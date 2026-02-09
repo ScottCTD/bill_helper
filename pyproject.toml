@@ -1,0 +1,38 @@
+[project]
+name = "bill-helper"
+version = "0.1.0"
+description = "Local-first personal billing ledger with FastAPI and React"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.14.1",
+    "fastapi>=0.115.8",
+    "litellm>=1.76.2",
+    "openai>=1.60.0",
+    "pydantic-settings>=2.7.1",
+    "python-multipart>=0.0.20",
+    "sqlalchemy>=2.0.37",
+    "uvicorn[standard]>=0.34.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8.3.4",
+]
+
+[project.scripts]
+bill-helper-api = "backend.main:main"
+
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]

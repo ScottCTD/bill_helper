@@ -1,0 +1,27 @@
+# Documentation Index
+
+This folder contains the source-of-truth documentation for the current MVP implementation.
+
+## Contents
+
+- `architecture.md`: system architecture, runtime flow, and design decisions.
+- `high-level-data-flow.md`: system-level graph model, storage layout, and end-to-end data flows.
+- `repository-structure.md`: directory and file-level map of the current codebase.
+- `backend.md`: backend package responsibilities and behavior.
+- `frontend.md`: frontend package responsibilities and behavior.
+- `api.md`: REST API contract reference for `/api/v1`.
+- `data-model.md`: relational schema and domain modeling rules.
+- `development.md`: local setup, build/test commands, and contributor workflow.
+- `documentation-system.md`: source-of-truth ownership matrix and anti-drift workflow.
+- `feature-entry-lifecycle.md`: focused entry-domain flow map.
+- `feature-dashboard-analytics.md`: focused dashboard analytics flow map.
+- `adr/README.md`: architecture decision record process and index.
+
+## How To Use
+
+1. Read `architecture.md` first for mental model.
+2. Use `backend.md`, `frontend.md`, and `api.md` for implementation details.
+3. Use `feature-*.md` for quickest path to high-change workflows.
+4. Use `development.md` for setup and operational commands.
+5. Run `uv run python scripts/check_docs_sync.py` before finalizing behavior/schema changes.
+6. Keep this docs set updated whenever behavior, schema, routes, or UX changes.

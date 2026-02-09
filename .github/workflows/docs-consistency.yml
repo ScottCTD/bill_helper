@@ -1,0 +1,24 @@
+name: docs-consistency
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Sync dependencies
+        run: uv sync --extra dev
+
+      - name: Run docs consistency checks
+        run: uv run python scripts/check_docs_sync.py
