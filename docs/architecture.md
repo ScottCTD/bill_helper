@@ -54,28 +54,34 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 - apply writes audit action rows (`agent_review_actions`)
 - approved entry proposals create `entries` rows directly (no entry-level status column)
 
-## Tooling Model (V1)
+## Tooling Model (Current)
 
 Read tools:
 
-- `search_entries`
 - `list_entries`
 - `list_tags`
 - `list_entities`
-- `list_accounts`
 - `get_dashboard_summary`
 
 Proposal tools:
 
-- `propose_create_entry`
-- `propose_create_tag`
-- `propose_create_entity`
+- entries: `propose_create_entry`, `propose_update_entry`, `propose_delete_entry`
+- tags: `propose_create_tag`, `propose_update_tag`, `propose_delete_tag`
+- entities: `propose_create_entity`, `propose_update_entity`, `propose_delete_entity`
+
+Contract notes:
+
+- model-facing tool interfaces avoid domain IDs and use natural keys/selectors
+- entry update/delete selectors: `date + amount_minor + from_entity + to_entity + name`
+- selector ambiguity is reported to the model as a tool error so the model asks user clarification
 
 ## Agent Internal Boundaries (Refactor Baseline)
 
 - `runtime.py`: run lifecycle orchestration and tool loop state machine
 - `message_history.py`: persisted conversation/attachment conversion into LLM messages
+- `message_history.py`: prepends reviewed proposal outcomes into the latest user message for follow-up turns
 - `model_client.py`: OpenRouter API adapter and normalized model errors
+- `model_client.py`: tenacity retries for model completion calls
 - `change_apply.py`: change-type handler registry for review-time resource application
 - `review.py`: approval/rejection transitions and audit writes
 

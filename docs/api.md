@@ -444,7 +444,7 @@ Approve and apply one proposal item.
 Body:
 
 - `note` (optional)
-- `payload_override` (optional; supported only for `create_entry` items)
+- `payload_override` (optional; supported for `create_entry` and `update_entry` items)
 
 Response: `AgentChangeItemRead`
 
@@ -457,8 +457,14 @@ State rules:
 Apply behavior:
 
 - `create_entry`: creates entry directly (no entry-level status field)
-- `create_tag`: creates/reuses normalized tag
-- `create_entity`: creates/reuses normalized entity
+- `update_entry`: updates one uniquely-selected entry by selector
+- `delete_entry`: soft-deletes one uniquely-selected entry by selector
+- `create_tag`: creates/reuses normalized tag with category
+- `update_tag`: renames tag and/or updates tag category
+- `delete_tag`: detaches tag from entries, then deletes tag
+- `create_entity`: creates/reuses normalized entity with category
+- `update_entity`: renames entity and/or updates entity category
+- `delete_entity`: nulls/detaches entity references from entries/accounts, then deletes entity
 
 ## `POST /agent/change-items/{item_id}/reject`
 

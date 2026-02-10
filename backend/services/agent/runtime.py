@@ -51,6 +51,10 @@ def _build_model_client() -> OpenRouterModelClient:
         base_url=settings.openrouter_base_url,
         model_name=settings.agent_model,
         tools=build_openai_tool_schemas(),
+        retry_max_attempts=settings.agent_retry_max_attempts,
+        retry_initial_wait_seconds=settings.agent_retry_initial_wait_seconds,
+        retry_max_wait_seconds=settings.agent_retry_max_wait_seconds,
+        retry_backoff_multiplier=settings.agent_retry_backoff_multiplier,
     )
 
 
@@ -221,7 +225,7 @@ def _execute_agent_run(
     settings = get_settings()
     max_steps = max(settings.agent_max_steps, 1)
 
-    llm_messages = build_llm_messages(db, thread.id)
+    llm_messages = build_llm_messages(db, thread.id, current_user_message_id=run.user_message_id)
     tool_context = ToolContext(db=db, run_id=run.id)
     usage_totals: dict[str, int | None] = {
         "input_tokens": run.input_tokens,

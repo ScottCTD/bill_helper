@@ -64,9 +64,10 @@ Implemented:
   - dedicated taxonomy tables for `Entity Categories` and `Tag Categories` (name, usage, rename)
   - entities/tags category fields now use taxonomy-sourced creatable pickers
   - shared table toolbar pattern with compact right-aligned `+` add actions across `Entries` and editable `Properties` sections
-- AI agent flow with append-only proposals and per-item human review:
+- AI agent flow with review-gated proposals and per-item human review:
   - Agent can answer questions and call read tools.
-  - Agent can propose `create_entry`, `create_tag`, `create_entity` only.
+  - Agent can propose CRUD changes for entries, tags, and entities (`create_*`, `update_*`, `delete_*`).
+  - Entry update/delete selectors are name/date/value/from/to based and ask for user clarification on ambiguity.
   - No direct table mutation by the agent runtime.
   - Agent timeline title now surfaces model context (`Agent (<model>)`) and assistant messages render markdown content via `react-markdown` + GFM support.
   - Agent message send now returns immediately with a `running` run while execution continues in background for progressive timeline polling.
@@ -77,7 +78,7 @@ Implemented:
   - In-flight run cards no longer show `Run: running (...)` header/timestamp rows; only thinking/tool activity is shown.
   - System messages now render with markdown formatting (including list markers).
   - Thread workspace now shows one cumulative usage/cost bar above the composer (`Input`, `Output`, `Cache read`, `Cache write`, rightmost `Total cost` in USD).
-  - Run costs are derived from LiteLLM model-cost mapping with OpenRouter alias support (for example `openrouter/openai/gpt-5-nano`).
+  - Run costs are derived from LiteLLM model-cost mapping with OpenRouter alias support (for example `openrouter/google/gemini-3-flash-preview`).
   - Timeline run cards surface pending proposal summaries and open a dedicated unified diff review modal.
   - Review modal supports `Reject`, `Approve`, `Approve & Next`, and sequential `Approve All` flows with inline failure visibility.
   - Approved entry proposals are persisted directly to `entries` without a separate entry-level status field.
@@ -136,8 +137,13 @@ Set these environment variables (for example in `.env`):
 - `OPENROUTER_API_KEY` (recommended; supported directly in `.env`)
 - `BILL_HELPER_OPENROUTER_API_KEY` (also supported)
 - `BILL_HELPER_OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`)
-- `BILL_HELPER_AGENT_MODEL` (default `openai/gpt-5-nano`)
+- `BILL_HELPER_AGENT_MODEL` (default `google/gemini-3-flash-preview`)
 - `BILL_HELPER_AGENT_MAX_STEPS` (default `100`)
+- `BILL_HELPER_DEFAULT_CURRENCY_CODE` (default `USD`)
+- `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS` (default `3`)
+- `BILL_HELPER_AGENT_RETRY_INITIAL_WAIT_SECONDS` (default `0.25`)
+- `BILL_HELPER_AGENT_RETRY_MAX_WAIT_SECONDS` (default `4.0`)
+- `BILL_HELPER_AGENT_RETRY_BACKOFF_MULTIPLIER` (default `2.0`)
 - `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` (default `5242880`)
 - `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`)
 

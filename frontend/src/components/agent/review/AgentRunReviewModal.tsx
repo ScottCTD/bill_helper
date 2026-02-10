@@ -30,9 +30,15 @@ interface BatchSummary {
 }
 
 const CHANGE_TYPE_LABEL: Record<AgentChangeItem["change_type"], string> = {
-  create_entry: "Entry",
-  create_tag: "Tag",
-  create_entity: "Entity"
+  create_entry: "Create Entry",
+  update_entry: "Update Entry",
+  delete_entry: "Delete Entry",
+  create_tag: "Create Tag",
+  update_tag: "Update Tag",
+  delete_tag: "Delete Tag",
+  create_entity: "Create Entity",
+  update_entity: "Update Entity",
+  delete_entity: "Delete Entity"
 };
 
 const INTERSECTION_THRESHOLDS = [0, 0.2, 0.4, 0.6, 0.8, 1];

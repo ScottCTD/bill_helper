@@ -220,9 +220,10 @@ Review actions:
   - one scrollable column with stacked proposal blocks in run order
   - focused pending block is tracked by `IntersectionObserver`
   - structured unified diff lines rendered from payload JSON
-  - additive `+` lines for create-only payloads
+  - additive `+` lines for proposal payload snapshots
   - paired `-`/`+` lines when reviewer-edited entry JSON differs from the original payload
-  - entry proposals support edit-before-approve via JSON override textarea
+  - supports labeled proposal blocks for entry/tag/entity create/update/delete types
+  - entry create proposals support edit-before-approve via JSON override textarea
 - sticky action bar:
   - `Reject` (focused pending item)
   - `Approve` (focused pending item)

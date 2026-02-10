@@ -34,8 +34,14 @@ class AgentToolCallStatus(StrEnum):
 
 class AgentChangeType(StrEnum):
     CREATE_ENTRY = "create_entry"
+    UPDATE_ENTRY = "update_entry"
+    DELETE_ENTRY = "delete_entry"
     CREATE_TAG = "create_tag"
+    UPDATE_TAG = "update_tag"
+    DELETE_TAG = "delete_tag"
     CREATE_ENTITY = "create_entity"
+    UPDATE_ENTITY = "update_entity"
+    DELETE_ENTITY = "delete_entity"
 
 
 class AgentChangeStatus(StrEnum):

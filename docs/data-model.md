@@ -14,7 +14,10 @@ Agent:
 - `AgentMessageRole`: `user`, `assistant`, `system`
 - `AgentRunStatus`: `running`, `completed`, `failed`
 - `AgentToolCallStatus`: `ok`, `error`
-- `AgentChangeType`: `create_entry`, `create_tag`, `create_entity`
+- `AgentChangeType`:
+  - entries: `create_entry`, `update_entry`, `delete_entry`
+  - tags: `create_tag`, `update_tag`, `delete_tag`
+  - entities: `create_entity`, `update_entity`, `delete_entity`
 - `AgentChangeStatus`: `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `APPLIED`, `APPLY_FAILED`
 - `AgentReviewActionType`: `approve`, `reject`
 
@@ -215,7 +218,7 @@ Fields:
 
 ## `agent_change_items`
 
-Purpose: review-gated proposed changes (append-only create operations).
+Purpose: review-gated proposed changes (CRUD proposals across entries/tags/entities).
 
 Fields:
 
@@ -246,9 +249,11 @@ Fields:
 
 - `agent_change_items` are created as `PENDING_REVIEW` by proposal tools.
 - only `PENDING_REVIEW` items can be approved/rejected.
-- approving applies exactly one resource creation and records review action.
+- approving applies exactly one proposed mutation and records review action.
 - rejecting records review action and does not create domain resources.
 - approving `create_entry` persists an entry directly without an entry-level status column.
+- `delete_tag` detaches tag links from entries before deleting the tag.
+- `delete_entity` nulls/detaches entity references from entries/accounts before deleting the entity.
 
 ## Currency Catalog (Current)
 

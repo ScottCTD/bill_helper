@@ -32,7 +32,7 @@ Agent settings:
 - `OPENROUTER_API_KEY` (recommended)
 - `BILL_HELPER_OPENROUTER_API_KEY` (also accepted)
 - `OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`)
-- `AGENT_MODEL` (default `openai/gpt-5-nano`)
+- `AGENT_MODEL` (default `google/gemini-3-flash-preview`)
 - `AGENT_MAX_STEPS` (default `100`)
 - `AGENT_MAX_IMAGE_SIZE_BYTES` (default `5MB`)
 - `AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`)
@@ -60,7 +60,7 @@ Core ledger models:
 - `Tag`, `EntryTag`
 - `Taxonomy`, `TaxonomyTerm`, `TaxonomyAssignment`
 
-Agent models (append-only review system):
+Agent models (review-gated mutation audit system):
 
 - `AgentThread`
 - `AgentMessage`
@@ -119,26 +119,39 @@ Agent services:
 - `backend/services/agent/prompts.py`
   - central system prompt definition
   - enforces entry-ingestion order: duplicate check first, then tag/entity reconciliation, then entry proposals
-  - final answer guidance now prefers concise direct responses and only includes pending review ids when items exist
+  - enforces name/selector-based proposals (no domain IDs in tool contracts)
+  - includes a lightweight current-user context section (current user + owned accounts) at runtime
+  - on tool errors/selector ambiguity, instructs the model to recover or ask for user clarification
 - `backend/services/agent/message_history.py`
   - converts persisted thread history and attachments into model-ready messages
+  - builds account summaries for current user and injects them into the system prompt context
+  - prepends reviewed proposal outcomes to the latest user message before user feedback text
 - `backend/services/agent/model_client.py`
   - OpenRouter client adapter with normalized model error handling
   - normalizes usage metadata from model responses into the runtime contract (`input/output/cache_*` tokens)
+  - applies configurable tenacity retries for model completion calls
 - `backend/services/agent/pricing.py`
   - LiteLLM-backed usage pricing helper (`cost_per_token`)
   - OpenRouter-prefixed model alias fallback for pricing lookup (`openrouter/<model>`, then raw model)
   - periodic model-cost map refresh from LiteLLM URL with fallback to bundled map when remote fetch fails
 - `backend/services/agent/tools.py`
-  - read tools: `search_entries`, `list_entries`, `list_tags`, `list_entities`, `list_accounts`, `get_dashboard_summary`
-  - proposal tools: `propose_create_entry`, `propose_create_tag`, `propose_create_entity`
+  - read tools: `list_entries`, `list_tags`, `list_entities`, `get_dashboard_summary`
+  - `list_entries` is the single entry query tool (date/name/from/to/tags/kind; exact-first then fuzzy ranking)
+  - `list_tags` / `list_entities` support name+category query and include category in outputs
+  - proposal tools cover CRUD:
+    - entries: `propose_create_entry`, `propose_update_entry`, `propose_delete_entry`
+    - tags: `propose_create_tag`, `propose_update_tag`, `propose_delete_tag`
+    - entities: `propose_create_entity`, `propose_update_entity`, `propose_delete_entity`
+  - all model-facing tool interfaces avoid domain IDs (names/selectors only)
+  - `propose_*` calls are blocked while prior thread proposals remain `PENDING_REVIEW`
   - proposal tools only create `agent_change_items` (`PENDING_REVIEW`)
 - `backend/services/agent/review.py`
   - per-item approve/reject workflow and state transitions
   - delegates concrete resource application to `backend/services/agent/change_apply.py`
 - `backend/services/agent/change_apply.py`
-  - change-type handler registry (`create_entry`, `create_tag`, `create_entity`)
-  - shared resolution logic for account/entity/user validation
+  - change-type handler registry for full proposal CRUD across entries/tags/entities
+  - entry update/delete resolve targets via selector (`date + amount_minor + from_entity + to_entity + name`)
+  - tag/entity delete applies detach/null semantics and preserves impacted entries/accounts
   - create-entry apply now writes directly without any entry status field
 - `backend/services/agent/serializers.py`
   - timeline-ready nested serializer helpers
@@ -215,7 +228,7 @@ Test modules:
 - asynchronous run start behavior (`POST /agent/threads/{thread_id}/messages` returns `running` while execution continues)
 - prompt contract for entry ingestion ordering (duplicate check -> tag/entity reconciliation -> entry proposal)
 
-Current baseline: `36 passed`.
+Current baseline: `44 passed`.
 
 ## Operational Impact
 
@@ -243,5 +256,5 @@ Current baseline: `36 passed`.
 - no streaming responses in V1
 - near-real-time timeline updates remain polling-based (no websocket/SSE)
 - no autonomous/background agent runs
-- no update/delete proposal types in V1 (append-only create proposals only)
+- update/delete proposal types are supported and require review approval before apply
 - taxonomy assignment storage uses string `subject_id` and does not enforce cross-table FK integrity for subject rows

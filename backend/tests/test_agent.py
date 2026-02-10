@@ -75,10 +75,10 @@ def test_thread_detail_includes_configured_model_name(client):
     assert detail["configured_model_name"] == get_settings().agent_model
 
 
-def test_default_agent_model_is_openai_gpt_5_nano():
+def test_default_agent_model_is_google_gemini_3_flash_preview():
     from backend.config import get_settings
 
-    assert get_settings().agent_model == "openai/gpt-5-nano"
+    assert get_settings().agent_model == "google/gemini-3-flash-preview"
 
 
 def test_system_prompt_requires_duplicate_then_reconcile_then_propose_entries():
@@ -95,16 +95,77 @@ def test_system_prompt_requires_duplicate_then_reconcile_then_propose_entries():
     assert prompt.index(duplicate_phrase) < prompt.index(reconcile_phrase) < prompt.index(propose_phrase)
 
 
-def test_system_prompt_allows_concise_final_message_without_empty_review_footer():
+def test_system_prompt_includes_error_recovery_and_no_domain_ids():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
-    concise_phrase = "Final message should prioritize a concise direct answer"
-    conditional_pending_phrase = "Include pending review item ids only when pending items exist"
+    assert "# Bill Helper System Prompt" in prompt
+    assert "## Rules" in prompt
+    assert "append-only policies" not in prompt
+    assert "You are the Bill Helper assistant." in prompt
+    assert "Final message should prioritize a concise direct answer" in prompt
+    assert "Include pending review item ids only when pending items exist" not in prompt
+    assert "Do not use domain IDs in proposals" in prompt
+    assert "If a tool returns an ERROR" in prompt
 
-    assert concise_phrase in prompt
-    assert conditional_pending_phrase in prompt
-    assert "Final message must include: direct answer, tools used (high level), and pending review item ids." not in prompt
+
+def test_system_prompt_includes_current_date_tag():
+    from datetime import date
+
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt(current_date=date(2026, 2, 10))
+    assert "## Current Date (UTC)\n2026-02-10" in prompt
+
+
+def test_system_prompt_includes_current_user_account_context(client, monkeypatch):
+    create_account_response = client.post(
+        "/api/v1/accounts",
+        json={
+            "name": "Main Checking",
+            "institution": "Bank Co",
+            "account_type": "checking",
+            "currency_code": "usd",
+            "is_active": True,
+        },
+    )
+    create_account_response.raise_for_status()
+
+    captured_messages: list[list[dict]] = []
+
+    def model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "ok"}
+
+    patch_model(monkeypatch, model)
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "hello")
+    assert run["status"] == "completed"
+    assert captured_messages
+
+    system_message = captured_messages[-1][0]
+    assert system_message.get("role") == "system"
+    system_content = str(system_message.get("content", ""))
+    assert "## Current User Context" in system_content
+    assert "accounts_count: 1" in system_content
+    assert "name=Main Checking" in system_content
+    assert "currency=USD" in system_content
+
+
+def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
+    from backend.services.agent.tools import build_openai_tool_schemas
+
+    names = [tool["function"]["name"] for tool in build_openai_tool_schemas()]
+    assert "list_accounts" not in names
+    assert "search_entries" not in names
+    assert "list_entries" in names
+    assert "propose_update_entry" in names
+    assert "propose_delete_entry" in names
+    assert "propose_update_tag" in names
+    assert "propose_delete_tag" in names
+    assert "propose_update_entity" in names
+    assert "propose_delete_entity" in names
 
 
 def test_run_persists_tool_calls(client, monkeypatch):
@@ -303,7 +364,7 @@ def test_run_handles_unknown_tool_calls_as_error(client, monkeypatch):
     assert run["tool_calls"][0]["output_json"]["summary"] == "unknown tool 'unknown_tool'"
 
 
-def test_proposal_creation_for_each_change_type(client, monkeypatch):
+def test_proposal_creation_for_each_create_change_type(client, monkeypatch):
     def fake_model(messages):
         if messages[-1]["role"] == "tool":
             return {"role": "assistant", "content": "Done. Please review pending items."}
@@ -322,8 +383,7 @@ def test_proposal_creation_for_each_change_type(client, monkeypatch):
                             "arguments": json.dumps(
                                 {
                                     "name": "groceries",
-                                    "color": "#22aa99",
-                                    "rationale": "Recurring spend category",
+                                    "category": "daily",
                                 }
                             ),
                         },
@@ -344,7 +404,6 @@ def test_proposal_creation_for_each_change_type(client, monkeypatch):
                                 {
                                     "name": "Costco",
                                     "category": "merchant",
-                                    "rationale": "Merchant appears in receipts",
                                 }
                             ),
                         },
@@ -363,12 +422,13 @@ def test_proposal_creation_for_each_change_type(client, monkeypatch):
                         "arguments": json.dumps(
                             {
                                 "kind": "EXPENSE",
-                                "occurred_at": "2026-01-03",
+                                "date": "2026-01-03",
                                 "name": "Coffee",
                                 "amount_minor": 550,
                                 "currency_code": "USD",
+                                "from_entity": "Main Checking",
+                                "to_entity": "Coffee Shop",
                                 "tags": ["food"],
-                                "rationale": "Receipt has coffee charge",
                             }
                         ),
                     },
@@ -377,10 +437,12 @@ def test_proposal_creation_for_each_change_type(client, monkeypatch):
         }
 
     patch_model(monkeypatch, fake_model)
-    thread = create_thread(client)
-    run_tag = send_message(client, thread["id"], "Please propose a new tag.")
-    run_entity = send_message(client, thread["id"], "Please propose a new entity.")
-    run_entry = send_message(client, thread["id"], "Please propose a new entry.")
+    thread_tag = create_thread(client)
+    thread_entity = create_thread(client)
+    thread_entry = create_thread(client)
+    run_tag = send_message(client, thread_tag["id"], "Please propose a new tag.")
+    run_entity = send_message(client, thread_entity["id"], "Please propose a new entity.")
+    run_entry = send_message(client, thread_entry["id"], "Please propose a new entry.")
 
     assert run_tag["change_items"][0]["change_type"] == "create_tag"
     assert run_entity["change_items"][0]["change_type"] == "create_entity"
@@ -388,6 +450,7 @@ def test_proposal_creation_for_each_change_type(client, monkeypatch):
     assert run_tag["change_items"][0]["status"] == "PENDING_REVIEW"
     assert run_entity["change_items"][0]["status"] == "PENDING_REVIEW"
     assert run_entry["change_items"][0]["status"] == "PENDING_REVIEW"
+    assert "account_id" not in run_entry["change_items"][0]["payload_json"]
 
 
 def test_approve_and_reapprove_conflict(client, monkeypatch):
@@ -406,7 +469,7 @@ def test_approve_and_reapprove_conflict(client, monkeypatch):
                         "arguments": json.dumps(
                             {
                                 "name": "subscriptions",
-                                "rationale": "Track recurring services",
+                                "category": "recurring",
                             }
                         ),
                     },
@@ -448,7 +511,6 @@ def test_reject_flow(client, monkeypatch):
                             {
                                 "name": "Temp Vendor",
                                 "category": "merchant",
-                                "rationale": "Potential vendor from OCR",
                             }
                         ),
                     },
@@ -486,12 +548,13 @@ def test_entry_approve_applies_entry_and_allows_override(client, monkeypatch):
                         "arguments": json.dumps(
                             {
                                 "kind": "EXPENSE",
-                                "occurred_at": "2026-01-09",
+                                "date": "2026-01-09",
                                 "name": "Lunch draft",
                                 "amount_minor": 1800,
                                 "currency_code": "USD",
+                                "from_entity": "Main Checking",
+                                "to_entity": "Lunch Spot",
                                 "tags": ["food"],
-                                "rationale": "Receipt text extraction",
                             }
                         ),
                     },
@@ -509,10 +572,12 @@ def test_entry_approve_applies_entry_and_allows_override(client, monkeypatch):
         json={
             "payload_override": {
                 "kind": "EXPENSE",
-                "occurred_at": "2026-01-09",
+                "date": "2026-01-09",
                 "name": "Lunch confirmed by reviewer",
                 "amount_minor": 1800,
                 "currency_code": "USD",
+                "from_entity": "Main Checking",
+                "to_entity": "Lunch Spot",
                 "tags": ["food", "team"],
             }
         },
@@ -546,12 +611,12 @@ def test_entry_approve_apply_failure_marks_item_failed(client, monkeypatch):
                         "arguments": json.dumps(
                             {
                                 "kind": "EXPENSE",
-                                "occurred_at": "2026-01-10",
-                                "name": "Broken account reference",
+                                "date": "2026-01-10",
+                                "name": "Draft entry",
                                 "amount_minor": 1200,
                                 "currency_code": "USD",
-                                "account_id": "missing-account-id",
-                                "rationale": "Account id came from OCR",
+                                "from_entity": "Main Checking",
+                                "to_entity": "Store",
                             }
                         ),
                     },
@@ -561,22 +626,261 @@ def test_entry_approve_apply_failure_marks_item_failed(client, monkeypatch):
 
     patch_model(monkeypatch, fake_model)
     thread = create_thread(client)
-    run = send_message(client, thread["id"], "Propose entry with account")
+    run = send_message(client, thread["id"], "Propose entry")
     item_id = run["change_items"][0]["id"]
 
     approve_response = client.post(
         f"/api/v1/agent/change-items/{item_id}/approve",
-        json={"note": "attempt apply"},
+        json={
+            "note": "attempt apply",
+            "payload_override": {
+                "kind": "EXPENSE",
+                "date": "2026-01-10",
+                "name": "Missing from_entity",
+                "amount_minor": 1200,
+                "currency_code": "USD",
+                "to_entity": "Store",
+            },
+        },
     )
     assert approve_response.status_code == 422
-    assert "Account not found" in approve_response.text
+    assert "from_entity" in approve_response.text
 
     run_detail = client.get(f"/api/v1/agent/runs/{run['id']}")
     run_detail.raise_for_status()
     refreshed_item = next(item for item in run_detail.json()["change_items"] if item["id"] == item_id)
     assert refreshed_item["status"] == "APPLY_FAILED"
-    assert "apply failed: Account not found" in (refreshed_item["review_note"] or "")
+    assert "apply failed" in (refreshed_item["review_note"] or "")
     assert any(action["action"] == "approve" for action in refreshed_item["review_actions"])
+
+
+def test_update_entry_selector_ambiguity_is_reported_to_agent(client, monkeypatch):
+    # Prepare duplicate selector candidates.
+    for _ in range(2):
+        create_response = client.post(
+            "/api/v1/entries",
+            json={
+                "kind": "EXPENSE",
+                "occurred_at": "2026-01-11",
+                "name": "Ambiguous Lunch",
+                "amount_minor": 2500,
+                "currency_code": "USD",
+                "from_entity": "Main Checking",
+                "to_entity": "Lunch Spot",
+                "tags": ["food"],
+            },
+        )
+        create_response.raise_for_status()
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Selector is ambiguous; please clarify which entry to update."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_update_entry",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_entry",
+                        "arguments": json.dumps(
+                            {
+                                "selector": {
+                                    "date": "2026-01-11",
+                                    "amount_minor": 2500,
+                                    "from_entity": "Main Checking",
+                                    "to_entity": "Lunch Spot",
+                                    "name": "Ambiguous Lunch",
+                                },
+                                "patch": {
+                                    "name": "Ambiguous Lunch (updated)",
+                                },
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Update that lunch entry")
+
+    assert run["status"] == "completed"
+    assert run["change_items"] == []
+    assert len(run["tool_calls"]) == 1
+    tool_output = run["tool_calls"][0]["output_json"]
+    assert tool_output["status"] == "ERROR"
+    assert "ambiguous selector" in tool_output["summary"]
+
+
+def test_reviewed_items_are_injected_into_followup_turn(client, monkeypatch):
+    def first_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Tag proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_tag",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_tag",
+                        "arguments": json.dumps(
+                            {
+                                "name": "tmp-tag",
+                                "category": "tmp",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, first_model)
+    thread = create_thread(client)
+    first_run = send_message(client, thread["id"], "Create a temporary tag")
+    item_id = first_run["change_items"][0]["id"]
+
+    reject_response = client.post(
+        f"/api/v1/agent/change-items/{item_id}/reject",
+        json={"note": "Use category recurring instead"},
+    )
+    reject_response.raise_for_status()
+
+    captured_messages: list[list[dict]] = []
+
+    def second_model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "Acknowledged review feedback."}
+
+    patch_model(monkeypatch, second_model)
+    followup_run = send_message(client, thread["id"], "Try again")
+    assert followup_run["status"] == "completed"
+    assert captured_messages
+
+    history = captured_messages[-1]
+    followup_user_messages = [message for message in history if message.get("role") == "user"]
+    assert followup_user_messages
+    followup_user = followup_user_messages[-1]
+    followup_content = followup_user.get("content")
+    assert isinstance(followup_content, str)
+    assert "Review results from your previous proposals:" in followup_content
+    assert "propose_create_tag" in followup_content
+    assert "review_action: reject" in followup_content.lower()
+    assert "Use category recurring instead" in followup_content
+    assert followup_content.index("Review results from your previous proposals:") < followup_content.index("User feedback:")
+    assert followup_content.index("User feedback:") < followup_content.index("Try again")
+
+
+def test_propose_tools_blocked_when_pending_reviews_exist(client, monkeypatch):
+    # First run creates a pending proposal and we intentionally skip review.
+    def first_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Tag proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_tag",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_tag",
+                        "arguments": json.dumps({"name": "pending-tag", "category": "misc"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, first_model)
+    thread = create_thread(client)
+    first_run = send_message(client, thread["id"], "Create tag pending-tag")
+    assert first_run["change_items"][0]["status"] == "PENDING_REVIEW"
+
+    # Second run attempts another proposal while first one is still pending.
+    def second_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Need review before proposing more changes."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entity",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entity",
+                        "arguments": json.dumps({"name": "Blocked Entity", "category": "merchant"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, second_model)
+    second_run = send_message(client, thread["id"], "Create blocked entity")
+    assert second_run["status"] == "completed"
+    assert second_run["change_items"] == []
+    assert len(second_run["tool_calls"]) == 1
+    output_json = second_run["tool_calls"][0]["output_json"]
+    assert output_json["status"] == "ERROR"
+    assert "blocked" in output_json["summary"]
+
+
+def test_create_entry_uses_default_currency_when_omitted(client, monkeypatch):
+    from backend.config import get_settings
+
+    settings = get_settings()
+    original_currency = settings.default_currency_code
+
+    try:
+        settings.default_currency_code = "CAD"
+
+        def fake_model(messages):
+            if messages[-1]["role"] == "tool":
+                return {"role": "assistant", "content": "Entry proposal created."}
+            return {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_propose_entry",
+                        "type": "function",
+                        "function": {
+                            "name": "propose_create_entry",
+                            "arguments": json.dumps(
+                                {
+                                    "kind": "EXPENSE",
+                                    "date": "2026-01-13",
+                                    "name": "Transit",
+                                    "amount_minor": 450,
+                                    "from_entity": "Main Checking",
+                                    "to_entity": "Transit Agency",
+                                    "tags": ["transport"],
+                                }
+                            ),
+                        },
+                    }
+                ],
+            }
+
+        patch_model(monkeypatch, fake_model)
+        thread = create_thread(client)
+        run = send_message(client, thread["id"], "Propose transit entry")
+        item_id = run["change_items"][0]["id"]
+
+        approve_response = client.post(f"/api/v1/agent/change-items/{item_id}/approve", json={})
+        approve_response.raise_for_status()
+
+        entries = client.get("/api/v1/entries", params={"source": "Transit"})
+        entries.raise_for_status()
+        payload = entries.json()
+        assert payload["total"] == 1
+        assert payload["items"][0]["currency_code"] == "CAD"
+    finally:
+        settings.default_currency_code = original_currency
 
 
 def test_requires_openrouter_key_for_send_message(client):

@@ -6,7 +6,7 @@ This doc is the fast path for understanding how entries are created, edited, lin
 
 - manual entry CRUD
 - entry links/groups
-- agent-proposed entry creation
+- agent-proposed entry CRUD (review-gated)
 
 ## Contract Summary
 
@@ -37,14 +37,16 @@ This doc is the fast path for understanding how entries are created, edited, lin
 
 ## Agent-Proposed Entry Flow
 
-1. Agent proposes `create_entry` via `backend/services/agent/tools.py`.
+1. Agent proposes `create_entry` / `update_entry` / `delete_entry` via `backend/services/agent/tools.py`.
 2. Proposal persisted as `agent_change_items` (`PENDING_REVIEW`).
 3. Human approves from frontend review UI:
    - `frontend/src/components/agent/review/AgentRunReviewModal.tsx`
 4. Apply handler:
    - `backend/services/agent/review.py`
    - `backend/services/agent/change_apply.py`
-5. Entry is created directly in `entries` (no entry status field).
+5. Apply handler resolves target by selector for update/delete:
+   - `date + amount_minor + from_entity + to_entity + name`
+6. Entry mutation is applied directly to `entries` (no entry status field).
 
 ## Tests
 
@@ -54,4 +56,5 @@ This doc is the fast path for understanding how entries are created, edited, lin
 ## Operational Notes
 
 - Currency normalization occurs server-side (`currency_code.upper()`).
+- Agent create-entry proposals can omit `currency_code`; backend defaults to `BILL_HELPER_DEFAULT_CURRENCY_CODE`.
 - Soft-delete removes entry links and triggers group recomputation.

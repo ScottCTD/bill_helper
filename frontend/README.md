@@ -67,6 +67,7 @@ uv run python scripts/check_docs_sync.py
 
 - Amount display uses code-prefix formatting (`CAD 8.13`).
 - Entry status is not part of frontend entry models.
+- Agent review timeline supports create/update/delete change items for entries, tags, and entities.
 - Dashboard visualizations use Recharts and currently consume CAD-only analytics payloads.
 
 ## Related Docs

@@ -23,6 +23,31 @@ def _get_change_item_or_none(db: Session, item_id: str) -> AgentChangeItem | Non
     )
 
 
+def _summarize_payload_override_diff(base_payload: dict[str, Any], override_payload: dict[str, Any]) -> str:
+    changed_keys = sorted(
+        key
+        for key in set(base_payload) | set(override_payload)
+        if base_payload.get(key) != override_payload.get(key)
+    )
+    if not changed_keys:
+        return ""
+    if len(changed_keys) <= 8:
+        return ", ".join(changed_keys)
+    return f"{', '.join(changed_keys[:8])}, ... (+{len(changed_keys) - 8} more)"
+
+
+def _combine_notes(note: str | None, extra: str | None) -> str | None:
+    note_text = (note or "").strip()
+    extra_text = (extra or "").strip()
+    if note_text and extra_text:
+        return f"{note_text} | {extra_text}"
+    if note_text:
+        return note_text
+    if extra_text:
+        return extra_text
+    return None
+
+
 def approve_change_item(
     db: Session,
     *,
@@ -37,19 +62,29 @@ def approve_change_item(
     if item.status != AgentChangeStatus.PENDING_REVIEW:
         raise ValueError("Only PENDING_REVIEW items can be approved")
 
-    if payload_override is not None and item.change_type != AgentChangeType.CREATE_ENTRY:
-        raise ValueError("payload_override is only supported for create_entry items")
+    if payload_override is not None and item.change_type not in {
+        AgentChangeType.CREATE_ENTRY,
+        AgentChangeType.UPDATE_ENTRY,
+    }:
+        raise ValueError("payload_override is only supported for create_entry/update_entry items")
 
     payload = payload_override if payload_override is not None else item.payload_json
+    override_note = None
+    if payload_override is not None:
+        diff_summary = _summarize_payload_override_diff(item.payload_json, payload_override)
+        if diff_summary:
+            override_note = f"payload_override_diff: {diff_summary}"
+    combined_note = _combine_notes(note, override_note)
+
     approval_action = AgentReviewAction(
         change_item_id=item.id,
         action=AgentReviewActionType.APPROVE,
         actor=actor,
-        note=note,
+        note=combined_note,
     )
     db.add(approval_action)
     item.status = AgentChangeStatus.APPROVED
-    item.review_note = note
+    item.review_note = combined_note
 
     try:
         resource = apply_change_item_payload(
@@ -60,7 +95,7 @@ def approve_change_item(
     except Exception as exc:
         item.status = AgentChangeStatus.APPLY_FAILED
         reason = str(exc)
-        item.review_note = f"{note} | apply failed: {reason}" if note else f"apply failed: {reason}"
+        item.review_note = _combine_notes(combined_note, f"apply failed: {reason}")
         item.updated_at = utc_now()
         db.add(item)
         db.commit()

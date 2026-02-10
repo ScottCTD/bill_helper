@@ -62,6 +62,9 @@ uv run python scripts/check_docs_sync.py
 ## Current Constraints
 
 - Entry-level `status` was removed; agent review state remains only on `agent_change_items`.
+- Agent tool contracts are name/selector-based (no domain IDs in model-facing arguments/outputs).
+- Entry create proposals can omit currency and fall back to `BILL_HELPER_DEFAULT_CURRENCY_CODE`.
+- Agent model/tool execution retries are controlled by `BILL_HELPER_AGENT_RETRY_*` settings.
 - Dashboard analytics are CAD-focused by design in the current implementation.
 
 ## Related Docs

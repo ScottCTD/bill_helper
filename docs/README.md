@@ -5,6 +5,7 @@ This folder contains the source-of-truth documentation for the current MVP imple
 ## Contents
 
 - `architecture.md`: system architecture, runtime flow, and design decisions.
+- `agent-billing-assistant.md`: billing assistant agent architecture, prompts, and tools (descriptions, arguments, expected outputs).
 - `high-level-data-flow.md`: system-level graph model, storage layout, and end-to-end data flows.
 - `repository-structure.md`: directory and file-level map of the current codebase.
 - `backend.md`: backend package responsibilities and behavior.

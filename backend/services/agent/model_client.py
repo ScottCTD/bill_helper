@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI, OpenAIError
+from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 
 class AgentModelError(RuntimeError):
@@ -70,6 +71,10 @@ class OpenRouterModelClient:
         base_url: str,
         model_name: str,
         tools: list[dict[str, Any]],
+        retry_max_attempts: int,
+        retry_initial_wait_seconds: float,
+        retry_max_wait_seconds: float,
+        retry_backoff_multiplier: float,
     ) -> None:
         self._client = OpenAI(
             api_key=api_key,
@@ -77,10 +82,14 @@ class OpenRouterModelClient:
         )
         self._model_name = model_name
         self._tools = tools
+        self._retry_max_attempts = max(1, retry_max_attempts)
+        self._retry_initial_wait_seconds = max(0.0, retry_initial_wait_seconds)
+        self._retry_max_wait_seconds = max(0.0, retry_max_wait_seconds)
+        self._retry_backoff_multiplier = max(1.0, retry_backoff_multiplier)
 
-    def complete(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+    def _chat_completion_once(self, messages: list[dict[str, Any]]) -> Any:
         try:
-            response = self._client.chat.completions.create(
+            return self._client.chat.completions.create(
                 model=self._model_name,
                 messages=messages,
                 tools=self._tools,
@@ -96,6 +105,24 @@ class OpenRouterModelClient:
             raise AgentModelError(f"model request failed: {str(exc)}") from exc
         except OpenAIError as exc:
             raise AgentModelError(f"model request failed: {str(exc)}") from exc
+
+    def complete(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+        retrying = Retrying(
+            stop=stop_after_attempt(self._retry_max_attempts),
+            wait=wait_exponential(
+                multiplier=self._retry_initial_wait_seconds,
+                max=self._retry_max_wait_seconds,
+                exp_base=self._retry_backoff_multiplier,
+            ),
+            retry=retry_if_exception_type(AgentModelError),
+            reraise=True,
+        )
+        response = None
+        for attempt in retrying:
+            with attempt:
+                response = self._chat_completion_once(messages)
+        if response is None:  # pragma: no cover - defensive guard
+            raise AgentModelError("model request failed: no response")
 
         try:
             message = response.choices[0].message

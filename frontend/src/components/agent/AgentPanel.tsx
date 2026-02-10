@@ -132,15 +132,15 @@ function summarizeRunChangeTypes(changeItems: AgentChangeItem[]): {
   let entityCount = 0;
 
   changeItems.forEach((item) => {
-    if (item.change_type === "create_entry") {
+    if (item.change_type.endsWith("_entry")) {
       entryCount += 1;
       return;
     }
-    if (item.change_type === "create_tag") {
+    if (item.change_type.endsWith("_tag")) {
       tagCount += 1;
       return;
     }
-    if (item.change_type === "create_entity") {
+    if (item.change_type.endsWith("_entity")) {
       entityCount += 1;
     }
   });
