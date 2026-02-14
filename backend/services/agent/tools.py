@@ -749,31 +749,42 @@ def _propose_delete_tag(context: ToolContext, args: ProposeDeleteTagArgs) -> Too
     if existing is None:
         return _error_result("tag not found", details={"name": args.name})
 
-    impacted_entries = list(
-        context.db.scalars(
-            select(Entry)
+    referenced_entry_count = int(
+        context.db.scalar(
+            select(func.count(Entry.id))
             .join(Entry.tags)
             .where(Tag.id == existing.id, Entry.is_deleted.is_(False))
-            .options(selectinload(Entry.tags))
-            .order_by(Entry.occurred_at.desc(), Entry.created_at.desc())
         )
+        or 0
     )
-    impact_records = [_entry_to_public_record(entry) for entry in impacted_entries]
+    if referenced_entry_count > 0:
+        sample_entries = list(
+            context.db.scalars(
+                select(Entry)
+                .join(Entry.tags)
+                .where(Tag.id == existing.id, Entry.is_deleted.is_(False))
+                .options(selectinload(Entry.tags))
+                .order_by(Entry.occurred_at.desc(), Entry.created_at.desc())
+                .limit(5)
+            )
+        )
+        return _error_result(
+            "cannot delete tag while it is referenced by entries",
+            details={
+                "name": args.name,
+                "referenced_entry_count": referenced_entry_count,
+                "sample_entries": [_entry_to_public_record(entry) for entry in sample_entries],
+            },
+        )
 
-    payload = {
-        "name": args.name,
-        "impact_preview": {
-            "entry_count": len(impact_records),
-            "entries": impact_records,
-        },
-    }
+    payload = {"name": args.name}
     item = _create_change_item(
         context,
         change_type=AgentChangeType.DELETE_TAG,
         payload=payload,
         rationale_text="Agent proposed deleting a tag.",
     )
-    preview = {"name": args.name, "impacted_entries": len(impact_records)}
+    preview = {"name": args.name}
     return _proposal_result("proposed tag deletion", preview=preview, item=item)
 
 

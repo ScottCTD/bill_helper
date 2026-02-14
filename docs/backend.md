@@ -129,6 +129,7 @@ Agent services:
 - `backend/services/agent/prompts.py`
   - central system prompt definition
   - enforces entry-ingestion order: duplicate check first, then tag/entity reconciliation, then entry proposals
+  - enforces tag-delete sequencing: update/retag affected entries before proposing `delete_tag`
   - enforces name/selector-based proposals (no domain IDs in tool contracts)
   - includes a lightweight current-user context section (current user + owned accounts) at runtime
   - on tool errors/selector ambiguity, instructs the model to recover or ask for user clarification
@@ -154,6 +155,7 @@ Agent services:
     - entities: `propose_create_entity`, `propose_update_entity`, `propose_delete_entity`
   - all model-facing tool interfaces avoid domain IDs (names/selectors only)
   - `propose_*` calls are blocked while prior thread proposals remain `PENDING_REVIEW`
+  - `propose_delete_tag` returns `ERROR` when the tag is still referenced by non-deleted entries (with count + sample context)
   - proposal tools only create `agent_change_items` (`PENDING_REVIEW`)
 - `backend/services/runtime_settings.py`
   - resolves effective runtime settings from `runtime_settings` overrides + env defaults
@@ -165,7 +167,8 @@ Agent services:
 - `backend/services/agent/change_apply.py`
   - change-type handler registry for full proposal CRUD across entries/tags/entities
   - entry update/delete resolve targets via selector (`date + amount_minor + from_entity + to_entity + name`)
-  - tag/entity delete applies detach/null semantics and preserves impacted entries/accounts
+  - tag delete is blocked when referenced by non-deleted entries (no automatic detach-on-delete)
+  - entity delete applies null/detach semantics and preserves impacted entries/accounts
   - create-entry apply now writes directly without any entry status field
 - `backend/services/agent/serializers.py`
   - timeline-ready nested serializer helpers
@@ -251,8 +254,9 @@ Test modules:
 - run API cost fields (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
 - asynchronous run start behavior (`POST /agent/threads/{thread_id}/messages` returns `running` while execution continues)
 - prompt contract for entry ingestion ordering (duplicate check -> tag/entity reconciliation -> entry proposal)
+- prompt contract for tag-deletion ordering (retag/update entries first -> then `propose_delete_tag`)
 
-Current baseline: `52 passed`.
+Current baseline for `backend/tests/test_agent.py`: `27 passed`.
 
 ## Operational Impact
 
@@ -268,6 +272,7 @@ Current baseline: `52 passed`.
 - dashboard currency and default entry currency are now runtime-configurable
 - current user attribution defaults (`owner`/review actor) now resolve from runtime settings rather than env-only config
 - entry-ingestion prompts now require duplicate detection before any entry proposal, reducing duplicate proposal risk
+- prompt policy now requires entry retag/update proposals before tag deletion proposals when references exist
 - entry domain no longer includes `status`; API/model/migration are synchronized on statusless entries
 - dashboard API serves runtime-configured currency analytics payloads; entries in other currencies are excluded from that dashboard response
 - new agent module boundaries reduce coupling and make it safer to add new model providers/change types

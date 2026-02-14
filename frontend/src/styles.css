@@ -1087,6 +1087,10 @@
     @apply h-[94vh] max-w-5xl overflow-hidden border-border/80 bg-card p-0;
   }
 
+  .agent-approve-all-confirm-content {
+    @apply top-[20vh] max-w-lg border-border/80 bg-card;
+  }
+
   .agent-review-modal-layout {
     @apply grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto];
   }
@@ -1100,7 +1104,23 @@
   }
 
   .agent-review-item {
-    @apply grid gap-2 rounded-xl border border-border/90 bg-background p-4;
+    @apply grid gap-3 rounded-xl border border-border/90 bg-background p-4 shadow-sm;
+  }
+
+  .agent-review-item.is-create {
+    @apply border-l-4 border-l-success/45;
+  }
+
+  .agent-review-item.is-update {
+    @apply border-l-4 border-l-primary/40;
+  }
+
+  .agent-review-item.is-delete {
+    @apply border-l-4 border-l-destructive/45;
+  }
+
+  .agent-review-item.is-snapshot {
+    @apply border-l-4 border-l-border;
   }
 
   .agent-review-item.is-focused {
@@ -1125,6 +1145,58 @@
 
   .agent-review-item-rationale {
     @apply m-0 text-sm text-foreground/90;
+  }
+
+  .agent-review-item-summary {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+
+  .agent-review-item-summary-title {
+    @apply m-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground;
+  }
+
+  .agent-review-item-stats {
+    @apply flex flex-wrap items-center gap-1.5;
+  }
+
+  .agent-review-diff-stat {
+    @apply border-border/85 bg-muted/65 text-xs font-medium text-muted-foreground;
+  }
+
+  .agent-review-diff-stat.is-added {
+    @apply border-success/40 bg-success/10 text-success-foreground;
+  }
+
+  .agent-review-diff-stat.is-removed {
+    @apply border-destructive/40 bg-destructive/10 text-foreground;
+  }
+
+  .agent-review-diff-stat.is-changed {
+    @apply border-primary/35 bg-primary/10 text-foreground;
+  }
+
+  .agent-review-metadata {
+    @apply flex flex-wrap items-center gap-1.5;
+  }
+
+  .agent-review-metadata-pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-muted/35 px-2.5 py-1;
+  }
+
+  .agent-review-metadata-pill.is-warning {
+    @apply border-warning/40 bg-warning/15;
+  }
+
+  .agent-review-metadata-pill.is-danger {
+    @apply border-destructive/45 bg-destructive/15;
+  }
+
+  .agent-review-metadata-label {
+    @apply text-[11px] font-semibold uppercase tracking-wide text-muted-foreground;
+  }
+
+  .agent-review-metadata-value {
+    @apply text-xs font-medium text-foreground;
   }
 
   .agent-review-status-badge {
@@ -1180,6 +1252,10 @@
   .agent-review-diff-value {
     @apply break-words text-xs text-foreground;
     font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  }
+
+  .agent-review-item-note {
+    @apply m-0 text-xs;
   }
 
   .agent-review-modal-footer {

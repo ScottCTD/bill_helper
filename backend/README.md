@@ -77,6 +77,8 @@ uv run python scripts/check_docs_sync.py
 - Entry-level `status` was removed; agent review state remains only on `agent_change_items`.
 - Agent tool contracts are name/selector-based (no domain IDs in model-facing arguments/outputs).
 - Entry create proposals can omit currency and fall back to the resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
+- Tag deletion proposals are blocked when the tag is still referenced by any non-deleted entries; apply path re-validates this constraint before delete.
+- Agent prompt policy requires entry retag/update proposals before tag-delete proposals when the tag is still referenced.
 - Agent model/tool execution retries and limits can be overridden at runtime via `/settings`.
 - Dashboard currency defaults to runtime settings (`/settings` override, else `BILL_HELPER_DASHBOARD_CURRENCY_CODE` / `CAD`).
 

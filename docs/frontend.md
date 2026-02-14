@@ -255,16 +255,20 @@ Review actions:
 - modal behavior:
   - one scrollable column with stacked proposal blocks in run order
   - focused pending block is tracked by `IntersectionObserver`
-  - structured unified diff lines rendered from payload JSON
-  - additive `+` lines for proposal payload snapshots
-  - paired `-`/`+` lines when reviewer-edited entry JSON differs from the original payload
+  - CRUD-aware field-level diff rendering (`frontend/src/components/agent/review/diff.ts`):
+    - create proposals render additive `+` field lines
+    - update proposals render changed fields only (`-` old / `+` new)
+    - delete proposals render removed `-` field lines for the target identity/resource payload
+  - reviewer-edited create-entry JSON still renders paired `-`/`+` lines against the original payload
+  - per-proposal stat badges (`Changed`, `Added`, `Removed`) and compact metadata pills (target/selector/patch scope/impact counts)
   - supports labeled proposal blocks for entry/tag/entity create/update/delete types
   - entry create proposals support edit-before-approve via JSON override textarea
 - sticky action bar:
   - `Reject` (focused pending item)
   - `Approve` (focused pending item)
   - `Approve & Next` (focused item, then smooth-scroll/focus next pending item after current index)
-  - `Approve All` (sequentially applies all pending items in deterministic order, continues through failures)
+  - `Approve All` opens an in-app themed confirmation dialog (no browser `window.confirm`)
+  - confirmed `Approve All` sequentially applies all pending items in deterministic order and continues through failures
   - pending context text (`Pending X of Y`) and focused ordinal
 - apply-failure handling:
   - failures are surfaced inline on proposal blocks
@@ -404,6 +408,7 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 
 - no pagination controls in agent thread/timeline UI yet
 - entry edit-before-approve in the review modal still uses raw JSON override (no structured form editor yet)
+- legacy delete proposals created before CRUD-aware rendering may still include verbose `impact_preview` payload context from historical runs
 - `Approve & Next` intentionally looks for the next pending item after current index only; if remaining pending items are above, reviewers must scroll back
 - `Approve All` is implemented as sequential per-item API calls (no batch endpoint), so very large runs may feel slower
 - popup auto-save requires valid required fields; invalid dirty state keeps popup open and surfaces validation errors

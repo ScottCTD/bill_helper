@@ -4,9 +4,9 @@ import type { AgentChangeItem, AgentChangeStatus, AgentRun } from "../../../lib/
 import { cn } from "../../../lib/utils";
 import { Badge } from "../../ui/badge";
 import { Button } from "../../ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../../ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../ui/dialog";
 import { Textarea } from "../../ui/textarea";
-import { buildUnifiedDiffLines, jsonRecordsAreEquivalent } from "./diff";
+import { buildProposalDiff, jsonRecordsAreEquivalent } from "./diff";
 
 interface AgentRunReviewModalProps {
   open: boolean;
@@ -65,6 +65,19 @@ function statusBadgeClass(status: AgentChangeStatus): string {
       return "agent-review-status-approved";
     default:
       return "";
+  }
+}
+
+function reviewModeClass(mode: "create" | "update" | "delete" | "snapshot"): string {
+  switch (mode) {
+    case "create":
+      return "is-create";
+    case "update":
+      return "is-update";
+    case "delete":
+      return "is-delete";
+    default:
+      return "is-snapshot";
   }
 }
 
@@ -131,6 +144,7 @@ export function AgentRunReviewModal({
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [batchSummary, setBatchSummary] = useState<BatchSummary | null>(null);
   const [isBatchRunning, setIsBatchRunning] = useState(false);
+  const [isApproveAllConfirmOpen, setIsApproveAllConfirmOpen] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -144,6 +158,7 @@ export function AgentRunReviewModal({
       setActionNotice(null);
       setBatchSummary(null);
       setIsBatchRunning(false);
+      setIsApproveAllConfirmOpen(false);
       return;
     }
 
@@ -151,6 +166,7 @@ export function AgentRunReviewModal({
     setActionNotice(null);
     setBatchSummary(null);
     setIsBatchRunning(false);
+    setIsApproveAllConfirmOpen(false);
   }, [open, run?.id]);
 
   useEffect(() => {
@@ -398,7 +414,7 @@ export function AgentRunReviewModal({
     setActionNotice("Reached end of this run. Remaining pending items are above.");
   }
 
-  async function handleApproveAll() {
+  function handleApproveAllClick() {
     if (isBatchRunning || isBusy) {
       return;
     }
@@ -407,12 +423,21 @@ export function AgentRunReviewModal({
     if (queue.length === 0) {
       return;
     }
+    setIsApproveAllConfirmOpen(true);
+  }
 
-    const confirmText = `Approve all ${queue.length} pending proposal${queue.length === 1 ? "" : "s"} in this run?`;
-    if (!window.confirm(confirmText)) {
+  async function handleApproveAllConfirm() {
+    if (isBatchRunning || isBusy) {
       return;
     }
 
+    const queue = items.filter(isPending);
+    if (queue.length === 0) {
+      setIsApproveAllConfirmOpen(false);
+      return;
+    }
+
+    setIsApproveAllConfirmOpen(false);
     setActionError(null);
     setActionNotice(null);
     setBatchSummary(null);
@@ -504,13 +529,14 @@ export function AgentRunReviewModal({
                 item.change_type === "create_entry" && overrideState?.hasChanges && overrideState.parsed
                   ? overrideState.parsed
                   : undefined;
-              const diffLines = buildUnifiedDiffLines(item.payload_json, reviewerOverride);
+              const diffPreview = buildProposalDiff(item.change_type, item.payload_json, reviewerOverride);
+              const diffLines = diffPreview.lines;
               const isFocused = item.status === "PENDING_REVIEW" && item.id === focusedPendingItem?.id;
 
               return (
                 <article
                   key={item.id}
-                  className={cn("agent-review-item", isFocused && "is-focused")}
+                  className={cn("agent-review-item", reviewModeClass(diffPreview.mode), isFocused && "is-focused")}
                   data-item-id={item.id}
                   ref={(node) => setItemBlockRef(item.id, node)}
                   tabIndex={-1}
@@ -529,8 +555,53 @@ export function AgentRunReviewModal({
 
                   <p className="agent-review-item-rationale">{item.rationale_text || "No rationale provided."}</p>
 
+                  <div className="agent-review-item-summary">
+                    <p className="agent-review-item-summary-title">{diffPreview.title}</p>
+                    <div className="agent-review-item-stats">
+                      {diffPreview.stats.changed > 0 ? (
+                        <Badge variant="outline" className="agent-review-diff-stat is-changed">
+                          Changed {diffPreview.stats.changed}
+                        </Badge>
+                      ) : null}
+                      {diffPreview.stats.added > 0 ? (
+                        <Badge variant="outline" className="agent-review-diff-stat is-added">
+                          Added {diffPreview.stats.added}
+                        </Badge>
+                      ) : null}
+                      {diffPreview.stats.removed > 0 ? (
+                        <Badge variant="outline" className="agent-review-diff-stat is-removed">
+                          Removed {diffPreview.stats.removed}
+                        </Badge>
+                      ) : null}
+                      {diffPreview.stats.changed === 0 && diffPreview.stats.added === 0 && diffPreview.stats.removed === 0 ? (
+                        <Badge variant="outline" className="agent-review-diff-stat">
+                          No deltas
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {diffPreview.metadata.length > 0 ? (
+                    <div className="agent-review-metadata" role="list" aria-label={`Metadata for proposal ${shortId(item.id)}`}>
+                      {diffPreview.metadata.map((meta) => (
+                        <div
+                          key={`${item.id}:${meta.label}:${meta.value}`}
+                          className={cn(
+                            "agent-review-metadata-pill",
+                            meta.tone === "warning" && "is-warning",
+                            meta.tone === "danger" && "is-danger"
+                          )}
+                          role="listitem"
+                        >
+                          <span className="agent-review-metadata-label">{meta.label}</span>
+                          <span className="agent-review-metadata-value">{meta.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
                   <div className="agent-review-diff" role="list" aria-label={`Diff for proposal ${shortId(item.id)}`}>
-                    {diffLines.length === 0 ? <p className="muted">No payload differences.</p> : null}
+                    {diffLines.length === 0 ? <p className="muted">No changed fields.</p> : null}
                     {diffLines.map((line) => (
                       <div
                         key={`${item.id}:${line.sign}:${line.path}:${line.value}`}
@@ -545,6 +616,8 @@ export function AgentRunReviewModal({
                       </div>
                     ))}
                   </div>
+
+                  {diffPreview.note ? <p className="agent-review-item-note muted">{diffPreview.note}</p> : null}
 
                   {item.change_type === "create_entry" && item.status === "PENDING_REVIEW" ? (
                     <label className="agent-entry-override">
@@ -595,7 +668,7 @@ export function AgentRunReviewModal({
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleApproveAll}
+                onClick={handleApproveAllClick}
                 disabled={pendingCount === 0 || isBatchRunning || isBusy}
               >
                 {isBatchRunning ? "Approving..." : "Approve All"}
@@ -638,6 +711,28 @@ export function AgentRunReviewModal({
           </footer>
         </div>
       </DialogContent>
+
+      <Dialog open={isApproveAllConfirmOpen} onOpenChange={setIsApproveAllConfirmOpen}>
+        <DialogContent className="agent-approve-all-confirm-content">
+          <DialogHeader>
+            <DialogTitle>Approve all pending proposals?</DialogTitle>
+            <DialogDescription>
+              This will apply all {pendingCount} pending proposal{pendingCount === 1 ? "" : "s"} in this run.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="muted">
+            The review will continue through per-item failures and summarize applied vs failed results after completion.
+          </p>
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => setIsApproveAllConfirmOpen(false)} disabled={isBatchRunning}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleApproveAllConfirm} disabled={isBatchRunning || pendingCount === 0 || isBusy}>
+              {isBatchRunning ? "Approving..." : "Approve all"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

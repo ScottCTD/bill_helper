@@ -103,6 +103,20 @@ def test_system_prompt_requires_duplicate_then_reconcile_then_propose_entries():
     assert prompt.index(duplicate_phrase) < prompt.index(reconcile_phrase) < prompt.index(propose_phrase)
 
 
+def test_system_prompt_requires_entry_updates_before_tag_delete():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    reference_phrase = "Check whether entries still reference the tag."
+    update_phrase = "propose update_entry changes first to remove/replace that tag on affected entries."
+    delete_phrase = "Only propose delete_tag after references are cleared."
+
+    assert reference_phrase in prompt
+    assert update_phrase in prompt
+    assert delete_phrase in prompt
+    assert prompt.index(reference_phrase) < prompt.index(update_phrase) < prompt.index(delete_phrase)
+
+
 def test_system_prompt_includes_error_recovery_and_no_domain_ids():
     from backend.services.agent.prompts import system_prompt
 
@@ -538,6 +552,108 @@ def test_reject_flow(client, monkeypatch):
 
     entities = client.get("/api/v1/entities").json()
     assert all(entity["name"] != "Temp Vendor" for entity in entities)
+
+
+def test_propose_delete_tag_is_blocked_when_tag_is_referenced(client, monkeypatch):
+    create_entry_response = client.post(
+        "/api/v1/entries",
+        json={
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-09",
+            "name": "Tagged expense",
+            "amount_minor": 990,
+            "currency_code": "USD",
+            "from_entity": "Main Checking",
+            "to_entity": "Grocery Store",
+            "tags": ["groceries"],
+        },
+    )
+    create_entry_response.raise_for_status()
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Cannot delete that tag while it is in use."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_delete_tag",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_delete_tag",
+                        "arguments": json.dumps({"name": "groceries"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Delete the groceries tag")
+
+    assert run["status"] == "completed"
+    assert run["change_items"] == []
+    assert len(run["tool_calls"]) == 1
+    tool_output = run["tool_calls"][0]["output_json"]
+    assert tool_output["status"] == "ERROR"
+    assert "cannot delete tag while it is referenced" in tool_output["summary"]
+    details = tool_output["details"]
+    assert details["name"] == "groceries"
+    assert details["referenced_entry_count"] == 1
+
+
+def test_delete_tag_apply_fails_if_tag_becomes_referenced_before_approval(client, monkeypatch):
+    create_tag_response = client.post("/api/v1/tags", json={"name": "stale-tag", "category": "misc"})
+    create_tag_response.raise_for_status()
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Tag delete proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_delete_tag",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_delete_tag",
+                        "arguments": json.dumps({"name": "stale-tag"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Delete stale-tag")
+    item_id = run["change_items"][0]["id"]
+
+    create_entry_response = client.post(
+        "/api/v1/entries",
+        json={
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-12",
+            "name": "Late tag link",
+            "amount_minor": 1450,
+            "currency_code": "USD",
+            "from_entity": "Main Checking",
+            "to_entity": "Cafe",
+            "tags": ["stale-tag"],
+        },
+    )
+    create_entry_response.raise_for_status()
+
+    approve_response = client.post(f"/api/v1/agent/change-items/{item_id}/approve", json={})
+    assert approve_response.status_code == 422
+    assert "cannot be deleted because it is referenced" in approve_response.text
+
+    run_detail = client.get(f"/api/v1/agent/runs/{run['id']}")
+    run_detail.raise_for_status()
+    refreshed_item = next(item for item in run_detail.json()["change_items"] if item["id"] == item_id)
+    assert refreshed_item["status"] == "APPLY_FAILED"
+    assert "cannot be deleted because it is referenced" in (refreshed_item["review_note"] or "")
 
 
 def test_entry_approve_applies_entry_and_allows_override(client, monkeypatch):

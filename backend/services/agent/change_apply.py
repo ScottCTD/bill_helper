@@ -5,11 +5,11 @@ from datetime import date as DateValue
 from typing import Any, Callable
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from backend.enums import AgentChangeType, EntryKind
-from backend.models import Account, Entity, Entry, EntryTag, Tag
+from backend.models import Account, Entity, Entry, Tag
 from backend.services.entries import normalize_tag_name, set_entry_tags, soft_delete_entry
 from backend.services.entities import (
     find_entity_by_name,
@@ -387,7 +387,18 @@ def apply_delete_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
     if tag is None:
         raise ValueError("Tag not found")
 
-    db.execute(delete(EntryTag).where(EntryTag.tag_id == tag.id))
+    referenced_entry_count = int(
+        db.scalar(
+            select(func.count(Entry.id))
+            .join(Entry.tags)
+            .where(Tag.id == tag.id, Entry.is_deleted.is_(False))
+        )
+        or 0
+    )
+    if referenced_entry_count > 0:
+        noun = "entry" if referenced_entry_count == 1 else "entries"
+        raise ValueError(f"Tag cannot be deleted because it is referenced by {referenced_entry_count} {noun}")
+
     assign_single_term_by_name(
         db,
         taxonomy_key=TAG_CATEGORY_TAXONOMY_KEY,

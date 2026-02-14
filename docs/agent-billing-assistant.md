@@ -17,7 +17,7 @@ The agent is a tool-calling LLM (OpenRouter via OpenAI-compatible API) with a re
 |-----------|------|----------------|
 | Runtime | `backend/services/agent/runtime.py` | Run lifecycle, bounded tool loop, persistence of tool calls and final assistant message |
 | Model client | `backend/services/agent/model_client.py` | OpenRouter adapter, tool wiring, retry-enabled model completion |
-| Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks, proposal ordering, error recovery, and current-user context section |
+| Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks, proposal ordering (including tag-delete sequencing), error recovery, and current-user context section |
 | Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; builds current-user account context for system prompt; prepends review outcomes before current user feedback in the latest user message |
 | Tools | `backend/services/agent/tools.py` | Read/proposal tool schemas, validation, execution, tool-level retry |
 | Review/apply | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py` | Approval/rejection, apply handlers for proposed CRUD changes |
@@ -77,16 +77,20 @@ You are the Bill Helper assistant. Follow review-gated mutation policies strictl
    0. Before proposing any entry, check for duplicates using existing entry data.
    1. If not duplicate: list existing tags and entities, then propose missing tags/entities first.
    2. Only after duplicate checks and tag/entity reconciliation, propose entries.
-5. Do not use domain IDs in proposals; use names and selector fields only.
-6. If a tool returns an ERROR, decide whether to recover with other tools or ask the user to clarify.
+5. Before proposing delete_tag:
+   0. Check whether entries still reference the tag.
+   1. If referenced, propose update_entry changes first to remove/replace that tag on affected entries.
+   2. Only propose delete_tag after references are cleared.
+6. Do not use domain IDs in proposals; use names and selector fields only.
+7. If a tool returns an ERROR, decide whether to recover with other tools or ask the user to clarify.
    If selector ambiguity is reported, ask the user for clarification before proposing a mutation.
-7. Reviewed proposal results are prepended in the latest user message before user feedback.
+8. Reviewed proposal results are prepended in the latest user message before user feedback.
    Use review statuses/comments to improve the next proposal iteration.
    If no explicit user feedback exists, explore missing context and improve proposals proactively.
-8. End every run with one final assistant message.
-9. Final message should prioritize a concise direct answer.
+9. End every run with one final assistant message.
+10. Final message should prioritize a concise direct answer.
    Mention tools only when they materially change the answer or next action.
-10. Do not ask to run non-existent tools.
+11. Do not ask to run non-existent tools.
 
 ## Current User Context
 ...
@@ -235,7 +239,7 @@ Proposal tools create `AgentChangeItem` rows with status `PENDING_REVIEW`. They 
 
 #### `propose_delete_tag`
 
-**Description:** Create a review-gated proposal to delete a tag. Delete behavior detaches tag references from entries; it does not delete entries.
+**Description:** Create a review-gated proposal to delete a tag only when the tag has no active entry references.
 
 **Arguments:**
 
@@ -243,7 +247,7 @@ Proposal tools create `AgentChangeItem` rows with status `PENDING_REVIEW`. They 
 |-----------|------|----------|-------------|
 | `name` | string | yes | 1–64 chars, existing tag name |
 
-**Expected output:** `OK` with status and preview (including impacted entry count). Returns `ERROR` if tag not found.
+**Expected output:** `OK` with status and preview when the tag is unreferenced. Returns `ERROR` if tag not found or still referenced by entries.
 
 ---
 
@@ -381,7 +385,7 @@ In `change_apply.py`:
 - `delete_entry`: soft-delete uniquely-selected entry
 - `create_tag`: create/reuse normalized tag + assign category
 - `update_tag`: rename and/or update category
-- `delete_tag`: detach from entries then delete tag
+- `delete_tag`: delete only if unreferenced by non-deleted entries; otherwise apply fails with validation error
 - `create_entity`: create/reuse normalized entity + category
 - `update_entity`: rename and/or update category (sync denormalized entry labels)
 - `delete_entity`: null/detach references from entries/accounts then delete entity
