@@ -130,6 +130,7 @@ Agent client methods:
 - `Kind` table cell uses symbol-only indicators (`+` for income, `-` for expense)
 - amount cells now render with ISO code prefix (for example `CAD 8.13`)
 - now uses shared shadcn primitives for card layout, filters, badges, and table actions
+- date column uses a fixed compact width with no-wrap so ISO dates stay single-line; narrow viewports scroll horizontally instead of wrapping
 - filter toolbar now uses shared table-shell classes aligned with `Properties`:
   - `.table-toolbar`
   - `.table-toolbar-filters`

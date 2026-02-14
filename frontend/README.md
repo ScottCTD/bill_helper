@@ -90,6 +90,7 @@ uv run python scripts/check_docs_sync.py
 ## Current Constraints
 
 - Amount display uses code-prefix formatting (`CAD 8.13`).
+- Entries table date values are pinned to a no-wrap compact column to avoid split-date rows; horizontal table scroll handles overflow on smaller widths.
 - Entry status is not part of frontend entry models.
 - Runtime settings are loaded from `/api/v1/settings` and affect default currency/model behavior across pages.
 - Agent review timeline supports create/update/delete change items for entries, tags, and entities.

@@ -394,6 +394,10 @@
     @apply cursor-pointer;
   }
 
+  .entries-date-column {
+    @apply w-28 whitespace-nowrap;
+  }
+
   .entry-delete-button {
     @apply text-muted-foreground hover:text-foreground;
   }

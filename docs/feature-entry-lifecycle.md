@@ -58,3 +58,4 @@ This doc is the fast path for understanding how entries are created, edited, lin
 - Currency normalization occurs server-side (`currency_code.upper()`).
 - Agent create-entry proposals can omit `currency_code`; backend defaults to resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
 - Soft-delete removes entry links and triggers group recomputation.
+- Entries list date cells are rendered as no-wrap with a compact fixed width so `YYYY-MM-DD` values stay on one line.

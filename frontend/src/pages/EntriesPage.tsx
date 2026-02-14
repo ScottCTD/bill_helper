@@ -209,7 +209,7 @@ export function EntriesPage() {
               <Table className="entries-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
+                    <TableHead className="entries-date-column">Date</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Kind</TableHead>
                     <TableHead>Amount</TableHead>
@@ -221,7 +221,7 @@ export function EntriesPage() {
                 <TableBody>
                   {entriesQuery.data.items.map((entry) => (
                     <TableRow key={entry.id} className="entries-table-row" onDoubleClick={() => setEditorState({ mode: "edit", entryId: entry.id })}>
-                      <TableCell>{entry.occurred_at}</TableCell>
+                      <TableCell className="entries-date-column">{entry.occurred_at}</TableCell>
                       <TableCell className="font-medium">{entry.name}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={entry.kind === "INCOME" ? "kind-indicator kind-indicator-income" : "kind-indicator kind-indicator-expense"}>
