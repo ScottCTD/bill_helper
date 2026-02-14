@@ -56,8 +56,6 @@ Agent:
   - `current_user_name`
   - `default_currency_code`
   - `dashboard_currency_code`
-  - `openrouter_api_key`
-  - `openrouter_base_url`
   - `agent_model`
   - `agent_max_steps`
   - `agent_retry_max_attempts`

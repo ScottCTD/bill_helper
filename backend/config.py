@@ -20,11 +20,18 @@ class Settings(BaseSettings):
         default="CAD",
         validation_alias=AliasChoices("DASHBOARD_CURRENCY_CODE", "BILL_HELPER_DASHBOARD_CURRENCY_CODE"),
     )
-    openrouter_api_key: str | None = Field(
+    langfuse_public_key: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("OPENROUTER_API_KEY", "BILL_HELPER_OPENROUTER_API_KEY"),
+        validation_alias=AliasChoices("LANGFUSE_PUBLIC_KEY", "BILL_HELPER_LANGFUSE_PUBLIC_KEY"),
     )
-    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    langfuse_secret_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("LANGFUSE_SECRET_KEY", "BILL_HELPER_LANGFUSE_SECRET_KEY"),
+    )
+    langfuse_host: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("LANGFUSE_HOST", "BILL_HELPER_LANGFUSE_HOST"),
+    )
     agent_model: str = "google/gemini-3-flash-preview"
     agent_max_steps: int = 100
     agent_retry_max_attempts: int = Field(default=3, ge=1, le=10)

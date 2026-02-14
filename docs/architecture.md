@@ -41,7 +41,7 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 1. user sends message to `/api/v1/agent/threads/{thread_id}/messages` (text + optional images)
 2. backend persists user message and attachments
 3. backend creates `agent_runs` row (`running`)
-4. runtime executes bounded tool-calling loop against OpenRouter
+4. runtime executes bounded tool-calling loop via LiteLLM using configured provider model
 5. each tool call is persisted to `agent_tool_calls`
 6. proposal tools create `agent_change_items` (`PENDING_REVIEW`)
 7. runtime enforces a final assistant message and marks run `completed` or `failed`
@@ -80,7 +80,7 @@ Contract notes:
 - `runtime.py`: run lifecycle orchestration and tool loop state machine
 - `message_history.py`: persisted conversation/attachment conversion into LLM messages
 - `message_history.py`: prepends reviewed proposal outcomes into the latest user message for follow-up turns
-- `model_client.py`: OpenRouter API adapter and normalized model errors
+- `model_client.py`: LiteLLM adapter and normalized model errors
 - `model_client.py`: tenacity retries for model completion calls
 - `change_apply.py`: change-type handler registry for review-time resource application
 - `review.py`: approval/rejection transitions and audit writes
@@ -132,4 +132,4 @@ Cross-page consistency:
 - bank sync / CSV ingestion
 - autonomous background agent runs
 - update/delete agent proposals
-- provider abstraction beyond OpenRouter integration
+- non-LiteLLM model client implementations

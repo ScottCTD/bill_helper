@@ -1,13 +1,34 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from threading import Lock
 from typing import Any
 
-from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI, OpenAIError
+import litellm
+from litellm import APIConnectionError, OpenAIError, Timeout
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 
 class AgentModelError(RuntimeError):
     pass
+
+
+_LANGFUSE_CALLBACK_NAME = "langfuse"
+_LANGFUSE_CALLBACK_LOCK = Lock()
+
+
+def _normalize_secret(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _normalize_host(value: Any) -> str | None:
+    normalized = _normalize_secret(value)
+    if normalized is None:
+        return None
+    return normalized.rstrip("/")
 
 
 def _normalize_observability_text(value: Any, *, max_length: int = 128) -> str | None:
@@ -17,6 +38,27 @@ def _normalize_observability_text(value: Any, *, max_length: int = 128) -> str |
     if not normalized:
         return None
     return normalized[:max_length]
+
+
+def _normalize_callback_values(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple, set)):
+        normalized: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                normalized.append(item)
+        return normalized
+    return []
+
+
+def _enable_langfuse_callbacks() -> None:
+    with _LANGFUSE_CALLBACK_LOCK:
+        for attribute_name in ("success_callback", "failure_callback"):
+            callbacks = _normalize_callback_values(getattr(litellm, attribute_name, None))
+            if _LANGFUSE_CALLBACK_NAME not in callbacks:
+                callbacks.append(_LANGFUSE_CALLBACK_NAME)
+                setattr(litellm, attribute_name, callbacks)
 
 
 def _build_observability_extra_body(observability: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -36,6 +78,46 @@ def _build_observability_extra_body(observability: dict[str, Any] | None) -> dic
         payload["trace"] = trace
 
     return payload or None
+
+
+def _build_observability_metadata(observability: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(observability, dict):
+        return None
+
+    metadata: dict[str, Any] = {}
+    trace_metadata: dict[str, Any] = {}
+
+    user = _normalize_observability_text(observability.get("user"), max_length=256)
+    session_id = _normalize_observability_text(observability.get("session_id"), max_length=256)
+    trace = observability.get("trace")
+
+    if user is not None:
+        metadata["trace_user_id"] = user
+    if session_id is not None:
+        metadata["session_id"] = session_id
+
+    generation_name = "agent_turn"
+    if isinstance(trace, dict):
+        trace_id = _normalize_observability_text(trace.get("trace_id"), max_length=256)
+        trace_name = _normalize_observability_text(trace.get("trace_name"), max_length=256)
+        generation_name = _normalize_observability_text(trace.get("generation_name"), max_length=128) or generation_name
+        thread_id = _normalize_observability_text(trace.get("thread_id"), max_length=256)
+        run_id = _normalize_observability_text(trace.get("run_id"), max_length=256)
+
+        if trace_id is not None:
+            metadata["trace_id"] = trace_id
+        if trace_name is not None:
+            metadata["trace_name"] = trace_name
+        if thread_id is not None:
+            trace_metadata["thread_id"] = thread_id
+        if run_id is not None:
+            trace_metadata["run_id"] = run_id
+
+    metadata["generation_name"] = generation_name
+    if trace_metadata:
+        metadata["trace_metadata"] = trace_metadata
+
+    return metadata or None
 
 
 def _read_attr(source: Any, key: str) -> Any:
@@ -91,36 +173,80 @@ def _normalize_usage(usage: Any) -> dict[str, int | None]:
     }
 
 
-class OpenRouterModelClient:
+def _coerce_text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    return value if value else None
+
+
+def _coerce_index(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
+
+
+def validate_litellm_environment(*, model_name: str) -> tuple[bool, list[str], str]:
+    normalized_model = (model_name or "").strip() or "google/gemini-3-flash-preview"
+    try:
+        validation = litellm.validate_environment(
+            model=normalized_model,
+        )
+    except Exception:
+        # Keep fail-fast only when we can confidently determine missing credentials.
+        return True, [], normalized_model
+
+    if not isinstance(validation, dict):
+        return True, [], normalized_model
+
+    keys_in_environment = validation.get("keys_in_environment")
+    if keys_in_environment is not True and keys_in_environment is not False:
+        return True, [], normalized_model
+
+    raw_missing = validation.get("missing_keys")
+    if isinstance(raw_missing, (list, tuple)):
+        missing_keys = [str(value) for value in raw_missing if str(value).strip()]
+    else:
+        missing_keys = []
+    return bool(keys_in_environment), missing_keys, normalized_model
+
+
+class LiteLLMModelClient:
     def __init__(
         self,
         *,
-        api_key: str,
-        base_url: str,
         model_name: str,
         tools: list[dict[str, Any]],
         retry_max_attempts: int,
         retry_initial_wait_seconds: float,
         retry_max_wait_seconds: float,
         retry_backoff_multiplier: float,
+        langfuse_public_key: str | None = None,
+        langfuse_secret_key: str | None = None,
+        langfuse_host: str | None = None,
     ) -> None:
-        self._client = OpenAI(
-            api_key=api_key,
-            base_url=base_url.rstrip("/"),
-        )
-        self._model_name = model_name
+        self._model_name = (model_name or "").strip() or "google/gemini-3-flash-preview"
         self._tools = tools
         self._retry_max_attempts = max(1, retry_max_attempts)
         self._retry_initial_wait_seconds = max(0.0, retry_initial_wait_seconds)
         self._retry_max_wait_seconds = max(0.0, retry_max_wait_seconds)
         self._retry_backoff_multiplier = max(1.0, retry_backoff_multiplier)
+        self._langfuse_public_key = _normalize_secret(langfuse_public_key)
+        self._langfuse_secret_key = _normalize_secret(langfuse_secret_key)
+        self._langfuse_host = _normalize_host(langfuse_host)
+        self._langfuse_enabled = self._langfuse_public_key is not None and self._langfuse_secret_key is not None
+        if self._langfuse_enabled:
+            _enable_langfuse_callbacks()
 
-    def _chat_completion_once(
+    def _base_request(
         self,
         messages: list[dict[str, Any]],
         *,
         observability: dict[str, Any] | None = None,
-    ) -> Any:
+    ) -> dict[str, Any]:
         request: dict[str, Any] = {
             "model": self._model_name,
             "messages": messages,
@@ -128,20 +254,48 @@ class OpenRouterModelClient:
             "tool_choice": "auto",
             "temperature": 0.1,
         }
+        if self._langfuse_enabled:
+            request["langfuse_public_key"] = self._langfuse_public_key
+            request["langfuse_secret_key"] = self._langfuse_secret_key
+            if self._langfuse_host is not None:
+                request["langfuse_host"] = self._langfuse_host
+
+        metadata = _build_observability_metadata(observability)
+        if metadata is not None:
+            request["metadata"] = metadata
+
         extra_body = _build_observability_extra_body(observability)
         if extra_body is not None:
             request["extra_body"] = extra_body
+        return request
+
+    def _to_model_error(self, exc: Exception) -> AgentModelError:
+        if isinstance(exc, Timeout):
+            message = "model request timed out"
+        elif isinstance(exc, APIConnectionError):
+            message = f"model request failed: {str(exc)}"
+        elif isinstance(exc, OpenAIError):
+            status_code = getattr(exc, "status_code", None)
+            if status_code is not None:
+                message_detail = getattr(exc, "message", None) or str(exc)
+                message = f"model request failed ({status_code}): {message_detail}"
+            else:
+                message = f"model request failed: {str(exc)}"
+        else:  # pragma: no cover - defensive guard
+            message = f"model request failed: {str(exc)}"
+        return AgentModelError(message)
+
+    def _chat_completion_once(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        observability: dict[str, Any] | None = None,
+    ) -> Any:
+        request = self._base_request(messages, observability=observability)
         try:
-            return self._client.chat.completions.create(**request)
-        except APIStatusError as exc:
-            detail = exc.body if exc.body is not None else str(exc)
-            raise AgentModelError(f"model request failed ({exc.status_code}): {detail}") from exc
-        except APITimeoutError as exc:
-            raise AgentModelError("model request timed out") from exc
-        except APIConnectionError as exc:
-            raise AgentModelError(f"model request failed: {str(exc)}") from exc
-        except OpenAIError as exc:
-            raise AgentModelError(f"model request failed: {str(exc)}") from exc
+            return litellm.completion(**request)
+        except Exception as exc:
+            raise self._to_model_error(exc) from exc
 
     def complete(
         self,
@@ -189,4 +343,137 @@ class OpenRouterModelClient:
             "content": message.content or "",
             "tool_calls": tool_calls,
             "usage": _normalize_usage(getattr(response, "usage", None)),
+        }
+
+    def complete_stream(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        observability: dict[str, Any] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        request = self._base_request(messages, observability=observability)
+        request["stream"] = True
+        request["stream_options"] = {"include_usage": True}
+
+        emitted_content = ""
+        final_content = ""
+        usage_totals: dict[str, int | None] = {
+            "input_tokens": None,
+            "output_tokens": None,
+            "cache_read_tokens": None,
+            "cache_write_tokens": None,
+        }
+        final_tool_calls_by_index: dict[int, dict[str, Any]] = {}
+
+        retrying = Retrying(
+            stop=stop_after_attempt(self._retry_max_attempts),
+            wait=wait_exponential(
+                multiplier=self._retry_initial_wait_seconds,
+                max=self._retry_max_wait_seconds,
+                exp_base=self._retry_backoff_multiplier,
+            ),
+            retry=retry_if_exception_type(AgentModelError),
+            reraise=True,
+        )
+
+        for attempt in retrying:
+            with attempt:
+                try:
+                    attempt_content = ""
+                    attempt_tool_calls_by_index: dict[int, dict[str, Any]] = {}
+                    try:
+                        stream = litellm.completion(**request)
+                    except OpenAIError as exc:
+                        status_code = getattr(exc, "status_code", None)
+                        if request.get("stream_options") and status_code in (400, 422):
+                            # Some OpenAI-compatible providers reject `stream_options`; retry once without it.
+                            retry_request = dict(request)
+                            retry_request.pop("stream_options", None)
+                            stream = litellm.completion(**retry_request)
+                        else:
+                            raise
+
+                    for chunk in stream:
+                        usage = _normalize_usage(_read_attr(chunk, "usage"))
+                        for field, value in usage.items():
+                            if value is not None:
+                                usage_totals[field] = value
+
+                        choices = _read_attr(chunk, "choices") or []
+                        for choice in choices:
+                            delta = _read_attr(choice, "delta")
+                            if delta is None:
+                                continue
+
+                            content_delta = _coerce_text(_read_attr(delta, "content"))
+                            if content_delta is not None:
+                                attempt_content = f"{attempt_content}{content_delta}"
+                                if attempt_content.startswith(emitted_content):
+                                    suffix = attempt_content[len(emitted_content) :]
+                                    if suffix:
+                                        emitted_content = attempt_content
+                                        yield {"type": "text_delta", "delta": suffix}
+                                elif emitted_content.startswith(attempt_content):
+                                    # Retry replaying an already-emitted prefix; suppress duplicates.
+                                    continue
+                                else:
+                                    raise AgentModelError("model request failed: stream retry produced divergent output")
+
+                            for tool_call_delta in _read_attr(delta, "tool_calls") or []:
+                                index = _coerce_index(_read_attr(tool_call_delta, "index"))
+                                if index is None:
+                                    continue
+                                current = attempt_tool_calls_by_index.setdefault(
+                                    index,
+                                    {
+                                        "id": "",
+                                        "type": "function",
+                                        "function": {"name": "", "arguments": ""},
+                                    },
+                                )
+
+                                delta_id = _coerce_text(_read_attr(tool_call_delta, "id"))
+                                if delta_id is not None:
+                                    if not current["id"]:
+                                        current["id"] = delta_id
+
+                                delta_type = _coerce_text(_read_attr(tool_call_delta, "type"))
+                                if delta_type is not None:
+                                    current["type"] = delta_type
+
+                                delta_function = _read_attr(tool_call_delta, "function")
+                                delta_name = _coerce_text(_read_attr(delta_function, "name"))
+                                if delta_name is not None:
+                                    current["function"]["name"] = f"{current['function']['name']}{delta_name}"
+
+                                delta_arguments = _coerce_text(_read_attr(delta_function, "arguments"))
+                                if delta_arguments is not None:
+                                    current["function"]["arguments"] = f"{current['function']['arguments']}{delta_arguments}"
+
+                    if not attempt_content and emitted_content:
+                        final_content = emitted_content
+                    else:
+                        if attempt_content.startswith(emitted_content):
+                            suffix = attempt_content[len(emitted_content) :]
+                            if suffix:
+                                emitted_content = attempt_content
+                                yield {"type": "text_delta", "delta": suffix}
+                            final_content = attempt_content
+                        else:
+                            final_content = emitted_content
+                    final_tool_calls_by_index = attempt_tool_calls_by_index
+                except Exception as exc:
+                    raise self._to_model_error(exc) from exc
+
+        if not final_content:
+            final_content = emitted_content
+        tool_calls = [final_tool_calls_by_index[index] for index in sorted(final_tool_calls_by_index)]
+        yield {
+            "type": "done",
+            "message": {
+                "role": "assistant",
+                "content": final_content,
+                "tool_calls": tool_calls,
+                "usage": usage_totals,
+            },
         }

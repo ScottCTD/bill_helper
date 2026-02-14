@@ -4,7 +4,7 @@ This document describes the architecture, prompts, and tools of the Bill Helper 
 
 ## Overview
 
-The agent is a tool-calling LLM (OpenRouter via OpenAI-compatible API) with a review-gated mutation model:
+The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated mutation model:
 
 - The agent reads data with read tools.
 - The agent proposes CRUD changes for entries, tags, and entities.
@@ -16,7 +16,7 @@ The agent is a tool-calling LLM (OpenRouter via OpenAI-compatible API) with a re
 | Component | File | Responsibility |
 |-----------|------|----------------|
 | Runtime | `backend/services/agent/runtime.py` | Run lifecycle, bounded tool loop, persistence of tool calls and final assistant message |
-| Model client | `backend/services/agent/model_client.py` | OpenRouter adapter, tool wiring, retry-enabled model completion |
+| Model client | `backend/services/agent/model_client.py` | LiteLLM adapter, tool wiring, retry-enabled model completion |
 | Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks, proposal ordering (including tag-delete sequencing), error recovery, and current-user context section |
 | Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; builds current-user account context for system prompt; prepends review outcomes before current user feedback in the latest user message |
 | Tools | `backend/services/agent/tools.py` | Read/proposal tool schemas, validation, execution, tool-level retry |
@@ -38,8 +38,9 @@ The agent is a tool-calling LLM (OpenRouter via OpenAI-compatible API) with a re
 
 | Setting | Env | Default | Notes |
 |---------|-----|---------|-------|
-| `openrouter_api_key` | `OPENROUTER_API_KEY` / `BILL_HELPER_OPENROUTER_API_KEY` | `None` | Required for run execution; can be overridden/cleared via `/api/v1/settings` |
-| `openrouter_base_url` | `BILL_HELPER_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API base URL |
+| `langfuse_public_key` | `LANGFUSE_PUBLIC_KEY` / `BILL_HELPER_LANGFUSE_PUBLIC_KEY` | `None` | Enables LiteLLM Langfuse callbacks when paired with `langfuse_secret_key` |
+| `langfuse_secret_key` | `LANGFUSE_SECRET_KEY` / `BILL_HELPER_LANGFUSE_SECRET_KEY` | `None` | Enables LiteLLM Langfuse callbacks when paired with `langfuse_public_key` |
+| `langfuse_host` | `LANGFUSE_HOST` / `BILL_HELPER_LANGFUSE_HOST` | `None` | Optional Langfuse host (defaults to Langfuse cloud host if omitted) |
 | `agent_model` | `BILL_HELPER_AGENT_MODEL` | `google/gemini-3-flash-preview` | Model name; runtime override supported via `/api/v1/settings` |
 | `agent_max_steps` | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool loop iterations |
 | `default_currency_code` | `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `CAD` | Fallback for entry proposals missing currency (`/settings` override first, env fallback second) |
@@ -396,7 +397,7 @@ In `change_apply.py`:
 |------|---------|
 | `backend/services/agent/tools.py` | Tool definitions and handlers |
 | `backend/services/agent/runtime.py` | Run orchestration, tool loop |
-| `backend/services/agent/model_client.py` | OpenRouter client with retry |
+| `backend/services/agent/model_client.py` | LiteLLM client with retry |
 | `backend/services/agent/prompts.py` | System prompt |
 | `backend/services/agent/message_history.py` | LLM message construction and review-result user-message augmentation |
 | `backend/services/agent/review.py` | Approve/reject logic |

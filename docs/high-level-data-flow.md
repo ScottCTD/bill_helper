@@ -72,7 +72,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 
 ### Agent-Assisted Write Path (Review-Gated)
 
-1. User sends message to `/api/v1/agent/threads/{thread_id}/messages`.
+1. User sends message to `/api/v1/agent/threads/{thread_id}/messages` (background run) or `/api/v1/agent/threads/{thread_id}/messages/stream` (SSE token stream).
 2. Agent runtime executes read/proposal tools.
 3. Proposed creates are persisted as `agent_change_items` (`PENDING_REVIEW`).
 4. Human reviewer approves/rejects individual items.
@@ -136,6 +136,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `0008_agent_run_usage_metrics`
   - `0009_remove_entry_status`
   - `0010_runtime_settings_overrides`
+  - `0011_remove_openrouter_runtime_settings_fields`
 - Operational commands:
   - `uv run alembic upgrade head`
   - `uv run bill-helper-api`
@@ -146,7 +147,8 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `BILL_HELPER_CURRENT_USER_NAME`
   - `BILL_HELPER_DEFAULT_CURRENCY_CODE`
   - `BILL_HELPER_DASHBOARD_CURRENCY_CODE`
-  - `BILL_HELPER_OPENROUTER_API_KEY`
+  - `BILL_HELPER_AGENT_MODEL`
+  - provider credentials for selected model (for example `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`)
 
 ## Current Constraints and Limitations
 

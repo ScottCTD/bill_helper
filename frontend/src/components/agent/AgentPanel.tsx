@@ -19,12 +19,12 @@ import {
   interruptAgentRun,
   listAgentThreads,
   rejectAgentChangeItem,
-  sendAgentMessage,
+  streamAgentMessage,
   withApiBase
 } from "../../lib/api";
 import { invalidateAgentThreadData, invalidateEntryReadModels } from "../../lib/queryInvalidation";
 import { queryKeys } from "../../lib/queryKeys";
-import type { AgentChangeItem, AgentRun, AgentThreadDetail, AgentThreadSummary } from "../../lib/types";
+import type { AgentChangeItem, AgentRun, AgentStreamEvent, AgentThreadDetail, AgentThreadSummary } from "../../lib/types";
 import { cn } from "../../lib/utils";
 import { AgentRunReviewModal } from "./review/AgentRunReviewModal";
 import { Button } from "../ui/button";
@@ -59,6 +59,7 @@ interface PendingUserMessage {
   threadId: string;
   content: string;
   createdAt: string;
+  baselineLastUserMessageId: string | null;
   attachments: PendingUserAttachmentPreview[];
 }
 
@@ -66,6 +67,9 @@ interface PendingAssistantMessage {
   id: string;
   threadId: string;
   createdAt: string;
+  content: string;
+  runId: string | null;
+  baselineLastAssistantMessageId: string | null;
 }
 
 const IMAGE_FILENAME_PATTERN = /\.(avif|bmp|gif|heic|heif|jpe?g|png|svg|tiff?|webp)$/i;
@@ -282,17 +286,14 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string>("");
   const [draftMessage, setDraftMessage] = useState("");
   const [draftFiles, setDraftFiles] = useState<DraftAttachment[]>([]);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isSendPolling, setIsSendPolling] = useState(false);
   const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null);
   const [pendingAssistantMessage, setPendingAssistantMessage] = useState<PendingAssistantMessage | null>(null);
   const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reviewRunId, setReviewRunId] = useState<string | null>(null);
-  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-  const [streamingText, setStreamingText] = useState("");
   const [isComposerDragActive, setIsComposerDragActive] = useState(false);
-  const streamingTimerRef = useRef<number | null>(null);
-  const autoStreamedMessageByThreadRef = useRef<Record<string, string>>({});
   const draftFileIdCounterRef = useRef(0);
   const composerDragDepthRef = useRef(0);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
@@ -363,22 +364,12 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
   });
 
-  const sendMessageMutation = useMutation({
-    mutationFn: sendAgentMessage,
-    onSuccess: (_, variables) => {
-      invalidateAgentThreadData(queryClient, variables.threadId);
-      setDraftMessage("");
-      setDraftFiles([]);
-      setPreviewAttachmentId(null);
-      setActionError(null);
-    }
-  });
   const interruptRunMutation = useMutation({
     mutationFn: interruptAgentRun,
     onSuccess: () => {
       invalidateAgentThreadData(queryClient, selectedThreadId || undefined);
       setIsSendPolling(false);
-      stopStreaming();
+      setPendingAssistantMessage(null);
       setActionError(null);
     }
   });
@@ -402,7 +393,6 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
 
   const isMutating =
     createThreadMutation.isPending ||
-    sendMessageMutation.isPending ||
     interruptRunMutation.isPending ||
     approveMutation.isPending ||
     rejectMutation.isPending;
@@ -422,17 +412,24 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
     return null;
   }, [threadQuery.data?.runs]);
-  const isRunInFlight = sendMessageMutation.isPending || hasActiveRun || Boolean(streamingMessageId);
-  const hasPendingRunActivity = useMemo(
-    () => pendingAssistantRuns.some((run) => Boolean(run.error_text) || run.tool_calls.length > 0 || run.change_items.length > 0),
-    [pendingAssistantRuns]
-  );
+  const isRunInFlight = isSendingMessage || hasActiveRun;
   const shouldShowOptimisticAssistantBubble = Boolean(
     pendingAssistantMessage &&
-      pendingAssistantMessage.threadId === selectedThreadId &&
-      !streamingMessageId &&
-      !hasPendingRunActivity
+      pendingAssistantMessage.threadId === selectedThreadId
   );
+  const pendingRunAttachedToOptimisticMessage = useMemo(() => {
+    if (!pendingAssistantMessage) {
+      return null;
+    }
+    if (pendingAssistantMessage.threadId !== selectedThreadId) {
+      return null;
+    }
+    if (pendingAssistantMessage.runId) {
+      return pendingAssistantRuns.find((run) => run.id === pendingAssistantMessage.runId) ?? null;
+    }
+    const runningRun = [...pendingAssistantRuns].reverse().find((run) => run.status === "running");
+    return runningRun ?? null;
+  }, [pendingAssistantMessage, pendingAssistantRuns, selectedThreadId]);
   const selectedRunForReview = useMemo(() => {
     if (!reviewRunId) {
       return null;
@@ -450,6 +447,43 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       });
     };
   }, [pendingUserMessage]);
+
+  useEffect(() => {
+    if (!pendingUserMessage) {
+      return;
+    }
+    if (pendingUserMessage.threadId !== selectedThreadId) {
+      return;
+    }
+    const latestPersistedUserMessage = [...(threadQuery.data?.messages ?? [])]
+      .reverse()
+      .find((message) => message.role === "user");
+    if (!latestPersistedUserMessage) {
+      return;
+    }
+    if (latestPersistedUserMessage.id === pendingUserMessage.baselineLastUserMessageId) {
+      return;
+    }
+    setPendingUserMessage(null);
+  }, [pendingUserMessage, selectedThreadId, threadQuery.data?.messages]);
+  useEffect(() => {
+    if (!pendingAssistantMessage) {
+      return;
+    }
+    if (pendingAssistantMessage.threadId !== selectedThreadId) {
+      return;
+    }
+    const latestPersistedAssistantMessage = [...(threadQuery.data?.messages ?? [])]
+      .reverse()
+      .find((message) => message.role === "assistant");
+    if (!latestPersistedAssistantMessage) {
+      return;
+    }
+    if (latestPersistedAssistantMessage.id === pendingAssistantMessage.baselineLastAssistantMessageId) {
+      return;
+    }
+    setPendingAssistantMessage(null);
+  }, [pendingAssistantMessage, selectedThreadId, threadQuery.data?.messages]);
   const activeModelName = useMemo(() => {
     const runs = threadQuery.data?.runs ?? [];
     const latest = runs[runs.length - 1];
@@ -499,40 +533,8 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     setPreviewAttachmentId(null);
   }, [previewAttachmentId, selectedDraftAttachmentPreview]);
 
-  function stopStreaming() {
-    if (streamingTimerRef.current !== null) {
-      window.clearInterval(streamingTimerRef.current);
-      streamingTimerRef.current = null;
-    }
-    setStreamingMessageId(null);
-    setStreamingText("");
-  }
-
-  function streamAssistantMessage(messageId: string, fullText: string) {
-    if (!fullText.trim()) {
-      stopStreaming();
-      return;
-    }
-    stopStreaming();
-    setStreamingMessageId(messageId);
-    setStreamingText("");
-
-    const step = Math.max(1, Math.ceil(fullText.length / 220));
-    let cursor = 0;
-    streamingTimerRef.current = window.setInterval(() => {
-      cursor = Math.min(fullText.length, cursor + step);
-      setStreamingText(fullText.slice(0, cursor));
-      if (cursor >= fullText.length) {
-        stopStreaming();
-      }
-    }, 22);
-  }
-
   useEffect(() => {
     return () => {
-      if (streamingTimerRef.current !== null) {
-        window.clearInterval(streamingTimerRef.current);
-      }
       if (sendAbortControllerRef.current) {
         sendAbortControllerRef.current.abort();
         sendAbortControllerRef.current = null;
@@ -541,22 +543,9 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   }, []);
 
   useEffect(() => {
-    stopStreaming();
     setReviewRunId(null);
     setPendingAssistantMessage(null);
   }, [selectedThreadId]);
-
-  useEffect(() => {
-    if (!pendingAssistantMessage) {
-      return;
-    }
-    if (pendingAssistantMessage.threadId !== selectedThreadId) {
-      return;
-    }
-    if (streamingMessageId || hasPendingRunActivity) {
-      setPendingAssistantMessage(null);
-    }
-  }, [hasPendingRunActivity, pendingAssistantMessage, selectedThreadId, streamingMessageId]);
 
   useEffect(() => {
     if (!pendingAssistantMessage) {
@@ -579,36 +568,6 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
     setReviewRunId(null);
   }, [reviewRunId, selectedRunForReview]);
-
-  useEffect(() => {
-    if (!selectedThreadId || !threadQuery.data) {
-      return;
-    }
-    const assistantMessages = threadQuery.data.messages.filter(
-      (message) => message.role === "assistant" && Boolean(message.content_markdown.trim())
-    );
-    const latestAssistantMessage = assistantMessages[assistantMessages.length - 1];
-    if (!latestAssistantMessage) {
-      return;
-    }
-
-    const latestSeenMessageId = autoStreamedMessageByThreadRef.current[selectedThreadId];
-    if (!latestSeenMessageId) {
-      autoStreamedMessageByThreadRef.current[selectedThreadId] = latestAssistantMessage.id;
-      return;
-    }
-    if (latestSeenMessageId === latestAssistantMessage.id) {
-      return;
-    }
-
-    const hasRunningRun = threadQuery.data.runs.some((run) => run.status === "running");
-    if (hasRunningRun) {
-      return;
-    }
-
-    autoStreamedMessageByThreadRef.current[selectedThreadId] = latestAssistantMessage.id;
-    streamAssistantMessage(latestAssistantMessage.id, latestAssistantMessage.content_markdown);
-  }, [selectedThreadId, threadQuery.data]);
 
   function nextDraftAttachmentId(): string {
     draftFileIdCounterRef.current += 1;
@@ -752,6 +711,34 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     return created.id;
   }
 
+  function handleAgentStreamEvent(threadId: string, event: AgentStreamEvent) {
+    if (event.type === "run_started") {
+      setPendingAssistantMessage((current) => {
+        if (!current || current.threadId !== threadId) {
+          return current;
+        }
+        return { ...current, runId: event.run_id };
+      });
+      return;
+    }
+    if (event.type === "text_delta") {
+      setPendingAssistantMessage((current) => {
+        if (!current || current.threadId !== threadId) {
+          return current;
+        }
+        return {
+          ...current,
+          runId: current.runId || event.run_id,
+          content: `${current.content}${event.delta}`
+        };
+      });
+      return;
+    }
+    if (event.type === "run_failed" && event.error_text) {
+      setActionError(event.error_text);
+    }
+  }
+
   async function handleSubmitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setActionError(null);
@@ -765,13 +752,25 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       const threadId = await ensureThreadId();
       const sendAbortController = new AbortController();
       sendAbortControllerRef.current = sendAbortController;
+      setIsSendingMessage(true);
       setIsSendPolling(true);
       invalidateAgentThreadData(queryClient, threadId);
+      const baselineLastUserMessageId =
+        [...(threadQuery.data?.messages ?? [])]
+          .reverse()
+          .find((message) => message.role === "user")
+          ?.id ?? null;
+      const baselineLastAssistantMessageId =
+        [...(threadQuery.data?.messages ?? [])]
+          .reverse()
+          .find((message) => message.role === "assistant")
+          ?.id ?? null;
       const optimisticMessage: PendingUserMessage = {
         id: `pending-user-${Date.now()}`,
         threadId,
         content,
         createdAt: new Date().toISOString(),
+        baselineLastUserMessageId,
         attachments: sendingDraftFiles.map((item, index) => ({
           id: `${item.id}-${index}`,
           name: item.file.name,
@@ -782,28 +781,38 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       setPendingAssistantMessage({
         id: `pending-assistant-${Date.now()}`,
         threadId,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        content: "",
+        runId: null,
+        baselineLastAssistantMessageId
       });
-      const run = await sendMessageMutation.mutateAsync({
+      setDraftMessage("");
+      setDraftFiles([]);
+      setPreviewAttachmentId(null);
+
+      await streamAgentMessage({
         threadId,
         content: draftMessage,
         files: sendingDraftFiles.map((item) => item.file),
-        signal: sendAbortController.signal
+        signal: sendAbortController.signal,
+        onEvent: (streamEvent) => handleAgentStreamEvent(threadId, streamEvent)
       });
       sendAbortControllerRef.current = null;
       const detail = await getAgentThread(threadId);
       queryClient.setQueryData(queryKeys.agent.thread(threadId), detail);
+      invalidateAgentThreadData(queryClient, threadId);
       setPendingUserMessage((current) => {
         if (!current || current.threadId !== threadId) {
           return current;
         }
         return null;
       });
-      const assistantMessage = detail.messages.find((message) => message.id === run.assistant_message_id);
-      if (assistantMessage) {
-        autoStreamedMessageByThreadRef.current[threadId] = assistantMessage.id;
-        streamAssistantMessage(assistantMessage.id, assistantMessage.content_markdown);
-      }
+      setPendingAssistantMessage((current) => {
+        if (!current || current.threadId !== threadId) {
+          return current;
+        }
+        return null;
+      });
     } catch (error) {
       sendAbortControllerRef.current = null;
       setPendingUserMessage((current) => {
@@ -816,24 +825,37 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         setActionError((error as Error).message);
       }
     } finally {
+      setIsSendingMessage(false);
       setIsSendPolling(false);
     }
   }
 
   async function handleStopRun() {
     setActionError(null);
-    stopStreaming();
+    setIsSendingMessage(false);
     setIsSendPolling(false);
     setPendingAssistantMessage(null);
     if (sendAbortControllerRef.current) {
       sendAbortControllerRef.current.abort();
       sendAbortControllerRef.current = null;
     }
-    if (!activeRunId) {
+    let runIdToInterrupt = activeRunId || pendingAssistantMessage?.runId || null;
+    if (!runIdToInterrupt && selectedThreadId) {
+      try {
+        const detail = await getAgentThread(selectedThreadId);
+        const latestRunningRun = sortRunsByCreatedAt(detail.runs)
+          .reverse()
+          .find((run) => run.status === "running");
+        runIdToInterrupt = latestRunningRun?.id ?? null;
+      } catch {
+        runIdToInterrupt = null;
+      }
+    }
+    if (!runIdToInterrupt) {
       return;
     }
     try {
-      await interruptRunMutation.mutateAsync(activeRunId);
+      await interruptRunMutation.mutateAsync(runIdToInterrupt);
     } catch (error) {
       setActionError((error as Error).message);
     }
@@ -951,8 +973,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                   const isAssistant = message.role === "assistant";
                   const isUser = message.role === "user";
                   const shouldRenderMarkdown = !isUser;
-                  const isStreamingMessage = streamingMessageId === message.id;
-                  const renderedContent = isStreamingMessage ? `${streamingText}\u258d` : message.content_markdown;
+                  const renderedContent = message.content_markdown;
                   const messageRuns = isAssistant ? runsByAssistantMessageId.get(message.id) ?? [] : [];
 
                   return (
@@ -979,11 +1000,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
 
                       {renderedContent.trim() ? (
                         shouldRenderMarkdown ? (
-                          isStreamingMessage ? (
-                            <p className="agent-message-text agent-message-streaming-text">{renderedContent}</p>
-                          ) : (
-                            <MarkdownRenderer markdown={renderedContent} />
-                          )
+                          <MarkdownRenderer markdown={renderedContent} />
                         ) : (
                           <p className="agent-message-text">{renderedContent}</p>
                         )
@@ -1046,14 +1063,34 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                       <strong>Assistant</strong>
                       <span className="muted">{prettyDateTime(pendingAssistantMessage.createdAt)}</span>
                     </header>
-                    <p className="agent-message-text">
-                      <span className="agent-message-caret">{"\u258d"}</span>
-                    </p>
+                    {pendingRunAttachedToOptimisticMessage ? (
+                      <AgentRunBlock
+                        run={pendingRunAttachedToOptimisticMessage}
+                        isMutating={isMutating}
+                        onReviewRun={setReviewRunId}
+                        mode="activity"
+                      />
+                    ) : null}
+                    {pendingAssistantMessage.content.trim() ? (
+                      <p className="agent-message-text agent-message-streaming-text">
+                        {pendingAssistantMessage.content}
+                        <span className="agent-message-caret">{"\u258d"}</span>
+                      </p>
+                    ) : (
+                      <p className="agent-message-text">
+                        <span className="agent-message-caret">{"\u258d"}</span>
+                      </p>
+                    )}
                   </article>
                 ) : null}
 
                 {pendingAssistantRuns.map((run) => {
                   const hasVisibleContent = Boolean(run.error_text) || run.tool_calls.length > 0 || run.change_items.length > 0;
+                  const attachedToOptimisticMessage =
+                    pendingRunAttachedToOptimisticMessage && pendingRunAttachedToOptimisticMessage.id === run.id;
+                  if (attachedToOptimisticMessage) {
+                    return null;
+                  }
                   if (!hasVisibleContent) {
                     return null;
                   }
@@ -1163,7 +1200,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                     </Button>
                   ) : (
                     <Button type="submit" size="sm" disabled={isMutating} className="agent-composer-send">
-                      {sendMessageMutation.isPending ? "Sending..." : "Send"}
+                      {isSendingMessage ? "Sending..." : "Send"}
                       <SendHorizontal className="h-4 w-4" />
                     </Button>
                   )}

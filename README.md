@@ -18,6 +18,7 @@ Implemented:
   - `0008_agent_run_usage_metrics`
   - `0009_remove_entry_status`
   - `0010_runtime_settings_overrides`
+  - `0011_remove_openrouter_runtime_settings_fields`
 - Taxonomy subsystem for generalized category management:
   - shared `taxonomies` / `taxonomy_terms` / `taxonomy_assignments` tables
   - default category taxonomies for `entities` and `tags`
@@ -27,8 +28,8 @@ Implemented:
 - Runtime settings system for user-configurable defaults (persisted in DB with env fallback semantics):
   - configurable default currency and dashboard currency
   - configurable current user name used for owner/review attribution
-  - configurable agent runtime controls (API key override, model, max steps, retry/image limits)
-  - empty API key override falls back to server default key
+  - configurable agent runtime controls (model, max steps, retry/image limits)
+  - model execution is LiteLLM-based and provider-agnostic (for example OpenAI/Anthropic/Google/OpenRouter)
 - Dashboard analytics redesign:
   - interactive, tabbed dashboard sections (`Overview`, `Daily Spend`, `Breakdowns`, `Insights`)
   - Recharts-based plotting (bar/area/pie) instead of custom static SVG charts
@@ -77,7 +78,9 @@ Implemented:
   - Entry update/delete selectors are name/date/value/from/to based and ask for user clarification on ambiguity.
   - No direct table mutation by the agent runtime.
   - Agent timeline title now surfaces model context (`Agent (<model>)`) and assistant messages render markdown content via `react-markdown` + GFM support.
-  - Agent message send now returns immediately with a `running` run while execution continues in background for progressive timeline polling.
+  - Agent now supports real-time token streaming to the timeline via `POST /api/v1/agent/threads/{thread_id}/messages/stream` (SSE).
+  - Existing `POST /api/v1/agent/threads/{thread_id}/messages` behavior remains available and still starts a background run for polling-based clients.
+  - If a run is interrupted, the interrupted user request remains in conversation history and the next turn is annotated so the model knows the previous response was cut short.
   - Composer now supports removable image chips with thumbnail previews before send.
   - Composer now supports paste (`Cmd/Ctrl+V`) and drag-drop image attachment ingestion.
   - Attachment chips are compact icon thumbnails with an extra-small corner remove (`x`) control that stays off the image preview above the chat bar.
@@ -85,14 +88,14 @@ Implemented:
   - In-flight run cards no longer show `Run: running (...)` header/timestamp rows; only thinking/tool activity is shown.
   - System messages now render with markdown formatting (including list markers).
   - Thread workspace now shows one cumulative usage/cost bar above the composer (`Input`, `Output`, `Cache read`, `Cache write`, rightmost `Total cost` in USD).
-  - Run costs are derived from LiteLLM model-cost mapping with OpenRouter alias support (for example `openrouter/google/gemini-3-flash-preview`).
+  - Run costs are derived from LiteLLM model-cost mapping using the configured model name.
   - Timeline run cards surface pending proposal summaries and open a dedicated unified diff review modal.
   - Review modal supports `Reject`, `Approve`, `Approve & Next`, and sequential `Approve All` flows with inline failure visibility.
   - Approved entry proposals are persisted directly to `entries` without a separate entry-level status field.
 - Refactor foundation for extensibility:
   - Backend agent internals are split by concern (`prompts`, `message_history`, `model_client`, `change_apply`, `runtime`, `review`).
   - Frontend query orchestration is centralized in `frontend/src/lib/queryKeys.ts` and `frontend/src/lib/queryInvalidation.ts`.
-  - Existing API contracts and route paths are unchanged.
+  - Existing API contracts remain compatible, with an added agent SSE stream endpoint for incremental assistant text.
 
 Deferred:
 
@@ -141,9 +144,9 @@ npm install
 
 Set these environment variables (for example in `.env`):
 
-- `OPENROUTER_API_KEY` (recommended; supported directly in `.env`)
-- `BILL_HELPER_OPENROUTER_API_KEY` (also supported)
-- `BILL_HELPER_OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`)
+- `LANGFUSE_PUBLIC_KEY` (optional; enables LiteLLM Langfuse callback tracing when paired with secret key)
+- `LANGFUSE_SECRET_KEY` (optional; enables LiteLLM Langfuse callback tracing when paired with public key)
+- `LANGFUSE_HOST` (optional; default Langfuse cloud host is `https://cloud.langfuse.com`)
 - `BILL_HELPER_AGENT_MODEL` (default `google/gemini-3-flash-preview`)
 - `BILL_HELPER_AGENT_MAX_STEPS` (default `100`)
 - `BILL_HELPER_DEFAULT_CURRENCY_CODE` (default `CAD`)
@@ -155,10 +158,23 @@ Set these environment variables (for example in `.env`):
 - `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` (default `5242880`)
 - `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`)
 
-Behavior when key is missing:
+Provider credential behavior:
+
+- LiteLLM resolves credentials directly from provider environment variables for the selected `BILL_HELPER_AGENT_MODEL`
+- examples:
+  - `OPENAI_API_KEY` with `BILL_HELPER_AGENT_MODEL=openai/gpt-4.1-mini`
+  - `ANTHROPIC_API_KEY` with `BILL_HELPER_AGENT_MODEL=anthropic/claude-3-5-sonnet-20240620`
+  - `OPENROUTER_API_KEY` with `BILL_HELPER_AGENT_MODEL=openrouter/google/gemini-3-flash-preview`
+
+Observability behavior:
+
+- when `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are set, runtime enables LiteLLM `langfuse` success/failure callbacks
+- each model call includes LiteLLM metadata (`trace_id`, `session_id`, `trace_user_id`, `generation_name`) so runs in one thread stay grouped in Langfuse
+
+Behavior when credentials are missing:
 
 - app boots normally
-- agent message send endpoint returns `503` with a clear configuration error when neither server key nor user override key is configured
+- agent message send endpoint returns `503` with a clear configuration error for the resolved model target
 
 ## 3) Initialize database
 
@@ -297,5 +313,5 @@ uv run python scripts/check_docs_sync.py
 - Frontend design tokens and component styles: `frontend/src/styles.css`
 - Frontend UI primitives: `frontend/src/components/ui`
 - Agent panel UI: `frontend/src/components/agent/AgentPanel.tsx`
-- Latest migration: `alembic/versions/0010_runtime_settings_overrides.py`
+- Latest migration: `alembic/versions/0011_remove_openrouter_runtime_settings_fields.py`
 - Demo seed: `scripts/seed_demo.py`

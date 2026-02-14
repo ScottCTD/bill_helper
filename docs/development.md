@@ -42,9 +42,6 @@ Core:
 
 Agent:
 
-- `OPENROUTER_API_KEY` (recommended)
-- `BILL_HELPER_OPENROUTER_API_KEY` (also accepted)
-- `OPENROUTER_BASE_URL`
 - `AGENT_MODEL`
 - `AGENT_MAX_STEPS` (default `100`)
 - `DEFAULT_CURRENCY_CODE` / `BILL_HELPER_DEFAULT_CURRENCY_CODE` (default `CAD`)
@@ -58,9 +55,9 @@ Agent:
 
 Notes:
 
-- backend boots without `OPENROUTER_API_KEY`
+- backend boots when provider credentials are missing
 - runtime behavior resolves settings from `/api/v1/settings` overrides first, then env defaults
-- agent message execution endpoints return `503` only when both user override key and server default key are missing
+- agent message execution endpoints return `503` when provider credentials required by `BILL_HELPER_AGENT_MODEL` are missing
 
 ## Database Setup
 
@@ -83,6 +80,7 @@ Current revisions:
 - `0008_agent_run_usage_metrics`
 - `0009_remove_entry_status`
 - `0010_runtime_settings_overrides`
+- `0011_remove_openrouter_runtime_settings_fields`
 
 Optional seed:
 
@@ -244,7 +242,7 @@ Constraints:
 
 ## Common Issues
 
-## Missing OpenRouter key
+## Missing provider credentials
 
 Symptom:
 
@@ -252,7 +250,7 @@ Symptom:
 
 Fix:
 
-- set `OPENROUTER_API_KEY` (or `BILL_HELPER_OPENROUTER_API_KEY`) and restart backend
+- set provider credentials required by `BILL_HELPER_AGENT_MODEL` (for example `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENROUTER_API_KEY`) and restart backend
 
 ## Migration state mismatch
 

@@ -6,7 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 os.environ["BILL_HELPER_DATABASE_URL"] = "sqlite:///./.data/test_bill_helper.db"
-os.environ["BILL_HELPER_OPENROUTER_API_KEY"] = "test-openrouter-key"
+os.environ["GOOGLE_API_KEY"] = "test-google-key"
+os.environ["GEMINI_API_KEY"] = "test-gemini-key"
 
 from backend.config import get_settings  # noqa: E402
 

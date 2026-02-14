@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -366,15 +366,10 @@ class DashboardRead(BaseModel):
     reconciliation: list[ReconciliationRead]
 
 
-RuntimeSettingsApiKeySource = Literal["override", "server_default", "unset"]
-
-
 class RuntimeSettingsOverridesRead(BaseModel):
     current_user_name: str | None = None
     default_currency_code: str | None = None
     dashboard_currency_code: str | None = None
-    openrouter_api_key_override_set: bool = False
-    openrouter_base_url: str | None = None
     agent_model: str | None = None
     agent_max_steps: int | None = None
     agent_retry_max_attempts: int | None = None
@@ -389,9 +384,6 @@ class RuntimeSettingsRead(BaseModel):
     current_user_name: str
     default_currency_code: str
     dashboard_currency_code: str
-    openrouter_api_key_source: RuntimeSettingsApiKeySource
-    openrouter_api_key_configured: bool
-    openrouter_base_url: str
     agent_model: str
     agent_max_steps: int
     agent_retry_max_attempts: int
@@ -407,8 +399,6 @@ class RuntimeSettingsUpdate(BaseModel):
     current_user_name: str | None = Field(default=None, max_length=255)
     default_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     dashboard_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
-    openrouter_api_key: str | None = Field(default=None, max_length=500)
-    openrouter_base_url: str | None = Field(default=None, max_length=500)
     agent_model: str | None = Field(default=None, max_length=255)
     agent_max_steps: int | None = Field(default=None, ge=1, le=500)
     agent_retry_max_attempts: int | None = Field(default=None, ge=1, le=10)
@@ -420,7 +410,6 @@ class RuntimeSettingsUpdate(BaseModel):
 
     @field_validator(
         "current_user_name",
-        "openrouter_base_url",
         "agent_model",
         mode="before",
     )
@@ -429,14 +418,6 @@ class RuntimeSettingsUpdate(BaseModel):
         if value is None:
             return None
         normalized = " ".join(str(value).split()).strip()
-        return normalized or None
-
-    @field_validator("openrouter_api_key", mode="before")
-    @classmethod
-    def normalize_optional_api_key(cls, value: Any) -> str | None:
-        if value is None:
-            return None
-        normalized = str(value).strip()
         return normalized or None
 
     @field_validator("default_currency_code", "dashboard_currency_code", mode="before")

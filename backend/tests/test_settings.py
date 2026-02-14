@@ -8,14 +8,26 @@ from inspect import signature
 def patch_model(monkeypatch, handler):
     from backend.services.agent import runtime
 
-    accepts_db = len(signature(handler).parameters) > 1
+    handler_params = signature(handler).parameters
+    params = list(handler_params.values())
+    accepts_db = len(params) > 1 and params[1].kind in (
+        params[1].POSITIONAL_ONLY,
+        params[1].POSITIONAL_OR_KEYWORD,
+        params[1].VAR_POSITIONAL,
+    )
+    accepts_kwargs = any(param.kind == param.VAR_KEYWORD for param in handler_params.values())
+    accepts_observability = "observability" in handler_params
 
-    def wrapped(messages, db):
+    def wrapped(messages, db, **kwargs):
         if accepts_db:
+            if accepts_kwargs or accepts_observability:
+                return handler(messages, db, **kwargs)
             return handler(messages, db)
+        if accepts_kwargs or accepts_observability:
+            return handler(messages, **kwargs)
         return handler(messages)
 
-    monkeypatch.setattr(runtime, "_call_openrouter", wrapped)
+    monkeypatch.setattr(runtime, "_call_model", wrapped)
 
 
 def create_thread(client) -> dict:
@@ -65,27 +77,25 @@ def test_settings_endpoint_returns_effective_defaults(client):
     assert payload["default_currency_code"] == settings.default_currency_code
     assert payload["dashboard_currency_code"] == settings.dashboard_currency_code
     assert payload["agent_model"] == settings.agent_model
-    assert payload["openrouter_api_key_source"] == "server_default"
-    assert payload["openrouter_api_key_configured"] is True
-    assert payload["overrides"]["openrouter_api_key_override_set"] is False
+    assert payload["overrides"]["agent_model"] is None
 
 
-def test_settings_api_key_override_and_clear(client):
-    set_override = client.patch("/api/v1/settings", json={"openrouter_api_key": "user-specific-key"})
+def test_settings_model_override_and_clear(client):
+    set_override = client.patch("/api/v1/settings", json={"agent_model": "openai/gpt-4.1-mini"})
     set_override.raise_for_status()
     set_payload = set_override.json()
-    assert set_payload["openrouter_api_key_source"] == "override"
-    assert set_payload["overrides"]["openrouter_api_key_override_set"] is True
+    assert set_payload["agent_model"] == "openai/gpt-4.1-mini"
+    assert set_payload["overrides"]["agent_model"] == "openai/gpt-4.1-mini"
 
-    clear_override = client.patch("/api/v1/settings", json={"openrouter_api_key": ""})
+    clear_override = client.patch("/api/v1/settings", json={"agent_model": ""})
     clear_override.raise_for_status()
     clear_payload = clear_override.json()
-    assert clear_payload["openrouter_api_key_source"] == "server_default"
-    assert clear_payload["openrouter_api_key_configured"] is True
-    assert clear_payload["overrides"]["openrouter_api_key_override_set"] is False
+    assert clear_payload["agent_model"] == "google/gemini-3-flash-preview"
+    assert clear_payload["overrides"]["agent_model"] is None
 
 
 def test_settings_override_updates_agent_model_for_new_runs(client, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
     patch_model(
         monkeypatch,
         lambda _messages: {"role": "assistant", "content": "Configured model applied."},

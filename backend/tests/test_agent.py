@@ -63,7 +63,35 @@ def patch_model(monkeypatch, handler):
             return handler(messages, **kwargs)
         return handler(messages)
 
-    monkeypatch.setattr(runtime, "_call_openrouter", wrapped)
+    monkeypatch.setattr(runtime, "_call_model", wrapped)
+
+
+def collect_sse_events(client, thread_id: str, content: str) -> list[dict]:
+    with client.stream(
+        "POST",
+        f"/api/v1/agent/threads/{thread_id}/messages/stream",
+        data={"content": content},
+    ) as response:
+        response.raise_for_status()
+        raw = "".join(response.iter_text())
+
+    events: list[dict] = []
+    for block in raw.replace("\r\n", "\n").split("\n\n"):
+        lines = [line for line in block.split("\n") if line.strip()]
+        if not lines:
+            continue
+        event_type = ""
+        payload = None
+        for line in lines:
+            if line.startswith("event:"):
+                event_type = line.split(":", 1)[1].strip()
+            elif line.startswith("data:"):
+                payload = json.loads(line.split(":", 1)[1].strip())
+        if isinstance(payload, dict):
+            if event_type:
+                payload["event_name"] = event_type
+            events.append(payload)
+    return events
 
 
 def test_thread_history_and_final_assistant_message(client, monkeypatch):
@@ -296,7 +324,47 @@ def test_send_message_returns_running_while_agent_executes(client, monkeypatch):
     raise AssertionError("Run did not complete in time")
 
 
-def test_openrouter_observability_uses_thread_as_session_id(client, monkeypatch):
+def test_stream_message_endpoint_emits_real_time_events(client, monkeypatch):
+    from backend.services.agent import runtime
+
+    def stream_model(_messages, _db, **_kwargs):
+        yield {"type": "text_delta", "delta": "Hel"}
+        yield {"type": "text_delta", "delta": "lo"}
+        yield {
+            "type": "done",
+            "message": {
+                "role": "assistant",
+                "content": "Hello",
+                "tool_calls": [],
+                "usage": {
+                    "input_tokens": 10,
+                    "output_tokens": 5,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0,
+                },
+            },
+        }
+
+    monkeypatch.setattr(runtime, "_call_model_stream", stream_model)
+
+    thread = create_thread(client)
+    events = collect_sse_events(client, thread["id"], "say hello")
+
+    assert events
+    assert events[0]["type"] == "run_started"
+    text = "".join(event.get("delta", "") for event in events if event.get("type") == "text_delta")
+    assert text == "Hello"
+    assert events[-1]["type"] == "run_completed"
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    assistant_messages = [message for message in detail["messages"] if message["role"] == "assistant"]
+    assert len(assistant_messages) == 1
+    assert assistant_messages[0]["content_markdown"] == "Hello"
+
+
+def test_model_observability_uses_thread_as_session_id(client, monkeypatch):
     captured_observability: list[dict] = []
 
     def capture_model(_messages, _db, *, observability=None):
@@ -357,6 +425,54 @@ def test_interrupt_completed_run_is_noop(client, monkeypatch):
     interrupted = interrupt_response.json()
     assert interrupted["status"] == "completed"
     assert interrupted["assistant_message_id"] == run["assistant_message_id"]
+
+
+def test_interrupted_previous_run_context_is_injected_into_followup_turn(client, monkeypatch):
+    def slow_model(_messages):
+        time.sleep(0.35)
+        return {"role": "assistant", "content": "Done."}
+
+    patch_model(monkeypatch, slow_model)
+    thread = create_thread(client)
+
+    first_response = client.post(
+        f"/api/v1/agent/threads/{thread['id']}/messages",
+        data={"content": "Please summarize January spend."},
+    )
+    first_response.raise_for_status()
+    first_run = first_response.json()
+    assert first_run["status"] == "running"
+
+    interrupt_response = client.post(f"/api/v1/agent/runs/{first_run['id']}/interrupt")
+    interrupt_response.raise_for_status()
+    interrupted = interrupt_response.json()
+    assert interrupted["status"] == "failed"
+    assert interrupted["assistant_message_id"] is None
+    assert interrupted["error_text"] == "Run interrupted by user."
+
+    captured_messages: list[list[dict]] = []
+
+    def followup_model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "Acknowledged."}
+
+    patch_model(monkeypatch, followup_model)
+    followup_run = send_message(client, thread["id"], "continue with Feb and include recurring items")
+    assert followup_run["status"] == "completed"
+    assert captured_messages
+
+    history = captured_messages[-1]
+    followup_user_messages = [message for message in history if message.get("role") == "user"]
+    assert followup_user_messages
+    followup_user = followup_user_messages[-1]
+    followup_content = followup_user.get("content")
+    assert isinstance(followup_content, str)
+    assert "Previous turn note: the user interrupted your previous response before it completed." in followup_content
+    assert 'Interrupted previous user request: "Please summarize January spend."' in followup_content
+    assert "Treat that interrupted request as conversation context" in followup_content
+    assert "User feedback:" in followup_content
+    assert "continue with Feb and include recurring items" in followup_content
+    assert followup_content.index("Previous turn note:") < followup_content.index("User feedback:")
 
 
 def test_run_accumulates_usage_tokens_across_steps(client, monkeypatch):
@@ -1082,18 +1198,20 @@ def test_create_entry_uses_default_currency_when_omitted(client, monkeypatch):
         settings.default_currency_code = original_currency
 
 
-def test_requires_openrouter_key_for_send_message(client):
+def test_requires_provider_credentials_for_send_message(client, monkeypatch):
     from backend.config import get_settings
 
     settings = get_settings()
-    original_key = settings.openrouter_api_key
+    original_model = settings.agent_model
     try:
-        settings.openrouter_api_key = None
+        settings.agent_model = "openai/gpt-4.1-mini"
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         thread = create_thread(client)
         response = client.post(
             f"/api/v1/agent/threads/{thread['id']}/messages",
             data={"content": "hello"},
         )
         assert response.status_code == 503
+        assert "Agent runtime is not configured." in response.text
     finally:
-        settings.openrouter_api_key = original_key
+        settings.agent_model = original_model

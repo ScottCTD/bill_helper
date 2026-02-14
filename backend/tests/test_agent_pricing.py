@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-def test_calculate_usage_costs_prefers_openrouter_alias(monkeypatch):
+def test_calculate_usage_costs_uses_configured_model_name(monkeypatch):
     from backend.services.agent import pricing
 
     attempted_models: list[str] = []
@@ -9,7 +9,7 @@ def test_calculate_usage_costs_prefers_openrouter_alias(monkeypatch):
 
     def fake_cost_per_token(*, model: str, prompt_tokens: int, completion_tokens: int):
         attempted_models.append(model)
-        if model == "openrouter/openai/gpt-5-nano":
+        if model == "openai/gpt-5-nano":
             assert prompt_tokens == 2000
             assert completion_tokens == 500
             return (0.0015, 0.0025)
@@ -23,7 +23,7 @@ def test_calculate_usage_costs_prefers_openrouter_alias(monkeypatch):
         output_tokens=500,
     )
 
-    assert attempted_models[0] == "openrouter/openai/gpt-5-nano"
+    assert attempted_models[0] == "openai/gpt-5-nano"
     assert costs.input_cost_usd == 0.0015
     assert costs.output_cost_usd == 0.0025
     assert costs.total_cost_usd == 0.004
@@ -56,7 +56,7 @@ def test_calculate_usage_costs_with_partial_usage_uses_available_side(monkeypatc
     monkeypatch.setattr(pricing, "_refresh_model_cost_map_if_due", lambda: None)
 
     def fake_cost_per_token(*, model: str, prompt_tokens: int, completion_tokens: int):
-        assert model == "openrouter/openai/gpt-5-nano"
+        assert model == "openai/gpt-5-nano"
         assert prompt_tokens == 300
         assert completion_tokens == 0
         return (0.00021, 0.0)

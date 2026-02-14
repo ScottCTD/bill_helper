@@ -7,7 +7,7 @@
 - Pydantic v2
 - Alembic
 - SQLite (local file)
-- OpenRouter Chat Completions integration via `openai` Python SDK
+- LiteLLM model-provider routing for chat completions
 
 ## Entry Points
 
@@ -31,9 +31,9 @@ Core app settings:
 
 Agent settings:
 
-- `OPENROUTER_API_KEY` (recommended)
-- `BILL_HELPER_OPENROUTER_API_KEY` (also accepted)
-- `OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`)
+- `LANGFUSE_PUBLIC_KEY` / `BILL_HELPER_LANGFUSE_PUBLIC_KEY` (optional; enables LiteLLM Langfuse callbacks when both keys are set)
+- `LANGFUSE_SECRET_KEY` / `BILL_HELPER_LANGFUSE_SECRET_KEY` (optional; enables LiteLLM Langfuse callbacks when both keys are set)
+- `LANGFUSE_HOST` / `BILL_HELPER_LANGFUSE_HOST` (optional; defaults to Langfuse cloud host if unset)
 - `AGENT_MODEL` (default `google/gemini-3-flash-preview`)
 - `AGENT_MAX_STEPS` (default `100`)
 - `AGENT_MAX_IMAGE_SIZE_BYTES` (default `5MB`)
@@ -44,13 +44,14 @@ Runtime override behavior:
 
 - `runtime_settings` table stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`
 - effective runtime settings are resolved as `override -> env default`
-- API key resolution supports three states: `override`, `server_default`, `unset`
-- empty API key override clears user override and falls back to server default
 
 Behavior notes:
 
-- app starts even without `OPENROUTER_API_KEY`
-- only agent message execution is blocked (`503`) when both server default key and user override key are missing
+- app starts even when provider credentials are missing
+- only agent message execution is blocked (`503`) when LiteLLM cannot resolve credentials for the configured model target
+- LiteLLM resolves provider credentials from environment variables for the configured model (for example `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`)
+- when `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` are configured, LiteLLM Langfuse callbacks are enabled for success/failure traces
+- credential pre-validation is best-effort; if provider validation is indeterminate, the run proceeds and provider/model errors are surfaced at model-call time
 - env settings are cached by `get_settings()` (`lru_cache`)
 - runtime behavior consumers use `backend/services/runtime_settings.py` for resolved effective values
 
@@ -124,9 +125,10 @@ Agent services:
 - `backend/services/agent/runtime.py`
   - executes one run per user message
   - orchestrates bounded tool-calling loop and run lifecycle persistence
+  - supports both non-stream execution and SSE execution (`run_existing_agent_run_stream`) for incremental text delivery
   - supports manual run interruption (`interrupt_agent_run`) and cooperative stop checks between model/tool steps
   - aggregates model usage metrics across all model calls in a run and persists totals on `agent_runs`
-  - passes OpenRouter observability context (`user`, `session_id=thread.id`, run-level `trace`) on each model request for conversation-level trace grouping
+  - passes model observability context (`user`, `session_id=thread.id`, run-level `trace`) on each model request for conversation-level trace grouping
   - delegates message assembly and model calls to dedicated modules
 - `backend/services/agent/prompts.py`
   - central system prompt definition
@@ -139,14 +141,19 @@ Agent services:
   - converts persisted thread history and attachments into model-ready messages
   - builds account summaries for current user and injects them into the system prompt context
   - prepends reviewed proposal outcomes to the latest user message before user feedback text
+  - for follow-up turns after interrupted runs, injects an interruption-context note so the model treats the prior request as unfinished context
 - `backend/services/agent/model_client.py`
-  - OpenRouter client adapter with normalized model error handling
+  - LiteLLM client adapter with normalized model error handling
   - normalizes usage metadata from model responses into the runtime contract (`input/output/cache_*` tokens)
-  - forwards OpenRouter observability fields through `extra_body` when provided by runtime
+  - supports streamed model responses (`complete_stream`) that emit incremental text deltas and final assembled tool-call/message payload
+  - applies configured retry policy to stream failures (including mid-stream transport failures)
+  - suppresses duplicate streamed prefixes across retries so front-end token rendering remains incremental
+  - forwards observability fields through LiteLLM `metadata` for Langfuse trace/session/user linking and through `extra_body` for providers that support it
+  - enables LiteLLM `langfuse` success/failure callbacks when Langfuse credentials are configured
   - applies configurable tenacity retries for model completion calls
 - `backend/services/agent/pricing.py`
   - LiteLLM-backed usage pricing helper (`cost_per_token`)
-  - OpenRouter-prefixed model alias fallback for pricing lookup (`openrouter/<model>`, then raw model)
+  - pricing lookup uses the configured model name directly
   - periodic model-cost map refresh from LiteLLM URL with fallback to bundled map when remote fetch fails
 - `backend/services/agent/tools.py`
   - read tools: `list_entries`, `list_tags`, `list_entities`, `get_dashboard_summary`
@@ -201,6 +208,7 @@ Agent router:
   - `POST /api/v1/agent/threads`
   - `GET /api/v1/agent/threads/{thread_id}`
   - `POST /api/v1/agent/threads/{thread_id}/messages` (multipart text + images)
+  - `POST /api/v1/agent/threads/{thread_id}/messages/stream` (multipart text + images, SSE response)
   - `GET /api/v1/agent/runs/{run_id}`
   - `POST /api/v1/agent/runs/{run_id}/interrupt`
   - `POST /api/v1/agent/change-items/{item_id}/approve`
@@ -226,6 +234,7 @@ Settings router:
 - `0008_agent_run_usage_metrics`
 - `0009_remove_entry_status`
 - `0010_runtime_settings_overrides`
+- `0011_remove_openrouter_runtime_settings_fields`
 
 Commands:
 
@@ -239,6 +248,7 @@ Test modules:
 - `backend/tests/test_entries.py`
 - `backend/tests/test_finance.py`
 - `backend/tests/test_agent.py`
+- `backend/tests/test_agent_model_client.py`
 - `backend/tests/test_agent_pricing.py`
 - `backend/tests/test_taxonomies.py`
 - `backend/tests/test_settings.py`
@@ -257,20 +267,32 @@ Test modules:
 - run usage token persistence (`input/output/cache read/cache write`) including multi-step aggregation and null-safe fallback
 - run API cost fields (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
 - asynchronous run start behavior (`POST /agent/threads/{thread_id}/messages` returns `running` while execution continues)
+- SSE agent message behavior (`POST /agent/threads/{thread_id}/messages/stream`) with incremental `text_delta` events and terminal completion/failure events
 - run interruption endpoint behavior (`POST /agent/runs/{run_id}/interrupt`) and no-op semantics for already-terminal runs
-- OpenRouter observability context propagation for stable per-thread session grouping
+- interrupted-run context injection into the next user turn prompt input
+- observability context propagation for stable per-thread session grouping
+- LiteLLM routing behavior with provider env credential resolution
 - prompt contract for entry ingestion ordering (duplicate check -> tag/entity reconciliation -> entry proposal)
 - prompt contract for tag-deletion ordering (retag/update entries first -> then `propose_delete_tag`)
 
-Current baseline for `backend/tests/test_agent.py`: `30 passed`.
+`test_agent_model_client.py` covers:
+
+- completion retry behavior for transient pre-response failures
+- stream retry behavior after partial output without duplicate text emission
+- stream divergence guard across retries
+- LiteLLM environment-validation behavior (including indeterminate-validation fallback)
+
+Current baseline for `backend/tests/test_agent.py`: `32 passed`.
 
 ## Operational Impact
 
 - agent image uploads are persisted under `.data/agent_uploads`
 - timeline rendering depends on attachment-serving endpoint
-- agent runs execute in a background thread; message send returns immediately with `status=running`
+- non-stream sends execute in a background thread; `POST /agent/threads/{thread_id}/messages` returns immediately with `status=running`
+- stream sends execute in-request and emit SSE events from `POST /agent/threads/{thread_id}/messages/stream`; disconnect fallback resumes the run in a background thread
 - interrupted runs are marked `failed` with user-facing interruption reason text
-- model requests now include OpenRouter observability payload (`user`, `session_id=thread.id`, run trace metadata) so repeated turns in one thread group into one Langfuse/OpenRouter session
+- the next user turn after an interruption carries an explicit interruption note in model input (while preserving normal conversation history)
+- model requests include observability payload (`user`, `session_id=thread.id`, run trace metadata) with LiteLLM metadata mapping for Langfuse grouping (`trace_id`, `session_id`, `trace_user_id`, `generation_name`)
 - each run includes persisted tool traces and change-item audit data
 - tool calls are committed incrementally per tool call to support near-real-time polling visibility
 - each run now includes nullable aggregated usage counters (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`)
@@ -293,9 +315,9 @@ Current baseline for `backend/tests/test_agent.py`: `30 passed`.
 
 - no auth/permissions; actor is current configured user string
 - runtime settings are global to the app instance (no per-authenticated-user isolation yet)
-- model provider is OpenRouter-only in current implementation
-- no streaming responses in V1
-- near-real-time timeline updates remain polling-based (no websocket/SSE)
+- model provider routing is LiteLLM-based using provider env credentials
+- no websocket transport; streaming uses SSE only
+- polling is still required for full run snapshots/tool payload details outside streamed deltas
 - no autonomous/background agent runs
 - update/delete proposal types are supported and require review approval before apply
 - taxonomy assignment storage uses string `subject_id` and does not enforce cross-table FK integrity for subject rows

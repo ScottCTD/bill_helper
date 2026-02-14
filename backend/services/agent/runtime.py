@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 import json
 import re
 from datetime import datetime, timezone
@@ -11,7 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 from backend.enums import AgentMessageRole, AgentRunStatus, AgentToolCallStatus
 from backend.models import AgentChangeItem, AgentMessage, AgentRun, AgentThread, AgentToolCall
 from backend.services.agent.message_history import build_llm_messages
-from backend.services.agent.model_client import AgentModelError, OpenRouterModelClient
+from backend.services.agent.model_client import AgentModelError, LiteLLMModelClient, validate_litellm_environment
 from backend.services.agent.tools import ToolContext, build_openai_tool_schemas, execute_tool
 from backend.services.runtime_settings import resolve_runtime_settings
 
@@ -38,27 +39,35 @@ class AgentRuntimeUnavailable(RuntimeError):
 
 def ensure_agent_available(db: Session) -> None:
     settings = resolve_runtime_settings(db)
-    if not settings.openrouter_api_key:
-        raise AgentRuntimeUnavailable(
-            "Agent runtime is not configured: set OPENROUTER_API_KEY (or BILL_HELPER_OPENROUTER_API_KEY)."
-        )
+    has_credentials, missing_keys, request_model = validate_litellm_environment(
+        model_name=settings.agent_model,
+    )
+    if has_credentials:
+        return
+    missing_text = f" Missing keys: {', '.join(missing_keys)}." if missing_keys else ""
+    raise AgentRuntimeUnavailable(
+        "Agent runtime is not configured. "
+        f"Model target: {request_model}.{missing_text} "
+        "Provide provider credentials via environment variables for BILL_HELPER_AGENT_MODEL."
+    )
 
 
-def _build_model_client(db: Session) -> OpenRouterModelClient:
+def _build_model_client(db: Session) -> LiteLLMModelClient:
     settings = resolve_runtime_settings(db)
-    return OpenRouterModelClient(
-        api_key=settings.openrouter_api_key or "",
-        base_url=settings.openrouter_base_url,
+    return LiteLLMModelClient(
         model_name=settings.agent_model,
         tools=build_openai_tool_schemas(),
         retry_max_attempts=settings.agent_retry_max_attempts,
         retry_initial_wait_seconds=settings.agent_retry_initial_wait_seconds,
         retry_max_wait_seconds=settings.agent_retry_max_wait_seconds,
         retry_backoff_multiplier=settings.agent_retry_backoff_multiplier,
+        langfuse_public_key=settings.langfuse_public_key,
+        langfuse_secret_key=settings.langfuse_secret_key,
+        langfuse_host=settings.langfuse_host,
     )
 
 
-def _call_openrouter(
+def _call_model(
     messages: list[dict[str, Any]],
     db: Session,
     *,
@@ -68,7 +77,17 @@ def _call_openrouter(
     return _build_model_client(db).complete(messages, observability=observability)
 
 
-def _openrouter_observability_context(
+def _call_model_stream(
+    messages: list[dict[str, Any]],
+    db: Session,
+    *,
+    observability: dict[str, Any] | None = None,
+) -> Iterator[dict[str, Any]]:
+    # Kept as a stable seam so tests can monkeypatch streaming model responses.
+    return _build_model_client(db).complete_stream(messages, observability=observability)
+
+
+def _model_observability_context(
     *,
     current_user_name: str,
     thread_id: str,
@@ -256,7 +275,7 @@ def _execute_agent_run(
 
     llm_messages = build_llm_messages(db, thread.id, current_user_message_id=run.user_message_id)
     tool_context = ToolContext(db=db, run_id=run.id)
-    observability_context = _openrouter_observability_context(
+    observability_context = _model_observability_context(
         current_user_name=settings.current_user_name,
         thread_id=thread.id,
         run_id=run.id,
@@ -273,7 +292,7 @@ def _execute_agent_run(
             if _run_is_stopped(db, run):
                 return _load_run_snapshot(db, run.id)
 
-            assistant_message = _call_openrouter(
+            assistant_message = _call_model(
                 llm_messages,
                 db,
                 observability=observability_context,
@@ -356,6 +375,163 @@ def _execute_agent_run(
         return _load_run_snapshot(db, run.id)
 
 
+def _run_terminal_stream_event(run: AgentRun) -> dict[str, Any]:
+    if run.status == AgentRunStatus.COMPLETED:
+        return {
+            "type": "run_completed",
+            "run_id": run.id,
+            "assistant_message_id": run.assistant_message_id,
+            "status": run.status.value,
+            "error_text": run.error_text,
+        }
+    return {
+        "type": "run_failed",
+        "run_id": run.id,
+        "assistant_message_id": run.assistant_message_id,
+        "status": run.status.value,
+        "error_text": run.error_text,
+    }
+
+
+def _execute_agent_run_stream(
+    db: Session,
+    *,
+    thread: AgentThread,
+    run: AgentRun,
+) -> Iterator[dict[str, Any]]:
+    settings = resolve_runtime_settings(db)
+    max_steps = max(settings.agent_max_steps, 1)
+
+    llm_messages = build_llm_messages(db, thread.id, current_user_message_id=run.user_message_id)
+    tool_context = ToolContext(db=db, run_id=run.id)
+    observability_context = _model_observability_context(
+        current_user_name=settings.current_user_name,
+        thread_id=thread.id,
+        run_id=run.id,
+    )
+    usage_totals: dict[str, int | None] = {
+        "input_tokens": run.input_tokens,
+        "output_tokens": run.output_tokens,
+        "cache_read_tokens": run.cache_read_tokens,
+        "cache_write_tokens": run.cache_write_tokens,
+    }
+
+    try:
+        for _ in range(max_steps):
+            if _run_is_stopped(db, run):
+                yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+                return
+
+            assistant_message: dict[str, Any] | None = None
+            for event in _call_model_stream(
+                llm_messages,
+                db,
+                observability=observability_context,
+            ):
+                event_type = str(event.get("type") or "")
+                if event_type == "text_delta":
+                    delta = str(event.get("delta") or "")
+                    if delta:
+                        yield {"type": "text_delta", "run_id": run.id, "delta": delta}
+                    continue
+                if event_type == "done":
+                    maybe_message = event.get("message")
+                    if isinstance(maybe_message, dict):
+                        assistant_message = maybe_message
+
+            if assistant_message is None:
+                raise AgentModelError("model request failed: no response")
+
+            if _run_is_stopped(db, run):
+                yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+                return
+
+            _accumulate_usage_totals(usage_totals, _extract_usage(assistant_message))
+            _apply_usage_totals_to_run(run, usage_totals)
+            db.add(run)
+
+            tool_calls = assistant_message.get("tool_calls") or []
+            assistant_content = assistant_message.get("content") or ""
+
+            if tool_calls:
+                llm_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": assistant_content,
+                        "tool_calls": tool_calls,
+                    }
+                )
+                for tool_call in tool_calls:
+                    if _run_is_stopped(db, run):
+                        yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+                        return
+                    function = tool_call.get("function") or {}
+                    tool_name = str(function.get("name") or "(unknown)")
+                    tool_result_message = _record_tool_call_and_result(
+                        db,
+                        run=run,
+                        tool_call=tool_call,
+                        tool_context=tool_context,
+                    )
+                    llm_messages.append(tool_result_message)
+                    db.commit()
+                    yield {
+                        "type": "tool_call",
+                        "run_id": run.id,
+                        "tool_name": tool_name,
+                    }
+                continue
+
+            _persist_final_message(
+                db,
+                thread,
+                run,
+                _final_assistant_content(assistant_content),
+                status=AgentRunStatus.COMPLETED,
+            )
+            yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+            return
+
+        _persist_final_message(
+            db,
+            thread,
+            run,
+            (
+                "I reached the configured max tool steps before finishing. "
+                "Please review the existing tool outputs and pending review items."
+            ),
+            status=AgentRunStatus.FAILED,
+            error_text="maximum tool steps reached",
+        )
+        yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+        return
+    except AgentModelError as exc:
+        _persist_final_message(
+            db,
+            thread,
+            run,
+            (
+                "I could not complete this run because the language model request failed.\n"
+                f"Error: {str(exc)}"
+            ),
+            status=AgentRunStatus.FAILED,
+            error_text=str(exc),
+        )
+        yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+        return
+    except Exception as exc:  # pragma: no cover - defensive guard
+        _persist_final_message(
+            db,
+            thread,
+            run,
+            "I encountered an internal error while processing this request.",
+            status=AgentRunStatus.FAILED,
+            error_text=str(exc),
+        )
+        yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+        return
+
+
 def start_agent_run(db: Session, thread: AgentThread, user_message: AgentMessage) -> AgentRun:
     ensure_agent_available(db)
     return _create_run(db, thread=thread, user_message=user_message)
@@ -378,6 +554,35 @@ def run_existing_agent_run(db: Session, run_id: str) -> AgentRun | None:
         return _load_run_snapshot(db, run.id)
 
     return _execute_agent_run(db, thread=thread, run=run)
+
+
+def run_existing_agent_run_stream(db: Session, run_id: str) -> Iterator[dict[str, Any]]:
+    run = db.get(AgentRun, run_id)
+    if run is None:
+        yield {
+            "type": "run_failed",
+            "run_id": run_id,
+            "assistant_message_id": None,
+            "status": AgentRunStatus.FAILED.value,
+            "error_text": "run not found",
+        }
+        return
+    if run.status != AgentRunStatus.RUNNING:
+        yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+        return
+
+    thread = db.get(AgentThread, run.thread_id)
+    if thread is None:
+        run.status = AgentRunStatus.FAILED
+        run.error_text = "thread not found"
+        run.completed_at = utc_now()
+        db.add(run)
+        db.commit()
+        yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+        return
+
+    yield {"type": "run_started", "run_id": run.id}
+    yield from _execute_agent_run_stream(db, thread=thread, run=run)
 
 
 def run_agent_turn(db: Session, thread: AgentThread, user_message: AgentMessage) -> AgentRun:

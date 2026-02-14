@@ -16,7 +16,6 @@ interface SettingsFormState {
   current_user_name: string;
   default_currency_code: string;
   dashboard_currency_code: string;
-  openrouter_base_url: string;
   agent_model: string;
   agent_max_steps: string;
   agent_max_images_per_message: string;
@@ -38,7 +37,6 @@ function buildFormState(data: RuntimeSettings): SettingsFormState {
     current_user_name: data.current_user_name,
     default_currency_code: data.default_currency_code,
     dashboard_currency_code: data.dashboard_currency_code,
-    openrouter_base_url: data.openrouter_base_url,
     agent_model: data.agent_model,
     agent_max_steps: String(data.agent_max_steps),
     agent_max_images_per_message: String(data.agent_max_images_per_message),
@@ -76,8 +74,6 @@ export function SettingsPage() {
 
   const [formState, setFormState] = useState<SettingsFormState | null>(null);
   const [initialState, setInitialState] = useState<SettingsFormState | null>(null);
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [apiKeyDirty, setApiKeyDirty] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const updateMutation = useMutation({
@@ -98,8 +94,6 @@ export function SettingsPage() {
     const nextFormState = buildFormState(settingsQuery.data);
     setFormState(nextFormState);
     setInitialState(nextFormState);
-    setApiKeyInput("");
-    setApiKeyDirty(false);
     setFormError(null);
   }, [settingsQuery.data]);
 
@@ -118,8 +112,8 @@ export function SettingsPage() {
     if (!formState || !initialState) {
       return false;
     }
-    return JSON.stringify(formState) !== JSON.stringify(initialState) || apiKeyDirty;
-  }, [apiKeyDirty, formState, initialState]);
+    return JSON.stringify(formState) !== JSON.stringify(initialState);
+  }, [formState, initialState]);
 
   function submitSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -174,7 +168,6 @@ export function SettingsPage() {
         current_user_name: nextCurrentUserName,
         default_currency_code: nextDefaultCurrencyCode,
         dashboard_currency_code: nextDashboardCurrencyCode,
-        openrouter_base_url: formState.openrouter_base_url.trim(),
         agent_model: formState.agent_model.trim(),
         agent_max_steps: nextAgentMaxSteps,
         agent_max_images_per_message: nextAgentMaxImagesPerMessage,
@@ -183,7 +176,6 @@ export function SettingsPage() {
         agent_retry_initial_wait_seconds: nextAgentRetryInitialWaitSeconds,
         agent_retry_max_wait_seconds: nextAgentRetryMaxWaitSeconds,
         agent_retry_backoff_multiplier: nextAgentRetryBackoffMultiplier,
-        openrouter_api_key: apiKeyDirty ? (apiKeyInput.trim() || null) : undefined,
       });
     } catch (error) {
       setFormError((error as Error).message);
@@ -195,8 +187,6 @@ export function SettingsPage() {
       current_user_name: null,
       default_currency_code: null,
       dashboard_currency_code: null,
-      openrouter_api_key: null,
-      openrouter_base_url: null,
       agent_model: null,
       agent_max_steps: null,
       agent_max_images_per_message: null,
@@ -220,13 +210,6 @@ export function SettingsPage() {
     return null;
   }
 
-  const apiKeySourceLabel =
-    settingsQuery.data.openrouter_api_key_source === "override"
-      ? "Using user override key"
-      : settingsQuery.data.openrouter_api_key_source === "server_default"
-      ? "Using server default key"
-      : "No API key configured";
-
   return (
     <div className="stack-lg">
       <Card className="overflow-hidden">
@@ -238,7 +221,6 @@ export function SettingsPage() {
               <CardDescription>Configure defaults for entries, dashboard analytics, and agent runtime behavior.</CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={settingsQuery.data.openrouter_api_key_configured ? "secondary" : "outline"}>{apiKeySourceLabel}</Badge>
               <Badge variant="outline">Model: {settingsQuery.data.agent_model}</Badge>
             </div>
           </div>
@@ -306,52 +288,9 @@ export function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Agent Runtime</CardTitle>
-            <CardDescription>Controls model selection, credentials, and guardrails for new runs.</CardDescription>
+            <CardDescription>Controls model selection and guardrails for new runs. Provider credentials are read from environment variables.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <FormField
-              label="OpenRouter API key override"
-              hint="Leave empty to use the server default key. Enter a value to store a user-specific override."
-            >
-              <Input
-                type="password"
-                autoComplete="off"
-                value={apiKeyInput}
-                placeholder={
-                  settingsQuery.data.overrides.openrouter_api_key_override_set
-                    ? "Override already configured. Enter a new key to replace it."
-                    : "No override set"
-                }
-                onChange={(event) => {
-                  setApiKeyInput(event.target.value);
-                  setApiKeyDirty(true);
-                }}
-              />
-            </FormField>
-
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setApiKeyInput("");
-                  setApiKeyDirty(true);
-                }}
-              >
-                Use server default key
-              </Button>
-            </div>
-
-            <FormField label="OpenRouter base URL">
-              <Input
-                value={formState.openrouter_base_url}
-                onChange={(event) =>
-                  setFormState((state) => (state ? { ...state, openrouter_base_url: event.target.value } : state))
-                }
-              />
-            </FormField>
-
             <FormField label="Agent model">
               <Input
                 value={formState.agent_model}

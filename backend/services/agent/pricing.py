@@ -34,21 +34,7 @@ def _model_cost_candidates(model_name: str) -> list[str]:
     normalized = model_name.strip()
     if not normalized:
         return []
-
-    candidates: list[str] = []
-
-    def add(candidate: str) -> None:
-        if candidate and candidate not in candidates:
-            candidates.append(candidate)
-
-    if normalized.startswith("openrouter/"):
-        add(normalized)
-        add(normalized.removeprefix("openrouter/"))
-    else:
-        add(f"openrouter/{normalized}")
-        add(normalized)
-
-    return candidates
+    return [normalized]
 
 
 def _to_decimal(value: Any) -> Decimal | None:

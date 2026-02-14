@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,7 +11,6 @@ from backend.models import RuntimeSettings as RuntimeSettingsRow
 from backend.schemas import RuntimeSettingsOverridesRead, RuntimeSettingsRead
 
 RUNTIME_SETTINGS_SCOPE = "default"
-RuntimeSettingsApiKeySource = Literal["override", "server_default", "unset"]
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
@@ -56,9 +55,9 @@ class ResolvedRuntimeSettings:
     current_user_name: str
     default_currency_code: str
     dashboard_currency_code: str
-    openrouter_api_key: str | None
-    openrouter_api_key_source: RuntimeSettingsApiKeySource
-    openrouter_base_url: str
+    langfuse_public_key: str | None
+    langfuse_secret_key: str | None
+    langfuse_host: str | None
     agent_model: str
     agent_max_steps: int
     agent_retry_max_attempts: int
@@ -105,24 +104,12 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
     dashboard_currency_code = (
         _normalize_optional_currency(override.dashboard_currency_code) if override is not None else None
     ) or _normalize_optional_currency(defaults.dashboard_currency_code) or "CAD"
-    openrouter_base_url = (
-        _normalize_optional_text(override.openrouter_base_url) if override is not None else None
-    ) or _normalize_optional_text(defaults.openrouter_base_url) or "https://openrouter.ai/api/v1"
+    langfuse_public_key = _normalize_optional_secret(defaults.langfuse_public_key)
+    langfuse_secret_key = _normalize_optional_secret(defaults.langfuse_secret_key)
+    langfuse_host = _normalize_optional_text(defaults.langfuse_host)
     agent_model = (
         _normalize_optional_text(override.agent_model) if override is not None else None
     ) or _normalize_optional_text(defaults.agent_model) or "google/gemini-3-flash-preview"
-
-    default_api_key = _normalize_optional_secret(defaults.openrouter_api_key)
-    override_api_key = _normalize_optional_secret(override.openrouter_api_key) if override is not None else None
-    if override_api_key:
-        openrouter_api_key = override_api_key
-        openrouter_api_key_source: RuntimeSettingsApiKeySource = "override"
-    elif default_api_key:
-        openrouter_api_key = default_api_key
-        openrouter_api_key_source = "server_default"
-    else:
-        openrouter_api_key = None
-        openrouter_api_key_source = "unset"
 
     agent_max_steps = _sanitize_int(
         override.agent_max_steps if override and override.agent_max_steps is not None else defaults.agent_max_steps,
@@ -177,9 +164,9 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         current_user_name=current_user_name,
         default_currency_code=default_currency_code,
         dashboard_currency_code=dashboard_currency_code,
-        openrouter_api_key=openrouter_api_key,
-        openrouter_api_key_source=openrouter_api_key_source,
-        openrouter_base_url=openrouter_base_url,
+        langfuse_public_key=langfuse_public_key,
+        langfuse_secret_key=langfuse_secret_key,
+        langfuse_host=langfuse_host,
         agent_model=agent_model,
         agent_max_steps=agent_max_steps,
         agent_retry_max_attempts=agent_retry_max_attempts,
@@ -199,9 +186,6 @@ def build_runtime_settings_read(db: Session) -> RuntimeSettingsRead:
         current_user_name=resolved.current_user_name,
         default_currency_code=resolved.default_currency_code,
         dashboard_currency_code=resolved.dashboard_currency_code,
-        openrouter_api_key_source=resolved.openrouter_api_key_source,
-        openrouter_api_key_configured=resolved.openrouter_api_key is not None,
-        openrouter_base_url=resolved.openrouter_base_url,
         agent_model=resolved.agent_model,
         agent_max_steps=resolved.agent_max_steps,
         agent_retry_max_attempts=resolved.agent_retry_max_attempts,
@@ -214,8 +198,6 @@ def build_runtime_settings_read(db: Session) -> RuntimeSettingsRead:
             current_user_name=_normalize_optional_text(override.current_user_name) if override else None,
             default_currency_code=_normalize_optional_currency(override.default_currency_code) if override else None,
             dashboard_currency_code=_normalize_optional_currency(override.dashboard_currency_code) if override else None,
-            openrouter_api_key_override_set=bool(_normalize_optional_secret(override.openrouter_api_key)) if override else False,
-            openrouter_base_url=_normalize_optional_text(override.openrouter_base_url) if override else None,
             agent_model=_normalize_optional_text(override.agent_model) if override else None,
             agent_max_steps=override.agent_max_steps if override else None,
             agent_retry_max_attempts=override.agent_retry_max_attempts if override else None,

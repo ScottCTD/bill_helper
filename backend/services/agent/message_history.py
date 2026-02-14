@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.enums import AgentMessageRole
+from backend.enums import AgentMessageRole, AgentRunStatus
 from backend.models import Account, AgentChangeItem, AgentMessage, AgentReviewAction, AgentRun, AgentToolCall, User
 from backend.services.agent.prompts import system_prompt
 from backend.services.runtime_settings import resolve_runtime_settings
@@ -23,11 +23,17 @@ def attachment_to_data_url(file_path: str, mime_type: str) -> str | None:
     return f"data:{mime_type};base64,{encoded}"
 
 
-def _compose_user_feedback_text(message: AgentMessage, review_results_prefix: str | None) -> str:
-    if review_results_prefix is None:
+def _compose_user_feedback_text(
+    message: AgentMessage,
+    *,
+    review_results_prefix: str | None,
+    interruption_prefix: str | None,
+) -> str:
+    prefixes = [prefix for prefix in (interruption_prefix, review_results_prefix) if isinstance(prefix, str) and prefix.strip()]
+    if not prefixes:
         return message.content_markdown
     feedback = message.content_markdown.strip() or "(none)"
-    return f"{review_results_prefix}\n\nUser feedback:\n{feedback}"
+    return f"{'\n\n'.join(prefixes)}\n\nUser feedback:\n{feedback}"
 
 
 def _build_current_user_context(db: Session) -> str:
@@ -69,8 +75,13 @@ def build_user_content(
     message: AgentMessage,
     *,
     review_results_prefix: str | None = None,
+    interruption_prefix: str | None = None,
 ) -> str | list[dict[str, Any]]:
-    content_text = _compose_user_feedback_text(message, review_results_prefix)
+    content_text = _compose_user_feedback_text(
+        message,
+        review_results_prefix=review_results_prefix,
+        interruption_prefix=interruption_prefix,
+    )
     if not message.attachments:
         return content_text
 
@@ -276,6 +287,77 @@ def _build_review_results_prefix_for_current_turn(
     return "\n".join(lines)
 
 
+def _build_interruption_prefix_for_current_turn(
+    db: Session,
+    *,
+    thread_id: str,
+    history: list[AgentMessage],
+    current_user_message_id: str | None,
+) -> str | None:
+    if not current_user_message_id:
+        return None
+
+    current_user = next(
+        (
+            message
+            for message in history
+            if message.id == current_user_message_id and message.role == AgentMessageRole.USER
+        ),
+        None,
+    )
+    if current_user is None:
+        return None
+
+    previous_user = next(
+        (
+            message
+            for message in reversed(history)
+            if message.role == AgentMessageRole.USER and message.created_at < current_user.created_at
+        ),
+        None,
+    )
+    if previous_user is None:
+        return None
+
+    candidate_runs = list(
+        db.scalars(
+            select(AgentRun)
+            .where(
+                AgentRun.thread_id == thread_id,
+                AgentRun.user_message_id == previous_user.id,
+            )
+            .order_by(AgentRun.created_at.desc())
+        )
+    )
+    interrupted_run = next(
+        (
+            run
+            for run in candidate_runs
+            if run.status == AgentRunStatus.FAILED
+            and run.assistant_message_id is None
+            and "interrupt" in (run.error_text or "").lower()
+        ),
+        None,
+    )
+    if interrupted_run is None:
+        return None
+
+    previous_feedback = " ".join(previous_user.content_markdown.split()).strip()
+    if len(previous_feedback) > 180:
+        previous_feedback = f"{previous_feedback[:177]}..."
+    previous_feedback_line = (
+        f'Interrupted previous user request: "{previous_feedback}"'
+        if previous_feedback
+        else "Interrupted previous user request: (no text; attachments and context still apply)."
+    )
+
+    return (
+        "Previous turn note: the user interrupted your previous response before it completed.\n"
+        f"{previous_feedback_line}\n"
+        "Treat that interrupted request as conversation context while answering the latest user feedback."
+    )
+
+
 def build_llm_messages(
     db: Session,
     thread_id: str,
@@ -296,6 +378,12 @@ def build_llm_messages(
         history=history,
         current_user_message_id=current_user_message_id,
     )
+    interruption_prefix = _build_interruption_prefix_for_current_turn(
+        db,
+        thread_id=thread_id,
+        history=history,
+        current_user_message_id=current_user_message_id,
+    )
 
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt(current_user_context=_build_current_user_context(db))}
@@ -303,10 +391,15 @@ def build_llm_messages(
     for message in history:
         if message.role == AgentMessageRole.USER:
             message_review_prefix = review_results_prefix if message.id == current_user_message_id else None
+            message_interruption_prefix = interruption_prefix if message.id == current_user_message_id else None
             messages.append(
                 {
                     "role": "user",
-                    "content": build_user_content(message, review_results_prefix=message_review_prefix),
+                    "content": build_user_content(
+                        message,
+                        review_results_prefix=message_review_prefix,
+                        interruption_prefix=message_interruption_prefix,
+                    ),
                 }
             )
             continue

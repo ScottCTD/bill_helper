@@ -5,7 +5,7 @@ Base URL: `http://localhost:8000/api/v1`
 ## Conventions
 
 - JSON for most endpoints.
-- `POST /agent/threads/{thread_id}/messages` uses multipart form-data.
+- `POST /agent/threads/{thread_id}/messages` and `POST /agent/threads/{thread_id}/messages/stream` use multipart form-data.
 - Money values use integer minor units (`amount_minor`, `balance_minor`).
 - Currency codes are normalized to uppercase server-side.
 
@@ -202,10 +202,8 @@ Response: `RuntimeSettingsRead`
 Response highlights:
 
 - `current_user_name`, `default_currency_code`, `dashboard_currency_code`
-- `openrouter_api_key_source` (`override` | `server_default` | `unset`)
-- `openrouter_api_key_configured` (boolean)
 - agent runtime fields (`agent_model`, `agent_max_steps`, retry/image limits)
-- `overrides` object with nullable override values and `openrouter_api_key_override_set`
+- `overrides` object with nullable override values for the same runtime fields
 
 ## `PATCH /settings`
 
@@ -216,8 +214,6 @@ Body: any subset of:
 - `current_user_name`
 - `default_currency_code`
 - `dashboard_currency_code`
-- `openrouter_api_key` (empty string or `null` clears override and falls back to server default)
-- `openrouter_base_url`
 - `agent_model`
 - `agent_max_steps`
 - `agent_retry_max_attempts`
@@ -444,6 +440,7 @@ Behavior:
 - persists message + attachments
 - creates an `agent_runs` row with initial `status=running`
 - starts bounded tool-calling execution in background
+- resolves provider routing via LiteLLM using configured model name + provider environment credentials
 - run/tool-call/change-item progress is available via `GET /agent/threads/{thread_id}` and `GET /agent/runs/{run_id}` polling
 
 Response: `AgentRunRead`
@@ -452,7 +449,7 @@ Usage behavior:
 
 - usage counters are aggregated across all model calls within the run (including tool-calling loops)
 - pricing fields are computed from aggregated input/output tokens using LiteLLM `cost_per_token`
-- pricing lookup prefers OpenRouter-prefixed model alias (`openrouter/<model>`) and falls back to raw model name
+- pricing lookup uses the configured run model name directly
 - fields are nullable for providers/responses that do not supply usage metadata
 - initial send response can be `running`; poll run/thread endpoints until terminal (`completed` or `failed`)
 
@@ -460,7 +457,57 @@ Errors:
 
 - `400` invalid payload (for example no content/files, invalid image type, limits exceeded)
 - `404` thread not found
-- `503` missing API key after runtime resolution (no user override key and no server default key)
+- `503` provider credentials unavailable for resolved model target
+
+## `POST /agent/threads/{thread_id}/messages/stream`
+
+Create user message and run agent with real-time server-sent events (SSE).
+
+Content type: `multipart/form-data`
+
+Form fields:
+
+- `content` (text, optional if files provided)
+- `files` (0..N images)
+
+Behavior:
+
+- uses the same validation and persistence rules as `POST /agent/threads/{thread_id}/messages`
+- starts run execution in-request and streams incremental agent events
+- if client disconnects before terminal event, backend continues the run in background
+- thread/run snapshots remain queryable via:
+  - `GET /agent/threads/{thread_id}`
+  - `GET /agent/runs/{run_id}`
+
+Response content type: `text/event-stream`
+
+Event contract (`event` name and JSON payload `data`):
+
+- `run_started`
+  - `{ "type": "run_started", "run_id": "<id>" }`
+- `text_delta`
+  - `{ "type": "text_delta", "run_id": "<id>", "delta": "<token fragment>" }`
+- `tool_call`
+  - `{ "type": "tool_call", "run_id": "<id>", "tool_name": "<tool name>" }`
+- terminal success:
+  - `run_completed`
+  - `{ "type": "run_completed", "run_id": "<id>", "assistant_message_id": "<id|null>", "status": "completed", "error_text": null }`
+- terminal failure:
+  - `run_failed`
+  - `{ "type": "run_failed", "run_id": "<id>", "assistant_message_id": "<id|null>", "status": "failed", "error_text": "<reason|null>" }`
+
+Usage behavior:
+
+- usage counters/costs are still persisted on the run record and returned from run/thread snapshot endpoints
+- SSE events stream text/tool progress only; usage totals are not emitted incrementally
+- transient stream failures are retried using configured agent retry settings
+- retries after partial streamed text suppress already-emitted prefixes to avoid duplicate text
+
+Errors:
+
+- `400` invalid payload (for example no content/files, invalid image type, limits exceeded)
+- `404` thread not found
+- `503` provider credentials unavailable for resolved model target
 
 ## `GET /agent/runs/{run_id}`
 

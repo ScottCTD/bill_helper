@@ -26,6 +26,7 @@
 - `versions/0008_agent_run_usage_metrics.py`: adds run usage token columns.
 - `versions/0009_remove_entry_status.py`: drops the obsolete entry `status` column.
 - `versions/0010_runtime_settings_overrides.py`: adds persisted runtime settings override table (`runtime_settings`).
+- `versions/0011_remove_openrouter_runtime_settings_fields.py`: removes legacy OpenRouter-specific runtime settings columns.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)

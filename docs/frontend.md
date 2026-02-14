@@ -208,9 +208,9 @@ Agent client methods:
 
 - categorized runtime settings workspace with responsive card layout:
   - `General` (current user name, default currency, dashboard currency)
-  - `Agent Runtime` (API key override, base URL, model, step/image limits)
+  - `Agent Runtime` (model, step/image limits)
   - `Reliability` (retry policy controls)
-- top summary surface shows effective API key source and active model
+- top summary surface shows active model
 - supports save/update and reset-to-server-default flows
 - setting changes trigger cache invalidation across dependent pages (agent/dashboard/accounts/entries/users)
 
@@ -288,7 +288,7 @@ Composer:
 - textarea defaults to a single line and auto-grows with content up to a bounded max height, then becomes internally scrollable
 - toolbar contains an "Add Attachments" button (paperclip icon, triggers hidden file input) and a run-aware primary action:
   - idle: `Send`
-  - assistant busy (active run or client-side streaming playback): destructive `Stop` (interrupts run if still active and halts local streaming/polling)
+  - assistant busy (active run or active SSE stream): destructive `Stop` (aborts stream request and interrupts run if still active)
 - compact removable attachment chips above the composer box (thumbnail + extra-small corner remove button that does not obscure preview)
 - click-to-preview image dialog before send
 - composer submit shortcut is line-aware:
@@ -297,8 +297,12 @@ Composer:
 - paste image attachments directly into the composer (`Cmd/Ctrl+V`)
 - drag-and-drop image files onto the composer drop target
 - optimistic user message rendering: user bubble appears immediately after submit, before run completion
+- optimistic user bubble is auto-removed once the persisted server-side user message arrives, preventing temporary duplicate user blocks
 - optimistic assistant placeholder rendering: assistant bubble appears immediately after submit (without waiting for run-status polling) with a flashing block cursor (`▍`) while awaiting first assistant content/activity
-- assistant response streaming playback in the chat timeline (token-by-token render effect)
+- assistant response text is streamed from backend SSE in real time (`POST /api/v1/agent/threads/{thread_id}/messages/stream`)
+- streamed assistant bubble remains visible while tool-call activity cards are also shown, so token deltas are not hidden during long multi-tool runs
+- tool-call activity for the active streaming run is rendered inside the same streaming assistant bubble (instead of a second temporary assistant bubble)
+- optimistic assistant bubble is reconciled away as soon as a new persisted assistant message arrives, preventing split-then-merge visual artifacts
 - active-run polling refreshes timeline state while backend run status is `running`
 
 Layout mode: full-page AI home experience (drawer mode has been removed).
@@ -389,6 +393,7 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 
 - frontend now depends on agent API contracts and attachment URLs
 - multipart requests are required for agent message send with images
+- agent send now depends on SSE parsing for incremental assistant text events (`run_started`, `text_delta`, `tool_call`, `run_completed`, `run_failed`)
 - all query keys/invalidation rules are now centralized, so new pages/features should reuse `queryKeys` + `queryInvalidation` helpers
 - UI primitives should be sourced from `frontend/src/components/ui/*` before introducing one-off controls/styles
 - properties page now issues taxonomy reads in addition to users/entities/tags/currencies:
@@ -425,7 +430,7 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 - `Approve All` is implemented as sequential per-item API calls (no batch endpoint), so very large runs may feel slower
 - popup auto-save requires valid required fields; invalid dirty state keeps popup open and surfaces validation errors
 - entry property wrappers are non-label containers so only direct control clicks activate inputs/selects
-- current streaming UI is client-rendered from the completed assistant message; runs are polled until completion but backend SSE/token streaming endpoint is not implemented yet
+- streaming bubble renders plain text deltas during SSE; markdown formatting is applied after the final assistant message is persisted/refetched
 - composer paste/drag-drop paths accept only image files; non-image files are skipped with a local error message
 - bundle output still reports large chunk warnings from existing editor/runtime bundles; this refactor did not add route-level code splitting
 - taxonomy UI is flat-list only in V1:

@@ -80,8 +80,6 @@ class RuntimeSettings(Base):
     current_user_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     default_currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
     dashboard_currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
-    openrouter_api_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    openrouter_base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     agent_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     agent_max_steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
     agent_retry_max_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)

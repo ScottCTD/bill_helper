@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Thread
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -36,6 +37,7 @@ from backend.services.agent import (
     interrupt_agent_run,
     reject_change_item,
     run_existing_agent_run,
+    run_existing_agent_run_stream,
     start_agent_run,
 )
 from backend.services.agent.serializers import (
@@ -137,51 +139,17 @@ def _run_agent_in_background(run_id: str) -> None:
         db.close()
 
 
-@router.get("/threads", response_model=list[AgentThreadSummaryRead])
-def list_threads(db: Session = Depends(get_db)) -> list[AgentThreadSummaryRead]:
-    return _thread_summary_rows(db)
+def _sse_event(event_type: str, payload: dict[str, object]) -> str:
+    return f"event: {event_type}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
 
 
-@router.post("/threads", response_model=AgentThreadRead, status_code=status.HTTP_201_CREATED)
-def create_thread(payload: AgentThreadCreate | None = None, db: Session = Depends(get_db)) -> AgentThreadRead:
-    thread = AgentThread(title=payload.title if payload else None)
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
-    return thread_to_schema(thread)
-
-
-@router.get("/threads/{thread_id}", response_model=AgentThreadDetailRead)
-def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThreadDetailRead:
-    thread = db.scalar(
-        select(AgentThread)
-        .where(AgentThread.id == thread_id)
-        .options(
-            selectinload(AgentThread.messages).selectinload(AgentMessage.attachments),
-            selectinload(AgentThread.runs).selectinload(AgentRun.tool_calls),
-            selectinload(AgentThread.runs)
-            .selectinload(AgentRun.change_items)
-            .selectinload(AgentChangeItem.review_actions),
-        )
-    )
-    if thread is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
-    settings = resolve_runtime_settings(db)
-    return AgentThreadDetailRead(
-        thread=thread_to_schema(thread),
-        messages=[message_to_schema(message, api_prefix=settings.api_prefix) for message in thread.messages],
-        runs=[run_to_schema(run) for run in thread.runs],
-        configured_model_name=settings.agent_model,
-    )
-
-
-@router.post("/threads/{thread_id}/messages", response_model=AgentRunRead)
-async def send_thread_message(
+async def _create_user_message_and_start_run(
+    *,
     thread_id: str,
-    content: str = Form(default=""),
-    files: list[UploadFile] = File(default_factory=list),
-    db: Session = Depends(get_db),
-) -> AgentRunRead:
+    content: str,
+    files: list[UploadFile],
+    db: Session,
+) -> AgentRun:
     try:
         # Fail fast before persisting uploads/messages when no model credentials are configured.
         ensure_agent_available(db)
@@ -239,9 +207,100 @@ async def send_thread_message(
     db.refresh(user_message)
     db.refresh(user_message, attribute_names=["attachments"])
 
-    run = start_agent_run(db, thread, user_message)
+    return start_agent_run(db, thread, user_message)
+
+
+@router.get("/threads", response_model=list[AgentThreadSummaryRead])
+def list_threads(db: Session = Depends(get_db)) -> list[AgentThreadSummaryRead]:
+    return _thread_summary_rows(db)
+
+
+@router.post("/threads", response_model=AgentThreadRead, status_code=status.HTTP_201_CREATED)
+def create_thread(payload: AgentThreadCreate | None = None, db: Session = Depends(get_db)) -> AgentThreadRead:
+    thread = AgentThread(title=payload.title if payload else None)
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+    return thread_to_schema(thread)
+
+
+@router.get("/threads/{thread_id}", response_model=AgentThreadDetailRead)
+def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThreadDetailRead:
+    thread = db.scalar(
+        select(AgentThread)
+        .where(AgentThread.id == thread_id)
+        .options(
+            selectinload(AgentThread.messages).selectinload(AgentMessage.attachments),
+            selectinload(AgentThread.runs).selectinload(AgentRun.tool_calls),
+            selectinload(AgentThread.runs)
+            .selectinload(AgentRun.change_items)
+            .selectinload(AgentChangeItem.review_actions),
+        )
+    )
+    if thread is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+    settings = resolve_runtime_settings(db)
+    return AgentThreadDetailRead(
+        thread=thread_to_schema(thread),
+        messages=[message_to_schema(message, api_prefix=settings.api_prefix) for message in thread.messages],
+        runs=[run_to_schema(run) for run in thread.runs],
+        configured_model_name=settings.agent_model,
+    )
+
+
+@router.post("/threads/{thread_id}/messages", response_model=AgentRunRead)
+async def send_thread_message(
+    thread_id: str,
+    content: str = Form(default=""),
+    files: list[UploadFile] = File(default_factory=list),
+    db: Session = Depends(get_db),
+) -> AgentRunRead:
+    run = await _create_user_message_and_start_run(
+        thread_id=thread_id,
+        content=content,
+        files=files,
+        db=db,
+    )
     Thread(target=_run_agent_in_background, args=(run.id,), daemon=True).start()
     return run_to_schema(run)
+
+
+@router.post("/threads/{thread_id}/messages/stream")
+async def send_thread_message_stream(
+    thread_id: str,
+    content: str = Form(default=""),
+    files: list[UploadFile] = File(default_factory=list),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    run = await _create_user_message_and_start_run(
+        thread_id=thread_id,
+        content=content,
+        files=files,
+        db=db,
+    )
+
+    def stream_events():
+        stream_finished = False
+        try:
+            for event in run_existing_agent_run_stream(db, run.id):
+                event_type = str(event.get("type") or "event")
+                payload = dict(event)
+                yield _sse_event(event_type, payload)
+            stream_finished = True
+        finally:
+            # If the client disconnects mid-stream, continue the run in background.
+            if not stream_finished:
+                Thread(target=_run_agent_in_background, args=(run.id,), daemon=True).start()
+
+    return StreamingResponse(
+        stream_events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/runs/{run_id}", response_model=AgentRunRead)

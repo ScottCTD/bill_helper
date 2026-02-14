@@ -88,8 +88,16 @@ uv run python scripts/check_docs_sync.py
 - Tag deletion proposals are blocked when the tag is still referenced by any non-deleted entries; apply path re-validates this constraint before delete.
 - Agent prompt policy requires entry retag/update proposals before tag-delete proposals when the tag is still referenced.
 - Agent model/tool execution retries and limits can be overridden at runtime via `/settings`.
+- Streamed model calls retry transient failures using the same retry policy.
+- Stream retries after partial output are de-duplicated so already-emitted prefixes are not re-sent to the SSE client.
+- Agent model calls are routed through LiteLLM using the configured model string (`agent_model`), and credentials are resolved from provider environment variables.
 - Agent runs can be interrupted via `POST /api/v1/agent/runs/{run_id}/interrupt`; interrupted runs transition to `failed`.
-- OpenRouter observability payload now includes stable `session_id=AgentThread.id` for each model call in a thread, which enables Langfuse/OpenRouter session grouping per conversation.
+- Follow-up user turns after an interrupted run now include an interruption context note in model input so the agent treats the interrupted request as unfinished context.
+- Agent message delivery now supports both modes:
+  - async start + polling: `POST /api/v1/agent/threads/{thread_id}/messages`
+  - SSE token stream: `POST /api/v1/agent/threads/{thread_id}/messages/stream`
+- Observability context (`user`, `session_id=AgentThread.id`, run trace metadata) is propagated on each model call.
+- When `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` are configured, LiteLLM `langfuse` success/failure callbacks are enabled and trace metadata is sent through LiteLLM `metadata`.
 - Dashboard currency defaults to runtime settings (`/settings` override, else `BILL_HELPER_DASHBOARD_CURRENCY_CODE` / `CAD`).
 
 ## Related Docs

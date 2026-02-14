@@ -5,6 +5,7 @@ from backend.services.agent.runtime import (
     interrupt_agent_run,
     run_agent_turn,
     run_existing_agent_run,
+    run_existing_agent_run_stream,
     start_agent_run,
 )
 
@@ -15,6 +16,7 @@ __all__ = [
     "interrupt_agent_run",
     "reject_change_item",
     "run_existing_agent_run",
+    "run_existing_agent_run_stream",
     "run_agent_turn",
     "start_agent_run",
 ]
