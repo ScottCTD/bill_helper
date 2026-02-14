@@ -222,6 +222,8 @@ Timeline features:
 - click-to-open conversation behavior from history rail
 - header title includes active model context (`Agent (<model>)`) based on the most recent run in the selected thread
 - main chat timeline with user/assistant message bubbles
+- timeline scroll behavior is a dedicated right-pane scroll surface with scrollbar at panel edge
+- desktop thread rail is viewport-bounded and keeps its own independent overflow scroll
 - assistant/system message bodies render markdown via `react-markdown` + `remark-gfm` (sanitized defaults, GFM tables/task lists/strikethrough)
 - attachment previews for uploaded images
 - run blocks are anchored to assistant-side timeline events (`assistant_message_id`) to keep tool activity in assistant flow
@@ -270,6 +272,8 @@ Review actions:
 Composer:
 
 - card-style input box: borderless textarea inside a rounded container with a bottom toolbar row
+- composer bar is pinned at the bottom of the right pane while timeline content scrolls
+- textarea defaults to a single line and auto-grows with content up to a bounded max height, then becomes internally scrollable
 - toolbar contains an "Add Attachments" button (paperclip icon, triggers hidden file input) and a "Send" button (with send icon)
 - compact removable attachment chips above the composer box (thumbnail + extra-small corner remove button that does not obscure preview)
 - click-to-preview image dialog before send

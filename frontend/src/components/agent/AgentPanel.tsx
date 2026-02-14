@@ -62,6 +62,7 @@ interface PendingUserMessage {
 }
 
 const IMAGE_FILENAME_PATTERN = /\.(avif|bmp|gif|heic|heif|jpe?g|png|svg|tiff?|webp)$/i;
+const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 220;
 
 function prettyDateTime(value: string): string {
   const parsed = new Date(value);
@@ -268,8 +269,20 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const autoStreamedMessageByThreadRef = useRef<Record<string, string>>({});
   const draftFileIdCounterRef = useRef(0);
   const composerDragDepthRef = useRef(0);
-  const timelineScrollRef = useRef<HTMLDivElement>(null);
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function autoSizeComposerTextarea(target?: HTMLTextAreaElement | null) {
+    const textarea = target ?? composerTextareaRef.current;
+    if (!textarea) {
+      return;
+    }
+    textarea.style.height = "auto";
+    const nextHeight = Math.min(textarea.scrollHeight, COMPOSER_TEXTAREA_MAX_HEIGHT_PX);
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT_PX ? "auto" : "hidden";
+  }
 
   const threadsQuery = useQuery({
     queryKey: queryKeys.agent.threads,
@@ -304,11 +317,16 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
 
   const threadMessages = threadQuery.data?.messages;
   useEffect(() => {
-    const el = timelineScrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
+    const timeline = timelineScrollRef.current;
+    if (!timeline) {
+      return;
     }
+    timeline.scrollTop = timeline.scrollHeight;
   }, [selectedThreadId, threadMessages]);
+
+  useEffect(() => {
+    autoSizeComposerTextarea();
+  }, [draftMessage]);
 
   const createThreadMutation = useMutation({
     mutationFn: createAgentThread,
@@ -706,6 +724,11 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     event.currentTarget.form?.requestSubmit();
   }
 
+  function handleDraftMessageChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    setDraftMessage(event.target.value);
+    autoSizeComposerTextarea(event.target);
+  }
+
   async function handleApproveItem(payload: {
     itemId: string;
     payloadOverride?: Record<string, unknown>;
@@ -949,13 +972,14 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
 
               <div className="agent-composer-box">
                 <Textarea
+                  ref={composerTextareaRef}
                   className="agent-composer-textarea border-none shadow-none focus-visible:ring-0"
                   placeholder="Ask a question or ask the agent to propose entries/tags/entities..."
                   value={draftMessage}
-                  onChange={(event) => setDraftMessage(event.target.value)}
+                  onChange={handleDraftMessageChange}
                   onKeyDown={handleComposerKeyDown}
                   onPaste={handleComposerPaste}
-                  rows={3}
+                  rows={1}
                 />
 
                 <div className="agent-composer-toolbar">

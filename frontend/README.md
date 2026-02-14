@@ -93,6 +93,9 @@ uv run python scripts/check_docs_sync.py
 - Entry status is not part of frontend entry models.
 - Runtime settings are loaded from `/api/v1/settings` and affect default currency/model behavior across pages.
 - Agent review timeline supports create/update/delete change items for entries, tags, and entities.
+- Agent home uses a dedicated right-pane timeline scroller while keeping the scrollbar at the panel edge (not beside message bubbles).
+- The left thread rail is viewport-bounded with independent overflow scrolling and does not move when timeline content scrolls.
+- The composer stays pinned at the bottom of the right pane; message input starts as one line and auto-expands up to a max height.
 - Dashboard visualizations use Recharts and consume the backend-configured dashboard currency payload.
 
 ## Related Docs
