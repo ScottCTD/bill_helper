@@ -7,6 +7,7 @@ This document describes the architecture, prompts, and tools of the Bill Helper 
 The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated mutation model:
 
 - The agent reads data with read tools.
+- The agent can publish concise user-visible progress notes with `send_intermediate_update`.
 - The agent proposes CRUD changes for entries, tags, and entities.
 - The agent does not directly mutate domain tables.
 - Domain mutations occur only through human review apply endpoints.
@@ -19,7 +20,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | Model client | `backend/services/agent/model_client.py` | LiteLLM adapter, tool wiring, retry-enabled model completion |
 | Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks, proposal ordering (including tag-delete sequencing), error recovery, and current-user context section |
 | Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; builds current-user account context for system prompt; prepends review outcomes before current user feedback in the latest user message |
-| Tools | `backend/services/agent/tools.py` | Read/proposal tool schemas, validation, execution, tool-level retry |
+| Tools | `backend/services/agent/tools.py` | Read/progress/proposal tool schemas, validation, execution, tool-level retry |
 | Review/apply | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py` | Approval/rejection, apply handlers for proposed CRUD changes |
 | API router | `backend/routers/agent.py` | Threads/runs/send/review/attachment endpoints |
 
@@ -31,7 +32,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
    - system prompt (including current-user account context)
    - thread message history
    - for the latest user turn only, review outcomes (if any) prepended before that user feedback text
-4. Runtime loops: model call → optional tool calls → tool results appended → repeat (bounded by `agent_max_steps`).
+4. Runtime loops: model call → optional tool calls (including sparse `send_intermediate_update` progress notes) → tool results appended → repeat (bounded by `agent_max_steps`).
 5. Runtime persists final assistant message and marks run `completed` or `failed`.
 
 ## Configuration
@@ -88,10 +89,13 @@ You are the Bill Helper assistant. Follow review-gated mutation policies strictl
 8. Reviewed proposal results are prepended in the latest user message before user feedback.
    Use review statuses/comments to improve the next proposal iteration.
    If no explicit user feedback exists, explore missing context and improve proposals proactively.
-9. End every run with one final assistant message.
-10. Final message should prioritize a concise direct answer.
+9. When transitioning between distinct tool-call batches, use send_intermediate_update
+   with a brief progress note so the user can follow your reasoning.
+10. Use send_intermediate_update sparingly for meaningful transitions; do not call it on every tool step.
+11. End every run with one final assistant message.
+12. Final message should prioritize a concise direct answer.
    Mention tools only when they materially change the answer or next action.
-11. Do not ask to run non-existent tools.
+13. Do not ask to run non-existent tools.
 
 ## Current User Context
 ...
@@ -198,6 +202,28 @@ summary: dashboard snapshot for YYYY-MM
 expenses_by_currency: {"USD": 12345, ...}
 incomes_by_currency: {"USD": 50000, ...}
 top_tags: tag:USD:1000; ...
+```
+
+---
+
+### Progress Tool
+
+#### `send_intermediate_update`
+
+**Description:** Emit a brief user-visible progress note between distinct tool-call batches. Use sparingly; do not call on every tool step.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `message` | string | yes | 1–400 chars, normalized |
+
+**Expected output (text):**
+
+```
+OK
+summary: intermediate update shared
+message: <update text>
 ```
 
 ---
@@ -363,6 +389,7 @@ Each tool emits model-visible text plus structured `output_json`:
 - Failure: `status: "ERROR"`, `summary`, optional `details`
 
 Runtime persists every tool call in `agent_tool_calls` and feeds tool output text back to the model for next-step decisions.
+When `send_intermediate_update` is called during SSE runs, runtime emits a `reasoning_update` stream event so the frontend can render progress updates in real time.
 For continuation after review, `message_history.py` prepends a compact review-results block to the latest user message, then includes user feedback text below it (not as dynamic system prompt text).
 Proposal tools are blocked when older pending review items still exist in the same thread; the agent receives an `ERROR` tool output instructing it to ask for review completion first.
 

@@ -171,6 +171,14 @@ def test_system_prompt_includes_error_recovery_and_no_domain_ids():
     assert "If a tool returns an ERROR" in prompt
 
 
+def test_system_prompt_requires_sparse_intermediate_updates():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    assert "send_intermediate_update" in prompt
+    assert "do not call it on every tool step" in prompt
+
+
 def test_system_prompt_includes_current_date_tag():
     from datetime import date
 
@@ -222,6 +230,7 @@ def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
     assert "list_accounts" not in names
     assert "search_entries" not in names
     assert "list_entries" in names
+    assert "send_intermediate_update" in names
     assert "propose_update_entry" in names
     assert "propose_delete_entry" in names
     assert "propose_update_tag" in names
@@ -362,6 +371,66 @@ def test_stream_message_endpoint_emits_real_time_events(client, monkeypatch):
     assistant_messages = [message for message in detail["messages"] if message["role"] == "assistant"]
     assert len(assistant_messages) == 1
     assert assistant_messages[0]["content_markdown"] == "Hello"
+
+
+def test_stream_message_endpoint_emits_reasoning_update_events(client, monkeypatch):
+    from backend.services.agent import runtime
+
+    stream_responses = [
+        [
+            {
+                "type": "done",
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "call_intermediate_update",
+                            "type": "function",
+                            "function": {
+                                "name": "send_intermediate_update",
+                                "arguments": json.dumps({"message": "I am checking existing entries and tags."}),
+                            },
+                        }
+                    ],
+                },
+            }
+        ],
+        [
+            {
+                "type": "done",
+                "message": {
+                    "role": "assistant",
+                    "content": "Finished and ready for review.",
+                    "tool_calls": [],
+                },
+            }
+        ],
+    ]
+
+    def stream_model(_messages, _db, **_kwargs):
+        for event in stream_responses.pop(0):
+            yield event
+
+    monkeypatch.setattr(runtime, "_call_model_stream", stream_model)
+
+    thread = create_thread(client)
+    events = collect_sse_events(client, thread["id"], "process this import")
+
+    reasoning_updates = [event for event in events if event.get("type") == "reasoning_update"]
+    assert len(reasoning_updates) == 1
+    assert reasoning_updates[0]["message"] == "I am checking existing entries and tags."
+    assert not [event for event in events if event.get("type") == "tool_call"]
+    assert events[-1]["type"] == "run_completed"
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    assert len(detail["runs"]) == 1
+    run = detail["runs"][0]
+    assert len(run["tool_calls"]) == 1
+    assert run["tool_calls"][0]["tool_name"] == "send_intermediate_update"
+    assert run["tool_calls"][0]["output_json"]["message"] == "I am checking existing entries and tags."
 
 
 def test_model_observability_uses_thread_as_session_id(client, monkeypatch):

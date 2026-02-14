@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 import json
 import re
 from datetime import datetime, timezone
@@ -13,7 +14,12 @@ from backend.enums import AgentMessageRole, AgentRunStatus, AgentToolCallStatus
 from backend.models import AgentChangeItem, AgentMessage, AgentRun, AgentThread, AgentToolCall
 from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.model_client import AgentModelError, LiteLLMModelClient, validate_litellm_environment
-from backend.services.agent.tools import ToolContext, build_openai_tool_schemas, execute_tool
+from backend.services.agent.tools import (
+    INTERMEDIATE_UPDATE_TOOL_NAME,
+    ToolContext,
+    build_openai_tool_schemas,
+    execute_tool,
+)
 from backend.services.runtime_settings import resolve_runtime_settings
 
 
@@ -35,6 +41,12 @@ def utc_now() -> datetime:
 
 class AgentRuntimeUnavailable(RuntimeError):
     pass
+
+
+@dataclass(slots=True)
+class RecordedToolCall:
+    llm_message: dict[str, Any]
+    persisted_row: AgentToolCall
 
 
 def ensure_agent_available(db: Session) -> None:
@@ -164,7 +176,7 @@ def _record_tool_call_and_result(
     run: AgentRun,
     tool_call: dict[str, Any],
     tool_context: ToolContext,
-) -> dict[str, Any]:
+) -> RecordedToolCall:
     function = tool_call.get("function") or {}
     name = str(function.get("name") or "")
     arguments = _parse_tool_arguments(function.get("arguments") or "{}")
@@ -180,12 +192,35 @@ def _record_tool_call_and_result(
     db.add(tool_row)
     db.flush()
 
-    return {
-        "role": "tool",
-        "tool_call_id": tool_call.get("id"),
-        "name": name,
-        "content": result.output_text,
-    }
+    return RecordedToolCall(
+        llm_message={
+            "role": "tool",
+            "tool_call_id": tool_call.get("id"),
+            "name": name,
+            "content": result.output_text,
+        },
+        persisted_row=tool_row,
+    )
+
+
+def _extract_reasoning_update_message(tool_call: AgentToolCall) -> str | None:
+    if tool_call.tool_name != INTERMEDIATE_UPDATE_TOOL_NAME:
+        return None
+
+    output_json = tool_call.output_json if isinstance(tool_call.output_json, dict) else {}
+    output_message = output_json.get("message")
+    if isinstance(output_message, str):
+        normalized_output = output_message.strip()
+        if normalized_output:
+            return normalized_output
+
+    input_json = tool_call.input_json if isinstance(tool_call.input_json, dict) else {}
+    input_message = input_json.get("message")
+    if isinstance(input_message, str):
+        normalized_input = input_message.strip()
+        if normalized_input:
+            return normalized_input
+    return None
 
 
 def _coerce_usage_int(value: Any) -> int | None:
@@ -318,13 +353,14 @@ def _execute_agent_run(
                 for tool_call in tool_calls:
                     if _run_is_stopped(db, run):
                         return _load_run_snapshot(db, run.id)
+                    recorded_tool_call = _record_tool_call_and_result(
+                        db,
+                        run=run,
+                        tool_call=tool_call,
+                        tool_context=tool_context,
+                    )
                     llm_messages.append(
-                        _record_tool_call_and_result(
-                            db,
-                            run=run,
-                            tool_call=tool_call,
-                            tool_context=tool_context,
-                        )
+                        recorded_tool_call.llm_message
                     )
                     db.commit()
                 continue
@@ -467,19 +503,27 @@ def _execute_agent_run_stream(
                         return
                     function = tool_call.get("function") or {}
                     tool_name = str(function.get("name") or "(unknown)")
-                    tool_result_message = _record_tool_call_and_result(
+                    recorded_tool_call = _record_tool_call_and_result(
                         db,
                         run=run,
                         tool_call=tool_call,
                         tool_context=tool_context,
                     )
-                    llm_messages.append(tool_result_message)
+                    llm_messages.append(recorded_tool_call.llm_message)
                     db.commit()
-                    yield {
-                        "type": "tool_call",
-                        "run_id": run.id,
-                        "tool_name": tool_name,
-                    }
+                    reasoning_update_message = _extract_reasoning_update_message(recorded_tool_call.persisted_row)
+                    if reasoning_update_message is not None:
+                        yield {
+                            "type": "reasoning_update",
+                            "run_id": run.id,
+                            "message": reasoning_update_message,
+                        }
+                    else:
+                        yield {
+                            "type": "tool_call",
+                            "run_id": run.id,
+                            "tool_name": tool_name,
+                        }
                 continue
 
             _persist_final_message(

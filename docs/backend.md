@@ -126,6 +126,7 @@ Agent services:
   - executes one run per user message
   - orchestrates bounded tool-calling loop and run lifecycle persistence
   - supports both non-stream execution and SSE execution (`run_existing_agent_run_stream`) for incremental text delivery
+  - emits `reasoning_update` SSE events when `send_intermediate_update` tool calls succeed
   - supports manual run interruption (`interrupt_agent_run`) and cooperative stop checks between model/tool steps
   - aggregates model usage metrics across all model calls in a run and persists totals on `agent_runs`
   - passes model observability context (`user`, `session_id=thread.id`, run-level `trace`) on each model request for conversation-level trace grouping
@@ -134,6 +135,7 @@ Agent services:
   - central system prompt definition
   - enforces entry-ingestion order: duplicate check first, then tag/entity reconciliation, then entry proposals
   - enforces tag-delete sequencing: update/retag affected entries before proposing `delete_tag`
+  - requires sparse `send_intermediate_update` calls between meaningful tool-call batches
   - enforces name/selector-based proposals (no domain IDs in tool contracts)
   - includes a lightweight current-user context section (current user + owned accounts) at runtime
   - on tool errors/selector ambiguity, instructs the model to recover or ask for user clarification
@@ -157,6 +159,7 @@ Agent services:
   - periodic model-cost map refresh from LiteLLM URL with fallback to bundled map when remote fetch fails
 - `backend/services/agent/tools.py`
   - read tools: `list_entries`, `list_tags`, `list_entities`, `get_dashboard_summary`
+  - progress tool: `send_intermediate_update` (brief user-visible intermediate reasoning/progress note)
   - `list_entries` is the single entry query tool (date/name/from/to/tags/kind; exact-first then fuzzy ranking)
   - `list_tags` / `list_entities` support name+category query and include category in outputs
   - proposal tools cover CRUD:
@@ -267,13 +270,14 @@ Test modules:
 - run usage token persistence (`input/output/cache read/cache write`) including multi-step aggregation and null-safe fallback
 - run API cost fields (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
 - asynchronous run start behavior (`POST /agent/threads/{thread_id}/messages` returns `running` while execution continues)
-- SSE agent message behavior (`POST /agent/threads/{thread_id}/messages/stream`) with incremental `text_delta` events and terminal completion/failure events
+- SSE agent message behavior (`POST /agent/threads/{thread_id}/messages/stream`) with incremental `text_delta` events, `reasoning_update` events, and terminal completion/failure events
 - run interruption endpoint behavior (`POST /agent/runs/{run_id}/interrupt`) and no-op semantics for already-terminal runs
 - interrupted-run context injection into the next user turn prompt input
 - observability context propagation for stable per-thread session grouping
 - LiteLLM routing behavior with provider env credential resolution
 - prompt contract for entry ingestion ordering (duplicate check -> tag/entity reconciliation -> entry proposal)
 - prompt contract for tag-deletion ordering (retag/update entries first -> then `propose_delete_tag`)
+- prompt contract for sparse intermediate reasoning updates (`send_intermediate_update`) during multi-step tool loops
 
 `test_agent_model_client.py` covers:
 
@@ -282,7 +286,7 @@ Test modules:
 - stream divergence guard across retries
 - LiteLLM environment-validation behavior (including indeterminate-validation fallback)
 
-Current baseline for `backend/tests/test_agent.py`: `32 passed`.
+Current baseline for `backend/tests/test_agent.py`: `34 passed`.
 
 ## Operational Impact
 
@@ -290,6 +294,7 @@ Current baseline for `backend/tests/test_agent.py`: `32 passed`.
 - timeline rendering depends on attachment-serving endpoint
 - non-stream sends execute in a background thread; `POST /agent/threads/{thread_id}/messages` returns immediately with `status=running`
 - stream sends execute in-request and emit SSE events from `POST /agent/threads/{thread_id}/messages/stream`; disconnect fallback resumes the run in a background thread
+- streamed runs may emit `reasoning_update` events in addition to `tool_call` and `text_delta` events, enabling lightweight progress UI before final message persistence
 - interrupted runs are marked `failed` with user-facing interruption reason text
 - the next user turn after an interruption carries an explicit interruption note in model input (while preserving normal conversation history)
 - model requests include observability payload (`user`, `session_id=thread.id`, run trace metadata) with LiteLLM metadata mapping for Langfuse grouping (`trace_id`, `session_id`, `trace_user_id`, `generation_name`)

@@ -489,6 +489,8 @@ Event contract (`event` name and JSON payload `data`):
   - `{ "type": "text_delta", "run_id": "<id>", "delta": "<token fragment>" }`
 - `tool_call`
   - `{ "type": "tool_call", "run_id": "<id>", "tool_name": "<tool name>" }`
+- `reasoning_update`
+  - `{ "type": "reasoning_update", "run_id": "<id>", "message": "<brief intermediate update>" }`
 - terminal success:
   - `run_completed`
   - `{ "type": "run_completed", "run_id": "<id>", "assistant_message_id": "<id|null>", "status": "completed", "error_text": null }`
@@ -499,7 +501,7 @@ Event contract (`event` name and JSON payload `data`):
 Usage behavior:
 
 - usage counters/costs are still persisted on the run record and returned from run/thread snapshot endpoints
-- SSE events stream text/tool progress only; usage totals are not emitted incrementally
+- SSE events stream text/tool progress only (including intermediate reasoning updates); usage totals are not emitted incrementally
 - transient stream failures are retried using configured agent retry settings
 - retries after partial streamed text suppress already-emitted prefixes to avoid duplicate text
 

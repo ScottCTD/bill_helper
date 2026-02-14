@@ -70,8 +70,41 @@ interface PendingAssistantMessage {
   content: string;
   runId: string | null;
   baselineLastAssistantMessageId: string | null;
+  activity: PendingAssistantActivityItem[];
 }
 
+type RunToolCall = AgentRun["tool_calls"][number];
+
+interface RunActivityToolBatch {
+  type: "tool_batch";
+  key: string;
+  toolCalls: RunToolCall[];
+}
+
+interface RunActivityReasoningUpdate {
+  type: "reasoning_update";
+  key: string;
+  message: string;
+  createdAt: string;
+}
+
+type RunActivityItem = RunActivityToolBatch | RunActivityReasoningUpdate;
+
+interface PendingAssistantToolBatchActivity {
+  type: "tool_batch";
+  key: string;
+  toolNames: string[];
+}
+
+interface PendingAssistantReasoningUpdateActivity {
+  type: "reasoning_update";
+  key: string;
+  message: string;
+}
+
+type PendingAssistantActivityItem = PendingAssistantToolBatchActivity | PendingAssistantReasoningUpdateActivity;
+
+const INTERMEDIATE_UPDATE_TOOL_NAME = "send_intermediate_update";
 const IMAGE_FILENAME_PATTERN = /\.(avif|bmp|gif|heic|heif|jpe?g|png|svg|tiff?|webp)$/i;
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 220;
 
@@ -180,11 +213,228 @@ function formatUsdCost(value: number | null): string {
   }).format(value);
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function extractIntermediateUpdateMessageFromToolCall(toolCall: RunToolCall): string | null {
+  if (toolCall.tool_name !== INTERMEDIATE_UPDATE_TOOL_NAME) {
+    return null;
+  }
+  const outputJson = asRecord(toolCall.output_json);
+  const outputMessage = outputJson?.message;
+  if (typeof outputMessage === "string" && outputMessage.trim()) {
+    return outputMessage.trim();
+  }
+
+  const inputJson = asRecord(toolCall.input_json);
+  const inputMessage = inputJson?.message;
+  if (typeof inputMessage === "string" && inputMessage.trim()) {
+    return inputMessage.trim();
+  }
+  return null;
+}
+
+function sortToolCallsByCreatedAt(toolCalls: RunToolCall[]): RunToolCall[] {
+  return [...toolCalls].sort((left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime());
+}
+
+function buildRunActivityTimeline(toolCalls: RunToolCall[]): RunActivityItem[] {
+  const timeline: RunActivityItem[] = [];
+  const sortedCalls = sortToolCallsByCreatedAt(toolCalls);
+  let pendingBatch: RunToolCall[] = [];
+
+  const flushPendingBatch = () => {
+    if (pendingBatch.length === 0) {
+      return;
+    }
+    const first = pendingBatch[0];
+    const last = pendingBatch[pendingBatch.length - 1];
+    timeline.push({
+      type: "tool_batch",
+      key: `${first.id}-${last.id}`,
+      toolCalls: pendingBatch,
+    });
+    pendingBatch = [];
+  };
+
+  sortedCalls.forEach((toolCall) => {
+    const reasoningUpdate = extractIntermediateUpdateMessageFromToolCall(toolCall);
+    if (!reasoningUpdate) {
+      pendingBatch.push(toolCall);
+      return;
+    }
+    flushPendingBatch();
+    timeline.push({
+      type: "reasoning_update",
+      key: toolCall.id,
+      message: reasoningUpdate,
+      createdAt: toolCall.created_at,
+    });
+  });
+  flushPendingBatch();
+  return timeline;
+}
+
+function appendPendingToolCallToActivity(
+  activity: PendingAssistantActivityItem[],
+  toolName: string,
+): PendingAssistantActivityItem[] {
+  if (!toolName || toolName === INTERMEDIATE_UPDATE_TOOL_NAME) {
+    return activity;
+  }
+
+  const last = activity[activity.length - 1];
+  if (last?.type === "tool_batch") {
+    const updatedBatch: PendingAssistantToolBatchActivity = {
+      ...last,
+      toolNames: [...last.toolNames, toolName],
+    };
+    return [...activity.slice(0, -1), updatedBatch];
+  }
+  return [
+    ...activity,
+    {
+      type: "tool_batch",
+      key: `tool-batch-${activity.length + 1}-${Date.now()}`,
+      toolNames: [toolName],
+    },
+  ];
+}
+
+function appendPendingReasoningUpdateToActivity(
+  activity: PendingAssistantActivityItem[],
+  message: string,
+): PendingAssistantActivityItem[] {
+  const normalized = message.trim();
+  if (!normalized) {
+    return activity;
+  }
+  return [
+    ...activity,
+    {
+      type: "reasoning_update",
+      key: `reasoning-update-${activity.length + 1}-${Date.now()}`,
+      message: normalized,
+    },
+  ];
+}
+
 interface AgentRunBlockProps {
   run: AgentRun;
   isMutating: boolean;
   onReviewRun: (runId: string) => void;
   mode?: "activity" | "summary" | "all";
+}
+
+function ToolCallDetailList({ toolCalls }: { toolCalls: RunToolCall[] }) {
+  return (
+    <ul className="agent-tool-call-list">
+      {toolCalls.map((toolCall) => (
+        <li key={toolCall.id}>
+          <details className="agent-tool-call">
+            <summary>
+              <ChevronRight className="agent-tool-call-chevron" />
+              <span className="agent-tool-call-name">{toolCall.tool_name}</span>
+              <span className="agent-tool-call-status">{toolCall.status}</span>
+              <span className="agent-tool-call-time muted">{prettyDateTime(toolCall.created_at)}</span>
+            </summary>
+            <div className="agent-tool-call-details">
+              <p className="agent-tool-call-details-label">Input</p>
+              <pre>{JSON.stringify(toolCall.input_json, null, 2)}</pre>
+              <p className="agent-tool-call-details-label">Output</p>
+              <pre>{JSON.stringify(toolCall.output_json, null, 2)}</pre>
+            </div>
+          </details>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ToolCallBatchGroup({
+  toolCalls,
+  isRunning,
+}: {
+  toolCalls: RunToolCall[];
+  isRunning: boolean;
+}) {
+  if (isRunning) {
+    return (
+      <div className="agent-tool-call-group agent-tool-call-group-static">
+        <div className="agent-tool-call-group-summary">
+          <span className="agent-tool-call-group-label">
+            {toolCalls.length} tool call{toolCalls.length === 1 ? "" : "s"}
+          </span>
+          <span className="agent-tool-call-status">live</span>
+        </div>
+        <ToolCallDetailList toolCalls={toolCalls} />
+      </div>
+    );
+  }
+
+  return (
+    <details className="agent-tool-call-group">
+      <summary>
+        <ChevronRight className="agent-tool-call-chevron" />
+        <span className="agent-tool-call-group-label">
+          {toolCalls.length} tool call{toolCalls.length === 1 ? "" : "s"}
+        </span>
+      </summary>
+      <ToolCallDetailList toolCalls={toolCalls} />
+    </details>
+  );
+}
+
+function PendingAssistantActivityBlock({ activity }: { activity: PendingAssistantActivityItem[] }) {
+  if (activity.length === 0) {
+    return null;
+  }
+  return (
+    <div className="agent-run-tools">
+      <div className="agent-run-activity-timeline">
+        {activity.map((item) => {
+          if (item.type === "reasoning_update") {
+            return (
+              <p key={item.key} className="agent-run-reasoning-update">
+                {item.message}
+              </p>
+            );
+          }
+          return (
+            <details key={item.key} className="agent-tool-call-group agent-tool-call-group-static" open>
+              <summary>
+                <ChevronRight className="agent-tool-call-chevron" />
+                <span className="agent-tool-call-group-label">
+                  {item.toolNames.length} tool call{item.toolNames.length === 1 ? "" : "s"}
+                </span>
+              </summary>
+              <ul className="agent-tool-call-list">
+                {item.toolNames.map((toolName, index) => (
+                  <li key={`${item.key}-${toolName}-${index}`}>
+                    <details className="agent-tool-call agent-tool-call-static" open>
+                      <summary>
+                        <ChevronRight className="agent-tool-call-chevron" />
+                        <span className="agent-tool-call-name">{toolName}</span>
+                        <span className="agent-tool-call-status">streaming</span>
+                      </summary>
+                      <div className="agent-tool-call-details">
+                        <p className="agent-tool-call-details-label">Details</p>
+                        <p className="muted agent-tool-call-pending-detail">Waiting for full tool payload...</p>
+                      </div>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function AgentRunBlock({ run, isMutating, onReviewRun, mode = "all" }: AgentRunBlockProps) {
@@ -195,20 +445,9 @@ function AgentRunBlock({ run, isMutating, onReviewRun, mode = "all" }: AgentRunB
   const pendingCount = run.change_items.filter((item) => item.status === "PENDING_REVIEW").length;
   const failedCount = run.change_items.filter((item) => item.status === "APPLY_FAILED").length;
   const typeSummary = summarizeRunChangeTypes(run.change_items);
-  const [isToolListExpanded, setIsToolListExpanded] = useState(run.status === "running");
-  const previousToolCallCountRef = useRef(run.tool_calls.length);
-
-  useEffect(() => {
-    const previousCount = previousToolCallCountRef.current;
-    previousToolCallCountRef.current = run.tool_calls.length;
-    if (run.status !== "running") {
-      setIsToolListExpanded(false);
-      return;
-    }
-    if (run.tool_calls.length > previousCount) {
-      setIsToolListExpanded(true);
-    }
-  }, [run.status, run.tool_calls.length]);
+  const activityTimeline = useMemo(() => buildRunActivityTimeline(run.tool_calls), [run.tool_calls]);
+  const showInterleavedTimeline = activityTimeline.some((item) => item.type === "reasoning_update");
+  const isRunning = run.status === "running";
 
   if (!hasActivityContent && !hasSummaryChanges) {
     return null;
@@ -222,38 +461,24 @@ function AgentRunBlock({ run, isMutating, onReviewRun, mode = "all" }: AgentRunB
 
           {run.tool_calls.length > 0 ? (
             <div className="agent-run-tools">
-              <details
-                className="agent-tool-call-group"
-                open={isToolListExpanded}
-                onToggle={(event) => setIsToolListExpanded(event.currentTarget.open)}
-              >
-                <summary>
-                  <ChevronRight className="agent-tool-call-chevron" />
-                  <span className="agent-tool-call-group-label">
-                    {run.tool_calls.length} tool call{run.tool_calls.length === 1 ? "" : "s"}
-                  </span>
-                </summary>
-                <ul className="agent-tool-call-list">
-                  {run.tool_calls.map((toolCall) => (
-                    <li key={toolCall.id}>
-                      <details className="agent-tool-call">
-                        <summary>
-                          <ChevronRight className="agent-tool-call-chevron" />
-                          <span className="agent-tool-call-name">{toolCall.tool_name}</span>
-                          <span className="agent-tool-call-status">{toolCall.status}</span>
-                          <span className="agent-tool-call-time muted">{prettyDateTime(toolCall.created_at)}</span>
-                        </summary>
-                        <div className="agent-tool-call-details">
-                          <p className="agent-tool-call-details-label">Input</p>
-                          <pre>{JSON.stringify(toolCall.input_json, null, 2)}</pre>
-                          <p className="agent-tool-call-details-label">Output</p>
-                          <pre>{JSON.stringify(toolCall.output_json, null, 2)}</pre>
-                        </div>
-                      </details>
-                    </li>
-                  ))}
-                </ul>
-              </details>
+              {showInterleavedTimeline ? (
+                <div className="agent-run-activity-timeline">
+                  {activityTimeline.map((item) => {
+                    if (item.type === "reasoning_update") {
+                      return (
+                        <p key={item.key} className="agent-run-reasoning-update">
+                          {item.message}
+                        </p>
+                      );
+                    }
+                    return (
+                      <ToolCallBatchGroup key={item.key} toolCalls={item.toolCalls} isRunning={isRunning} />
+                    );
+                  })}
+                </div>
+              ) : (
+                <ToolCallBatchGroup toolCalls={run.tool_calls} isRunning={isRunning} />
+              )}
             </div>
           ) : null}
         </>
@@ -430,6 +655,12 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     const runningRun = [...pendingAssistantRuns].reverse().find((run) => run.status === "running");
     return runningRun ?? null;
   }, [pendingAssistantMessage, pendingAssistantRuns, selectedThreadId]);
+  const pendingOptimisticActivity = useMemo(() => {
+    if (!pendingAssistantMessage || pendingAssistantMessage.threadId !== selectedThreadId) {
+      return [];
+    }
+    return pendingAssistantMessage.activity;
+  }, [pendingAssistantMessage, selectedThreadId]);
   const selectedRunForReview = useMemo(() => {
     if (!reviewRunId) {
       return null;
@@ -712,30 +943,66 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   }
 
   function handleAgentStreamEvent(threadId: string, event: AgentStreamEvent) {
-    if (event.type === "run_started") {
+    const streamEvent = event as AgentStreamEvent & {
+      type?: string;
+      run_id?: string;
+      delta?: string;
+      tool_name?: string;
+      message?: string;
+      error_text?: string | null;
+    };
+    const eventType = String(streamEvent.type || "");
+
+    if (eventType === "run_started") {
       setPendingAssistantMessage((current) => {
         if (!current || current.threadId !== threadId) {
           return current;
         }
-        return { ...current, runId: event.run_id };
+        return { ...current, runId: streamEvent.run_id || current.runId };
       });
       return;
     }
-    if (event.type === "text_delta") {
+    if (eventType === "tool_call") {
       setPendingAssistantMessage((current) => {
         if (!current || current.threadId !== threadId) {
           return current;
         }
         return {
           ...current,
-          runId: current.runId || event.run_id,
-          content: `${current.content}${event.delta}`
+          runId: current.runId || streamEvent.run_id || null,
+          activity: appendPendingToolCallToActivity(current.activity, String(streamEvent.tool_name || "")),
         };
       });
       return;
     }
-    if (event.type === "run_failed" && event.error_text) {
-      setActionError(event.error_text);
+    if (eventType === "reasoning_update") {
+      setPendingAssistantMessage((current) => {
+        if (!current || current.threadId !== threadId) {
+          return current;
+        }
+        return {
+          ...current,
+          runId: current.runId || streamEvent.run_id || null,
+          activity: appendPendingReasoningUpdateToActivity(current.activity, String(streamEvent.message || "")),
+        };
+      });
+      return;
+    }
+    if (eventType === "text_delta") {
+      setPendingAssistantMessage((current) => {
+        if (!current || current.threadId !== threadId) {
+          return current;
+        }
+        return {
+          ...current,
+          runId: current.runId || streamEvent.run_id || null,
+          content: `${current.content}${String(streamEvent.delta || "")}`,
+        };
+      });
+      return;
+    }
+    if (eventType === "run_failed" && streamEvent.error_text) {
+      setActionError(streamEvent.error_text);
     }
   }
 
@@ -784,7 +1051,8 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         createdAt: new Date().toISOString(),
         content: "",
         runId: null,
-        baselineLastAssistantMessageId
+        baselineLastAssistantMessageId,
+        activity: [],
       });
       setDraftMessage("");
       setDraftFiles([]);
@@ -1070,6 +1338,8 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                         onReviewRun={setReviewRunId}
                         mode="activity"
                       />
+                    ) : pendingOptimisticActivity.length > 0 ? (
+                      <PendingAssistantActivityBlock activity={pendingOptimisticActivity} />
                     ) : null}
                     {pendingAssistantMessage.content.trim() ? (
                       <p className="agent-message-text agent-message-streaming-text">

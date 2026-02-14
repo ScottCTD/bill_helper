@@ -84,6 +84,7 @@ uv run python scripts/check_docs_sync.py
 
 - Entry-level `status` was removed; agent review state remains only on `agent_change_items`.
 - Agent tool contracts are name/selector-based (no domain IDs in model-facing arguments/outputs).
+- Agent can emit sparse intermediate progress notes via `send_intermediate_update`; runtime streams these as `reasoning_update` SSE events.
 - Entry create proposals can omit currency and fall back to the resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
 - Tag deletion proposals are blocked when the tag is still referenced by any non-deleted entries; apply path re-validates this constraint before delete.
 - Agent prompt policy requires entry retag/update proposals before tag-delete proposals when the tag is still referenced.
@@ -96,6 +97,7 @@ uv run python scripts/check_docs_sync.py
 - Agent message delivery now supports both modes:
   - async start + polling: `POST /api/v1/agent/threads/{thread_id}/messages`
   - SSE token stream: `POST /api/v1/agent/threads/{thread_id}/messages/stream`
+- SSE streams can include `text_delta`, `tool_call`, and `reasoning_update` events before terminal run status events.
 - Observability context (`user`, `session_id=AgentThread.id`, run trace metadata) is propagated on each model call.
 - When `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` are configured, LiteLLM `langfuse` success/failure callbacks are enabled and trace metadata is sent through LiteLLM `metadata`.
 - Dashboard currency defaults to runtime settings (`/settings` override, else `BILL_HELPER_DASHBOARD_CURRENCY_CODE` / `CAD`).

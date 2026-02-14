@@ -18,6 +18,9 @@ from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.taxonomy import get_single_term_name_map
 
 
+INTERMEDIATE_UPDATE_TOOL_NAME = "send_intermediate_update"
+
+
 @dataclass(slots=True)
 class ToolExecutionResult:
     output_text: str
@@ -54,6 +57,15 @@ class AgentToolDefinition:
 
 class EmptyArgs(BaseModel):
     pass
+
+
+class SendIntermediateUpdateArgs(BaseModel):
+    message: str = Field(min_length=1, max_length=400)
+
+    @field_validator("message")
+    @classmethod
+    def normalize_message(cls, value: str) -> str:
+        return _normalize_required_text(value)
 
 
 def _normalize_loose_text(value: str | None) -> str | None:
@@ -693,6 +705,25 @@ def _get_dashboard_summary(context: ToolContext, _: EmptyArgs) -> ToolExecutionR
     )
 
 
+def _send_intermediate_update(_: ToolContext, args: SendIntermediateUpdateArgs) -> ToolExecutionResult:
+    payload = {
+        "status": "OK",
+        "summary": "intermediate update shared",
+        "message": args.message,
+    }
+    return ToolExecutionResult(
+        output_text=_format_lines(
+            [
+                "OK",
+                "summary: intermediate update shared",
+                f"message: {args.message}",
+            ]
+        ),
+        output_json=payload,
+        status="ok",
+    )
+
+
 def _propose_create_tag(context: ToolContext, args: ProposeCreateTagArgs) -> ToolExecutionResult:
     existing = context.db.scalar(select(Tag).where(Tag.name == args.name))
     if existing is not None:
@@ -1018,6 +1049,15 @@ TOOLS: dict[str, AgentToolDefinition] = {
         ),
         args_model=EmptyArgs,
         handler=_get_dashboard_summary,
+    ),
+    INTERMEDIATE_UPDATE_TOOL_NAME: AgentToolDefinition(
+        name=INTERMEDIATE_UPDATE_TOOL_NAME,
+        description=(
+            "Share a brief, user-visible progress update between distinct batches of tool calls. "
+            "Use sparingly for meaningful transitions; do not call this on every step."
+        ),
+        args_model=SendIntermediateUpdateArgs,
+        handler=_send_intermediate_update,
     ),
     "propose_create_tag": AgentToolDefinition(
         name="propose_create_tag",

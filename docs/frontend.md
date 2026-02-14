@@ -235,9 +235,12 @@ Timeline features:
 - attachment previews for uploaded images
 - run blocks are anchored to assistant-side timeline events (`assistant_message_id`) to keep tool activity in assistant flow
 - active runs without an assistant message render only when there is visible activity payload (tool calls/errors/review summary)
+- running assistant bubbles interleave `send_intermediate_update` reasoning notes with grouped non-update tool-call batches
+- completed runs retain the same interleaved reasoning/tool-batch structure for consistency with in-flight rendering
 - tool-call traces now use two-level disclosure:
   - outer run-level toggle (`N tool calls`)
   - inner per-tool toggle (input/output JSON)
+- during active execution, outer tool-batch collapse is intentionally disabled to avoid flicker while batches are growing
 - a rotating chevron icon indicates the expand/collapse state of each tool call
 - expanded tool-call details are indented with a left border line for visual hierarchy
 - message and tool-call timestamps are hidden by default and fade in on hover for a cleaner look
@@ -301,7 +304,7 @@ Composer:
 - optimistic assistant placeholder rendering: assistant bubble appears immediately after submit (without waiting for run-status polling) with a flashing block cursor (`▍`) while awaiting first assistant content/activity
 - assistant response text is streamed from backend SSE in real time (`POST /api/v1/agent/threads/{thread_id}/messages/stream`)
 - streamed assistant bubble remains visible while tool-call activity cards are also shown, so token deltas are not hidden during long multi-tool runs
-- tool-call activity for the active streaming run is rendered inside the same streaming assistant bubble (instead of a second temporary assistant bubble)
+- stream event activity (`tool_call` + `reasoning_update`) for the active run is rendered inside the same streaming assistant bubble (instead of a second temporary assistant bubble)
 - optimistic assistant bubble is reconciled away as soon as a new persisted assistant message arrives, preventing split-then-merge visual artifacts
 - active-run polling refreshes timeline state while backend run status is `running`
 
@@ -393,7 +396,7 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 
 - frontend now depends on agent API contracts and attachment URLs
 - multipart requests are required for agent message send with images
-- agent send now depends on SSE parsing for incremental assistant text events (`run_started`, `text_delta`, `tool_call`, `run_completed`, `run_failed`)
+- agent send now depends on SSE parsing for incremental assistant text events (`run_started`, `text_delta`, `tool_call`, `reasoning_update`, `run_completed`, `run_failed`)
 - all query keys/invalidation rules are now centralized, so new pages/features should reuse `queryKeys` + `queryInvalidation` helpers
 - UI primitives should be sourced from `frontend/src/components/ui/*` before introducing one-off controls/styles
 - properties page now issues taxonomy reads in addition to users/entities/tags/currencies:

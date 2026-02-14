@@ -1024,8 +1024,24 @@
     @apply grid gap-2;
   }
 
+  .agent-run-activity-timeline {
+    @apply grid gap-2;
+  }
+
+  .agent-run-reasoning-update {
+    @apply m-0 rounded-md border border-border/75 bg-muted/25 px-2.5 py-1.5 text-xs leading-5 text-muted-foreground;
+  }
+
   .agent-tool-call-group {
     @apply rounded-md border border-border/75 bg-muted/20;
+  }
+
+  .agent-tool-call-group-static {
+    @apply overflow-hidden;
+  }
+
+  .agent-tool-call-group-summary {
+    @apply flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs;
   }
 
   .agent-tool-call-group summary {
@@ -1063,6 +1079,19 @@
 
   .agent-tool-call {
     @apply rounded-md;
+  }
+
+  .agent-tool-call-static {
+    @apply rounded-md;
+  }
+
+  .agent-tool-call-static > summary {
+    @apply flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-muted/60;
+    list-style: none;
+  }
+
+  .agent-tool-call-pending-detail {
+    @apply m-0 text-xs;
   }
 
   .agent-tool-call summary {

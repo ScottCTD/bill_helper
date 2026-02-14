@@ -79,12 +79,14 @@ Implemented:
   - No direct table mutation by the agent runtime.
   - Agent timeline title now surfaces model context (`Agent (<model>)`) and assistant messages render markdown content via `react-markdown` + GFM support.
   - Agent now supports real-time token streaming to the timeline via `POST /api/v1/agent/threads/{thread_id}/messages/stream` (SSE).
+  - Agent can emit sparse intermediate progress notes through `send_intermediate_update`; streamed runs surface these as `reasoning_update` events.
   - Existing `POST /api/v1/agent/threads/{thread_id}/messages` behavior remains available and still starts a background run for polling-based clients.
   - If a run is interrupted, the interrupted user request remains in conversation history and the next turn is annotated so the model knows the previous response was cut short.
   - Composer now supports removable image chips with thumbnail previews before send.
   - Composer now supports paste (`Cmd/Ctrl+V`) and drag-drop image attachment ingestion.
   - Attachment chips are compact icon thumbnails with an extra-small corner remove (`x`) control that stays off the image preview above the chat bar.
   - Run and tool events are anchored in the assistant-side timeline with collapsible tool-call payload panels.
+  - Runs interleave reasoning updates and grouped tool-call batches in both active and completed states for a consistent trace view.
   - In-flight run cards no longer show `Run: running (...)` header/timestamp rows; only thinking/tool activity is shown.
   - System messages now render with markdown formatting (including list markers).
   - Thread workspace now shows one cumulative usage/cost bar above the composer (`Input`, `Output`, `Cache read`, `Cache write`, rightmost `Total cost` in USD).
