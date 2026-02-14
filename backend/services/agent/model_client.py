@@ -10,6 +10,34 @@ class AgentModelError(RuntimeError):
     pass
 
 
+def _normalize_observability_text(value: Any, *, max_length: int = 128) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    return normalized[:max_length]
+
+
+def _build_observability_extra_body(observability: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(observability, dict):
+        return None
+
+    payload: dict[str, Any] = {}
+    user = _normalize_observability_text(observability.get("user"))
+    session_id = _normalize_observability_text(observability.get("session_id"))
+    trace = observability.get("trace")
+
+    if user is not None:
+        payload["user"] = user
+    if session_id is not None:
+        payload["session_id"] = session_id
+    if isinstance(trace, dict) and trace:
+        payload["trace"] = trace
+
+    return payload or None
+
+
 def _read_attr(source: Any, key: str) -> Any:
     if source is None:
         return None
@@ -87,15 +115,24 @@ class OpenRouterModelClient:
         self._retry_max_wait_seconds = max(0.0, retry_max_wait_seconds)
         self._retry_backoff_multiplier = max(1.0, retry_backoff_multiplier)
 
-    def _chat_completion_once(self, messages: list[dict[str, Any]]) -> Any:
+    def _chat_completion_once(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        observability: dict[str, Any] | None = None,
+    ) -> Any:
+        request: dict[str, Any] = {
+            "model": self._model_name,
+            "messages": messages,
+            "tools": self._tools,
+            "tool_choice": "auto",
+            "temperature": 0.1,
+        }
+        extra_body = _build_observability_extra_body(observability)
+        if extra_body is not None:
+            request["extra_body"] = extra_body
         try:
-            return self._client.chat.completions.create(
-                model=self._model_name,
-                messages=messages,
-                tools=self._tools,
-                tool_choice="auto",
-                temperature=0.1,
-            )
+            return self._client.chat.completions.create(**request)
         except APIStatusError as exc:
             detail = exc.body if exc.body is not None else str(exc)
             raise AgentModelError(f"model request failed ({exc.status_code}): {detail}") from exc
@@ -106,7 +143,12 @@ class OpenRouterModelClient:
         except OpenAIError as exc:
             raise AgentModelError(f"model request failed: {str(exc)}") from exc
 
-    def complete(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+    def complete(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        observability: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         retrying = Retrying(
             stop=stop_after_attempt(self._retry_max_attempts),
             wait=wait_exponential(
@@ -120,7 +162,7 @@ class OpenRouterModelClient:
         response = None
         for attempt in retrying:
             with attempt:
-                response = self._chat_completion_once(messages)
+                response = self._chat_completion_once(messages, observability=observability)
         if response is None:  # pragma: no cover - defensive guard
             raise AgentModelError("model request failed: no response")
 

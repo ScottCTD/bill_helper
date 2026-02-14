@@ -398,6 +398,30 @@
     @apply w-28 whitespace-nowrap;
   }
 
+  .entries-amount-cell {
+    @apply inline-flex items-baseline gap-1 whitespace-nowrap;
+  }
+
+  .entries-amount-value {
+    @apply font-medium tabular-nums;
+  }
+
+  .entries-amount-currency {
+    @apply text-xs text-muted-foreground;
+  }
+
+  .entries-tag-list {
+    @apply flex flex-wrap items-center gap-1.5;
+  }
+
+  .entries-tag-pill {
+    @apply px-2 py-0.5 text-xs font-medium;
+  }
+
+  .entries-tag-empty {
+    @apply text-xs text-muted-foreground;
+  }
+
   .entry-delete-button {
     @apply text-muted-foreground hover:text-foreground;
   }
@@ -695,7 +719,7 @@
   }
 
   .tag-multiselect-control {
-    @apply flex min-h-[2.35rem] w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1 shadow-sm;
+    @apply flex min-h-[2.25rem] w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-sm transition-colors hover:bg-accent/35;
     cursor: text;
   }
 
@@ -705,11 +729,11 @@
   }
 
   .tag-multiselect-control:focus-within {
-    @apply ring-2 ring-ring ring-offset-2 ring-offset-background;
+    @apply ring-2 ring-ring;
   }
 
   .tag-multiselect-input {
-    @apply min-w-[100px] flex-1 border-none bg-transparent px-1 py-0.5 text-sm outline-none;
+    @apply min-w-[100px] flex-1 rounded-none border-none bg-transparent px-1 py-0.5 text-sm shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0;
   }
 
   .tag-chip {
@@ -823,7 +847,7 @@
   }
 
   .agent-thread-button {
-    @apply h-9 w-full justify-start rounded-md border border-border/80 bg-muted/45 px-2.5 text-left text-sm font-medium;
+    @apply h-9 w-full justify-start rounded-md border border-transparent bg-transparent px-2.5 text-left text-sm font-medium;
   }
 
   .agent-thread-label {
@@ -831,11 +855,11 @@
   }
 
   .agent-thread-button:hover {
-    @apply bg-accent;
+    @apply bg-accent/60;
   }
 
   .agent-thread-button.selected {
-    @apply border-primary/45 bg-accent;
+    @apply border-primary/45 bg-accent shadow-sm;
   }
 
   .agent-thread-timeline {
@@ -880,6 +904,10 @@
 
   .agent-message-streaming-text {
     @apply animate-pulse;
+  }
+
+  .agent-message-caret {
+    @apply inline-block animate-pulse text-muted-foreground;
   }
 
   .agent-message-text {
@@ -996,6 +1024,23 @@
     @apply grid gap-2;
   }
 
+  .agent-tool-call-group {
+    @apply rounded-md border border-border/75 bg-muted/20;
+  }
+
+  .agent-tool-call-group summary {
+    @apply flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-muted/60;
+    list-style: none;
+  }
+
+  .agent-tool-call-group summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .agent-tool-call-group-label {
+    @apply font-medium text-foreground;
+  }
+
   .agent-run-changes-summary {
     @apply grid gap-2 rounded-lg border border-border/90 bg-muted/35 p-3;
   }
@@ -1009,7 +1054,7 @@
   }
 
   .agent-tool-call-list {
-    @apply m-0 list-none space-y-0.5 p-0;
+    @apply m-0 list-none space-y-0.5 p-2 pt-0;
   }
 
   .agent-tool-call-list > li {
@@ -1034,6 +1079,10 @@
   }
 
   .agent-tool-call[open] > summary .agent-tool-call-chevron {
+    transform: rotate(90deg);
+  }
+
+  .agent-tool-call-group[open] > summary .agent-tool-call-chevron {
     transform: rotate(90deg);
   }
 

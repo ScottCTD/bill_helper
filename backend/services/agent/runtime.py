@@ -58,9 +58,33 @@ def _build_model_client(db: Session) -> OpenRouterModelClient:
     )
 
 
-def _call_openrouter(messages: list[dict[str, Any]], db: Session) -> dict[str, Any]:
+def _call_openrouter(
+    messages: list[dict[str, Any]],
+    db: Session,
+    *,
+    observability: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     # Kept as a stable seam so tests can monkeypatch model responses.
-    return _build_model_client(db).complete(messages)
+    return _build_model_client(db).complete(messages, observability=observability)
+
+
+def _openrouter_observability_context(
+    *,
+    current_user_name: str,
+    thread_id: str,
+    run_id: str,
+) -> dict[str, Any]:
+    return {
+        "user": current_user_name,
+        "session_id": thread_id,
+        "trace": {
+            "trace_id": run_id,
+            "trace_name": "Bill Helper Agent Run",
+            "generation_name": "agent_turn",
+            "thread_id": thread_id,
+            "run_id": run_id,
+        },
+    }
 
 
 def _persist_final_message(
@@ -216,6 +240,11 @@ def _create_run(
     return run
 
 
+def _run_is_stopped(db: Session, run: AgentRun) -> bool:
+    db.refresh(run, attribute_names=["status"])
+    return run.status != AgentRunStatus.RUNNING
+
+
 def _execute_agent_run(
     db: Session,
     *,
@@ -227,6 +256,11 @@ def _execute_agent_run(
 
     llm_messages = build_llm_messages(db, thread.id, current_user_message_id=run.user_message_id)
     tool_context = ToolContext(db=db, run_id=run.id)
+    observability_context = _openrouter_observability_context(
+        current_user_name=settings.current_user_name,
+        thread_id=thread.id,
+        run_id=run.id,
+    )
     usage_totals: dict[str, int | None] = {
         "input_tokens": run.input_tokens,
         "output_tokens": run.output_tokens,
@@ -236,7 +270,17 @@ def _execute_agent_run(
 
     try:
         for _ in range(max_steps):
-            assistant_message = _call_openrouter(llm_messages, db)
+            if _run_is_stopped(db, run):
+                return _load_run_snapshot(db, run.id)
+
+            assistant_message = _call_openrouter(
+                llm_messages,
+                db,
+                observability=observability_context,
+            )
+            if _run_is_stopped(db, run):
+                return _load_run_snapshot(db, run.id)
+
             _accumulate_usage_totals(usage_totals, _extract_usage(assistant_message))
             _apply_usage_totals_to_run(run, usage_totals)
             db.add(run)
@@ -253,6 +297,8 @@ def _execute_agent_run(
                     }
                 )
                 for tool_call in tool_calls:
+                    if _run_is_stopped(db, run):
+                        return _load_run_snapshot(db, run.id)
                     llm_messages.append(
                         _record_tool_call_and_result(
                             db,
@@ -337,3 +383,22 @@ def run_existing_agent_run(db: Session, run_id: str) -> AgentRun | None:
 def run_agent_turn(db: Session, thread: AgentThread, user_message: AgentMessage) -> AgentRun:
     run = start_agent_run(db, thread, user_message)
     return _execute_agent_run(db, thread=thread, run=run)
+
+
+def interrupt_agent_run(db: Session, run_id: str, *, reason: str = "Run interrupted by user.") -> AgentRun | None:
+    run = db.get(AgentRun, run_id)
+    if run is None:
+        return None
+    if run.status != AgentRunStatus.RUNNING:
+        return _load_run_snapshot(db, run.id)
+
+    run.status = AgentRunStatus.FAILED
+    run.error_text = reason
+    run.completed_at = utc_now()
+    thread = db.get(AgentThread, run.thread_id)
+    if thread is not None:
+        thread.updated_at = utc_now()
+        db.add(thread)
+    db.add(run)
+    db.commit()
+    return _load_run_snapshot(db, run.id)

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
 import { EntryEditorModal, type EntryEditorSubmitPayload } from "../components/EntryEditorModal";
+import { TagMultiSelect } from "../components/TagMultiSelect";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
@@ -21,7 +22,7 @@ import {
   listUsers,
   updateEntry
 } from "../lib/api";
-import { formatMinor } from "../lib/format";
+import { formatMinorCompact } from "../lib/format";
 import { invalidateEntryReadModels } from "../lib/queryInvalidation";
 import { queryKeys } from "../lib/queryKeys";
 
@@ -41,12 +42,16 @@ function groupLabel(groupId: string, groupName?: string | null) {
   return isUuidGroupId ? "" : groupId;
 }
 
+function normalizedCurrencyCode(currencyCode: string) {
+  return currencyCode.trim().toUpperCase() || "CAD";
+}
+
 export function EntriesPage() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
     kind: "",
-    tag: "",
-    currency: "",
+    tags: [] as string[],
+    currencies: [] as string[],
     source: ""
   });
   const [editorState, setEditorState] = useState<EditorState>(null);
@@ -59,13 +64,11 @@ export function EntriesPage() {
   const entryListFilters = useMemo(
     () => ({
       kind: filters.kind || undefined,
-      tag: filters.tag || undefined,
-      currency: filters.currency || undefined,
       source: filters.source || undefined,
       limit: 200,
       offset: 0
     }),
-    [filters]
+    [filters.kind, filters.source]
   );
   const entriesQuery = useQuery({
     queryKey: queryKeys.entries.list(entryListFilters),
@@ -113,6 +116,38 @@ export function EntriesPage() {
     entriesQuery.data?.items.forEach((entry) => codes.add(entry.currency_code));
     return Array.from(codes).sort();
   }, [currenciesQuery.data, entriesQuery.data]);
+
+  const currencyFilterOptions = useMemo(
+    () =>
+      filterCurrencies.map((currency, index) => ({
+        id: -1 - index,
+        name: normalizedCurrencyCode(currency),
+        color: null
+      })),
+    [filterCurrencies]
+  );
+
+  const filteredEntries = useMemo(() => {
+    const selectedTagSet = new Set(filters.tags.map((tagName) => tagName.trim().toLowerCase()).filter(Boolean));
+    const selectedCurrencySet = new Set(filters.currencies.map((currencyCode) => currencyCode.trim().toUpperCase()).filter(Boolean));
+    return (entriesQuery.data?.items ?? []).filter((entry) => {
+      if (selectedTagSet.size > 0) {
+        const hasMatchingTag = entry.tags.some((tag) => selectedTagSet.has(tag.name.trim().toLowerCase()));
+        if (!hasMatchingTag) {
+          return false;
+        }
+      }
+
+      if (selectedCurrencySet.size > 0) {
+        const entryCurrencyCode = normalizedCurrencyCode(entry.currency_code);
+        if (!selectedCurrencySet.has(entryCurrencyCode)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [entriesQuery.data?.items, filters.currencies, filters.tags]);
 
   function handleEditorSubmit(payload: EntryEditorSubmitPayload) {
     if (editorState?.mode === "edit") {
@@ -168,26 +203,26 @@ export function EntriesPage() {
                 </NativeSelect>
               </label>
               <label className="field min-w-[180px]">
-                <span>Tag</span>
-                <NativeSelect value={filters.tag} onChange={(event) => setFilters((state) => ({ ...state, tag: event.target.value }))}>
-                  <option value="">All</option>
-                  {tagsQuery.data?.map((tag) => (
-                    <option key={tag.id} value={tag.name}>
-                      {tag.name}
-                    </option>
-                  ))}
-                </NativeSelect>
+                <span>Tags</span>
+                <TagMultiSelect
+                  options={tagsQuery.data ?? []}
+                  value={filters.tags}
+                  ariaLabel="Tag filter"
+                  placeholder="All tags"
+                  allowCreate={false}
+                  onChange={(nextTags) => setFilters((state) => ({ ...state, tags: nextTags }))}
+                />
               </label>
               <label className="field min-w-[150px]">
-                <span>Currency</span>
-                <NativeSelect value={filters.currency} onChange={(event) => setFilters((state) => ({ ...state, currency: event.target.value }))}>
-                  <option value="">All</option>
-                  {filterCurrencies.map((currency) => (
-                    <option key={currency} value={currency}>
-                      {currency}
-                    </option>
-                  ))}
-                </NativeSelect>
+                <span>Currencies</span>
+                <TagMultiSelect
+                  options={currencyFilterOptions}
+                  value={filters.currencies}
+                  ariaLabel="Currency filter"
+                  placeholder="All currencies"
+                  allowCreate={false}
+                  onChange={(nextCurrencies) => setFilters((state) => ({ ...state, currencies: nextCurrencies }))}
+                />
               </label>
               <label className="field min-w-[260px] grow">
                 <span>Source text</span>
@@ -219,7 +254,7 @@ export function EntriesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {entriesQuery.data.items.map((entry) => (
+                  {filteredEntries.map((entry) => (
                     <TableRow key={entry.id} className="entries-table-row" onDoubleClick={() => setEditorState({ mode: "edit", entryId: entry.id })}>
                       <TableCell className="entries-date-column">{entry.occurred_at}</TableCell>
                       <TableCell className="font-medium">{entry.name}</TableCell>
@@ -228,8 +263,25 @@ export function EntriesPage() {
                           {kindSymbol(entry.kind)}
                         </Badge>
                       </TableCell>
-                      <TableCell>{formatMinor(entry.amount_minor, entry.currency_code)}</TableCell>
-                      <TableCell>{entry.tags.map((tag) => tag.name).join(", ")}</TableCell>
+                      <TableCell>
+                        <span className="entries-amount-cell">
+                          <span className="entries-amount-value">{formatMinorCompact(entry.amount_minor)}</span>
+                          <span className="entries-amount-currency">{normalizedCurrencyCode(entry.currency_code)}</span>
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {entry.tags.length > 0 ? (
+                          <div className="entries-tag-list">
+                            {entry.tags.map((tag) => (
+                              <Badge key={tag.id} variant="secondary" className="entries-tag-pill">
+                                {tag.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="entries-tag-empty">-</span>
+                        )}
+                      </TableCell>
                       <TableCell>{groupLabel(entry.group_id, entry.group_name)}</TableCell>
                       <TableCell>
                         <div className="table-actions">

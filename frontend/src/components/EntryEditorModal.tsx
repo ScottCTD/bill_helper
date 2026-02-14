@@ -416,6 +416,7 @@ export function EntryEditorModal({
                   ariaLabel="From"
                   options={entityOptionNames}
                   placeholder="Select or create entity..."
+                  createLabelPrefix="Create entity"
                   value={formState.from_entity_value}
                   disabled={isSaving}
                   onCreateOption={(createdValue) =>
@@ -428,6 +429,7 @@ export function EntryEditorModal({
                   ariaLabel="To"
                   options={entityOptionNames}
                   placeholder="Select or create entity..."
+                  createLabelPrefix="Create entity"
                   value={formState.to_entity_value}
                   disabled={isSaving}
                   onCreateOption={(createdValue) =>
@@ -445,6 +447,7 @@ export function EntryEditorModal({
                 value={formState.tags}
                 ariaLabel="Tags"
                 placeholder="Select or create tags..."
+                createLabelPrefix="Create tag"
                 disabled={isSaving}
                 onChange={(nextTags) => setFormState((state) => ({ ...state, tags: nextTags }))}
               />

@@ -9,13 +9,14 @@ import {
   useRef,
   useState
 } from "react";
-import { ChevronRight, Paperclip, SendHorizontal, X } from "lucide-react";
+import { ChevronRight, Paperclip, SendHorizontal, Square, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   approveAgentChangeItem,
   createAgentThread,
   getAgentThread,
+  interruptAgentRun,
   listAgentThreads,
   rejectAgentChangeItem,
   sendAgentMessage,
@@ -59,6 +60,12 @@ interface PendingUserMessage {
   content: string;
   createdAt: string;
   attachments: PendingUserAttachmentPreview[];
+}
+
+interface PendingAssistantMessage {
+  id: string;
+  threadId: string;
+  createdAt: string;
 }
 
 const IMAGE_FILENAME_PATTERN = /\.(avif|bmp|gif|heic|heif|jpe?g|png|svg|tiff?|webp)$/i;
@@ -180,10 +187,24 @@ function AgentRunBlock({ run, isMutating, onReviewRun, mode = "all" }: AgentRunB
   const showActivity = mode !== "summary";
   const showSummary = mode !== "activity";
   const hasSummaryChanges = showSummary && run.change_items.length > 0;
-  const hasActivityContent = Boolean(run.error_text) || run.status === "running" || run.tool_calls.length > 0;
+  const hasActivityContent = Boolean(run.error_text) || run.tool_calls.length > 0;
   const pendingCount = run.change_items.filter((item) => item.status === "PENDING_REVIEW").length;
   const failedCount = run.change_items.filter((item) => item.status === "APPLY_FAILED").length;
   const typeSummary = summarizeRunChangeTypes(run.change_items);
+  const [isToolListExpanded, setIsToolListExpanded] = useState(run.status === "running");
+  const previousToolCallCountRef = useRef(run.tool_calls.length);
+
+  useEffect(() => {
+    const previousCount = previousToolCallCountRef.current;
+    previousToolCallCountRef.current = run.tool_calls.length;
+    if (run.status !== "running") {
+      setIsToolListExpanded(false);
+      return;
+    }
+    if (run.tool_calls.length > previousCount) {
+      setIsToolListExpanded(true);
+    }
+  }, [run.status, run.tool_calls.length]);
 
   if (!hasActivityContent && !hasSummaryChanges) {
     return null;
@@ -194,37 +215,41 @@ function AgentRunBlock({ run, isMutating, onReviewRun, mode = "all" }: AgentRunB
       {showActivity ? (
         <>
           {run.error_text ? <p className="error">{run.error_text}</p> : null}
-          {run.status === "running" ? (
-            <p className="muted">
-              {run.tool_calls.length > 0
-                ? `Working... ${run.tool_calls.length} tool call${run.tool_calls.length === 1 ? "" : "s"} recorded so far.`
-                : "Thinking... preparing tool calls."}
-            </p>
-          ) : null}
 
           {run.tool_calls.length > 0 ? (
             <div className="agent-run-tools">
-              <h4>Tool calls</h4>
-              <ul className="agent-tool-call-list">
-                {run.tool_calls.map((toolCall) => (
-                  <li key={toolCall.id}>
-                    <details className="agent-tool-call">
-                      <summary>
-                        <ChevronRight className="agent-tool-call-chevron" />
-                        <span className="agent-tool-call-name">{toolCall.tool_name}</span>
-                        <span className="agent-tool-call-status">{toolCall.status}</span>
-                        <span className="agent-tool-call-time muted">{prettyDateTime(toolCall.created_at)}</span>
-                      </summary>
-                      <div className="agent-tool-call-details">
-                        <p className="agent-tool-call-details-label">Input</p>
-                        <pre>{JSON.stringify(toolCall.input_json, null, 2)}</pre>
-                        <p className="agent-tool-call-details-label">Output</p>
-                        <pre>{JSON.stringify(toolCall.output_json, null, 2)}</pre>
-                      </div>
-                    </details>
-                  </li>
-                ))}
-              </ul>
+              <details
+                className="agent-tool-call-group"
+                open={isToolListExpanded}
+                onToggle={(event) => setIsToolListExpanded(event.currentTarget.open)}
+              >
+                <summary>
+                  <ChevronRight className="agent-tool-call-chevron" />
+                  <span className="agent-tool-call-group-label">
+                    {run.tool_calls.length} tool call{run.tool_calls.length === 1 ? "" : "s"}
+                  </span>
+                </summary>
+                <ul className="agent-tool-call-list">
+                  {run.tool_calls.map((toolCall) => (
+                    <li key={toolCall.id}>
+                      <details className="agent-tool-call">
+                        <summary>
+                          <ChevronRight className="agent-tool-call-chevron" />
+                          <span className="agent-tool-call-name">{toolCall.tool_name}</span>
+                          <span className="agent-tool-call-status">{toolCall.status}</span>
+                          <span className="agent-tool-call-time muted">{prettyDateTime(toolCall.created_at)}</span>
+                        </summary>
+                        <div className="agent-tool-call-details">
+                          <p className="agent-tool-call-details-label">Input</p>
+                          <pre>{JSON.stringify(toolCall.input_json, null, 2)}</pre>
+                          <p className="agent-tool-call-details-label">Output</p>
+                          <pre>{JSON.stringify(toolCall.output_json, null, 2)}</pre>
+                        </div>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
+              </details>
             </div>
           ) : null}
         </>
@@ -259,6 +284,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const [draftFiles, setDraftFiles] = useState<DraftAttachment[]>([]);
   const [isSendPolling, setIsSendPolling] = useState(false);
   const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null);
+  const [pendingAssistantMessage, setPendingAssistantMessage] = useState<PendingAssistantMessage | null>(null);
   const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reviewRunId, setReviewRunId] = useState<string | null>(null);
@@ -272,6 +298,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sendAbortControllerRef = useRef<AbortController | null>(null);
 
   function autoSizeComposerTextarea(target?: HTMLTextAreaElement | null) {
     const textarea = target ?? composerTextareaRef.current;
@@ -346,6 +373,15 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       setActionError(null);
     }
   });
+  const interruptRunMutation = useMutation({
+    mutationFn: interruptAgentRun,
+    onSuccess: () => {
+      invalidateAgentThreadData(queryClient, selectedThreadId || undefined);
+      setIsSendPolling(false);
+      stopStreaming();
+      setActionError(null);
+    }
+  });
 
   const approveMutation = useMutation({
     mutationFn: approveAgentChangeItem,
@@ -367,6 +403,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const isMutating =
     createThreadMutation.isPending ||
     sendMessageMutation.isPending ||
+    interruptRunMutation.isPending ||
     approveMutation.isPending ||
     rejectMutation.isPending;
 
@@ -375,6 +412,26 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const hasActiveRun = useMemo(
     () => (threadQuery.data?.runs ?? []).some((run) => run.status === "running"),
     [threadQuery.data?.runs]
+  );
+  const activeRunId = useMemo(() => {
+    const runs = sortRunsByCreatedAt(threadQuery.data?.runs ?? []);
+    for (let index = runs.length - 1; index >= 0; index -= 1) {
+      if (runs[index].status === "running") {
+        return runs[index].id;
+      }
+    }
+    return null;
+  }, [threadQuery.data?.runs]);
+  const isRunInFlight = sendMessageMutation.isPending || hasActiveRun || Boolean(streamingMessageId);
+  const hasPendingRunActivity = useMemo(
+    () => pendingAssistantRuns.some((run) => Boolean(run.error_text) || run.tool_calls.length > 0 || run.change_items.length > 0),
+    [pendingAssistantRuns]
+  );
+  const shouldShowOptimisticAssistantBubble = Boolean(
+    pendingAssistantMessage &&
+      pendingAssistantMessage.threadId === selectedThreadId &&
+      !streamingMessageId &&
+      !hasPendingRunActivity
   );
   const selectedRunForReview = useMemo(() => {
     if (!reviewRunId) {
@@ -476,13 +533,42 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       if (streamingTimerRef.current !== null) {
         window.clearInterval(streamingTimerRef.current);
       }
+      if (sendAbortControllerRef.current) {
+        sendAbortControllerRef.current.abort();
+        sendAbortControllerRef.current = null;
+      }
     };
   }, []);
 
   useEffect(() => {
     stopStreaming();
     setReviewRunId(null);
+    setPendingAssistantMessage(null);
   }, [selectedThreadId]);
+
+  useEffect(() => {
+    if (!pendingAssistantMessage) {
+      return;
+    }
+    if (pendingAssistantMessage.threadId !== selectedThreadId) {
+      return;
+    }
+    if (streamingMessageId || hasPendingRunActivity) {
+      setPendingAssistantMessage(null);
+    }
+  }, [hasPendingRunActivity, pendingAssistantMessage, selectedThreadId, streamingMessageId]);
+
+  useEffect(() => {
+    if (!pendingAssistantMessage) {
+      return;
+    }
+    if (pendingAssistantMessage.threadId !== selectedThreadId) {
+      return;
+    }
+    if (!isRunInFlight && !pendingUserMessage) {
+      setPendingAssistantMessage(null);
+    }
+  }, [isRunInFlight, pendingAssistantMessage, pendingUserMessage, selectedThreadId]);
 
   useEffect(() => {
     if (!reviewRunId) {
@@ -645,6 +731,18 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
   }
 
+  async function handleCreateThread() {
+    setActionError(null);
+    try {
+      await createThreadMutation.mutateAsync({});
+      requestAnimationFrame(() => {
+        composerTextareaRef.current?.focus();
+      });
+    } catch (error) {
+      setActionError((error as Error).message);
+    }
+  }
+
   async function ensureThreadId(): Promise<string> {
     if (selectedThreadId) {
       return selectedThreadId;
@@ -665,6 +763,8 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     const sendingDraftFiles = [...draftFiles];
     try {
       const threadId = await ensureThreadId();
+      const sendAbortController = new AbortController();
+      sendAbortControllerRef.current = sendAbortController;
       setIsSendPolling(true);
       invalidateAgentThreadData(queryClient, threadId);
       const optimisticMessage: PendingUserMessage = {
@@ -679,11 +779,18 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         }))
       };
       setPendingUserMessage(optimisticMessage);
+      setPendingAssistantMessage({
+        id: `pending-assistant-${Date.now()}`,
+        threadId,
+        createdAt: new Date().toISOString()
+      });
       const run = await sendMessageMutation.mutateAsync({
         threadId,
         content: draftMessage,
-        files: sendingDraftFiles.map((item) => item.file)
+        files: sendingDraftFiles.map((item) => item.file),
+        signal: sendAbortController.signal
       });
+      sendAbortControllerRef.current = null;
       const detail = await getAgentThread(threadId);
       queryClient.setQueryData(queryKeys.agent.thread(threadId), detail);
       setPendingUserMessage((current) => {
@@ -698,12 +805,37 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         streamAssistantMessage(assistantMessage.id, assistantMessage.content_markdown);
       }
     } catch (error) {
+      sendAbortControllerRef.current = null;
       setPendingUserMessage((current) => {
         return current ? null : current;
       });
-      setActionError((error as Error).message);
+      setPendingAssistantMessage(null);
+      if ((error as Error).name === "AbortError") {
+        setActionError(null);
+      } else {
+        setActionError((error as Error).message);
+      }
     } finally {
       setIsSendPolling(false);
+    }
+  }
+
+  async function handleStopRun() {
+    setActionError(null);
+    stopStreaming();
+    setIsSendPolling(false);
+    setPendingAssistantMessage(null);
+    if (sendAbortControllerRef.current) {
+      sendAbortControllerRef.current.abort();
+      sendAbortControllerRef.current = null;
+    }
+    if (!activeRunId) {
+      return;
+    }
+    try {
+      await interruptRunMutation.mutateAsync(activeRunId);
+    } catch (error) {
+      setActionError((error as Error).message);
     }
   }
 
@@ -711,14 +843,19 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     if (event.key !== "Enter") {
       return;
     }
-    if (!event.metaKey && !event.ctrlKey) {
-      return;
-    }
     if (event.nativeEvent.isComposing) {
       return;
     }
+
+    const hasMultipleLines = event.currentTarget.value.includes("\n");
+    const hasSubmitModifier = event.metaKey || event.ctrlKey;
+    const shouldSubmit = hasSubmitModifier || (!hasMultipleLines && !event.shiftKey);
+    if (!shouldSubmit) {
+      return;
+    }
+
     event.preventDefault();
-    if (isMutating) {
+    if (isMutating || isRunInFlight) {
       return;
     }
     event.currentTarget.form?.requestSubmit();
@@ -765,14 +902,15 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         <header className="agent-panel-header">
           <div>
             <h2>{`Agent (${activeModelName})`}</h2>
-            <p className="muted">Append-only proposals with human review.</p>
           </div>
           <div className="agent-panel-header-actions">
             <Button
               type="button"
               variant="secondary"
               size="sm"
-              onClick={() => createThreadMutation.mutate({})}
+              onClick={() => {
+                void handleCreateThread();
+              }}
               disabled={isMutating}
             >
               New Thread
@@ -902,25 +1040,33 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                   </article>
                 ) : null}
 
-                {pendingAssistantRuns.map((run) => (
-                  <article key={`pending-run-${run.id}`} className="agent-message agent-message-assistant agent-message-working">
+                {shouldShowOptimisticAssistantBubble && pendingAssistantMessage ? (
+                  <article className="agent-message agent-message-assistant agent-message-streaming" key={pendingAssistantMessage.id}>
                     <header>
                       <strong>Assistant</strong>
-                      <span className="muted">working...</span>
+                      <span className="muted">{prettyDateTime(pendingAssistantMessage.createdAt)}</span>
                     </header>
-                    <AgentRunBlock run={run} isMutating={isMutating} onReviewRun={setReviewRunId} />
-                  </article>
-                ))}
-
-                {pendingAssistantRuns.length === 0 && (sendMessageMutation.isPending || hasActiveRun) && !streamingMessageId ? (
-                  <article className="agent-message agent-message-assistant agent-message-streaming">
-                    <header>
-                      <strong>Assistant</strong>
-                      <span className="muted">working...</span>
-                    </header>
-                    <p className="agent-message-text agent-message-streaming-text">Thinking...</p>
+                    <p className="agent-message-text">
+                      <span className="agent-message-caret">{"\u258d"}</span>
+                    </p>
                   </article>
                 ) : null}
+
+                {pendingAssistantRuns.map((run) => {
+                  const hasVisibleContent = Boolean(run.error_text) || run.tool_calls.length > 0 || run.change_items.length > 0;
+                  if (!hasVisibleContent) {
+                    return null;
+                  }
+                  return (
+                    <article key={`pending-run-${run.id}`} className="agent-message agent-message-assistant agent-message-working">
+                      <header>
+                        <strong>Assistant</strong>
+                        <span className="muted">{prettyDateTime(run.created_at)}</span>
+                      </header>
+                      <AgentRunBlock run={run} isMutating={isMutating} onReviewRun={setReviewRunId} />
+                    </article>
+                  );
+                })}
               </div>
             ) : null}
 
@@ -1003,10 +1149,24 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                     Add Attachments
                   </Button>
 
-                  <Button type="submit" size="sm" disabled={isMutating} className="agent-composer-send">
-                    {sendMessageMutation.isPending ? "Sending..." : "Send"}
-                    <SendHorizontal className="h-4 w-4" />
-                  </Button>
+                  {isRunInFlight ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={interruptRunMutation.isPending}
+                      className="agent-composer-send"
+                      onClick={handleStopRun}
+                    >
+                      {interruptRunMutation.isPending ? "Stopping..." : "Stop"}
+                      <Square className="h-3.5 w-3.5" />
+                    </Button>
+                  ) : (
+                    <Button type="submit" size="sm" disabled={isMutating} className="agent-composer-send">
+                      {sendMessageMutation.isPending ? "Sending..." : "Send"}
+                      <SendHorizontal className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
               {actionError ? <p className="error">{actionError}</p> : null}

@@ -43,6 +43,7 @@ Implemented:
 - Unified popup entry editor, BlockNote markdown notes, and Notion-like tag multi-select.
 - Entries UX refresh:
   - new entry creation moved to compact `+` action beside `Source text` filter
+  - entry `Tag` and `Currency` filters now use chip-style multi-select controls with local row filtering for selected values
   - row double-click opens popup editor (details row action removed)
   - group column now hides unnamed UUID-style groups and only shows explicit group names
   - popup editor is a vertical, scrollable, Notion-like page with close-to-auto-save behavior
@@ -58,8 +59,8 @@ Implemented:
   - dialog positioning no longer uses transform centering, improving editor floating-toolbar anchoring inside popup context
   - form controls only activate when clicking directly on controls (property label area no longer steals focus)
   - `From`/`To` accept typed values with suggestions and create new entities when the typed name does not exist
-  - entity dropdown now shows explicit `Create "..."` actions for unknown typed values (same pattern as tags)
-  - `Tags` support typed creation for tags not yet in the system
+  - entity dropdown now shows explicit `Create entity "..."` actions for unknown typed values
+  - `Tags` support typed creation for tags not yet in the system with explicit `Create tag "..."` actions
   - newly created tag/entity values are immediately available in the current dropdown option lists
   - `Kind` now uses a single-select control and `Account` is removed from entry create/edit
   - entry table no longer includes a `Status` column/filter (status is removed from entry schema)

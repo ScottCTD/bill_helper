@@ -124,7 +124,9 @@ Agent services:
 - `backend/services/agent/runtime.py`
   - executes one run per user message
   - orchestrates bounded tool-calling loop and run lifecycle persistence
+  - supports manual run interruption (`interrupt_agent_run`) and cooperative stop checks between model/tool steps
   - aggregates model usage metrics across all model calls in a run and persists totals on `agent_runs`
+  - passes OpenRouter observability context (`user`, `session_id=thread.id`, run-level `trace`) on each model request for conversation-level trace grouping
   - delegates message assembly and model calls to dedicated modules
 - `backend/services/agent/prompts.py`
   - central system prompt definition
@@ -140,6 +142,7 @@ Agent services:
 - `backend/services/agent/model_client.py`
   - OpenRouter client adapter with normalized model error handling
   - normalizes usage metadata from model responses into the runtime contract (`input/output/cache_*` tokens)
+  - forwards OpenRouter observability fields through `extra_body` when provided by runtime
   - applies configurable tenacity retries for model completion calls
 - `backend/services/agent/pricing.py`
   - LiteLLM-backed usage pricing helper (`cost_per_token`)
@@ -199,6 +202,7 @@ Agent router:
   - `GET /api/v1/agent/threads/{thread_id}`
   - `POST /api/v1/agent/threads/{thread_id}/messages` (multipart text + images)
   - `GET /api/v1/agent/runs/{run_id}`
+  - `POST /api/v1/agent/runs/{run_id}/interrupt`
   - `POST /api/v1/agent/change-items/{item_id}/approve`
   - `POST /api/v1/agent/change-items/{item_id}/reject`
   - `GET /api/v1/agent/attachments/{attachment_id}`
@@ -253,16 +257,20 @@ Test modules:
 - run usage token persistence (`input/output/cache read/cache write`) including multi-step aggregation and null-safe fallback
 - run API cost fields (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
 - asynchronous run start behavior (`POST /agent/threads/{thread_id}/messages` returns `running` while execution continues)
+- run interruption endpoint behavior (`POST /agent/runs/{run_id}/interrupt`) and no-op semantics for already-terminal runs
+- OpenRouter observability context propagation for stable per-thread session grouping
 - prompt contract for entry ingestion ordering (duplicate check -> tag/entity reconciliation -> entry proposal)
 - prompt contract for tag-deletion ordering (retag/update entries first -> then `propose_delete_tag`)
 
-Current baseline for `backend/tests/test_agent.py`: `27 passed`.
+Current baseline for `backend/tests/test_agent.py`: `30 passed`.
 
 ## Operational Impact
 
 - agent image uploads are persisted under `.data/agent_uploads`
 - timeline rendering depends on attachment-serving endpoint
 - agent runs execute in a background thread; message send returns immediately with `status=running`
+- interrupted runs are marked `failed` with user-facing interruption reason text
+- model requests now include OpenRouter observability payload (`user`, `session_id=thread.id`, run trace metadata) so repeated turns in one thread group into one Langfuse/OpenRouter session
 - each run includes persisted tool traces and change-item audit data
 - tool calls are committed incrementally per tool call to support near-real-time polling visibility
 - each run now includes nullable aggregated usage counters (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`)

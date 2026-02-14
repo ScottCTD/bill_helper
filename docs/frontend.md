@@ -107,6 +107,7 @@ Agent client methods:
 - `createAgentThread`
 - `getAgentThread`
 - `sendAgentMessage`
+- `interruptAgentRun`
 - `getAgentRun`
 - `approveAgentChangeItem`
 - `rejectAgentChangeItem`
@@ -119,16 +120,19 @@ Agent client methods:
 - open unified entry popup for create/edit via row double-click
 - delete entry
 - creation action is a compact `+` button placed beside the `Source text` filter
+- `Tag` and `Currency` filters now use `TagMultiSelect` chip controls with multi-selection behavior
+- selected tag/currency filters are applied client-side on fetched rows (OR semantics within each filter group)
 - no separate top entry-creation card
 - group column only renders explicit group names; UUID-only unnamed groups are hidden
 - table row density is compacted and delete action is de-emphasized
+- tags column renders tag names as compact bubble chips instead of comma-separated text
 - popup property rows use compact inline `Label: control` formatting for tighter scanability
 - `Kind / Amount / Currency` and `From / To` rows are tuned to remain single-line in desktop popup width
 - `Owner` row is constrained to single-line in desktop popup width
 - `Status` has been removed from entry create/edit/list/filter UI and from entry payloads
 - entry create modal default currency now resolves from runtime settings (`GET /settings`)
 - `Kind` table cell uses symbol-only indicators (`+` for income, `-` for expense)
-- amount cells now render with ISO code prefix (for example `CAD 8.13`)
+- amount cells render compact numeric precision in the entries list (`300.00 -> 300`, `300.20 -> 300.2`, `300.25 -> 300.25`) with a de-emphasized ISO currency label
 - now uses shared shadcn primitives for card layout, filters, badges, and table actions
 - date column uses a fixed compact width with no-wrap so ISO dates stay single-line; narrow viewports scroll horizontally instead of wrapping
 - filter toolbar now uses shared table-shell classes aligned with `Properties`:
@@ -220,7 +224,9 @@ Timeline features:
 
 - left conversation history rail (thread list) with compact one-line thread buttons
 - thread label uses the first 20 characters of the thread title (thread titles are seeded from the first user message)
+- thread list uses plain list-row styling for non-selected items; only the active thread is boxed/highlighted
 - click-to-open conversation behavior from history rail
+- creating a new thread via `New Thread` focuses the composer textarea for immediate typing
 - header title includes active model context (`Agent (<model>)`) based on the most recent run in the selected thread
 - main chat timeline with user/assistant message bubbles
 - timeline scroll behavior is a dedicated right-pane scroll surface with scrollbar at panel edge
@@ -228,9 +234,10 @@ Timeline features:
 - assistant/system message bodies render markdown via `react-markdown` + `remark-gfm` (sanitized defaults, GFM tables/task lists/strikethrough)
 - attachment previews for uploaded images
 - run blocks are anchored to assistant-side timeline events (`assistant_message_id`) to keep tool activity in assistant flow
-- active runs without an assistant message render as temporary assistant-side working blocks
-- pending working blocks no longer render an extra trailing helper sentence below tool activity
-- tool-call traces are displayed as a compact bullet-point list; each item expands on click to reveal input/output JSON
+- active runs without an assistant message render only when there is visible activity payload (tool calls/errors/review summary)
+- tool-call traces now use two-level disclosure:
+  - outer run-level toggle (`N tool calls`)
+  - inner per-tool toggle (input/output JSON)
 - a rotating chevron icon indicates the expand/collapse state of each tool call
 - expanded tool-call details are indented with a left border line for visual hierarchy
 - message and tool-call timestamps are hidden by default and fade in on hover for a cleaner look
@@ -279,15 +286,19 @@ Composer:
 - card-style input box: borderless textarea inside a rounded container with a bottom toolbar row
 - composer bar is pinned at the bottom of the right pane while timeline content scrolls
 - textarea defaults to a single line and auto-grows with content up to a bounded max height, then becomes internally scrollable
-- toolbar contains an "Add Attachments" button (paperclip icon, triggers hidden file input) and a "Send" button (with send icon)
+- toolbar contains an "Add Attachments" button (paperclip icon, triggers hidden file input) and a run-aware primary action:
+  - idle: `Send`
+  - assistant busy (active run or client-side streaming playback): destructive `Stop` (interrupts run if still active and halts local streaming/polling)
 - compact removable attachment chips above the composer box (thumbnail + extra-small corner remove button that does not obscure preview)
 - click-to-preview image dialog before send
-- `Cmd+Enter` (or `Ctrl+Enter`) submits the composer form
+- composer submit shortcut is line-aware:
+  - `Cmd+Enter` (or `Ctrl+Enter`) always submits
+  - plain `Enter` submits only when the draft is a single line
 - paste image attachments directly into the composer (`Cmd/Ctrl+V`)
 - drag-and-drop image files onto the composer drop target
 - optimistic user message rendering: user bubble appears immediately after submit, before run completion
+- optimistic assistant placeholder rendering: assistant bubble appears immediately after submit (without waiting for run-status polling) with a flashing block cursor (`▍`) while awaiting first assistant content/activity
 - assistant response streaming playback in the chat timeline (token-by-token render effect)
-- explicit "working..." placeholder while message run is pending
 - active-run polling refreshes timeline state while backend run status is `running`
 
 Layout mode: full-page AI home experience (drawer mode has been removed).
@@ -323,6 +334,7 @@ Includes:
   - base app background/surfaces now default to white with restrained neutral accents
 - global UI typography uses a product-style sans stack (`Inter` -> SF Pro -> Segoe UI/Roboto fallbacks) instead of editorial/body-copy-first styling
 - component classes for legacy/transitioned surfaces (`.card`, `.form-grid`, `.field`, `.agent-panel`, `.tag-multiselect`, editor/chart helpers)
+- entries filter `TagMultiSelect` controls now share the same baseline chrome (height/padding/focus/hover treatment) as adjacent select/input filters
 - shared table surface classes:
   - `.table-shell*`
   - `.table-toolbar*`
@@ -395,9 +407,9 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 - `From`/`To` fields now accept typed values with entity suggestions:
   - exact match to existing entity name -> sends `from_entity_id` / `to_entity_id`
   - non-matching typed name -> sends `from_entity` / `to_entity` so backend creates the entity
-  - non-empty typed values always render an explicit `Create "..."` option in the entity dropdown
+  - non-empty typed values always render an explicit `Create entity "..."` option in the entity dropdown
   - created entity options are shared across both `From` and `To` dropdowns during the current edit session
-- `Tags` input remains creatable; new typed tags are normalized and created on save if missing
+- `Tags` input remains creatable with explicit `Create tag "..."` actions; new typed tags are normalized and created on save if missing
 - local dropdown option sets are immediately updated with newly typed selections so users can re-select without waiting for a backend refetch
 - frontend install/build commands are unchanged:
   - install: `npm install`

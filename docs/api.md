@@ -475,6 +475,22 @@ Returned run payload includes:
 - usage counters (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`)
 - derived pricing fields (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
 
+## `POST /agent/runs/{run_id}/interrupt`
+
+Interrupt a currently-running run.
+
+Response: `AgentRunRead`
+
+Behavior:
+
+- if run is `running`, backend marks it `failed` with `error_text = "Run interrupted by user."`
+- running worker loop checks persisted run status between model/tool steps and exits without persisting a final assistant message after interruption
+- if run is already terminal (`completed`/`failed`), endpoint is a no-op and returns current snapshot
+
+Errors:
+
+- `404` run not found
+
 ## `POST /agent/change-items/{item_id}/approve`
 
 Approve and apply one proposal item.

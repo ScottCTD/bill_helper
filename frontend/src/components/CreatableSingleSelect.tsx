@@ -9,6 +9,7 @@ interface CreatableSingleSelectProps {
   disabled?: boolean;
   ariaLabel?: string;
   onCreateOption?: (createdValue: string) => void;
+  createLabelPrefix?: string;
 }
 
 function normalizeValue(value: string) {
@@ -38,7 +39,8 @@ export function CreatableSingleSelect({
   placeholder = "Select or create...",
   disabled = false,
   ariaLabel,
-  onCreateOption
+  onCreateOption,
+  createLabelPrefix = "Create"
 }: CreatableSingleSelectProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -212,7 +214,7 @@ export function CreatableSingleSelect({
               onPointerDown={(event) => onOptionPointerDown(event, () => selectValue(creatableValue, true))}
               onKeyDown={(event) => onActionKeyDown(event, () => selectValue(creatableValue, true))}
             >
-              Create "{creatableValue}"
+              {createLabelPrefix} "{creatableValue}"
             </button>
           ) : null}
           {filteredOptions.length === 0 && !creatableValue ? <p className="tag-multiselect-empty">No matching options.</p> : null}

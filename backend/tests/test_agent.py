@@ -44,11 +44,23 @@ def send_message(
 def patch_model(monkeypatch, handler):
     from backend.services.agent import runtime
 
-    accepts_db = len(signature(handler).parameters) > 1
+    handler_params = signature(handler).parameters
+    params = list(handler_params.values())
+    accepts_db = len(params) > 1 and params[1].kind in (
+        params[1].POSITIONAL_ONLY,
+        params[1].POSITIONAL_OR_KEYWORD,
+        params[1].VAR_POSITIONAL,
+    )
+    accepts_kwargs = any(param.kind == param.VAR_KEYWORD for param in handler_params.values())
+    accepts_observability = "observability" in handler_params
 
-    def wrapped(messages, db):
+    def wrapped(messages, db, **kwargs):
         if accepts_db:
+            if accepts_kwargs or accepts_observability:
+                return handler(messages, db, **kwargs)
             return handler(messages, db)
+        if accepts_kwargs or accepts_observability:
+            return handler(messages, **kwargs)
         return handler(messages)
 
     monkeypatch.setattr(runtime, "_call_openrouter", wrapped)
@@ -282,6 +294,69 @@ def test_send_message_returns_running_while_agent_executes(client, monkeypatch):
         time.sleep(0.02)
 
     raise AssertionError("Run did not complete in time")
+
+
+def test_openrouter_observability_uses_thread_as_session_id(client, monkeypatch):
+    captured_observability: list[dict] = []
+
+    def capture_model(_messages, _db, *, observability=None):
+        if isinstance(observability, dict):
+            captured_observability.append(observability)
+        return {"role": "assistant", "content": "Done."}
+
+    patch_model(monkeypatch, capture_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "hello")
+
+    assert run["status"] == "completed"
+    assert captured_observability
+    context = captured_observability[0]
+    assert context["session_id"] == thread["id"]
+    assert context["trace"]["trace_id"] == run["id"]
+
+
+def test_interrupt_running_run_stops_background_processing(client, monkeypatch):
+    def slow_model(_messages):
+        time.sleep(0.35)
+        return {"role": "assistant", "content": "Done."}
+
+    patch_model(monkeypatch, slow_model)
+    thread = create_thread(client)
+
+    response = client.post(
+        f"/api/v1/agent/threads/{thread['id']}/messages",
+        data={"content": "please run"},
+    )
+    response.raise_for_status()
+    run = response.json()
+    assert run["status"] == "running"
+
+    interrupt_response = client.post(f"/api/v1/agent/runs/{run['id']}/interrupt")
+    interrupt_response.raise_for_status()
+    interrupted = interrupt_response.json()
+    assert interrupted["status"] == "failed"
+    assert interrupted["error_text"] == "Run interrupted by user."
+
+    time.sleep(0.45)
+    run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
+    run_response.raise_for_status()
+    payload = run_response.json()
+    assert payload["status"] == "failed"
+    assert payload["assistant_message_id"] is None
+    assert payload["error_text"] == "Run interrupted by user."
+
+
+def test_interrupt_completed_run_is_noop(client, monkeypatch):
+    patch_model(monkeypatch, lambda _messages: {"role": "assistant", "content": "Done."})
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "complete me")
+    assert run["status"] == "completed"
+
+    interrupt_response = client.post(f"/api/v1/agent/runs/{run['id']}/interrupt")
+    interrupt_response.raise_for_status()
+    interrupted = interrupt_response.json()
+    assert interrupted["status"] == "completed"
+    assert interrupted["assistant_message_id"] == run["assistant_message_id"]
 
 
 def test_run_accumulates_usage_tokens_across_steps(client, monkeypatch):

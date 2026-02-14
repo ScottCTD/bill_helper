@@ -53,7 +53,15 @@ Touch together:
 - `backend/services/agent/tools.py` (proposal/read outputs)
 - `backend/tests/test_agent.py`
 
-## 4) Runtime Settings Changes
+## 4) Agent Run Lifecycle / Interrupt Changes
+
+Touch together:
+
+- `backend/routers/agent.py`
+- `backend/services/agent/runtime.py`
+- `backend/tests/test_agent.py`
+
+## 5) Runtime Settings Changes
 
 Touch together:
 
@@ -80,6 +88,8 @@ uv run python scripts/check_docs_sync.py
 - Tag deletion proposals are blocked when the tag is still referenced by any non-deleted entries; apply path re-validates this constraint before delete.
 - Agent prompt policy requires entry retag/update proposals before tag-delete proposals when the tag is still referenced.
 - Agent model/tool execution retries and limits can be overridden at runtime via `/settings`.
+- Agent runs can be interrupted via `POST /api/v1/agent/runs/{run_id}/interrupt`; interrupted runs transition to `failed`.
+- OpenRouter observability payload now includes stable `session_id=AgentThread.id` for each model call in a thread, which enables Langfuse/OpenRouter session grouping per conversation.
 - Dashboard currency defaults to runtime settings (`/settings` override, else `BILL_HELPER_DASHBOARD_CURRENCY_CODE` / `CAD`).
 
 ## Related Docs

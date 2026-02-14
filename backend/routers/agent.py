@@ -33,6 +33,7 @@ from backend.services.agent import (
     AgentRuntimeUnavailable,
     approve_change_item,
     ensure_agent_available,
+    interrupt_agent_run,
     reject_change_item,
     run_existing_agent_run,
     start_agent_run,
@@ -253,6 +254,14 @@ def get_run(run_id: str, db: Session = Depends(get_db)) -> AgentRunRead:
             selectinload(AgentRun.change_items).selectinload(AgentChangeItem.review_actions),
         )
     )
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    return run_to_schema(run)
+
+
+@router.post("/runs/{run_id}/interrupt", response_model=AgentRunRead)
+def interrupt_run(run_id: str, db: Session = Depends(get_db)) -> AgentRunRead:
+    run = interrupt_agent_run(db, run_id)
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
     return run_to_schema(run)

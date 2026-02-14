@@ -9,6 +9,8 @@ interface TagMultiSelectProps {
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
+  allowCreate?: boolean;
+  createLabelPrefix?: string;
 }
 
 function normalizeTagName(value: string) {
@@ -58,7 +60,16 @@ function removeFirstTag(values: string[], normalizedTagName: string) {
   return values.filter((_, currentIndex) => currentIndex !== removeIndex);
 }
 
-export function TagMultiSelect({ options, value, onChange, placeholder = "Select tags...", disabled = false, ariaLabel }: TagMultiSelectProps) {
+export function TagMultiSelect({
+  options,
+  value,
+  onChange,
+  placeholder = "Select tags...",
+  disabled = false,
+  ariaLabel,
+  allowCreate = true,
+  createLabelPrefix = "Create"
+}: TagMultiSelectProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const normalizedValue = useMemo(() => normalizeTagList(value), [value]);
@@ -133,6 +144,9 @@ export function TagMultiSelect({ options, value, onChange, placeholder = "Select
   }, [effectiveOptions, query]);
 
   const creatableTag = useMemo(() => {
+    if (!allowCreate) {
+      return null;
+    }
     const normalized = normalizeTagName(query);
     if (!normalized) {
       return null;
@@ -141,7 +155,7 @@ export function TagMultiSelect({ options, value, onChange, placeholder = "Select
       return null;
     }
     return normalized;
-  }, [optionsByName, query, selectedKeys]);
+  }, [allowCreate, optionsByName, query, selectedKeys]);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -299,7 +313,7 @@ export function TagMultiSelect({ options, value, onChange, placeholder = "Select
         ))}
         <input
           ref={inputRef}
-          className="tag-multiselect-input"
+          className="tag-multiselect-input !h-full !rounded-none !border-0 !bg-transparent !px-1 !py-0.5 !shadow-none focus-visible:!ring-0"
           aria-label={ariaLabel}
           value={query}
           onChange={(event) => {
@@ -351,7 +365,9 @@ export function TagMultiSelect({ options, value, onChange, placeholder = "Select
               }}
               onKeyDown={(event) => onActionKeyDown(event, () => addTag(creatableTag))}
             >
-              <span className="tag-option-label">Create "{creatableTag}"</span>
+              <span className="tag-option-label">
+                {createLabelPrefix} "{creatableTag}"
+              </span>
             </button>
           ) : null}
         </div>
