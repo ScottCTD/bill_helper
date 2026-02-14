@@ -267,6 +267,7 @@ export function AgentPanel({ isOpen, onClose, mode = "drawer" }: AgentPanelProps
   const autoStreamedMessageByThreadRef = useRef<Record<string, string>>({});
   const draftFileIdCounterRef = useRef(0);
   const composerDragDepthRef = useRef(0);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
 
   const threadsQuery = useQuery({
     queryKey: queryKeys.agent.threads,
@@ -298,6 +299,14 @@ export function AgentPanel({ isOpen, onClose, mode = "drawer" }: AgentPanelProps
       setSelectedThreadId(firstId);
     }
   }, [isOpen, selectedThreadId, threadsQuery.data]);
+
+  const threadMessages = threadQuery.data?.messages;
+  useEffect(() => {
+    const el = timelineScrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [selectedThreadId, threadMessages]);
 
   const createThreadMutation = useMutation({
     mutationFn: createAgentThread,
@@ -781,7 +790,7 @@ export function AgentPanel({ isOpen, onClose, mode = "drawer" }: AgentPanelProps
             {threadQuery.isError ? <p className="error">{(threadQuery.error as Error).message}</p> : null}
 
             {selectedThreadId ? (
-              <div className="agent-timeline-scroll">
+              <div className="agent-timeline-scroll" ref={timelineScrollRef}>
                 {(threadQuery.data?.messages ?? []).map((message) => {
                   const isAssistant = message.role === "assistant";
                   const isUser = message.role === "user";
