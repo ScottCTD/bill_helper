@@ -111,7 +111,9 @@ export function DashboardPage() {
           <div className="table-shell-header">
             <div>
               <h2 className="table-shell-title">Dashboard</h2>
-              <p className="table-shell-subtitle">Interactive CAD analytics with daily-tag based segmentation.</p>
+              <p className="table-shell-subtitle">
+                Interactive {data.currency_code} analytics with daily-tag based segmentation.
+              </p>
             </div>
           </div>
 
@@ -465,11 +467,11 @@ export function DashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>CAD Reconciliation</CardTitle>
+              <CardTitle>{data.currency_code} Reconciliation</CardTitle>
             </CardHeader>
             <CardContent>
               {data.reconciliation.length === 0 ? (
-                <p className="muted">No active CAD accounts configured.</p>
+                <p className="muted">No active {data.currency_code} accounts configured.</p>
               ) : (
                 <Table>
                   <TableHeader>

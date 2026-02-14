@@ -48,6 +48,31 @@ Agent:
 - `name` (unique)
 - `created_at`, `updated_at`
 
+## `runtime_settings`
+
+- `id` (PK int)
+- `scope` (unique string, current runtime uses `default`)
+- nullable override fields:
+  - `current_user_name`
+  - `default_currency_code`
+  - `dashboard_currency_code`
+  - `openrouter_api_key`
+  - `openrouter_base_url`
+  - `agent_model`
+  - `agent_max_steps`
+  - `agent_retry_max_attempts`
+  - `agent_retry_initial_wait_seconds`
+  - `agent_retry_max_wait_seconds`
+  - `agent_retry_backoff_multiplier`
+  - `agent_max_image_size_bytes`
+  - `agent_max_images_per_message`
+- `created_at`, `updated_at`
+
+Purpose:
+
+- stores optional runtime overrides managed by `/api/v1/settings`
+- effective runtime values are resolved as `override -> env default`
+
 ## `entities`
 
 - `id` (PK UUID string)
@@ -254,6 +279,7 @@ Fields:
 - approving `create_entry` persists an entry directly without an entry-level status column.
 - `delete_tag` detaches tag links from entries before deleting the tag.
 - `delete_entity` nulls/detaches entity references from entries/accounts before deleting the entity.
+- resolved runtime settings drive current-user attribution defaults, dashboard currency, and agent runtime limits/model selection.
 
 ## Currency Catalog (Current)
 
@@ -267,6 +293,7 @@ Currency responses are synthesized from:
 ## Current Constraints
 
 - no auth/tenant scoping for agent or ledger tables
+- runtime settings are global to the app instance (single `scope` row in current implementation)
 - image files are local filesystem references (not object storage)
 - proposal payloads are JSON and schema-evolved by app logic (not DB-level JSON schema constraints)
 - category assignments are persisted in taxonomy tables; `entities.category` remains for compatibility and is synchronized by service logic

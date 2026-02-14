@@ -191,6 +191,44 @@ Return built-in + discovered currency catalog.
 
 Response: `CurrencyRead[]`
 
+## Settings
+
+## `GET /settings`
+
+Fetch effective runtime settings (`override -> env default`) plus override metadata.
+
+Response: `RuntimeSettingsRead`
+
+Response highlights:
+
+- `current_user_name`, `default_currency_code`, `dashboard_currency_code`
+- `openrouter_api_key_source` (`override` | `server_default` | `unset`)
+- `openrouter_api_key_configured` (boolean)
+- agent runtime fields (`agent_model`, `agent_max_steps`, retry/image limits)
+- `overrides` object with nullable override values and `openrouter_api_key_override_set`
+
+## `PATCH /settings`
+
+Partially update runtime settings overrides.
+
+Body: any subset of:
+
+- `current_user_name`
+- `default_currency_code`
+- `dashboard_currency_code`
+- `openrouter_api_key` (empty string or `null` clears override and falls back to server default)
+- `openrouter_base_url`
+- `agent_model`
+- `agent_max_steps`
+- `agent_retry_max_attempts`
+- `agent_retry_initial_wait_seconds`
+- `agent_retry_max_wait_seconds`
+- `agent_retry_backoff_multiplier`
+- `agent_max_image_size_bytes`
+- `agent_max_images_per_message`
+
+Response: `RuntimeSettingsRead`
+
 ## Entries
 
 ## `POST /entries`
@@ -296,7 +334,7 @@ Response: `DashboardRead`
 Current `DashboardRead` sections:
 
 - `month`
-- `currency_code` (currently fixed to `CAD`)
+- `currency_code` (resolved dashboard currency setting)
 - `kpis`
   - `expense_total_minor`
   - `income_total_minor`
@@ -338,7 +376,7 @@ Current `DashboardRead` sections:
   - `spent_to_date_minor`
   - `projected_total_minor` (`null` for non-current months)
   - `projected_remaining_minor` (`null` for non-current months)
-- `reconciliation[]` (active CAD accounts only)
+- `reconciliation[]` (active accounts in the resolved dashboard currency)
 
 Daily classification rule for dashboard analytics:
 
@@ -378,7 +416,7 @@ Response: `AgentThreadDetailRead` with:
 - `thread`
 - `messages` (with attachment metadata)
 - `runs` (with tool calls + change items + review actions)
-- `configured_model_name` (current backend configured model from settings / `.env`)
+- `configured_model_name` (current resolved runtime model from `/settings` override or env default)
 - each run also includes nullable usage counters:
   - `input_tokens`
   - `output_tokens`
@@ -422,7 +460,7 @@ Errors:
 
 - `400` invalid payload (for example no content/files, invalid image type, limits exceeded)
 - `404` thread not found
-- `503` missing `OPENROUTER_API_KEY` (or `BILL_HELPER_OPENROUTER_API_KEY`)
+- `503` missing API key after runtime resolution (no user override key and no server default key)
 
 ## `GET /agent/runs/{run_id}`
 

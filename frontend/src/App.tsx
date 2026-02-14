@@ -1,5 +1,5 @@
 import { NavLink, Route, Routes } from "react-router-dom";
-import { Bot, CreditCard, FolderKanban, Home, Layers3 } from "lucide-react";
+import { Bot, CreditCard, FolderKanban, Home, Layers3, Settings2 } from "lucide-react";
 
 import { buttonVariants } from "./components/ui/button";
 import { cn } from "./lib/utils";
@@ -9,13 +9,15 @@ import { EntriesPage } from "./pages/EntriesPage";
 import { EntryDetailPage } from "./pages/EntryDetailPage";
 import { HomePage } from "./pages/HomePage";
 import { PropertiesPage } from "./pages/PropertiesPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 const navItems = [
   { to: "/", label: "Home", icon: Bot },
   { to: "/dashboard", label: "Dashboard", icon: Home },
   { to: "/entries", label: "Entries", icon: Layers3 },
   { to: "/accounts", label: "Accounts", icon: CreditCard },
-  { to: "/properties", label: "Properties", icon: FolderKanban }
+  { to: "/properties", label: "Properties", icon: FolderKanban },
+  { to: "/settings", label: "Settings", icon: Settings2 }
 ] as const;
 
 export function App() {
@@ -53,6 +55,7 @@ export function App() {
           <Route path="/entries/:entryId" element={<EntryDetailPage />} />
           <Route path="/accounts" element={<AccountsPage />} />
           <Route path="/properties" element={<PropertiesPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
     </div>

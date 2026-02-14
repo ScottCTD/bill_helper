@@ -10,11 +10,11 @@ from backend.database import get_db
 from backend.models import Account
 from backend.schemas import DashboardRead
 from backend.services.finance import (
-    DASHBOARD_DEFAULT_CURRENCY_CODE,
     build_dashboard_analytics,
     build_reconciliation,
     month_window,
 )
+from backend.services.runtime_settings import resolve_runtime_settings
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -29,11 +29,14 @@ def get_dashboard(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="month must be in YYYY-MM format") from exc
 
+    runtime_settings = resolve_runtime_settings(db)
+    dashboard_currency_code = runtime_settings.dashboard_currency_code
+
     analytics = build_dashboard_analytics(
         db,
         start=start,
         end=end,
-        currency_code=DASHBOARD_DEFAULT_CURRENCY_CODE,
+        currency_code=dashboard_currency_code,
     )
 
     as_of = min(date.today(), end - timedelta(days=1))
@@ -42,7 +45,7 @@ def get_dashboard(
             select(Account)
             .where(
                 Account.is_active.is_(True),
-                Account.currency_code == DASHBOARD_DEFAULT_CURRENCY_CODE,
+                Account.currency_code == dashboard_currency_code,
             )
             .order_by(Account.name.asc())
         )
@@ -51,7 +54,7 @@ def get_dashboard(
 
     return DashboardRead(
         month=month,
-        currency_code=DASHBOARD_DEFAULT_CURRENCY_CODE,
+        currency_code=dashboard_currency_code,
         **analytics,
         reconciliation=reconciliation,
     )

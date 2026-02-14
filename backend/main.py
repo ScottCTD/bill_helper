@@ -7,18 +7,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
-from backend.routers import accounts, agent, currencies, dashboard, entities, entries, groups, links, tags, taxonomies, users
+from backend.routers import accounts, agent, currencies, dashboard, entities, entries, groups, links, settings, tags, taxonomies, users
 
 
 def create_app() -> FastAPI:
-    settings = get_settings()
+    app_settings = get_settings()
     Path(".data").mkdir(exist_ok=True)
 
-    app = FastAPI(title=settings.app_name)
+    app = FastAPI(title=app_settings.app_name)
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=app_settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -28,17 +28,18 @@ def create_app() -> FastAPI:
     def healthcheck() -> dict[str, str]:
         return {"status": "ok"}
 
-    app.include_router(accounts.router, prefix=settings.api_prefix)
-    app.include_router(currencies.router, prefix=settings.api_prefix)
-    app.include_router(entities.router, prefix=settings.api_prefix)
-    app.include_router(entries.router, prefix=settings.api_prefix)
-    app.include_router(tags.router, prefix=settings.api_prefix)
-    app.include_router(taxonomies.router, prefix=settings.api_prefix)
-    app.include_router(users.router, prefix=settings.api_prefix)
-    app.include_router(links.router, prefix=settings.api_prefix)
-    app.include_router(groups.router, prefix=settings.api_prefix)
-    app.include_router(dashboard.router, prefix=settings.api_prefix)
-    app.include_router(agent.router, prefix=settings.api_prefix)
+    app.include_router(accounts.router, prefix=app_settings.api_prefix)
+    app.include_router(currencies.router, prefix=app_settings.api_prefix)
+    app.include_router(entities.router, prefix=app_settings.api_prefix)
+    app.include_router(entries.router, prefix=app_settings.api_prefix)
+    app.include_router(tags.router, prefix=app_settings.api_prefix)
+    app.include_router(taxonomies.router, prefix=app_settings.api_prefix)
+    app.include_router(users.router, prefix=app_settings.api_prefix)
+    app.include_router(links.router, prefix=app_settings.api_prefix)
+    app.include_router(groups.router, prefix=app_settings.api_prefix)
+    app.include_router(dashboard.router, prefix=app_settings.api_prefix)
+    app.include_router(agent.router, prefix=app_settings.api_prefix)
+    app.include_router(settings.router, prefix=app_settings.api_prefix)
 
     return app
 

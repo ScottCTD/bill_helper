@@ -16,8 +16,10 @@ This module hosts the FastAPI app, SQLAlchemy models, Pydantic schemas, and doma
 - `backend/routers/entries.py`: entry CRUD, filters, link creation.
 - `backend/routers/dashboard.py`: monthly dashboard analytics endpoint.
 - `backend/routers/agent.py`: agent thread/run/review endpoints.
+- `backend/routers/settings.py`: runtime settings read/update endpoints.
 - `backend/services/finance.py`: reconciliation + dashboard aggregations/projection.
 - `backend/services/agent/change_apply.py`: apply approved proposals.
+- `backend/services/runtime_settings.py`: persisted override + env fallback resolver for runtime settings.
 - `backend/services/serializers.py`: ORM -> API schema conversion.
 
 ## Common Change Paths
@@ -51,6 +53,17 @@ Touch together:
 - `backend/services/agent/tools.py` (proposal/read outputs)
 - `backend/tests/test_agent.py`
 
+## 4) Runtime Settings Changes
+
+Touch together:
+
+- `backend/routers/settings.py`
+- `backend/services/runtime_settings.py`
+- runtime consumers (`backend/routers/*`, `backend/services/agent/*`) that depend on resolved settings
+- `backend/schemas.py`
+- `backend/tests/test_settings.py`
+- Alembic migration in `alembic/versions`
+
 ## Run and Verify
 
 ```bash
@@ -63,9 +76,9 @@ uv run python scripts/check_docs_sync.py
 
 - Entry-level `status` was removed; agent review state remains only on `agent_change_items`.
 - Agent tool contracts are name/selector-based (no domain IDs in model-facing arguments/outputs).
-- Entry create proposals can omit currency and fall back to `BILL_HELPER_DEFAULT_CURRENCY_CODE`.
-- Agent model/tool execution retries are controlled by `BILL_HELPER_AGENT_RETRY_*` settings.
-- Dashboard analytics are CAD-focused by design in the current implementation.
+- Entry create proposals can omit currency and fall back to the resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
+- Agent model/tool execution retries and limits can be overridden at runtime via `/settings`.
+- Dashboard currency defaults to runtime settings (`/settings` override, else `BILL_HELPER_DASHBOARD_CURRENCY_CODE` / `CAD`).
 
 ## Related Docs
 

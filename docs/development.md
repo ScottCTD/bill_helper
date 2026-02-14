@@ -38,6 +38,7 @@ Core:
 - `DATABASE_URL`
 - `CORS_ORIGINS`
 - `CURRENT_USER_NAME`
+- `DASHBOARD_CURRENCY_CODE`
 
 Agent:
 
@@ -46,7 +47,8 @@ Agent:
 - `OPENROUTER_BASE_URL`
 - `AGENT_MODEL`
 - `AGENT_MAX_STEPS` (default `100`)
-- `DEFAULT_CURRENCY_CODE` / `BILL_HELPER_DEFAULT_CURRENCY_CODE` (default `USD`)
+- `DEFAULT_CURRENCY_CODE` / `BILL_HELPER_DEFAULT_CURRENCY_CODE` (default `CAD`)
+- `DASHBOARD_CURRENCY_CODE` / `BILL_HELPER_DASHBOARD_CURRENCY_CODE` (default `CAD`)
 - `AGENT_RETRY_MAX_ATTEMPTS` (default `3`)
 - `AGENT_RETRY_INITIAL_WAIT_SECONDS` (default `0.25`)
 - `AGENT_RETRY_MAX_WAIT_SECONDS` (default `4.0`)
@@ -57,7 +59,8 @@ Agent:
 Notes:
 
 - backend boots without `OPENROUTER_API_KEY`
-- agent message execution endpoints return `503` until key is configured
+- runtime behavior resolves settings from `/api/v1/settings` overrides first, then env defaults
+- agent message execution endpoints return `503` only when both user override key and server default key are missing
 
 ## Database Setup
 
@@ -79,6 +82,7 @@ Current revisions:
 - `0007_taxonomy_core`
 - `0008_agent_run_usage_metrics`
 - `0009_remove_entry_status`
+- `0010_runtime_settings_overrides`
 
 Optional seed:
 

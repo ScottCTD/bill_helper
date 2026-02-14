@@ -13,8 +13,12 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     current_user_name: str = "scott"
     default_currency_code: str = Field(
-        default="USD",
+        default="CAD",
         validation_alias=AliasChoices("DEFAULT_CURRENCY_CODE", "BILL_HELPER_DEFAULT_CURRENCY_CODE"),
+    )
+    dashboard_currency_code: str = Field(
+        default="CAD",
+        validation_alias=AliasChoices("DASHBOARD_CURRENCY_CODE", "BILL_HELPER_DASHBOARD_CURRENCY_CODE"),
     )
     openrouter_api_key: str | None = Field(
         default=None,

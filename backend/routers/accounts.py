@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.config import get_settings
 from backend.database import get_db
 from backend.models import Account, AccountSnapshot, Entity, User
 from backend.schemas import (
@@ -25,6 +24,7 @@ from backend.services.entities import (
     set_entity_category,
 )
 from backend.services.finance import build_reconciliation
+from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.users import ensure_current_user
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
@@ -36,7 +36,7 @@ def _resolve_owner_user_id(db: Session, owner_user_id: str | None) -> str | None
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Owner user not found")
         return owner_user_id
 
-    settings = get_settings()
+    settings = resolve_runtime_settings(db)
     owner_user = ensure_current_user(db, settings.current_user_name)
     return owner_user.id
 

@@ -38,11 +38,11 @@ The agent is a tool-calling LLM (OpenRouter via OpenAI-compatible API) with a re
 
 | Setting | Env | Default | Notes |
 |---------|-----|---------|-------|
-| `openrouter_api_key` | `OPENROUTER_API_KEY` / `BILL_HELPER_OPENROUTER_API_KEY` | `None` | Required for run execution |
+| `openrouter_api_key` | `OPENROUTER_API_KEY` / `BILL_HELPER_OPENROUTER_API_KEY` | `None` | Required for run execution; can be overridden/cleared via `/api/v1/settings` |
 | `openrouter_base_url` | `BILL_HELPER_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API base URL |
-| `agent_model` | `BILL_HELPER_AGENT_MODEL` | `google/gemini-3-flash-preview` | Model name |
+| `agent_model` | `BILL_HELPER_AGENT_MODEL` | `google/gemini-3-flash-preview` | Model name; runtime override supported via `/api/v1/settings` |
 | `agent_max_steps` | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool loop iterations |
-| `default_currency_code` | `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `USD` | Fallback for entry proposals missing currency |
+| `default_currency_code` | `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `CAD` | Fallback for entry proposals missing currency (`/settings` override first, env fallback second) |
 | `agent_retry_max_attempts` | `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS` | `3` | Model completion retry attempts |
 | `agent_retry_initial_wait_seconds` | `BILL_HELPER_AGENT_RETRY_INITIAL_WAIT_SECONDS` | `0.25` | Exponential backoff start |
 | `agent_retry_max_wait_seconds` | `BILL_HELPER_AGENT_RETRY_MAX_WAIT_SECONDS` | `4.0` | Exponential backoff cap |

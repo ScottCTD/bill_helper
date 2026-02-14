@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field, ValidationError, field_validator, model_v
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
-from backend.config import get_settings
 from backend.enums import AgentChangeType, EntryKind
 from backend.models import Account, Entity, Entry, EntryTag, Tag
 from backend.services.entries import normalize_tag_name, set_entry_tags, soft_delete_entry
@@ -20,6 +19,7 @@ from backend.services.entities import (
     set_entity_category,
 )
 from backend.services.groups import assign_initial_group, recompute_entry_groups
+from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.tags import resolve_tag_color
 from backend.services.taxonomy import assign_single_term_by_name
 from backend.services.users import ensure_current_user
@@ -471,7 +471,7 @@ def apply_create_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
     except ValidationError as exc:
         raise ValueError(str(exc)) from exc
 
-    settings = get_settings()
+    settings = resolve_runtime_settings(db)
     currency_code = (parsed.currency_code or settings.default_currency_code).strip().upper()
 
     from_entity = get_or_create_entity(db, parsed.from_entity)

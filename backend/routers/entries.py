@@ -7,7 +7,6 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from backend.config import get_settings
 from backend.database import get_db
 from backend.enums import EntryKind
 from backend.models import Account, Entity, Entry, EntryLink, Tag, User
@@ -23,6 +22,7 @@ from backend.schemas import (
 from backend.services.entries import normalize_tag_name, set_entry_tags, soft_delete_entry
 from backend.services.entities import get_or_create_entity, normalize_entity_name
 from backend.services.groups import assign_initial_group, recompute_entry_groups
+from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.serializers import entry_to_detail_schema, entry_to_schema, link_to_schema
 from backend.services.users import ensure_current_user, get_or_create_user, normalize_user_name
 
@@ -134,7 +134,7 @@ def create_entry(payload: EntryCreate, db: Session = Depends(get_db)) -> EntryRe
     if owner_name is not None and normalize_user_name(owner_name) == "":
         owner_name = None
     if owner_user_id is None and owner_name is None:
-        settings = get_settings()
+        settings = resolve_runtime_settings(db)
         owner_user = ensure_current_user(db, settings.current_user_name)
         owner_user_id = owner_user.id
         owner_name = owner_user.name

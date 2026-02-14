@@ -17,6 +17,7 @@ This module hosts the React app, route pages, UI primitives, and API/query clien
 - `frontend/src/pages/EntriesPage.tsx`: entry list/filter/table interactions.
 - `frontend/src/components/EntryEditorModal.tsx`: entry create/edit modal.
 - `frontend/src/pages/DashboardPage.tsx`: tabbed interactive analytics.
+- `frontend/src/pages/SettingsPage.tsx`: runtime configuration workspace for user overrides.
 - `frontend/src/components/agent/*`: AI timeline and review UI.
 
 ## Common Change Paths
@@ -48,6 +49,17 @@ Touch together:
 - `frontend/src/styles.css`
 - `docs/frontend.md` (document new patterns)
 
+## 4) Runtime Settings UX
+
+Touch together:
+
+- `frontend/src/pages/SettingsPage.tsx`
+- `frontend/src/lib/api.ts`
+- `frontend/src/lib/types.ts`
+- `frontend/src/lib/queryKeys.ts`
+- `frontend/src/lib/queryInvalidation.ts`
+- dependent pages using configured defaults (`EntriesPage`, `EntryDetailPage`, `AccountsPage`, `DashboardPage`)
+
 ## Run and Verify
 
 ```bash
@@ -67,8 +79,9 @@ uv run python scripts/check_docs_sync.py
 
 - Amount display uses code-prefix formatting (`CAD 8.13`).
 - Entry status is not part of frontend entry models.
+- Runtime settings are loaded from `/api/v1/settings` and affect default currency/model behavior across pages.
 - Agent review timeline supports create/update/delete change items for entries, tags, and entities.
-- Dashboard visualizations use Recharts and currently consume CAD-only analytics payloads.
+- Dashboard visualizations use Recharts and consume the backend-configured dashboard currency payload.
 
 ## Related Docs
 

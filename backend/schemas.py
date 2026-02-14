@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.enums import (
     AgentChangeStatus,
@@ -364,6 +364,88 @@ class DashboardRead(BaseModel):
     largest_expenses: list[DashboardLargestExpenseItem]
     projection: DashboardProjectionRead
     reconciliation: list[ReconciliationRead]
+
+
+RuntimeSettingsApiKeySource = Literal["override", "server_default", "unset"]
+
+
+class RuntimeSettingsOverridesRead(BaseModel):
+    current_user_name: str | None = None
+    default_currency_code: str | None = None
+    dashboard_currency_code: str | None = None
+    openrouter_api_key_override_set: bool = False
+    openrouter_base_url: str | None = None
+    agent_model: str | None = None
+    agent_max_steps: int | None = None
+    agent_retry_max_attempts: int | None = None
+    agent_retry_initial_wait_seconds: float | None = None
+    agent_retry_max_wait_seconds: float | None = None
+    agent_retry_backoff_multiplier: float | None = None
+    agent_max_image_size_bytes: int | None = None
+    agent_max_images_per_message: int | None = None
+
+
+class RuntimeSettingsRead(BaseModel):
+    current_user_name: str
+    default_currency_code: str
+    dashboard_currency_code: str
+    openrouter_api_key_source: RuntimeSettingsApiKeySource
+    openrouter_api_key_configured: bool
+    openrouter_base_url: str
+    agent_model: str
+    agent_max_steps: int
+    agent_retry_max_attempts: int
+    agent_retry_initial_wait_seconds: float
+    agent_retry_max_wait_seconds: float
+    agent_retry_backoff_multiplier: float
+    agent_max_image_size_bytes: int
+    agent_max_images_per_message: int
+    overrides: RuntimeSettingsOverridesRead
+
+
+class RuntimeSettingsUpdate(BaseModel):
+    current_user_name: str | None = Field(default=None, max_length=255)
+    default_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
+    dashboard_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
+    openrouter_api_key: str | None = Field(default=None, max_length=500)
+    openrouter_base_url: str | None = Field(default=None, max_length=500)
+    agent_model: str | None = Field(default=None, max_length=255)
+    agent_max_steps: int | None = Field(default=None, ge=1, le=500)
+    agent_retry_max_attempts: int | None = Field(default=None, ge=1, le=10)
+    agent_retry_initial_wait_seconds: float | None = Field(default=None, ge=0.0, le=30.0)
+    agent_retry_max_wait_seconds: float | None = Field(default=None, ge=0.0, le=120.0)
+    agent_retry_backoff_multiplier: float | None = Field(default=None, ge=1.0, le=10.0)
+    agent_max_image_size_bytes: int | None = Field(default=None, ge=1024, le=104857600)
+    agent_max_images_per_message: int | None = Field(default=None, ge=1, le=12)
+
+    @field_validator(
+        "current_user_name",
+        "openrouter_base_url",
+        "agent_model",
+        mode="before",
+    )
+    @classmethod
+    def normalize_optional_text(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(str(value).split()).strip()
+        return normalized or None
+
+    @field_validator("openrouter_api_key", mode="before")
+    @classmethod
+    def normalize_optional_api_key(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    @field_validator("default_currency_code", "dashboard_currency_code", mode="before")
+    @classmethod
+    def normalize_optional_currency(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(str(value).split()).strip().upper()
+        return normalized or None
 
 
 class AgentThreadCreate(BaseModel):

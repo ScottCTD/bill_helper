@@ -17,16 +17,22 @@ Implemented:
   - `0007_taxonomy_core`
   - `0008_agent_run_usage_metrics`
   - `0009_remove_entry_status`
+  - `0010_runtime_settings_overrides`
 - Taxonomy subsystem for generalized category management:
   - shared `taxonomies` / `taxonomy_terms` / `taxonomy_assignments` tables
   - default category taxonomies for `entities` and `tags`
   - backward-compatible `entities.category` field still returned by API while sourced through taxonomy assignments
   - `PATCH /entities/{entity_id}` now resolves response category from taxonomy assignments, so term renames are reflected immediately
-- React frontend with AI-native home page plus routes for dashboard, entries, entry detail, accounts, and properties.
+- React frontend with AI-native home page plus routes for dashboard, entries, entry detail, accounts, properties, and settings.
+- Runtime settings system for user-configurable defaults (persisted in DB with env fallback semantics):
+  - configurable default currency and dashboard currency
+  - configurable current user name used for owner/review attribution
+  - configurable agent runtime controls (API key override, model, max steps, retry/image limits)
+  - empty API key override falls back to server default key
 - Dashboard analytics redesign:
   - interactive, tabbed dashboard sections (`Overview`, `Daily Spend`, `Breakdowns`, `Insights`)
   - Recharts-based plotting (bar/area/pie) instead of custom static SVG charts
-  - CAD-only analytics surface (non-CAD entries are ignored in dashboard calculations)
+  - runtime-configured analytics currency (entries in other currencies are ignored in that dashboard response)
   - daily vs non-daily expense segmentation from tags (`daily` tag marks daily spend; `non-daily` overrides)
   - monthly projection card for current month based on spend-to-date daily pace
 - Frontend UI system refactor to `shadcn/ui` + Tailwind tokens:
@@ -139,7 +145,8 @@ Set these environment variables (for example in `.env`):
 - `BILL_HELPER_OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`)
 - `BILL_HELPER_AGENT_MODEL` (default `google/gemini-3-flash-preview`)
 - `BILL_HELPER_AGENT_MAX_STEPS` (default `100`)
-- `BILL_HELPER_DEFAULT_CURRENCY_CODE` (default `USD`)
+- `BILL_HELPER_DEFAULT_CURRENCY_CODE` (default `CAD`)
+- `BILL_HELPER_DASHBOARD_CURRENCY_CODE` (default `CAD`)
 - `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS` (default `3`)
 - `BILL_HELPER_AGENT_RETRY_INITIAL_WAIT_SECONDS` (default `0.25`)
 - `BILL_HELPER_AGENT_RETRY_MAX_WAIT_SECONDS` (default `4.0`)
@@ -150,7 +157,7 @@ Set these environment variables (for example in `.env`):
 Behavior when key is missing:
 
 - app boots normally
-- agent message send endpoint returns `503` with a clear configuration error
+- agent message send endpoint returns `503` with a clear configuration error when neither server key nor user override key is configured
 
 ## 3) Initialize database
 
@@ -221,9 +228,10 @@ Frontend URL:
 ## Agent UX Quick Path
 
 1. Open the app and use the `Home` route for the AI-native chat workspace.
-2. Create/select a thread.
-3. Send text and optional images.
-4. Review timeline:
+2. Use `Settings` to configure runtime defaults (currency/model/step and key fallback behavior) before running agent-heavy workflows if needed.
+3. Create/select a thread.
+4. Send text and optional images.
+5. Review timeline:
    - user/assistant messages
    - newly sent user message appears immediately while run is in-flight
    - assistant markdown rendering with single-surface message bubbles
@@ -237,7 +245,7 @@ Frontend URL:
    - composer shortcut: `Cmd+Enter` (or `Ctrl+Enter`) sends the message
    - single cumulative thread usage bar above the composer (`Input`, `Output`, `Cache read`, `Cache write`, rightmost `Total cost`)
    - run-level proposal summary cards with pending counts
-5. Open the run review modal and process proposals:
+6. Open the run review modal and process proposals:
    - entry proposals support JSON edit-before-approve with unified payload diff
    - use `Approve & Next` for focused step-through review
    - use `Approve All` for deterministic sequential batch apply (with partial-failure summary/jump links)
@@ -277,13 +285,16 @@ uv run python scripts/check_docs_sync.py
 - Backend app: `backend/main.py`
 - Backend guide: `backend/README.md`
 - Agent router: `backend/routers/agent.py`
+- Settings router: `backend/routers/settings.py`
 - Agent services: `backend/services/agent`
+- Runtime settings resolver: `backend/services/runtime_settings.py`
 - ORM models: `backend/models.py`
 - Frontend app shell: `frontend/src/App.tsx`
 - Frontend guide: `frontend/README.md`
 - Frontend AI home page: `frontend/src/pages/HomePage.tsx`
+- Frontend settings page: `frontend/src/pages/SettingsPage.tsx`
 - Frontend design tokens and component styles: `frontend/src/styles.css`
 - Frontend UI primitives: `frontend/src/components/ui`
 - Agent panel UI: `frontend/src/components/agent/AgentPanel.tsx`
-- Latest migration: `alembic/versions/0009_remove_entry_status.py`
+- Latest migration: `alembic/versions/0010_runtime_settings_overrides.py`
 - Demo seed: `scripts/seed_demo.py`

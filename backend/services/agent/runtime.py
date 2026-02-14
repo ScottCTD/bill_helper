@@ -8,12 +8,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.config import get_settings
 from backend.enums import AgentMessageRole, AgentRunStatus, AgentToolCallStatus
 from backend.models import AgentChangeItem, AgentMessage, AgentRun, AgentThread, AgentToolCall
 from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.model_client import AgentModelError, OpenRouterModelClient
 from backend.services.agent.tools import ToolContext, build_openai_tool_schemas, execute_tool
+from backend.services.runtime_settings import resolve_runtime_settings
 
 
 USAGE_FIELDS = (
@@ -36,16 +36,16 @@ class AgentRuntimeUnavailable(RuntimeError):
     pass
 
 
-def ensure_agent_available() -> None:
-    settings = get_settings()
+def ensure_agent_available(db: Session) -> None:
+    settings = resolve_runtime_settings(db)
     if not settings.openrouter_api_key:
         raise AgentRuntimeUnavailable(
             "Agent runtime is not configured: set OPENROUTER_API_KEY (or BILL_HELPER_OPENROUTER_API_KEY)."
         )
 
 
-def _build_model_client() -> OpenRouterModelClient:
-    settings = get_settings()
+def _build_model_client(db: Session) -> OpenRouterModelClient:
+    settings = resolve_runtime_settings(db)
     return OpenRouterModelClient(
         api_key=settings.openrouter_api_key or "",
         base_url=settings.openrouter_base_url,
@@ -58,9 +58,9 @@ def _build_model_client() -> OpenRouterModelClient:
     )
 
 
-def _call_openrouter(messages: list[dict[str, Any]]) -> dict[str, Any]:
+def _call_openrouter(messages: list[dict[str, Any]], db: Session) -> dict[str, Any]:
     # Kept as a stable seam so tests can monkeypatch model responses.
-    return _build_model_client().complete(messages)
+    return _build_model_client(db).complete(messages)
 
 
 def _persist_final_message(
@@ -200,7 +200,7 @@ def _create_run(
     thread: AgentThread,
     user_message: AgentMessage,
 ) -> AgentRun:
-    settings = get_settings()
+    settings = resolve_runtime_settings(db)
 
     run = AgentRun(
         thread_id=thread.id,
@@ -222,7 +222,7 @@ def _execute_agent_run(
     thread: AgentThread,
     run: AgentRun,
 ) -> AgentRun:
-    settings = get_settings()
+    settings = resolve_runtime_settings(db)
     max_steps = max(settings.agent_max_steps, 1)
 
     llm_messages = build_llm_messages(db, thread.id, current_user_message_id=run.user_message_id)
@@ -236,7 +236,7 @@ def _execute_agent_run(
 
     try:
         for _ in range(max_steps):
-            assistant_message = _call_openrouter(llm_messages)
+            assistant_message = _call_openrouter(llm_messages, db)
             _accumulate_usage_totals(usage_totals, _extract_usage(assistant_message))
             _apply_usage_totals_to_run(run, usage_totals)
             db.add(run)
@@ -311,7 +311,7 @@ def _execute_agent_run(
 
 
 def start_agent_run(db: Session, thread: AgentThread, user_message: AgentMessage) -> AgentRun:
-    ensure_agent_available()
+    ensure_agent_available(db)
     return _create_run(db, thread=thread, user_message=user_message)
 
 

@@ -26,6 +26,8 @@ Core app settings:
 - `DATABASE_URL` (default `sqlite:///./.data/bill_helper.db`)
 - `CORS_ORIGINS` (default `http://localhost:5173`)
 - `CURRENT_USER_NAME` (default `scott`)
+- `DEFAULT_CURRENCY_CODE` (default `CAD`)
+- `DASHBOARD_CURRENCY_CODE` (default `CAD`)
 
 Agent settings:
 
@@ -38,11 +40,19 @@ Agent settings:
 - `AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`)
 - runtime pricing uses LiteLLM model-cost mapping (`litellm`) and refreshes cost map from LiteLLM source with local fallback
 
+Runtime override behavior:
+
+- `runtime_settings` table stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`
+- effective runtime settings are resolved as `override -> env default`
+- API key resolution supports three states: `override`, `server_default`, `unset`
+- empty API key override clears user override and falls back to server default
+
 Behavior notes:
 
 - app starts even without `OPENROUTER_API_KEY`
-- only agent message execution is blocked (`503`) when key is missing
-- settings are cached by `get_settings()` (`lru_cache`)
+- only agent message execution is blocked (`503`) when both server default key and user override key are missing
+- env settings are cached by `get_settings()` (`lru_cache`)
+- runtime behavior consumers use `backend/services/runtime_settings.py` for resolved effective values
 
 ## Database Layer (`backend/database.py`)
 
@@ -100,7 +110,7 @@ Core services:
 - `backend/services/finance.py`
   - keeps account reconciliation math
   - now builds tab-oriented dashboard analytics sections:
-    - CAD-scoped monthly KPIs
+    - configured-currency monthly KPIs
     - daily vs non-daily spend series (tag-driven)
     - monthly trend rollups
     - from/to/tag breakdowns
@@ -145,6 +155,10 @@ Agent services:
   - all model-facing tool interfaces avoid domain IDs (names/selectors only)
   - `propose_*` calls are blocked while prior thread proposals remain `PENDING_REVIEW`
   - proposal tools only create `agent_change_items` (`PENDING_REVIEW`)
+- `backend/services/runtime_settings.py`
+  - resolves effective runtime settings from `runtime_settings` overrides + env defaults
+  - exposes read-model payload for `/settings` API (`effective values + override metadata`)
+  - used by agent runtime, dashboard currency selection, current-user attribution defaults, and entry-currency fallback
 - `backend/services/agent/review.py`
   - per-item approve/reject workflow and state transitions
   - delegates concrete resource application to `backend/services/agent/change_apply.py`
@@ -171,6 +185,7 @@ Core routers:
 - `tags.py`
 - `taxonomies.py`
 - `currencies.py`
+- `settings.py`
 
 Agent router:
 
@@ -185,6 +200,13 @@ Agent router:
   - `POST /api/v1/agent/change-items/{item_id}/reject`
   - `GET /api/v1/agent/attachments/{attachment_id}`
 
+Settings router:
+
+- `backend/routers/settings.py`
+- endpoints:
+  - `GET /api/v1/settings`
+  - `PATCH /api/v1/settings`
+
 ## Migrations
 
 - `0001_initial`
@@ -196,6 +218,7 @@ Agent router:
 - `0007_taxonomy_core`
 - `0008_agent_run_usage_metrics`
 - `0009_remove_entry_status`
+- `0010_runtime_settings_overrides`
 
 Commands:
 
@@ -211,6 +234,7 @@ Test modules:
 - `backend/tests/test_agent.py`
 - `backend/tests/test_agent_pricing.py`
 - `backend/tests/test_taxonomies.py`
+- `backend/tests/test_settings.py`
 
 `test_agent.py` covers:
 
@@ -228,7 +252,7 @@ Test modules:
 - asynchronous run start behavior (`POST /agent/threads/{thread_id}/messages` returns `running` while execution continues)
 - prompt contract for entry ingestion ordering (duplicate check -> tag/entity reconciliation -> entry proposal)
 
-Current baseline: `44 passed`.
+Current baseline: `52 passed`.
 
 ## Operational Impact
 
@@ -240,9 +264,12 @@ Current baseline: `44 passed`.
 - each run now includes nullable aggregated usage counters (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`)
 - each run API payload now includes nullable derived USD cost fields from LiteLLM pricing (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
 - final assistant messages are sanitized to drop empty boilerplate footers (`Tools used ... Pending review item ids: []`) when no pending review items exist
+- runtime settings can be updated through `/api/v1/settings`; changes apply to subsequent requests/runs without restarting the app
+- dashboard currency and default entry currency are now runtime-configurable
+- current user attribution defaults (`owner`/review actor) now resolve from runtime settings rather than env-only config
 - entry-ingestion prompts now require duplicate detection before any entry proposal, reducing duplicate proposal risk
 - entry domain no longer includes `status`; API/model/migration are synchronized on statusless entries
-- dashboard API now serves CAD-only analytics payloads with richer chart-ready sections; non-CAD entry rows are excluded from dashboard aggregations
+- dashboard API serves runtime-configured currency analytics payloads; entries in other currencies are excluded from that dashboard response
 - new agent module boundaries reduce coupling and make it safer to add new model providers/change types
 - taxonomy defaults (`entity_category`, `tag_category`) are auto-provisioned by service logic when missing
 - tags now support optional `category` assignment via taxonomy terms while keeping existing tag APIs intact
@@ -252,6 +279,7 @@ Current baseline: `44 passed`.
 ## Constraints / Known Limitations
 
 - no auth/permissions; actor is current configured user string
+- runtime settings are global to the app instance (no per-authenticated-user isolation yet)
 - model provider is OpenRouter-only in current implementation
 - no streaming responses in V1
 - near-real-time timeline updates remain polling-based (no websocket/SSE)

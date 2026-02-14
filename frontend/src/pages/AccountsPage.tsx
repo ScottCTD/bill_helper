@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createAccount,
   createSnapshot,
+  getRuntimeSettings,
   getReconciliation,
   listAccounts,
   listCurrencies,
@@ -20,6 +21,7 @@ export function AccountsPage() {
   const accountsQuery = useQuery({ queryKey: queryKeys.accounts.all, queryFn: listAccounts });
   const currenciesQuery = useQuery({ queryKey: queryKeys.properties.currencies, queryFn: listCurrencies });
   const usersQuery = useQuery({ queryKey: queryKeys.properties.users, queryFn: listUsers });
+  const runtimeSettingsQuery = useQuery({ queryKey: queryKeys.settings.runtime, queryFn: getRuntimeSettings });
 
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
   const [createForm, setCreateForm] = useState({
@@ -27,14 +29,14 @@ export function AccountsPage() {
     name: "",
     institution: "",
     account_type: "",
-    currency_code: "USD"
+    currency_code: "CAD"
   });
   const [editForm, setEditForm] = useState({
     owner_user_id: "",
     name: "",
     institution: "",
     account_type: "",
-    currency_code: "USD",
+    currency_code: "CAD",
     is_active: true
   });
   const [snapshotForm, setSnapshotForm] = useState({
@@ -42,6 +44,7 @@ export function AccountsPage() {
     balance_major: "",
     note: ""
   });
+  const [createCurrencyInitialized, setCreateCurrencyInitialized] = useState(false);
 
   useEffect(() => {
     if (!selectedAccountId && accountsQuery.data && accountsQuery.data.length > 0) {
@@ -51,6 +54,7 @@ export function AccountsPage() {
 
   const selectedAccount = accountsQuery.data?.find((account) => account.id === selectedAccountId);
   const currentUserId = usersQuery.data?.find((user) => user.is_current_user)?.id ?? "";
+  const defaultCurrencyCode = (runtimeSettingsQuery.data?.default_currency_code ?? "CAD").toUpperCase();
   const currencies = useMemo(() => {
     const codes = new Set((currenciesQuery.data ?? []).map((currency) => currency.code));
     if (createForm.currency_code) {
@@ -68,6 +72,17 @@ export function AccountsPage() {
     }
     setCreateForm((state) => (state.owner_user_id ? state : { ...state, owner_user_id: currentUserId }));
   }, [currentUserId]);
+
+  useEffect(() => {
+    if (createCurrencyInitialized) {
+      return;
+    }
+    if (!defaultCurrencyCode) {
+      return;
+    }
+    setCreateForm((state) => ({ ...state, currency_code: defaultCurrencyCode }));
+    setCreateCurrencyInitialized(true);
+  }, [createCurrencyInitialized, defaultCurrencyCode]);
 
   useEffect(() => {
     if (!selectedAccount) {
@@ -104,7 +119,7 @@ export function AccountsPage() {
         name: "",
         institution: "",
         account_type: "",
-        currency_code: "USD"
+        currency_code: defaultCurrencyCode
       });
     }
   });

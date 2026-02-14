@@ -9,12 +9,12 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
-from backend.config import get_settings
 from backend.enums import AgentChangeStatus, AgentChangeType
 from backend.models import Account, AgentChangeItem, AgentRun, Entity, Entry, Tag
 from backend.services.entries import normalize_tag_name
 from backend.services.entities import find_entity_by_name, normalize_entity_category, normalize_entity_name
 from backend.services.finance import aggregate_monthly_totals, aggregate_top_tags, month_window
+from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.taxonomy import get_single_term_name_map
 
 
@@ -867,7 +867,7 @@ def _propose_delete_entity(context: ToolContext, args: ProposeDeleteEntityArgs) 
 
 
 def _propose_create_entry(context: ToolContext, args: ProposeCreateEntryArgs) -> ToolExecutionResult:
-    settings = get_settings()
+    settings = resolve_runtime_settings(context.db)
     currency_code = (args.currency_code or settings.default_currency_code).strip().upper()
     payload = {
         "kind": args.kind,
@@ -1137,7 +1137,7 @@ def execute_tool(name: str, arguments: dict[str, Any], context: ToolContext) -> 
     except ValidationError as exc:
         return _error_result("invalid tool arguments", details=exc.errors())
 
-    settings = get_settings()
+    settings = resolve_runtime_settings(context.db)
     retrying = Retrying(
         stop=stop_after_attempt(settings.agent_retry_max_attempts),
         wait=wait_exponential(

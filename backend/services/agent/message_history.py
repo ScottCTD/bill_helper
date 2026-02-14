@@ -9,10 +9,10 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.config import get_settings
 from backend.enums import AgentMessageRole
 from backend.models import Account, AgentChangeItem, AgentMessage, AgentReviewAction, AgentRun, AgentToolCall, User
 from backend.services.agent.prompts import system_prompt
+from backend.services.runtime_settings import resolve_runtime_settings
 
 
 def attachment_to_data_url(file_path: str, mime_type: str) -> str | None:
@@ -31,7 +31,7 @@ def _compose_user_feedback_text(message: AgentMessage, review_results_prefix: st
 
 
 def _build_current_user_context(db: Session) -> str:
-    settings = get_settings()
+    settings = resolve_runtime_settings(db)
     current_user_name = (settings.current_user_name or "").strip() or "(unknown)"
     accounts = list(
         db.scalars(

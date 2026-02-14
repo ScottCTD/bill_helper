@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from inspect import signature
 
 
 def create_thread(client) -> dict:
@@ -43,7 +44,14 @@ def send_message(
 def patch_model(monkeypatch, handler):
     from backend.services.agent import runtime
 
-    monkeypatch.setattr(runtime, "_call_openrouter", handler)
+    accepts_db = len(signature(handler).parameters) > 1
+
+    def wrapped(messages, db):
+        if accepts_db:
+            return handler(messages, db)
+        return handler(messages)
+
+    monkeypatch.setattr(runtime, "_call_openrouter", wrapped)
 
 
 def test_thread_history_and_final_assistant_message(client, monkeypatch):

@@ -24,7 +24,7 @@ Defined in `frontend/src/App.tsx`.
 
 Current shell behavior:
 
-- tokenized top app bar with route actions (`Home`, `Dashboard`, `Entries`, `Accounts`, `Properties`)
+- tokenized top app bar with route actions (`Home`, `Dashboard`, `Entries`, `Accounts`, `Properties`, `Settings`)
 - content canvas is route-driven (no global right-side agent occupancy on non-home pages)
 - home route is AI-native and renders the agent experience as the primary page content
 - outer route wrapper card removed so page sections are visually separated instead of nested in a single container
@@ -41,6 +41,7 @@ Pages:
 - `/entries/:entryId` -> entry detail
 - `/accounts` -> accounts
 - `/properties` -> core catalogs + taxonomy term management
+- `/settings` -> runtime settings workspace
 
 Providers in `frontend/src/main.tsx`:
 
@@ -55,6 +56,7 @@ Defines typed API models for:
 
 - ledger domain (`Entry`, `Account`, `User`, `Entity`, `Tag`, ...)
 - analytics (`Dashboard`, `Reconciliation`, ...)
+- runtime settings domain (`RuntimeSettings`, `RuntimeSettingsOverrides`)
 - agent domain (`AgentThread*`, `AgentMessage*`, `AgentRun`, `AgentToolCall`, `AgentChangeItem`, `AgentReviewAction`)
 
 ## `frontend/src/lib/api.ts`
@@ -64,6 +66,9 @@ Responsibilities:
 - generic `request<T>` helper
 - JSON and FormData request handling
 - endpoint functions for all backend domains including `agent/*`
+- runtime settings client methods:
+  - `getRuntimeSettings`
+  - `updateRuntimeSettings`
 - taxonomy client methods:
   - `listTaxonomies`
   - `listTaxonomyTerms`
@@ -81,6 +86,8 @@ Responsibilities:
   - `properties.taxonomies`
   - `properties.taxonomyTermsRoot`
   - `properties.taxonomyTerms(taxonomyKey)`
+- settings domain includes:
+  - `settings.runtime`
 
 ## `frontend/src/lib/queryInvalidation.ts`
 
@@ -88,6 +95,8 @@ Responsibilities:
 
 - centralized invalidation policies after writes/review actions
 - shared invalidation bundles for entry/account/agent/property read-model refresh
+- runtime settings invalidation bundle:
+  - `invalidateRuntimeSettingsReadModels(queryClient)` to refresh dependent surfaces after settings writes
 - reduces duplicated cache-invalidation logic across screens
 - taxonomy-aware invalidation now includes:
   - assignment-driven term usage refresh when tags/entities change
@@ -118,6 +127,7 @@ Agent client methods:
 - `Kind / Amount / Currency` and `From / To` rows are tuned to remain single-line in desktop popup width
 - `Owner` row is constrained to single-line in desktop popup width
 - `Status` has been removed from entry create/edit/list/filter UI and from entry payloads
+- entry create modal default currency now resolves from runtime settings (`GET /settings`)
 - `Kind` table cell uses symbol-only indicators (`+` for income, `-` for expense)
 - amount cells now render with ISO code prefix (for example `CAD 8.13`)
 - now uses shared shadcn primitives for card layout, filters, badges, and table actions
@@ -132,12 +142,14 @@ Agent client methods:
 - link create/delete
 - uses shared popup editor for edits (same auto-save behavior as entries list popup)
 - now uses shared shadcn primitives for cards, action buttons, and link form controls
+- editor wiring also consumes runtime settings defaults for consistency with create flow
 
 ## `AccountsPage.tsx`
 
 - account CRUD updates
 - snapshot create/list
 - reconciliation display
+- create-account default currency now resolves from runtime settings (`GET /settings`)
 
 ## `PropertiesPage.tsx`
 
@@ -160,7 +172,7 @@ Agent client methods:
 
 - tabbed interactive analytics surface (`Overview`, `Daily Spend`, `Breakdowns`, `Insights`)
 - uses Recharts for bar/area/pie plots with tooltips and legends
-- CAD-only dashboard analytics (non-CAD entries are excluded from dashboard stats)
+- runtime-configured dashboard currency analytics (non-matching currency entries are excluded)
 - daily vs non-daily expense segmentation:
   - `daily` tag marks an expense as daily
   - `non-daily` (or `non_daily` / `nondaily`) overrides and marks non-daily
@@ -177,7 +189,17 @@ Agent client methods:
 - insights panel:
   - weekday spend bar chart
   - largest expenses table
-  - CAD reconciliation table
+  - configured-currency reconciliation table
+
+## `SettingsPage.tsx`
+
+- categorized runtime settings workspace with responsive card layout:
+  - `General` (current user name, default currency, dashboard currency)
+  - `Agent Runtime` (API key override, base URL, model, step/image limits)
+  - `Reliability` (retry policy controls)
+- top summary surface shows effective API key source and active model
+- supports save/update and reset-to-server-default flows
+- setting changes trigger cache invalidation across dependent pages (agent/dashboard/accounts/entries/users)
 
 ## Agent UI
 

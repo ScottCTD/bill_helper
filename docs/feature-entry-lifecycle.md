@@ -56,5 +56,5 @@ This doc is the fast path for understanding how entries are created, edited, lin
 ## Operational Notes
 
 - Currency normalization occurs server-side (`currency_code.upper()`).
-- Agent create-entry proposals can omit `currency_code`; backend defaults to `BILL_HELPER_DEFAULT_CURRENCY_CODE`.
+- Agent create-entry proposals can omit `currency_code`; backend defaults to resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
 - Soft-delete removes entry links and triggers group recomputation.

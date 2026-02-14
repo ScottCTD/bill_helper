@@ -13,6 +13,7 @@ import {
   createEntry,
   deleteEntry,
   getEntry,
+  getRuntimeSettings,
   listCurrencies,
   listEntities,
   listEntries,
@@ -51,6 +52,7 @@ export function EntriesPage() {
   const [editorState, setEditorState] = useState<EditorState>(null);
 
   const currenciesQuery = useQuery({ queryKey: queryKeys.properties.currencies, queryFn: listCurrencies });
+  const runtimeSettingsQuery = useQuery({ queryKey: queryKeys.settings.runtime, queryFn: getRuntimeSettings });
   const entitiesQuery = useQuery({ queryKey: queryKeys.properties.entities, queryFn: listEntities });
   const usersQuery = useQuery({ queryKey: queryKeys.properties.users, queryFn: listUsers });
   const tagsQuery = useQuery({ queryKey: queryKeys.properties.tags, queryFn: listTags });
@@ -264,6 +266,7 @@ export function EntriesPage() {
         users={usersQuery.data ?? []}
         tags={tagsQuery.data ?? []}
         currentUserId={currentUserId}
+        defaultCurrencyCode={(runtimeSettingsQuery.data?.default_currency_code ?? "CAD").toUpperCase()}
         isSaving={createEntryMutation.isPending || updateEntryMutation.isPending}
         loadError={editorLoadError}
         saveError={editorSaveError}

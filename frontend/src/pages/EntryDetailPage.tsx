@@ -13,6 +13,7 @@ import {
   deleteLink,
   getEntry,
   getGroup,
+  getRuntimeSettings,
   listCurrencies,
   listEntities,
   listTags,
@@ -53,6 +54,7 @@ export function EntryDetailPage() {
   const entitiesQuery = useQuery({ queryKey: queryKeys.properties.entities, queryFn: listEntities });
   const usersQuery = useQuery({ queryKey: queryKeys.properties.users, queryFn: listUsers });
   const tagsQuery = useQuery({ queryKey: queryKeys.properties.tags, queryFn: listTags });
+  const runtimeSettingsQuery = useQuery({ queryKey: queryKeys.settings.runtime, queryFn: getRuntimeSettings });
 
   const currentUserId = useMemo(
     () => usersQuery.data?.find((user) => user.is_current_user)?.id ?? "",
@@ -205,6 +207,7 @@ export function EntryDetailPage() {
         users={usersQuery.data ?? []}
         tags={tagsQuery.data ?? []}
         currentUserId={currentUserId}
+        defaultCurrencyCode={(runtimeSettingsQuery.data?.default_currency_code ?? "CAD").toUpperCase()}
         isSaving={updateMutation.isPending}
         saveError={(updateMutation.error as Error | null)?.message ?? null}
         onClose={() => setIsEditorOpen(false)}

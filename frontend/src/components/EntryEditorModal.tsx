@@ -46,6 +46,7 @@ interface EntryEditorModalProps {
   users: User[];
   tags: Tag[];
   currentUserId: string;
+  defaultCurrencyCode: string;
   isSaving: boolean;
   loadError?: string | null;
   saveError?: string | null;
@@ -65,13 +66,13 @@ function todayDateInputValue() {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-function buildCreateForm(currentUserId: string): EntryEditorFormState {
+function buildCreateForm(currentUserId: string, defaultCurrencyCode: string): EntryEditorFormState {
   return {
     kind: "EXPENSE",
     occurred_at: todayDateInputValue(),
     name: "",
     amount_major: "",
-    currency_code: "USD",
+    currency_code: defaultCurrencyCode,
     from_entity_value: "",
     to_entity_value: "",
     owner_user_id: currentUserId,
@@ -176,6 +177,7 @@ export function EntryEditorModal({
   users,
   tags,
   currentUserId,
+  defaultCurrencyCode,
   isSaving,
   loadError,
   saveError,
@@ -183,8 +185,10 @@ export function EntryEditorModal({
   onSubmit
 }: EntryEditorModalProps) {
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [formState, setFormState] = useState<EntryEditorFormState>(() => buildCreateForm(currentUserId));
-  const [initialFormState, setInitialFormState] = useState<EntryEditorFormState>(() => buildCreateForm(currentUserId));
+  const [formState, setFormState] = useState<EntryEditorFormState>(() => buildCreateForm(currentUserId, defaultCurrencyCode));
+  const [initialFormState, setInitialFormState] = useState<EntryEditorFormState>(() =>
+    buildCreateForm(currentUserId, defaultCurrencyCode)
+  );
   const [editorResetNonce, setEditorResetNonce] = useState(0);
   const [createdEntityOptionNames, setCreatedEntityOptionNames] = useState<string[]>([]);
 
@@ -194,7 +198,7 @@ export function EntryEditorModal({
     }
 
     if (mode === "create") {
-      const nextState = buildCreateForm(currentUserId);
+      const nextState = buildCreateForm(currentUserId, defaultCurrencyCode);
       setFormState(nextState);
       setInitialFormState(nextState);
       setValidationError(null);
@@ -211,7 +215,7 @@ export function EntryEditorModal({
       setEditorResetNonce((value) => value + 1);
       setCreatedEntityOptionNames([]);
     }
-  }, [currentUserId, entry, isOpen, mode]);
+  }, [currentUserId, defaultCurrencyCode, entry, isOpen, mode]);
 
   useEffect(() => {
     if (!isOpen || mode !== "create" || !currentUserId) {

@@ -10,7 +10,6 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.config import get_settings
 from backend.database import SessionLocal, get_db
 from backend.enums import AgentChangeStatus, AgentMessageRole
 from backend.models import (
@@ -33,6 +32,7 @@ from backend.schemas import (
 from backend.services.agent import (
     AgentRuntimeUnavailable,
     approve_change_item,
+    ensure_agent_available,
     reject_change_item,
     run_existing_agent_run,
     start_agent_run,
@@ -44,6 +44,7 @@ from backend.services.agent.serializers import (
     thread_summary_to_schema,
     thread_to_schema,
 )
+from backend.services.runtime_settings import resolve_runtime_settings
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -164,7 +165,7 @@ def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThr
     )
     if thread is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
-    settings = get_settings()
+    settings = resolve_runtime_settings(db)
     return AgentThreadDetailRead(
         thread=thread_to_schema(thread),
         messages=[message_to_schema(message, api_prefix=settings.api_prefix) for message in thread.messages],
@@ -182,13 +183,11 @@ async def send_thread_message(
 ) -> AgentRunRead:
     try:
         # Fail fast before persisting uploads/messages when no model credentials are configured.
-        from backend.services.agent.runtime import ensure_agent_available
-
-        ensure_agent_available()
+        ensure_agent_available(db)
     except AgentRuntimeUnavailable as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
-    settings = get_settings()
+    settings = resolve_runtime_settings(db)
     thread = _get_thread_or_404(db, thread_id)
     clean_content = _normalize_optional_text(content)
     if not clean_content and not files:
@@ -265,7 +264,7 @@ def approve_item(
     payload: AgentChangeItemApproveRequest,
     db: Session = Depends(get_db),
 ) -> AgentChangeItemRead:
-    settings = get_settings()
+    settings = resolve_runtime_settings(db)
     try:
         item = approve_change_item(
             db,
@@ -292,7 +291,7 @@ def reject_item(
     payload: AgentChangeItemRejectRequest,
     db: Session = Depends(get_db),
 ) -> AgentChangeItemRead:
-    settings = get_settings()
+    settings = resolve_runtime_settings(db)
     try:
         item = reject_change_item(db, item_id=item_id, actor=settings.current_user_name, note=payload.note)
     except ValueError as exc:

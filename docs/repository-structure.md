@@ -25,6 +25,7 @@
 - `versions/0007_taxonomy_core.py`: introduces taxonomy/taxonomy_terms/taxonomy_assignments and backfills entity categories.
 - `versions/0008_agent_run_usage_metrics.py`: adds run usage token columns.
 - `versions/0009_remove_entry_status.py`: drops the obsolete entry `status` column.
+- `versions/0010_runtime_settings_overrides.py`: adds persisted runtime settings override table (`runtime_settings`).
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
@@ -51,6 +52,7 @@
 - `groups.py`: graph view of an entry group.
 - `dashboard.py`: monthly analytics endpoint.
 - `agent.py`: append-only agent thread/message/run/review endpoints.
+- `settings.py`: runtime settings read/update endpoints for user overrides with env fallback.
 
 ### Backend Services (`/backend/services`)
 
@@ -62,6 +64,7 @@
 - `finance.py`: reconciliation, CAD dashboard analytics, projections, and chart-ready breakdown aggregations.
 - `serializers.py`: ORM-to-schema mapping helpers.
 - `taxonomy.py`: shared taxonomy normalization, term assignment, and usage-count helpers.
+- `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults.
 - `agent/`: agent runtime, tool execution, serialization, prompt/model adapters, and review apply handlers.
 
 ### Backend Tests (`/backend/tests`)
@@ -98,6 +101,7 @@
 #### Pages (`/frontend/src/pages`)
 
 - `DashboardPage.tsx`: tabbed interactive analytics dashboard (overview/daily/breakdowns/insights) backed by Recharts.
+- `SettingsPage.tsx`: responsive runtime settings workspace (general, agent runtime, reliability).
 - `EntriesPage.tsx`: list/filter/delete entries and open popup create/edit editor.
 - `EntryDetailPage.tsx`: manage links/group graph and open popup editor for updates.
 - `AccountsPage.tsx`: create/update accounts, snapshot management, reconciliation view.

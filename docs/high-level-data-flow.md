@@ -82,7 +82,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 
 1. Frontend calls `/api/v1/dashboard?month=YYYY-MM` and account reconciliation endpoints.
 2. Finance service computes:
-   - CAD-scoped monthly KPIs
+   - runtime-configured currency monthly KPIs
    - daily spending split (daily vs non-daily tag classification)
    - monthly trend, breakdowns (`from`, `to`, `tag`)
    - weekday distribution, largest expenses, projection
@@ -98,11 +98,13 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `backend/routers/dashboard.py`
   - `backend/routers/accounts.py`
   - `backend/routers/agent.py`
+  - `backend/routers/settings.py`
 - Core services:
   - `backend/services/groups.py`
   - `backend/services/entries.py`
   - `backend/services/entities.py`
   - `backend/services/users.py`
+  - `backend/services/runtime_settings.py`
   - `backend/services/taxonomy.py`
   - `backend/services/finance.py`
 - Agent services:
@@ -133,6 +135,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `0007_taxonomy_core`
   - `0008_agent_run_usage_metrics`
   - `0009_remove_entry_status`
+  - `0010_runtime_settings_overrides`
 - Operational commands:
   - `uv run alembic upgrade head`
   - `uv run bill-helper-api`
@@ -141,11 +144,14 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 - Relevant environment variables:
   - `BILL_HELPER_DATABASE_URL`
   - `BILL_HELPER_CURRENT_USER_NAME`
+  - `BILL_HELPER_DEFAULT_CURRENCY_CODE`
+  - `BILL_HELPER_DASHBOARD_CURRENCY_CODE`
+  - `BILL_HELPER_OPENROUTER_API_KEY`
 
 ## Current Constraints and Limitations
 
 - Group recomputation is global over active entries (not incremental).
 - Link uniqueness is directional, while grouping treats connectivity as undirected.
 - Entry deletion is soft-delete; related link rows are physically removed.
-- Dashboard analytics are currently CAD-focused by design.
+- Dashboard analytics use runtime-configured currency selection (`/settings` override, else env default).
 - No auth/permissions boundaries (single-user local mode).

@@ -1,0 +1,228 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Literal
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from backend.config import get_settings
+from backend.models import RuntimeSettings as RuntimeSettingsRow
+from backend.schemas import RuntimeSettingsOverridesRead, RuntimeSettingsRead
+
+RUNTIME_SETTINGS_SCOPE = "default"
+RuntimeSettingsApiKeySource = Literal["override", "server_default", "unset"]
+
+
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = " ".join(value.split()).strip()
+    return normalized or None
+
+
+def _normalize_optional_currency(value: str | None) -> str | None:
+    normalized = _normalize_optional_text(value)
+    if normalized is None:
+        return None
+    code = normalized.upper()
+    if len(code) != 3:
+        return None
+    return code
+
+
+def _normalize_optional_secret(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _sanitize_int(value: int, *, minimum: int, fallback: int) -> int:
+    if value < minimum:
+        return max(fallback, minimum)
+    return value
+
+
+def _sanitize_float(value: float, *, minimum: float, fallback: float) -> float:
+    if value < minimum:
+        return max(fallback, minimum)
+    return value
+
+
+@dataclass(slots=True, frozen=True)
+class ResolvedRuntimeSettings:
+    api_prefix: str
+    current_user_name: str
+    default_currency_code: str
+    dashboard_currency_code: str
+    openrouter_api_key: str | None
+    openrouter_api_key_source: RuntimeSettingsApiKeySource
+    openrouter_base_url: str
+    agent_model: str
+    agent_max_steps: int
+    agent_retry_max_attempts: int
+    agent_retry_initial_wait_seconds: float
+    agent_retry_max_wait_seconds: float
+    agent_retry_backoff_multiplier: float
+    agent_max_image_size_bytes: int
+    agent_max_images_per_message: int
+
+
+def get_runtime_settings_override(db: Session) -> RuntimeSettingsRow | None:
+    return db.scalar(select(RuntimeSettingsRow).where(RuntimeSettingsRow.scope == RUNTIME_SETTINGS_SCOPE))
+
+
+def _ensure_runtime_settings_override(db: Session) -> RuntimeSettingsRow:
+    existing = get_runtime_settings_override(db)
+    if existing is not None:
+        return existing
+    created = RuntimeSettingsRow(scope=RUNTIME_SETTINGS_SCOPE)
+    db.add(created)
+    db.flush()
+    return created
+
+
+def update_runtime_settings_override(db: Session, updates: dict[str, Any]) -> RuntimeSettingsRow:
+    row = _ensure_runtime_settings_override(db)
+    for field_name, value in updates.items():
+        setattr(row, field_name, value)
+    db.add(row)
+    db.flush()
+    return row
+
+
+def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
+    defaults = get_settings()
+    override = get_runtime_settings_override(db)
+
+    current_user_name = (
+        _normalize_optional_text(override.current_user_name) if override is not None else None
+    ) or _normalize_optional_text(defaults.current_user_name) or "scott"
+    default_currency_code = (
+        _normalize_optional_currency(override.default_currency_code) if override is not None else None
+    ) or _normalize_optional_currency(defaults.default_currency_code) or "CAD"
+    dashboard_currency_code = (
+        _normalize_optional_currency(override.dashboard_currency_code) if override is not None else None
+    ) or _normalize_optional_currency(defaults.dashboard_currency_code) or "CAD"
+    openrouter_base_url = (
+        _normalize_optional_text(override.openrouter_base_url) if override is not None else None
+    ) or _normalize_optional_text(defaults.openrouter_base_url) or "https://openrouter.ai/api/v1"
+    agent_model = (
+        _normalize_optional_text(override.agent_model) if override is not None else None
+    ) or _normalize_optional_text(defaults.agent_model) or "google/gemini-3-flash-preview"
+
+    default_api_key = _normalize_optional_secret(defaults.openrouter_api_key)
+    override_api_key = _normalize_optional_secret(override.openrouter_api_key) if override is not None else None
+    if override_api_key:
+        openrouter_api_key = override_api_key
+        openrouter_api_key_source: RuntimeSettingsApiKeySource = "override"
+    elif default_api_key:
+        openrouter_api_key = default_api_key
+        openrouter_api_key_source = "server_default"
+    else:
+        openrouter_api_key = None
+        openrouter_api_key_source = "unset"
+
+    agent_max_steps = _sanitize_int(
+        override.agent_max_steps if override and override.agent_max_steps is not None else defaults.agent_max_steps,
+        minimum=1,
+        fallback=defaults.agent_max_steps,
+    )
+    agent_retry_max_attempts = _sanitize_int(
+        override.agent_retry_max_attempts
+        if override and override.agent_retry_max_attempts is not None
+        else defaults.agent_retry_max_attempts,
+        minimum=1,
+        fallback=defaults.agent_retry_max_attempts,
+    )
+    agent_retry_initial_wait_seconds = _sanitize_float(
+        override.agent_retry_initial_wait_seconds
+        if override and override.agent_retry_initial_wait_seconds is not None
+        else defaults.agent_retry_initial_wait_seconds,
+        minimum=0.0,
+        fallback=defaults.agent_retry_initial_wait_seconds,
+    )
+    agent_retry_max_wait_seconds = _sanitize_float(
+        override.agent_retry_max_wait_seconds
+        if override and override.agent_retry_max_wait_seconds is not None
+        else defaults.agent_retry_max_wait_seconds,
+        minimum=0.0,
+        fallback=defaults.agent_retry_max_wait_seconds,
+    )
+    agent_retry_backoff_multiplier = _sanitize_float(
+        override.agent_retry_backoff_multiplier
+        if override and override.agent_retry_backoff_multiplier is not None
+        else defaults.agent_retry_backoff_multiplier,
+        minimum=1.0,
+        fallback=defaults.agent_retry_backoff_multiplier,
+    )
+    agent_max_image_size_bytes = _sanitize_int(
+        override.agent_max_image_size_bytes
+        if override and override.agent_max_image_size_bytes is not None
+        else defaults.agent_max_image_size_bytes,
+        minimum=1024,
+        fallback=defaults.agent_max_image_size_bytes,
+    )
+    agent_max_images_per_message = _sanitize_int(
+        override.agent_max_images_per_message
+        if override and override.agent_max_images_per_message is not None
+        else defaults.agent_max_images_per_message,
+        minimum=1,
+        fallback=defaults.agent_max_images_per_message,
+    )
+
+    return ResolvedRuntimeSettings(
+        api_prefix=defaults.api_prefix,
+        current_user_name=current_user_name,
+        default_currency_code=default_currency_code,
+        dashboard_currency_code=dashboard_currency_code,
+        openrouter_api_key=openrouter_api_key,
+        openrouter_api_key_source=openrouter_api_key_source,
+        openrouter_base_url=openrouter_base_url,
+        agent_model=agent_model,
+        agent_max_steps=agent_max_steps,
+        agent_retry_max_attempts=agent_retry_max_attempts,
+        agent_retry_initial_wait_seconds=agent_retry_initial_wait_seconds,
+        agent_retry_max_wait_seconds=agent_retry_max_wait_seconds,
+        agent_retry_backoff_multiplier=agent_retry_backoff_multiplier,
+        agent_max_image_size_bytes=agent_max_image_size_bytes,
+        agent_max_images_per_message=agent_max_images_per_message,
+    )
+
+
+def build_runtime_settings_read(db: Session) -> RuntimeSettingsRead:
+    override = get_runtime_settings_override(db)
+    resolved = resolve_runtime_settings(db)
+
+    return RuntimeSettingsRead(
+        current_user_name=resolved.current_user_name,
+        default_currency_code=resolved.default_currency_code,
+        dashboard_currency_code=resolved.dashboard_currency_code,
+        openrouter_api_key_source=resolved.openrouter_api_key_source,
+        openrouter_api_key_configured=resolved.openrouter_api_key is not None,
+        openrouter_base_url=resolved.openrouter_base_url,
+        agent_model=resolved.agent_model,
+        agent_max_steps=resolved.agent_max_steps,
+        agent_retry_max_attempts=resolved.agent_retry_max_attempts,
+        agent_retry_initial_wait_seconds=resolved.agent_retry_initial_wait_seconds,
+        agent_retry_max_wait_seconds=resolved.agent_retry_max_wait_seconds,
+        agent_retry_backoff_multiplier=resolved.agent_retry_backoff_multiplier,
+        agent_max_image_size_bytes=resolved.agent_max_image_size_bytes,
+        agent_max_images_per_message=resolved.agent_max_images_per_message,
+        overrides=RuntimeSettingsOverridesRead(
+            current_user_name=_normalize_optional_text(override.current_user_name) if override else None,
+            default_currency_code=_normalize_optional_currency(override.default_currency_code) if override else None,
+            dashboard_currency_code=_normalize_optional_currency(override.dashboard_currency_code) if override else None,
+            openrouter_api_key_override_set=bool(_normalize_optional_secret(override.openrouter_api_key)) if override else False,
+            openrouter_base_url=_normalize_optional_text(override.openrouter_base_url) if override else None,
+            agent_model=_normalize_optional_text(override.agent_model) if override else None,
+            agent_max_steps=override.agent_max_steps if override else None,
+            agent_retry_max_attempts=override.agent_retry_max_attempts if override else None,
+            agent_retry_initial_wait_seconds=override.agent_retry_initial_wait_seconds if override else None,
+            agent_retry_max_wait_seconds=override.agent_retry_max_wait_seconds if override else None,
+            agent_retry_backoff_multiplier=override.agent_retry_backoff_multiplier if override else None,
+            agent_max_image_size_bytes=override.agent_max_image_size_bytes if override else None,
+            agent_max_images_per_message=override.agent_max_images_per_message if override else None,
+        ),
+    )

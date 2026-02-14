@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from backend.config import get_settings
 from backend.database import get_db
 from backend.models import Account, Entry, User
 from backend.schemas import UserCreate, UserRead, UserUpdate
+from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.users import ensure_current_user, find_user_by_name, normalize_user_name
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -31,7 +31,7 @@ def _to_schema(
 
 @router.get("", response_model=list[UserRead])
 def list_users(db: Session = Depends(get_db)) -> list[UserRead]:
-    settings = get_settings()
+    settings = resolve_runtime_settings(db)
     ensure_current_user(db, settings.current_user_name)
     db.commit()
 
@@ -84,7 +84,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)) -> UserRead:
     db.commit()
     db.refresh(user)
 
-    settings = get_settings()
+    settings = resolve_runtime_settings(db)
     return _to_schema(user, settings.current_user_name, account_count=0, entry_count=0)
 
 
@@ -111,7 +111,7 @@ def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(user)
 
-    settings = get_settings()
+    settings = resolve_runtime_settings(db)
     account_count = int(db.scalar(select(func.count(Account.id)).where(Account.owner_user_id == user.id)) or 0)
     entry_count = int(
         db.scalar(
