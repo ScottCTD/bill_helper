@@ -86,11 +86,12 @@
 ### Frontend Source (`/frontend/src`)
 
 - `main.tsx`: React root and providers.
-- `App.tsx`: top-level navigation and route map.
-- `styles.css`: global styling.
+- `App.tsx`: top-level shell layout (sidebar + content) and route map.
+- `styles.css`: global styling including sidebar and app-shell classes.
 
 #### Components (`/frontend/src/components`)
 
+- `Sidebar.tsx`: collapsible left-panel navigation with icon+label links.
 - `MetricCard.tsx`: reusable metric container.
 - `LineChart.tsx`: legacy SVG daily expense chart helper (dashboard now uses Recharts).
 - `GroupGraphView.tsx`: SVG graph rendering for entry groups.
