@@ -17,6 +17,7 @@ This module hosts the React app, route pages, UI primitives, and API/query clien
 - `frontend/src/pages/EntriesPage.tsx`: entry list/filter/table interactions.
 - `frontend/src/components/EntryEditorModal.tsx`: entry create/edit modal.
 - `frontend/src/pages/DashboardPage.tsx`: tabbed interactive analytics.
+- `frontend/src/pages/AccountsPage.tsx`: account table workspace with create/edit dialogs, snapshots, and reconciliation.
 - `frontend/src/pages/SettingsPage.tsx`: runtime configuration workspace for user overrides.
 - `frontend/src/components/agent/*`: AI timeline and review UI.
 
@@ -60,6 +61,17 @@ Touch together:
 - `frontend/src/lib/queryInvalidation.ts`
 - dependent pages using configured defaults (`EntriesPage`, `EntryDetailPage`, `AccountsPage`, `DashboardPage`)
 
+## 5) Accounts Workspace UX
+
+Touch together:
+
+- `frontend/src/pages/AccountsPage.tsx`
+- `frontend/src/lib/api.ts`
+- `frontend/src/lib/types.ts`
+- `frontend/src/lib/queryKeys.ts`
+- `frontend/src/lib/queryInvalidation.ts`
+- `frontend/src/styles.css`
+
 ## Run and Verify
 
 ```bash
@@ -89,3 +101,4 @@ uv run python scripts/check_docs_sync.py
 - `docs/api.md`
 - `docs/feature-entry-lifecycle.md`
 - `docs/feature-dashboard-analytics.md`
+- `docs/feature-account-reconciliation.md`

@@ -16,6 +16,7 @@ This folder contains the source-of-truth documentation for the current MVP imple
 - `documentation-system.md`: source-of-truth ownership matrix and anti-drift workflow.
 - `feature-entry-lifecycle.md`: focused entry-domain flow map.
 - `feature-dashboard-analytics.md`: focused dashboard analytics flow map.
+- `feature-account-reconciliation.md`: account table workflow, snapshot checkpointing, and reconciliation semantics.
 - `adr/README.md`: architecture decision record process and index.
 
 ## How To Use

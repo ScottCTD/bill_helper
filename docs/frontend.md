@@ -145,10 +145,19 @@ Agent client methods:
 
 ## `AccountsPage.tsx`
 
-- account CRUD updates
-- snapshot create/list
-- reconciliation display
-- create-account default currency now resolves from runtime settings (`GET /settings`)
+- table-first account workspace aligned with Entries/Properties table shell patterns
+- compact toolbar with search and icon-only `+` action for account creation
+- create account via modal dialog (`Dialog` + shared form primitives)
+- per-row `Edit` action opens modal dialog for account updates (including active/inactive toggle)
+- selected table row drives snapshot create/history and reconciliation side panels
+- both side panels include plain-language helper copy so terms are understandable in-product:
+  - reconciliation definitions for `As of`, `Ledger`, `Snapshot`, `Delta`
+  - snapshot form definitions for `Snapshot date`, `Balance`, and optional `Note`
+- reconciliation copy explicitly documents runtime behavior:
+  - ledger balance is computed from entries up to `as_of`
+  - snapshot balance uses the latest snapshot with `snapshot_at <= as_of`
+  - `delta = ledger - snapshot`
+- create-account default currency resolves from runtime settings (`GET /settings`)
 
 ## `PropertiesPage.tsx`
 
@@ -335,7 +344,7 @@ Includes:
   - cumulative thread usage/cost bar styling above composer
 - button baseline behavior is scoped to unclassed legacy buttons so `shadcn/ui` variant buttons are not overridden
 - spacing scale was relaxed (`app-content`, `stack`, `grid`, form gaps) to reduce crowded coupling between sections
-- account picker controls now use consistent rounded chip geometry and focus/hover/selected states (no square text-only selected boxes)
+- accounts page now uses shared table + dialog primitives instead of bespoke chip-picker controls
 - amount formatting now uses code-prefix formatting in UI (`<CURRENCY_CODE> <amount>`)
 - scrollbar system now uses tokenized Notion-like styling:
   - thin rounded thumbs
@@ -365,6 +374,10 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
   - `GET /taxonomies`
   - `GET /taxonomies/entity_category/terms`
   - `GET /taxonomies/tag_category/terms`
+- accounts workspace now uses table-row selection with dialog-based create/edit:
+  - create action is the icon `+` button in the table toolbar
+  - edits are per-row and open from `Edit` action buttons
+  - snapshot/reconciliation panels reflect the currently selected row
 - taxonomy term create/rename and entity/tag category assignment changes now invalidate taxonomy-term usage caches
 - entry popup save flow is now close-driven:
   - clicking outside/closing attempts to auto-save when there are changes

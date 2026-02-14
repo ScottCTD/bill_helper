@@ -568,18 +568,6 @@
     min-height: 360px;
   }
 
-  .account-picker {
-    @apply flex flex-wrap gap-2.5;
-  }
-
-  .account-picker button {
-    @apply inline-flex h-10 items-center justify-center rounded-lg border border-border bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
-  }
-
-  .account-picker button.selected {
-    @apply border-primary/40 bg-primary text-primary-foreground shadow-sm;
-  }
-
   .line-chart,
   .group-graph {
     @apply h-auto w-full rounded-lg border border-border/80 bg-card;

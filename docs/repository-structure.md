@@ -122,6 +122,7 @@
   - `documentation-system.md`: source-of-truth matrix + anti-drift workflow.
   - `feature-entry-lifecycle.md`: entry-domain flow map.
   - `feature-dashboard-analytics.md`: dashboard flow map.
+  - `feature-account-reconciliation.md`: account workspace + snapshot/reconciliation flow map.
   - `/adr`: architecture decision records.
 - `/skills/notion-grade-ui/SKILL.md`: project-local frontend UI quality skill for calm, tokenized, primitives-first design implementation.
 - `/scripts/seed_demo.py`: local seed dataset generation.
