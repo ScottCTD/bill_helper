@@ -193,6 +193,100 @@
 }
 
 @layer components {
+  /* ── App shell: sidebar + content ── */
+  .app-shell {
+    @apply flex min-h-screen;
+  }
+
+  .sidebar {
+    @apply sticky top-0 flex h-screen w-56 flex-shrink-0 flex-col border-r border-border/80 bg-card;
+    transition: width 0.2s ease;
+  }
+
+  .sidebar-collapsed {
+    @apply w-14;
+  }
+
+  .sidebar-header {
+    @apply flex h-14 items-center gap-2 border-b border-border/60 px-3;
+  }
+
+  .sidebar-title {
+    @apply flex-1 truncate text-base font-semibold tracking-tight;
+  }
+
+  .sidebar-toggle {
+    @apply inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border-none bg-transparent text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+
+  .sidebar-collapsed .sidebar-header {
+    @apply justify-center px-0;
+  }
+
+  .sidebar-nav {
+    @apply flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-3;
+  }
+
+  .sidebar-collapsed .sidebar-nav {
+    @apply items-center px-1;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground;
+  }
+
+  .sidebar-link-active {
+    @apply bg-accent text-foreground;
+  }
+
+  .sidebar-collapsed .sidebar-link {
+    @apply justify-center px-0 py-2;
+    width: 2.5rem;
+  }
+
+  .sidebar-link-icon {
+    @apply h-[1.125rem] w-[1.125rem] flex-shrink-0;
+  }
+
+  .sidebar-footer {
+    @apply border-t border-border/60 px-3 py-3;
+  }
+
+  .sidebar-footer-text {
+    @apply m-0 text-xs leading-relaxed text-muted-foreground;
+  }
+
+  .app-main {
+    @apply flex-1 overflow-x-hidden;
+  }
+
+  .app-main-padded {
+    @apply overflow-y-auto;
+  }
+
+  .app-content {
+    @apply mx-auto max-w-[1100px] px-6 py-6 md:px-8 md:py-8;
+  }
+
+  @media (max-width: 768px) {
+    .sidebar {
+      @apply fixed inset-y-0 left-0 z-40 w-56 -translate-x-full shadow-lg;
+      transition: transform 0.2s ease, width 0.2s ease;
+    }
+
+    .sidebar:not(.sidebar-collapsed) {
+      @apply translate-x-0;
+    }
+
+    .sidebar-collapsed {
+      @apply w-14 translate-x-0 shadow-none;
+    }
+
+    .app-content {
+      @apply px-4 py-5;
+    }
+  }
+
   .page {
     @apply min-w-0;
   }
@@ -685,12 +779,8 @@
     @apply grid grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-border/80 bg-card shadow-[0_1px_1px_hsl(222_18%_19%_/_0.03),0_16px_40px_hsl(222_18%_19%_/_0.08)];
   }
 
-  .agent-panel-drawer {
-    @apply sticky top-4 max-h-[calc(100vh-2rem)];
-  }
-
   .agent-panel-page {
-    @apply relative h-[calc(100vh-14rem)] min-h-[640px] max-h-none;
+    @apply relative h-screen min-h-[640px] max-h-none rounded-none border-0 shadow-none;
   }
 
   .agent-panel-header {
@@ -760,7 +850,7 @@
   }
 
   .agent-thread-main {
-    @apply px-4 py-4;
+    @apply mx-auto w-full max-w-5xl px-6 py-4;
   }
 
   .agent-timeline-scroll {
@@ -773,6 +863,14 @@
 
   .agent-message header {
     @apply flex items-center justify-between gap-2 text-xs;
+  }
+
+  .agent-message header > .muted {
+    @apply opacity-0 transition-opacity duration-150;
+  }
+
+  .agent-message:hover > header > .muted {
+    @apply opacity-100;
   }
 
   .agent-message-assistant {
@@ -917,13 +1015,20 @@
     @apply inline-flex items-center rounded-full border border-border/80 bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground;
   }
 
-  .agent-tool-call,
-  .agent-change-item {
-    @apply grid gap-1.5 rounded-md border border-border/90 bg-background p-2;
+  .agent-tool-call-list {
+    @apply m-0 list-none space-y-0.5 p-0;
+  }
+
+  .agent-tool-call-list > li {
+    @apply m-0 p-0;
+  }
+
+  .agent-tool-call {
+    @apply rounded-md;
   }
 
   .agent-tool-call summary {
-    @apply flex cursor-pointer items-start justify-between gap-2 text-xs;
+    @apply flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-muted/60;
     list-style: none;
   }
 
@@ -931,8 +1036,24 @@
     display: none;
   }
 
-  .agent-tool-call-summary-main {
-    @apply inline-flex min-w-0 items-center gap-2;
+  .agent-tool-call-chevron {
+    @apply h-3.5 w-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150;
+  }
+
+  .agent-tool-call[open] > summary .agent-tool-call-chevron {
+    transform: rotate(90deg);
+  }
+
+  .agent-tool-call-name {
+    @apply font-medium text-foreground;
+  }
+
+  .agent-tool-call-time {
+    @apply ml-auto shrink-0 text-[11px] opacity-0 transition-opacity duration-150;
+  }
+
+  .agent-tool-call summary:hover .agent-tool-call-time {
+    @apply opacity-100;
   }
 
   .agent-tool-call-status {
@@ -940,11 +1061,15 @@
   }
 
   .agent-tool-call-details {
-    @apply grid gap-1.5;
+    @apply grid gap-1.5 border-l-2 border-border/60 py-1 pl-5 ml-[7px] mt-0.5 mb-1;
   }
 
   .agent-tool-call-details-label {
     @apply m-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground;
+  }
+
+  .agent-change-item {
+    @apply grid gap-1.5 rounded-md border border-border/90 bg-background p-2;
   }
 
   .agent-tool-call pre,
@@ -1101,11 +1226,32 @@
   }
 
   .agent-composer {
-    @apply grid gap-2 border-t border-border pt-3;
+    @apply grid gap-2 border-t border-border/80 pb-4 pt-3;
   }
 
   .agent-composer-drop-active {
     @apply rounded-lg border border-dashed border-primary/50 bg-accent/30 p-2;
+  }
+
+  .agent-composer-box {
+    @apply grid overflow-hidden rounded-xl border border-border/60 bg-background transition-colors focus-within:border-border;
+  }
+
+  .agent-composer-textarea {
+    @apply resize-none rounded-none bg-transparent px-3.5 pt-3 pb-2 text-sm;
+    min-height: 4.5rem;
+  }
+
+  .agent-composer-toolbar {
+    @apply flex items-center justify-between gap-2 px-2 pb-2;
+  }
+
+  .agent-composer-attach {
+    @apply gap-1.5 text-muted-foreground hover:text-foreground;
+  }
+
+  .agent-composer-send {
+    @apply gap-1.5;
   }
 
   .agent-draft-attachments {
@@ -1132,18 +1278,6 @@
     @apply absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full border border-border/85 bg-card p-0 text-foreground;
   }
 
-  .agent-file-input {
-    @apply inline-flex flex-wrap items-center gap-2 text-xs;
-  }
-
-  .agent-file-input-label {
-    @apply inline-flex items-center gap-1.5 text-muted-foreground;
-  }
-
-  .agent-file-input input {
-    @apply h-auto max-w-full border-none bg-transparent p-0 text-xs shadow-none;
-  }
-
   .agent-attachment-preview-dialog {
     @apply max-w-3xl;
   }
@@ -1154,19 +1288,8 @@
 }
 
 @media (max-width: 1080px) {
-  .agent-panel-drawer {
-    position: fixed;
-    inset: 0 0 0 auto;
-    width: min(100vw, 560px);
-    max-height: none;
-    height: 100vh;
-    border-radius: 0;
-    z-index: 80;
-    top: 0;
-  }
-
   .agent-panel-page {
-    height: calc(100vh - 11rem);
+    height: 100vh;
     min-height: 560px;
   }
 

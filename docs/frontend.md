@@ -24,14 +24,13 @@ Defined in `frontend/src/App.tsx`.
 
 Current shell behavior:
 
-- tokenized top app bar with route actions (`Home`, `Dashboard`, `Entries`, `Accounts`, `Properties`, `Settings`)
+- collapsible left sidebar (`Sidebar.tsx`) with vertical navigation links (`Agent`, `Dashboard`, `Entries`, `Accounts`, `Properties`, `Settings`)
+- sidebar shows app title, icon+label nav links, and a footer tagline; collapses to icon-only mode via toggle button
 - content canvas is route-driven (no global right-side agent occupancy on non-home pages)
-- home route is AI-native and renders the agent experience as the primary page content
-- outer route wrapper card removed so page sections are visually separated instead of nested in a single container
-- readable container width tuned for full-page content
+- home route is AI-native and renders the agent experience as full-height primary page content (bypasses app-content padding to fill the viewport)
+- page sections are visually separated; readable container width tuned for full-page content
 - responsive behavior:
-  - home agent page uses full-width content area
-  - reusable drawer styling is still supported by `AgentPanel` for optional future use
+  - on small screens (≤768px) the sidebar starts collapsed to icon-only and can slide open
 
 Pages:
 
@@ -219,8 +218,11 @@ Timeline features:
 - run blocks are anchored to assistant-side timeline events (`assistant_message_id`) to keep tool activity in assistant flow
 - active runs without an assistant message render as temporary assistant-side working blocks
 - pending working blocks no longer render an extra trailing helper sentence below tool activity
-- tool-call trace panels are collapsible by default with summary rows (tool name, status, timestamp)
-- expanded tool-call details show input/output JSON payloads in scrollable blocks
+- tool-call traces are displayed as a compact bullet-point list; each item expands on click to reveal input/output JSON
+- a rotating chevron icon indicates the expand/collapse state of each tool call
+- expanded tool-call details are indented with a left border line for visual hierarchy
+- message and tool-call timestamps are hidden by default and fade in on hover for a cleaner look
+- the composer shares the same horizontal padding as the conversation area (no extra inset)
 - while send/run is in-flight, timeline polling stays active so tool-call progress can appear before final assistant text
 - assistant message cards render run/tool activity before assistant markdown content, so final text appears after tool-call context
 - in-flight run cards do not render separate `Run: running (...)` header/timestamp rows; activity is shown via thinking/tool traces only
@@ -258,23 +260,19 @@ Review actions:
 
 Composer:
 
-- text area
-- multi-image upload input
-- compact removable image icon chips above the composer (thumbnail + extra-small corner remove button that does not obscure preview)
+- card-style input box: borderless textarea inside a rounded container with a bottom toolbar row
+- toolbar contains an "Add Attachments" button (paperclip icon, triggers hidden file input) and a "Send" button (with send icon)
+- compact removable attachment chips above the composer box (thumbnail + extra-small corner remove button that does not obscure preview)
 - click-to-preview image dialog before send
 - `Cmd+Enter` (or `Ctrl+Enter`) submits the composer form
 - paste image attachments directly into the composer (`Cmd/Ctrl+V`)
 - drag-and-drop image files onto the composer drop target
 - optimistic user message rendering: user bubble appears immediately after submit, before run completion
-- one-click send
 - assistant response streaming playback in the chat timeline (token-by-token render effect)
 - explicit "working..." placeholder while message run is pending
 - active-run polling refreshes timeline state while backend run status is `running`
 
-Layout modes:
-
-- `mode="page"` for full-page AI home experience
-- `mode="drawer"` for optional overlay/drawer presentation
+Layout mode: full-page AI home experience (drawer mode has been removed).
 
 Cache invalidation after review apply:
 
@@ -332,7 +330,7 @@ Includes:
 - agent timeline refresh for workspace redesign:
   - single-surface message body styling (no nested inner message box)
   - markdown typography for assistant/system output (including list marker rendering)
-  - collapsible tool-call details
+  - lightweight bullet-list tool-call display with chevron expand/collapse
   - draft attachment chip + preview dialog styling
   - cumulative thread usage/cost bar styling above composer
 - button baseline behavior is scoped to unclassed legacy buttons so `shadcn/ui` variant buttons are not overridden

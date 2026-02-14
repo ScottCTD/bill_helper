@@ -9,7 +9,7 @@ import {
   useRef,
   useState
 } from "react";
-import { ImageIcon, X } from "lucide-react";
+import { ChevronRight, Paperclip, SendHorizontal, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -28,14 +28,12 @@ import { cn } from "../../lib/utils";
 import { AgentRunReviewModal } from "./review/AgentRunReviewModal";
 import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
-import { Input } from "../ui/input";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { Textarea } from "../ui/textarea";
 
 interface AgentPanelProps {
   isOpen: boolean;
   onClose?: () => void;
-  mode?: "drawer" | "page";
 }
 
 interface DraftAttachment {
@@ -206,23 +204,26 @@ function AgentRunBlock({ run, isMutating, onReviewRun, mode = "all" }: AgentRunB
           {run.tool_calls.length > 0 ? (
             <div className="agent-run-tools">
               <h4>Tool calls</h4>
-              {run.tool_calls.map((toolCall) => (
-                <details key={toolCall.id} className="agent-tool-call">
-                  <summary>
-                    <span className="agent-tool-call-summary-main">
-                      <strong>{toolCall.tool_name}</strong>
-                      <span className="agent-tool-call-status">{toolCall.status}</span>
-                    </span>
-                    <span className="muted">{prettyDateTime(toolCall.created_at)}</span>
-                  </summary>
-                  <div className="agent-tool-call-details">
-                    <p className="agent-tool-call-details-label">Input</p>
-                    <pre>{JSON.stringify(toolCall.input_json, null, 2)}</pre>
-                    <p className="agent-tool-call-details-label">Output</p>
-                    <pre>{JSON.stringify(toolCall.output_json, null, 2)}</pre>
-                  </div>
-                </details>
-              ))}
+              <ul className="agent-tool-call-list">
+                {run.tool_calls.map((toolCall) => (
+                  <li key={toolCall.id}>
+                    <details className="agent-tool-call">
+                      <summary>
+                        <ChevronRight className="agent-tool-call-chevron" />
+                        <span className="agent-tool-call-name">{toolCall.tool_name}</span>
+                        <span className="agent-tool-call-status">{toolCall.status}</span>
+                        <span className="agent-tool-call-time muted">{prettyDateTime(toolCall.created_at)}</span>
+                      </summary>
+                      <div className="agent-tool-call-details">
+                        <p className="agent-tool-call-details-label">Input</p>
+                        <pre>{JSON.stringify(toolCall.input_json, null, 2)}</pre>
+                        <p className="agent-tool-call-details-label">Output</p>
+                        <pre>{JSON.stringify(toolCall.output_json, null, 2)}</pre>
+                      </div>
+                    </details>
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : null}
         </>
@@ -250,7 +251,7 @@ function AgentRunBlock({ run, isMutating, onReviewRun, mode = "all" }: AgentRunB
   );
 }
 
-export function AgentPanel({ isOpen, onClose, mode = "drawer" }: AgentPanelProps) {
+export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const queryClient = useQueryClient();
   const [selectedThreadId, setSelectedThreadId] = useState<string>("");
   const [draftMessage, setDraftMessage] = useState("");
@@ -268,6 +269,7 @@ export function AgentPanel({ isOpen, onClose, mode = "drawer" }: AgentPanelProps
   const draftFileIdCounterRef = useRef(0);
   const composerDragDepthRef = useRef(0);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const threadsQuery = useQuery({
     queryKey: queryKeys.agent.threads,
@@ -734,11 +736,9 @@ export function AgentPanel({ isOpen, onClose, mode = "drawer" }: AgentPanelProps
     return null;
   }
 
-  const isPageMode = mode === "page";
-
   return (
     <>
-      <aside className={cn("agent-panel", isPageMode ? "agent-panel-page" : "agent-panel-drawer")} aria-label="Agent panel">
+      <aside className="agent-panel agent-panel-page" aria-label="Agent panel">
         <header className="agent-panel-header">
           <div>
             <h2>{`Agent (${activeModelName})`}</h2>
@@ -754,16 +754,11 @@ export function AgentPanel({ isOpen, onClose, mode = "drawer" }: AgentPanelProps
             >
               New Thread
             </Button>
-            {!isPageMode && onClose ? (
-              <Button type="button" variant="outline" size="sm" onClick={onClose}>
-                Close
-              </Button>
-            ) : null}
           </div>
         </header>
 
-        <div className={cn("agent-panel-body", isPageMode && "agent-panel-body-page")}>
-          <section className={cn("agent-thread-list", isPageMode && "agent-thread-list-page")}>
+        <div className="agent-panel-body agent-panel-body-page">
+          <section className="agent-thread-list agent-thread-list-page">
             <h3>Threads</h3>
             {threadsQuery.isLoading ? <p>Loading threads...</p> : null}
             {threadsQuery.isError ? <p className="error">{(threadsQuery.error as Error).message}</p> : null}
@@ -783,7 +778,7 @@ export function AgentPanel({ isOpen, onClose, mode = "drawer" }: AgentPanelProps
             </div>
           </section>
 
-          <section className={cn("agent-thread-timeline", isPageMode && "agent-thread-main")}>
+          <section className="agent-thread-timeline agent-thread-main">
             <h3>Timeline</h3>
             {!selectedThreadId ? <p className="muted">Create or select a thread to begin.</p> : null}
             {threadQuery.isLoading ? <p>Loading timeline...</p> : null}
@@ -924,9 +919,9 @@ export function AgentPanel({ isOpen, onClose, mode = "drawer" }: AgentPanelProps
               onDragLeave={handleComposerDragLeave}
               onDrop={handleComposerDrop}
             >
-              {isComposerDragActive ? <p className="muted">Drop images to attach</p> : null}
+              {isComposerDragActive ? <p className="muted">Drop files to attach</p> : null}
               {draftAttachmentPreviews.length > 0 ? (
-                <div className="agent-draft-attachments" aria-label="Pending image attachments">
+                <div className="agent-draft-attachments" aria-label="Pending attachments">
                   {draftAttachmentPreviews.map((preview) => (
                     <div key={preview.id} className="agent-draft-attachment-chip">
                       <button
@@ -952,26 +947,44 @@ export function AgentPanel({ isOpen, onClose, mode = "drawer" }: AgentPanelProps
                 </div>
               ) : null}
 
-              <Textarea
-                placeholder="Ask a question or ask the agent to propose entries/tags/entities..."
-                value={draftMessage}
-                onChange={(event) => setDraftMessage(event.target.value)}
-                onKeyDown={handleComposerKeyDown}
-                onPaste={handleComposerPaste}
-                rows={5}
-              />
+              <div className="agent-composer-box">
+                <Textarea
+                  className="agent-composer-textarea border-none shadow-none focus-visible:ring-0"
+                  placeholder="Ask a question or ask the agent to propose entries/tags/entities..."
+                  value={draftMessage}
+                  onChange={(event) => setDraftMessage(event.target.value)}
+                  onKeyDown={handleComposerKeyDown}
+                  onPaste={handleComposerPaste}
+                  rows={3}
+                />
 
-              <label className="agent-file-input">
-                <span className="agent-file-input-label">
-                  <ImageIcon className="h-3.5 w-3.5" />
-                  Add images
-                </span>
-                <Input type="file" accept="image/*" multiple onChange={handleDraftFileSelection} />
-              </label>
+                <div className="agent-composer-toolbar">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleDraftFileSelection}
+                    className="sr-only"
+                    tabIndex={-1}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="agent-composer-attach"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                    Add Attachments
+                  </Button>
 
-              <Button type="submit" disabled={isMutating}>
-                {sendMessageMutation.isPending ? "Sending..." : "Send"}
-              </Button>
+                  <Button type="submit" size="sm" disabled={isMutating} className="agent-composer-send">
+                    {sendMessageMutation.isPending ? "Sending..." : "Send"}
+                    <SendHorizontal className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
               {actionError ? <p className="error">{actionError}</p> : null}
             </form>
           </section>
