@@ -149,6 +149,7 @@ Agent services:
   - normalizes usage metadata from model responses into the runtime contract (`input/output/cache_*` tokens)
   - supports streamed model responses (`complete_stream`) that emit incremental text deltas and final assembled tool-call/message payload
   - applies configured retry policy to stream failures (including mid-stream transport failures)
+  - performs a targeted one-shot retry for transient OpenRouter SSL `bad record mac` (`litellm.APIError`) failures in both streamed and non-streamed completions, including when `agent_retry_max_attempts=1`
   - suppresses duplicate streamed prefixes across retries so front-end token rendering remains incremental
   - forwards observability fields through LiteLLM `metadata` for Langfuse trace/session/user linking and through `extra_body` for providers that support it
   - enables LiteLLM `langfuse` success/failure callbacks when Langfuse credentials are configured

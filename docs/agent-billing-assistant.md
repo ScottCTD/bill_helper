@@ -52,6 +52,11 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | `agent_max_images_per_message` | `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE` | `4` | Attachment count limit |
 | `agent_max_image_size_bytes` | `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` | `5242880` | Attachment size limit |
 
+Retry behavior notes:
+
+- Both `complete` and `complete_stream` perform a targeted one-shot retry for transient OpenRouter SSL `bad record mac` transport failures surfaced as `litellm.APIError`.
+- This targeted retry runs even when `agent_retry_max_attempts` is set to `1`; additional retries still follow the configured tenacity policy.
+
 ---
 
 ## System Prompt

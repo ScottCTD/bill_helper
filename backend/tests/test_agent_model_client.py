@@ -59,6 +59,37 @@ def test_complete_stream_retries_before_first_text_delta(monkeypatch):
     assert events[1]["message"]["usage"]["output_tokens"] == 1
 
 
+def test_complete_stream_retries_transient_ssl_bad_record_mac_when_max_attempts_is_one(monkeypatch):
+    client = _build_model_client(retry_max_attempts=1)
+    calls = {"count": 0}
+
+    def fake_completion(**_kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise litellm.APIError(
+                500,
+                "OpenrouterException - [SSL: SSLV3_ALERT_BAD_RECORD_MAC] sslv3 alert bad record mac",
+                "openrouter",
+                "openrouter/google/gemini-2.5-flash",
+            )
+        return iter(
+            [
+                {"choices": [{"delta": {"content": "Hello"}}]},
+                {"choices": [{"delta": {}}], "usage": {"input_tokens": 2, "output_tokens": 1}},
+            ]
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    events = list(client.complete_stream([{"role": "user", "content": "hi"}]))
+
+    assert calls["count"] == 2
+    assert [event["type"] for event in events] == ["text_delta", "done"]
+    assert events[0]["delta"] == "Hello"
+    assert events[1]["message"]["content"] == "Hello"
+    assert events[1]["message"]["usage"]["input_tokens"] == 2
+    assert events[1]["message"]["usage"]["output_tokens"] == 1
+
+
 def test_complete_retries_before_failing(monkeypatch):
     client = _build_model_client(retry_max_attempts=2)
     calls = {"count": 0}
@@ -67,6 +98,40 @@ def test_complete_retries_before_failing(monkeypatch):
         calls["count"] += 1
         if calls["count"] == 1:
             raise RuntimeError("Connection error.")
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="Hello",
+                        tool_calls=[],
+                    )
+                )
+            ],
+            usage={"input_tokens": 3, "output_tokens": 2},
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    response = client.complete([{"role": "user", "content": "hi"}])
+
+    assert calls["count"] == 2
+    assert response["content"] == "Hello"
+    assert response["usage"]["input_tokens"] == 3
+    assert response["usage"]["output_tokens"] == 2
+
+
+def test_complete_retries_transient_ssl_bad_record_mac_when_max_attempts_is_one(monkeypatch):
+    client = _build_model_client(retry_max_attempts=1)
+    calls = {"count": 0}
+
+    def fake_completion(**_kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise litellm.APIError(
+                500,
+                "OpenrouterException - [SSL: SSLV3_ALERT_BAD_RECORD_MAC] sslv3 alert bad record mac",
+                "openrouter",
+                "openrouter/google/gemini-2.5-flash",
+            )
         return SimpleNamespace(
             choices=[
                 SimpleNamespace(

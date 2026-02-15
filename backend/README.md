@@ -90,6 +90,7 @@ uv run python scripts/check_docs_sync.py
 - Agent prompt policy requires entry retag/update proposals before tag-delete proposals when the tag is still referenced.
 - Agent model/tool execution retries and limits can be overridden at runtime via `/settings`.
 - Streamed model calls retry transient failures using the same retry policy.
+- OpenRouter SSL `sslv3 alert bad record mac` transport failures get a one-shot immediate retry in both streamed and non-streamed model calls, even when `agent_retry_max_attempts=1`.
 - Stream retries after partial output are de-duplicated so already-emitted prefixes are not re-sent to the SSE client.
 - Agent model calls are routed through LiteLLM using the configured model string (`agent_model`), and credentials are resolved from provider environment variables.
 - Agent runs can be interrupted via `POST /api/v1/agent/runs/{run_id}/interrupt`; interrupted runs transition to `failed`.

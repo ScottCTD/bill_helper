@@ -5,7 +5,7 @@ from threading import Lock
 from typing import Any
 
 import litellm
-from litellm import APIConnectionError, OpenAIError, Timeout
+from litellm import APIConnectionError, APIError, OpenAIError, Timeout
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 
@@ -15,6 +15,11 @@ class AgentModelError(RuntimeError):
 
 _LANGFUSE_CALLBACK_NAME = "langfuse"
 _LANGFUSE_CALLBACK_LOCK = Lock()
+_TRANSIENT_SSL_BAD_RECORD_MAC_MARKERS = (
+    "sslv3_alert_bad_record_mac",
+    "sslv3 alert bad record mac",
+    "bad record mac",
+)
 
 
 def _normalize_secret(value: Any) -> str | None:
@@ -50,6 +55,17 @@ def _normalize_callback_values(value: Any) -> list[str]:
                 normalized.append(item)
         return normalized
     return []
+
+
+def _is_transient_ssl_bad_record_mac_error(exc: Exception) -> bool:
+    if not isinstance(exc, APIError):
+        return False
+    error_text_parts = [str(exc)]
+    message = getattr(exc, "message", None)
+    if isinstance(message, str):
+        error_text_parts.append(message)
+    normalized = " ".join(error_text_parts).lower()
+    return any(marker in normalized for marker in _TRANSIENT_SSL_BAD_RECORD_MAC_MARKERS)
 
 
 def _enable_langfuse_callbacks() -> None:
@@ -274,6 +290,13 @@ class LiteLLMModelClient:
             message = "model request timed out"
         elif isinstance(exc, APIConnectionError):
             message = f"model request failed: {str(exc)}"
+        elif isinstance(exc, APIError):
+            status_code = getattr(exc, "status_code", None)
+            if status_code is not None:
+                message_detail = getattr(exc, "message", None) or str(exc)
+                message = f"model request failed ({status_code}): {message_detail}"
+            else:
+                message = f"model request failed: {str(exc)}"
         elif isinstance(exc, OpenAIError):
             status_code = getattr(exc, "status_code", None)
             if status_code is not None:
@@ -285,6 +308,14 @@ class LiteLLMModelClient:
             message = f"model request failed: {str(exc)}"
         return AgentModelError(message)
 
+    def _completion_with_transient_ssl_retry(self, request: dict[str, Any]) -> Any:
+        try:
+            return litellm.completion(**request)
+        except Exception as exc:
+            if not _is_transient_ssl_bad_record_mac_error(exc):
+                raise
+            return litellm.completion(**request)
+
     def _chat_completion_once(
         self,
         messages: list[dict[str, Any]],
@@ -293,7 +324,7 @@ class LiteLLMModelClient:
     ) -> Any:
         request = self._base_request(messages, observability=observability)
         try:
-            return litellm.completion(**request)
+            return self._completion_with_transient_ssl_retry(request)
         except Exception as exc:
             raise self._to_model_error(exc) from exc
 
@@ -382,14 +413,14 @@ class LiteLLMModelClient:
                     attempt_content = ""
                     attempt_tool_calls_by_index: dict[int, dict[str, Any]] = {}
                     try:
-                        stream = litellm.completion(**request)
+                        stream = self._completion_with_transient_ssl_retry(request)
                     except OpenAIError as exc:
                         status_code = getattr(exc, "status_code", None)
                         if request.get("stream_options") and status_code in (400, 422):
                             # Some OpenAI-compatible providers reject `stream_options`; retry once without it.
                             retry_request = dict(request)
                             retry_request.pop("stream_options", None)
-                            stream = litellm.completion(**retry_request)
+                            stream = self._completion_with_transient_ssl_retry(retry_request)
                         else:
                             raise
 
