@@ -15,6 +15,7 @@
 ## Build and Runtime
 
 - Dev server: `npm run dev` (default `http://localhost:5173`)
+- Frontend tests: `npm run test`
 - Production build: `npm run build`
 - API base override: `VITE_API_BASE_URL` (optional)
 
@@ -28,6 +29,7 @@ Current shell behavior:
 - sidebar shows app title, icon+label nav links, and a footer tagline; collapses to icon-only mode via toggle button
 - content canvas is route-driven (no global right-side agent occupancy on non-home pages)
 - home route is AI-native and renders the agent experience as full-height primary page content (bypasses app-content padding to fill the viewport)
+- route pages are lazy-loaded via `React.lazy` + `Suspense` so non-home routes are not eagerly loaded into the initial JS payload
 - page sections are visually separated; readable container width tuned for full-page content
 - responsive behavior:
   - on small screens (≤768px) the sidebar starts collapsed to icon-only and can slide open
@@ -106,7 +108,7 @@ Agent client methods:
 - `listAgentThreads`
 - `createAgentThread`
 - `getAgentThread`
-- `sendAgentMessage`
+- `streamAgentMessage`
 - `interruptAgentRun`
 - `getAgentRun`
 - `approveAgentChangeItem`
@@ -150,6 +152,12 @@ Agent client methods:
 
 ## `AccountsPage.tsx`
 
+- page is now a thin orchestrator; domain state/actions live in `frontend/src/features/accounts/useAccountsPageModel.ts`
+- accounts workspace UI is split into dedicated section components:
+  - `frontend/src/features/accounts/AccountsTableSection.tsx`
+  - `frontend/src/features/accounts/ReconciliationSection.tsx`
+  - `frontend/src/features/accounts/SnapshotsSection.tsx`
+  - `frontend/src/features/accounts/AccountDialogs.tsx`
 - table-first account workspace aligned with Entries/Properties table shell patterns
 - compact toolbar with search and icon-only `+` action for account creation
 - create account via modal dialog (`Dialog` + shared form primitives)
@@ -166,6 +174,18 @@ Agent client methods:
 
 ## `PropertiesPage.tsx`
 
+- page is now a thin orchestrator; domain state/actions live in `frontend/src/features/properties/usePropertiesPageModel.ts`
+- properties model internals are split into focused hooks:
+  - `frontend/src/features/properties/usePropertiesQueries.ts` (queries + taxonomy option/label derivation)
+  - `frontend/src/features/properties/usePropertiesSectionState.ts` (active section/search/create-panel UI state)
+  - `frontend/src/features/properties/usePropertiesFormState.ts` (CRUD form/editing state)
+  - `frontend/src/features/properties/usePropertiesFilteredData.ts` (section-specific filtered lists)
+- section UI is split by concern under `frontend/src/features/properties/sections/*`:
+  - `UsersSection.tsx`
+  - `EntitiesSection.tsx`
+  - `TagsSection.tsx`
+  - `CurrenciesSection.tsx`
+  - `TaxonomyTermsSection.tsx`
 - two-level information architecture:
   - `Core`: Users, Entities, Tags, Currencies
   - `Taxonomies`: Entity Categories, Tag Categories
@@ -219,6 +239,20 @@ Agent client methods:
 ## `frontend/src/components/agent/AgentPanel.tsx`
 
 Used as the primary AI page (`/`) via `frontend/src/pages/HomePage.tsx`.
+
+This file now acts as the stateful coordinator. Run activity rendering and derivation logic were extracted to:
+
+- `frontend/src/components/agent/AgentRunBlock.tsx`
+- `frontend/src/components/agent/activity.ts`
+- panel rendering surfaces were further extracted to:
+  - `frontend/src/components/agent/panel/AgentThreadList.tsx`
+  - `frontend/src/components/agent/panel/AgentTimeline.tsx`
+  - `frontend/src/components/agent/panel/AgentComposer.tsx`
+  - `frontend/src/components/agent/panel/AgentThreadUsageBar.tsx`
+  - `frontend/src/components/agent/panel/AgentAttachmentPreviewDialog.tsx`
+  - `frontend/src/components/agent/panel/useAgentDraftAttachments.ts`
+  - `frontend/src/components/agent/panel/types.ts`
+  - `frontend/src/components/agent/panel/format.ts`
 
 Timeline features:
 
@@ -326,11 +360,19 @@ Cache invalidation after review apply:
 - `GroupGraphView.tsx`
 - `MetricCard.tsx`
 - `ui/MarkdownRenderer.tsx`
+- `agent/AgentRunBlock.tsx`
+- `agent/activity.ts`
 - `agent/review/AgentRunReviewModal.tsx`
 - `agent/review/diff.ts`
 - `components/ui/*` (new shadcn-based primitive layer)
   - `button.tsx`, `card.tsx`, `dialog.tsx`, `input.tsx`, `textarea.tsx`, `badge.tsx`, `table.tsx`, `select.tsx`, `checkbox.tsx`, `label.tsx`, `separator.tsx`, `native-select.tsx`
   - `NativeSelect` now supports wrapper-level sizing via `wrapperClassName` so narrow controls keep caret alignment
+
+## Feature Modules
+
+- `features/accounts/*`
+- `features/properties/*`
+- `agent/panel/*`
 
 ## Styling (`frontend/src/styles.css`)
 
@@ -399,6 +441,10 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 - agent send now depends on SSE parsing for incremental assistant text events (`run_started`, `text_delta`, `tool_call`, `reasoning_update`, `run_completed`, `run_failed`)
 - all query keys/invalidation rules are now centralized, so new pages/features should reuse `queryKeys` + `queryInvalidation` helpers
 - UI primitives should be sourced from `frontend/src/components/ui/*` before introducing one-off controls/styles
+- page-level integration tests now cover accounts/properties orchestration flows:
+  - `frontend/src/pages/AccountsPage.test.tsx`
+  - `frontend/src/pages/PropertiesPage.test.tsx`
+  - shared wrapper: `frontend/src/test/renderWithQueryClient.tsx`
 - properties page now issues taxonomy reads in addition to users/entities/tags/currencies:
   - `GET /taxonomies`
   - `GET /taxonomies/entity_category/terms`
@@ -421,6 +467,7 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 - local dropdown option sets are immediately updated with newly typed selections so users can re-select without waiting for a backend refetch
 - frontend install/build commands are unchanged:
   - install: `npm install`
+  - test: `npm run test`
   - build: `npm run build`
 - scrollbar width jitter is reduced across route switches and entry editor popup open/edit states by reserving gutter space
 
@@ -435,7 +482,7 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 - entry property wrappers are non-label containers so only direct control clicks activate inputs/selects
 - streaming bubble renders plain text deltas during SSE; markdown formatting is applied after the final assistant message is persisted/refetched
 - composer paste/drag-drop paths accept only image files; non-image files are skipped with a local error message
-- bundle output still reports large chunk warnings from existing editor/runtime bundles; this refactor did not add route-level code splitting
+- bundle output can still report large chunk warnings because `EntryEditorModal`/BlockNote and charting bundles are heavy even after route-level lazy loading
 - taxonomy UI is flat-list only in V1:
   - no delete flow for category terms
   - no parent-term hierarchy editing

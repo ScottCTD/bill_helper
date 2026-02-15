@@ -1,0 +1,214 @@
+import type { AgentChangeItem, AgentRun, AgentThreadDetail } from "../../lib/types";
+
+const INTERMEDIATE_UPDATE_TOOL_NAME = "send_intermediate_update";
+
+export type RunToolCall = AgentRun["tool_calls"][number];
+
+interface RunActivityToolBatch {
+  type: "tool_batch";
+  key: string;
+  toolCalls: RunToolCall[];
+}
+
+interface RunActivityReasoningUpdate {
+  type: "reasoning_update";
+  key: string;
+  message: string;
+  createdAt: string;
+}
+
+export type RunActivityItem = RunActivityToolBatch | RunActivityReasoningUpdate;
+
+interface PendingAssistantToolBatchActivity {
+  type: "tool_batch";
+  key: string;
+  toolNames: string[];
+}
+
+interface PendingAssistantReasoningUpdateActivity {
+  type: "reasoning_update";
+  key: string;
+  message: string;
+}
+
+export type PendingAssistantActivityItem = PendingAssistantToolBatchActivity | PendingAssistantReasoningUpdateActivity;
+
+export function sortRunsByCreatedAt(runs: AgentRun[]): AgentRun[] {
+  return [...runs].sort((left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime());
+}
+
+export function runsByAssistantMessage(detail: AgentThreadDetail | undefined): Map<string, AgentRun[]> {
+  const map = new Map<string, AgentRun[]>();
+  sortRunsByCreatedAt(detail?.runs ?? []).forEach((run) => {
+    if (!run.assistant_message_id) {
+      return;
+    }
+    const runs = map.get(run.assistant_message_id);
+    if (runs) {
+      runs.push(run);
+      return;
+    }
+    map.set(run.assistant_message_id, [run]);
+  });
+  return map;
+}
+
+export function runsWithoutAssistantMessage(detail: AgentThreadDetail | undefined): AgentRun[] {
+  return sortRunsByCreatedAt((detail?.runs ?? []).filter((run) => !run.assistant_message_id));
+}
+
+export function totalRunMetric(
+  runs: AgentRun[],
+  field: "input_tokens" | "output_tokens" | "cache_read_tokens" | "cache_write_tokens" | "total_cost_usd"
+): number | null {
+  let total = 0;
+  let hasValue = false;
+  runs.forEach((run) => {
+    const value = run[field];
+    if (typeof value === "number") {
+      total += value;
+      hasValue = true;
+    }
+  });
+  return hasValue ? total : null;
+}
+
+export function summarizeRunChangeTypes(changeItems: AgentChangeItem[]): {
+  entryCount: number;
+  tagCount: number;
+  entityCount: number;
+} {
+  let entryCount = 0;
+  let tagCount = 0;
+  let entityCount = 0;
+
+  changeItems.forEach((item) => {
+    if (item.change_type.endsWith("_entry")) {
+      entryCount += 1;
+      return;
+    }
+    if (item.change_type.endsWith("_tag")) {
+      tagCount += 1;
+      return;
+    }
+    if (item.change_type.endsWith("_entity")) {
+      entityCount += 1;
+    }
+  });
+
+  return {
+    entryCount,
+    tagCount,
+    entityCount
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function extractIntermediateUpdateMessageFromToolCall(toolCall: RunToolCall): string | null {
+  if (toolCall.tool_name !== INTERMEDIATE_UPDATE_TOOL_NAME) {
+    return null;
+  }
+  const outputJson = asRecord(toolCall.output_json);
+  const outputMessage = outputJson?.message;
+  if (typeof outputMessage === "string" && outputMessage.trim()) {
+    return outputMessage.trim();
+  }
+
+  const inputJson = asRecord(toolCall.input_json);
+  const inputMessage = inputJson?.message;
+  if (typeof inputMessage === "string" && inputMessage.trim()) {
+    return inputMessage.trim();
+  }
+  return null;
+}
+
+function sortToolCallsByCreatedAt(toolCalls: RunToolCall[]): RunToolCall[] {
+  return [...toolCalls].sort((left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime());
+}
+
+export function buildRunActivityTimeline(toolCalls: RunToolCall[]): RunActivityItem[] {
+  const timeline: RunActivityItem[] = [];
+  const sortedCalls = sortToolCallsByCreatedAt(toolCalls);
+  let pendingBatch: RunToolCall[] = [];
+
+  const flushPendingBatch = () => {
+    if (pendingBatch.length === 0) {
+      return;
+    }
+    const first = pendingBatch[0];
+    const last = pendingBatch[pendingBatch.length - 1];
+    timeline.push({
+      type: "tool_batch",
+      key: `${first.id}-${last.id}`,
+      toolCalls: pendingBatch
+    });
+    pendingBatch = [];
+  };
+
+  sortedCalls.forEach((toolCall) => {
+    const reasoningUpdate = extractIntermediateUpdateMessageFromToolCall(toolCall);
+    if (!reasoningUpdate) {
+      pendingBatch.push(toolCall);
+      return;
+    }
+    flushPendingBatch();
+    timeline.push({
+      type: "reasoning_update",
+      key: toolCall.id,
+      message: reasoningUpdate,
+      createdAt: toolCall.created_at
+    });
+  });
+  flushPendingBatch();
+  return timeline;
+}
+
+export function appendPendingToolCallToActivity(
+  activity: PendingAssistantActivityItem[],
+  toolName: string
+): PendingAssistantActivityItem[] {
+  if (!toolName || toolName === INTERMEDIATE_UPDATE_TOOL_NAME) {
+    return activity;
+  }
+
+  const last = activity[activity.length - 1];
+  if (last?.type === "tool_batch") {
+    const updatedBatch: PendingAssistantToolBatchActivity = {
+      ...last,
+      toolNames: [...last.toolNames, toolName]
+    };
+    return [...activity.slice(0, -1), updatedBatch];
+  }
+  return [
+    ...activity,
+    {
+      type: "tool_batch",
+      key: `tool-batch-${activity.length + 1}-${Date.now()}`,
+      toolNames: [toolName]
+    }
+  ];
+}
+
+export function appendPendingReasoningUpdateToActivity(
+  activity: PendingAssistantActivityItem[],
+  message: string
+): PendingAssistantActivityItem[] {
+  const normalized = message.trim();
+  if (!normalized) {
+    return activity;
+  }
+  return [
+    ...activity,
+    {
+      type: "reasoning_update",
+      key: `reasoning-update-${activity.length + 1}-${Date.now()}`,
+      message: normalized
+    }
+  ];
+}

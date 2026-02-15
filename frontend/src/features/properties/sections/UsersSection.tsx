@@ -1,0 +1,165 @@
+import type { FormEvent } from "react";
+import { Plus } from "lucide-react";
+
+import type { User } from "../../../lib/types";
+import { Badge } from "../../../components/ui/badge";
+import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
+
+interface UsersSectionProps {
+  search: string;
+  onSearchChange: (value: string) => void;
+  createPanelOpen: boolean;
+  onToggleCreatePanel: () => void;
+  onCloseCreatePanel: () => void;
+  newUserName: string;
+  onNewUserNameChange: (value: string) => void;
+  editingUserId: string;
+  editingUserName: string;
+  onEditingUserNameChange: (value: string) => void;
+  onStartEditUser: (user: User) => void;
+  onCancelEditUser: () => void;
+  onSaveUser: (userId: string) => void;
+  onCreateUserSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  users: User[] | undefined;
+  hasAnyUsers: boolean;
+  isLoading: boolean;
+  isError: boolean;
+  queryErrorMessage: string | null;
+  createErrorMessage: string | null;
+  updateErrorMessage: string | null;
+  isCreating: boolean;
+  isUpdating: boolean;
+}
+
+export function UsersSection(props: UsersSectionProps) {
+  const {
+    search,
+    onSearchChange,
+    createPanelOpen,
+    onToggleCreatePanel,
+    onCloseCreatePanel,
+    newUserName,
+    onNewUserNameChange,
+    editingUserId,
+    editingUserName,
+    onEditingUserNameChange,
+    onStartEditUser,
+    onCancelEditUser,
+    onSaveUser,
+    onCreateUserSubmit,
+    users,
+    hasAnyUsers,
+    isLoading,
+    isError,
+    queryErrorMessage,
+    createErrorMessage,
+    updateErrorMessage,
+    isCreating,
+    isUpdating
+  } = props;
+
+  return (
+    <div className="table-shell">
+      <div className="table-shell-header">
+        <div>
+          <h3 className="table-shell-title">Users</h3>
+          <p className="table-shell-subtitle">Manage owners available to accounts and entries.</p>
+        </div>
+      </div>
+      <div className="table-toolbar">
+        <div className="table-toolbar-filters">
+          <label className="field min-w-[220px] grow">
+            <span>Search</span>
+            <Input placeholder="Filter users" value={search} onChange={(event) => onSearchChange(event.target.value)} />
+          </label>
+        </div>
+        <div className="table-toolbar-action">
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            aria-label={createPanelOpen ? "Cancel add user" : "Add user"}
+            onClick={onToggleCreatePanel}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {createPanelOpen ? (
+        <form className="table-inline-form" onSubmit={onCreateUserSubmit}>
+          <label className="field min-w-[220px] grow">
+            <span>Name</span>
+            <Input placeholder="e.g. Alice" value={newUserName} onChange={(event) => onNewUserNameChange(event.target.value)} />
+          </label>
+          <div className="table-inline-form-actions">
+            <Button type="submit" size="sm" disabled={isCreating}>
+              {isCreating ? "Creating..." : "Create"}
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={onCloseCreatePanel}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : null}
+
+      {createErrorMessage ? <p className="error">{createErrorMessage}</p> : null}
+      {isLoading ? <p>Loading users...</p> : null}
+      {isError ? <p className="error">{queryErrorMessage}</p> : null}
+
+      {users ? (
+        users.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Current User</TableHead>
+                <TableHead>Accounts</TableHead>
+                <TableHead>Entries</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell>
+                    {editingUserId === user.id ? (
+                      <Input value={editingUserName} className="h-8" onChange={(event) => onEditingUserNameChange(event.target.value)} />
+                    ) : (
+                      user.name
+                    )}
+                  </TableCell>
+                  <TableCell>{user.is_current_user ? <Badge variant="secondary">Current</Badge> : null}</TableCell>
+                  <TableCell>{user.account_count ?? 0}</TableCell>
+                  <TableCell>{user.entry_count ?? 0}</TableCell>
+                  <TableCell>
+                    {editingUserId === user.id ? (
+                      <div className="table-actions">
+                        <Button type="button" size="sm" disabled={isUpdating} onClick={() => onSaveUser(user.id)}>
+                          Save
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" onClick={onCancelEditUser}>
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button type="button" size="sm" variant="outline" onClick={() => onStartEditUser(user)}>
+                        Edit
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <p className="muted">{hasAnyUsers ? "No users match the current search." : "No users yet."}</p>
+        )
+      ) : null}
+
+      {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
+    </div>
+  );
+}

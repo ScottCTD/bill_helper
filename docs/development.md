@@ -159,6 +159,13 @@ cd /path/to/bill_helper/frontend
 npm run build
 ```
 
+Frontend tests:
+
+```bash
+cd /path/to/bill_helper/frontend
+npm run test
+```
+
 Migration state:
 
 ```bash
@@ -188,9 +195,9 @@ Apply migration:
 uv run alembic upgrade head
 ```
 
-## Agent Feature Dev Notes
+## Agent + Frontend Refactor Notes
 
-Affected backend modules:
+Backend agent modules:
 
 - `backend/routers/agent.py`
 - `backend/services/agent/runtime.py`
@@ -198,21 +205,33 @@ Affected backend modules:
 - `backend/services/agent/review.py`
 - `backend/services/agent/serializers.py`
 
-Affected frontend modules:
+Frontend agent modules:
 
-- `frontend/src/components/agent/AgentPanel.tsx`
-- `frontend/src/App.tsx`
-- `frontend/src/lib/api.ts`
-- `frontend/src/lib/types.ts`
-- `frontend/src/styles.css`
+- coordinator: `frontend/src/components/agent/AgentPanel.tsx`
+- panel presentation + local hooks: `frontend/src/components/agent/panel/*`
+- run rendering: `frontend/src/components/agent/AgentRunBlock.tsx`
+- run activity derivation: `frontend/src/components/agent/activity.ts`
+- review modal and diff logic: `frontend/src/components/agent/review/*`
+
+Frontend workspace modules:
+
+- accounts: `frontend/src/features/accounts/*`, `frontend/src/pages/AccountsPage.tsx`
+- properties: `frontend/src/features/properties/*`, `frontend/src/pages/PropertiesPage.tsx`
+
+Frontend test modules:
+
+- config/setup: `frontend/vitest.config.ts`, `frontend/src/test/setup.ts`, `frontend/src/test/renderWithQueryClient.tsx`
+- agent tests: `frontend/src/components/agent/activity.test.ts`, `frontend/src/components/agent/AgentRunBlock.test.tsx`, `frontend/src/components/agent/review/diff.test.ts`
+- page integration tests: `frontend/src/pages/AccountsPage.test.tsx`, `frontend/src/pages/PropertiesPage.test.tsx`
 
 Behavioral checks:
 
-- user can open panel globally and create/select threads
+- user can open home agent workspace and create/select threads
 - message send persists timeline and run history
-- tool traces appear in timeline
-- proposal items can be approved/rejected individually
-- approving entry proposals creates entry rows directly (no entry-level status column)
+- tool/reasoning traces appear in timeline while run is active
+- proposal items can be approved/rejected individually from review modal
+- accounts workspace supports create/edit/snapshot flows from split feature modules
+- properties workspace supports section-specific CRUD flows from split feature modules
 
 ## Frontend Skill Workflow
 
@@ -246,7 +265,7 @@ Constraints:
 
 Symptom:
 
-- `/api/v1/agent/threads/{id}/messages` returns `503`
+- `/api/v1/agent/threads/{id}/messages` or `/api/v1/agent/threads/{id}/messages/stream` returns `503`
 
 Fix:
 

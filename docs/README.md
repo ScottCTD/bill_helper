@@ -19,6 +19,11 @@ This folder contains the source-of-truth documentation for the current MVP imple
 - `feature-account-reconciliation.md`: account table workflow, snapshot checkpointing, and reconciliation semantics.
 - `adr/README.md`: architecture decision record process and index.
 
+Historical implementation docs:
+
+- `completed/*.md`: closed implementation plans and migration notes. These are archival and not source-of-truth for current behavior.
+- `todo/*.md`: active/planned proposal notes that are not source-of-truth behavior docs.
+
 ## How To Use
 
 1. Read `architecture.md` first for mental model.

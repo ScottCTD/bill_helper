@@ -1,4 +1,4 @@
-# TODO Proposal: Properties Taxonomies and Table UI Alignment
+# Completed Proposal: Properties Taxonomies and Table UI Alignment
 
 ## Draft Date
 

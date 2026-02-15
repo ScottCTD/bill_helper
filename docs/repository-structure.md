@@ -80,6 +80,7 @@
 - `package.json`: npm scripts and frontend dependencies.
 - `package-lock.json`: locked npm dependencies.
 - `vite.config.ts`: dev server config and API proxy.
+- `vitest.config.ts`: frontend unit test runner configuration (`jsdom` + RTL setup).
 - `tsconfig.json`: TypeScript compiler settings.
 - `index.html`: Vite app shell.
 - `README.md`: frontend-local change map and UI workflow notes.
@@ -89,6 +90,7 @@
 - `main.tsx`: React root and providers.
 - `App.tsx`: top-level shell layout (sidebar + content) and route map.
 - `styles.css`: global styling including sidebar and app-shell classes.
+- `test/`: frontend test setup, typed fixture factories, and shared query-client test renderer.
 
 #### Components (`/frontend/src/components`)
 
@@ -99,6 +101,9 @@
 - `TagMultiSelect.tsx`: Notion-style chip/dropdown multi-select for entry tags.
 - `EntryEditorModal.tsx`: shared popup for entry create/edit.
 - `MarkdownBlockEditor.tsx`: BlockNote wrapper for markdown + pasted images.
+- `agent/AgentRunBlock.tsx`: extracted run activity/summary renderer used by `AgentPanel`.
+- `agent/activity.ts`: extracted run/activity derivation helpers for agent timeline state.
+- `agent/panel/*`: agent panel presentation layer (`AgentThreadList`, `AgentTimeline`, `AgentComposer`, `AgentThreadUsageBar`, `AgentAttachmentPreviewDialog`) plus panel-local hooks/type/format helpers.
 
 #### Pages (`/frontend/src/pages`)
 
@@ -106,8 +111,28 @@
 - `SettingsPage.tsx`: responsive runtime settings workspace (general, agent runtime, reliability).
 - `EntriesPage.tsx`: list/filter/delete entries and open popup create/edit editor.
 - `EntryDetailPage.tsx`: manage links/group graph and open popup editor for updates.
-- `AccountsPage.tsx`: create/update accounts, snapshot management, reconciliation view.
-- `PropertiesPage.tsx`: database-style management for users, entities, tags, and currency catalog placeholder.
+- `AccountsPage.tsx`: thin page orchestrator that composes accounts feature modules.
+- `PropertiesPage.tsx`: thin page orchestrator that composes properties feature modules.
+- `AccountsPage.test.tsx`: page-level integration tests for account create/snapshot flows.
+- `PropertiesPage.test.tsx`: page-level integration tests for users/taxonomy flows.
+
+#### Feature Modules (`/frontend/src/features`)
+
+- `accounts/`
+  - `useAccountsPageModel.ts`: query/mutation orchestration, derived state, and action handlers.
+  - `AccountsTableSection.tsx`: account table/search/selection UI.
+  - `ReconciliationSection.tsx`: account reconciliation summary UI.
+  - `SnapshotsSection.tsx`: snapshot create/history UI.
+  - `AccountDialogs.tsx`: create/edit account dialog UI.
+  - `helpers.ts`, `types.ts`: normalization helpers and local state contracts.
+- `properties/`
+  - `usePropertiesPageModel.ts`: top-level properties coordinator composing query/state/mutation hooks.
+  - `usePropertiesQueries.ts`: users/entities/tags/currencies/taxonomy queries + derived option/label state.
+  - `usePropertiesSectionState.ts`: section routing/search/create-panel state.
+  - `usePropertiesFormState.ts`: section form/editing state.
+  - `usePropertiesFilteredData.ts`: filtered list derivation by section search state.
+  - `sections/*.tsx`: dedicated users/entities/tags/currencies/taxonomy section UI blocks.
+  - `helpers.ts`, `types.ts`: filtering/taxonomy helpers and section contracts.
 
 #### Frontend Lib (`/frontend/src/lib`)
 

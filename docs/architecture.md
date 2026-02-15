@@ -38,13 +38,14 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 
 ## Run Lifecycle
 
-1. user sends message to `/api/v1/agent/threads/{thread_id}/messages` (text + optional images)
+1. user sends message to `/api/v1/agent/threads/{thread_id}/messages` (background) or `/api/v1/agent/threads/{thread_id}/messages/stream` (SSE)
 2. backend persists user message and attachments
 3. backend creates `agent_runs` row (`running`)
 4. runtime executes bounded tool-calling loop via LiteLLM using configured provider model
 5. each tool call is persisted to `agent_tool_calls`
 6. proposal tools create `agent_change_items` (`PENDING_REVIEW`)
-7. runtime enforces a final assistant message and marks run `completed` or `failed`
+7. stream path emits incremental `text_delta`, `tool_call`, and `reasoning_update` events while the run executes
+8. runtime enforces a final assistant message and marks run `completed` or `failed`
 
 ## Review Boundary
 
@@ -96,6 +97,11 @@ Agent state:
 - thread list query
 - selected-thread detail query
 - message send + approve/reject mutations
+- optimistic user/assistant message placeholders while runs are in-flight
+- panel-level UI split:
+  - coordinator: `frontend/src/components/agent/AgentPanel.tsx`
+  - presentation modules: `frontend/src/components/agent/panel/*`
+  - run rendering/derivation: `frontend/src/components/agent/AgentRunBlock.tsx`, `frontend/src/components/agent/activity.ts`
 
 Cross-page consistency:
 
@@ -131,5 +137,4 @@ Cross-page consistency:
 
 - bank sync / CSV ingestion
 - autonomous background agent runs
-- update/delete agent proposals
 - non-LiteLLM model client implementations

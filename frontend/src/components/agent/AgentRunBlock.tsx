@@ -1,0 +1,203 @@
+import { useMemo } from "react";
+import { ChevronRight } from "lucide-react";
+
+import type { AgentRun } from "../../lib/types";
+import { cn } from "../../lib/utils";
+import {
+  buildRunActivityTimeline,
+  summarizeRunChangeTypes,
+  type PendingAssistantActivityItem,
+  type RunToolCall
+} from "./activity";
+import { Button } from "../ui/button";
+
+interface AgentRunBlockProps {
+  run: AgentRun;
+  isMutating: boolean;
+  onReviewRun: (runId: string) => void;
+  mode?: "activity" | "summary" | "all";
+}
+
+function prettyDateTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString();
+}
+
+function ToolCallDetailList({ toolCalls }: { toolCalls: RunToolCall[] }) {
+  return (
+    <ul className="agent-tool-call-list">
+      {toolCalls.map((toolCall) => (
+        <li key={toolCall.id}>
+          <details className="agent-tool-call">
+            <summary>
+              <ChevronRight className="agent-tool-call-chevron" />
+              <span className="agent-tool-call-name">{toolCall.tool_name}</span>
+              <span className="agent-tool-call-status">{toolCall.status}</span>
+              <span className="agent-tool-call-time muted">{prettyDateTime(toolCall.created_at)}</span>
+            </summary>
+            <div className="agent-tool-call-details">
+              <p className="agent-tool-call-details-label">Input</p>
+              <pre>{JSON.stringify(toolCall.input_json, null, 2)}</pre>
+              <p className="agent-tool-call-details-label">Output</p>
+              <pre>{JSON.stringify(toolCall.output_json, null, 2)}</pre>
+            </div>
+          </details>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ToolCallBatchGroup({
+  toolCalls,
+  isRunning
+}: {
+  toolCalls: RunToolCall[];
+  isRunning: boolean;
+}) {
+  if (isRunning) {
+    return (
+      <div className="agent-tool-call-group agent-tool-call-group-static">
+        <div className="agent-tool-call-group-summary">
+          <span className="agent-tool-call-group-label">
+            {toolCalls.length} tool call{toolCalls.length === 1 ? "" : "s"}
+          </span>
+          <span className="agent-tool-call-status">live</span>
+        </div>
+        <ToolCallDetailList toolCalls={toolCalls} />
+      </div>
+    );
+  }
+
+  return (
+    <details className="agent-tool-call-group">
+      <summary>
+        <ChevronRight className="agent-tool-call-chevron" />
+        <span className="agent-tool-call-group-label">
+          {toolCalls.length} tool call{toolCalls.length === 1 ? "" : "s"}
+        </span>
+      </summary>
+      <ToolCallDetailList toolCalls={toolCalls} />
+    </details>
+  );
+}
+
+export function PendingAssistantActivityBlock({ activity }: { activity: PendingAssistantActivityItem[] }) {
+  if (activity.length === 0) {
+    return null;
+  }
+  return (
+    <div className="agent-run-tools">
+      <div className="agent-run-activity-timeline">
+        {activity.map((item) => {
+          if (item.type === "reasoning_update") {
+            return (
+              <p key={item.key} className="agent-run-reasoning-update">
+                {item.message}
+              </p>
+            );
+          }
+          return (
+            <details key={item.key} className="agent-tool-call-group agent-tool-call-group-static" open>
+              <summary>
+                <ChevronRight className="agent-tool-call-chevron" />
+                <span className="agent-tool-call-group-label">
+                  {item.toolNames.length} tool call{item.toolNames.length === 1 ? "" : "s"}
+                </span>
+              </summary>
+              <ul className="agent-tool-call-list">
+                {item.toolNames.map((toolName, index) => (
+                  <li key={`${item.key}-${toolName}-${index}`}>
+                    <details className="agent-tool-call agent-tool-call-static" open>
+                      <summary>
+                        <ChevronRight className="agent-tool-call-chevron" />
+                        <span className="agent-tool-call-name">{toolName}</span>
+                        <span className="agent-tool-call-status">streaming</span>
+                      </summary>
+                      <div className="agent-tool-call-details">
+                        <p className="agent-tool-call-details-label">Details</p>
+                        <p className="muted agent-tool-call-pending-detail">Waiting for full tool payload...</p>
+                      </div>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function AgentRunBlock({ run, isMutating, onReviewRun, mode = "all" }: AgentRunBlockProps) {
+  const showActivity = mode !== "summary";
+  const showSummary = mode !== "activity";
+  const hasSummaryChanges = showSummary && run.change_items.length > 0;
+  const hasActivityContent = Boolean(run.error_text) || run.tool_calls.length > 0;
+  const pendingCount = run.change_items.filter((item) => item.status === "PENDING_REVIEW").length;
+  const failedCount = run.change_items.filter((item) => item.status === "APPLY_FAILED").length;
+  const typeSummary = summarizeRunChangeTypes(run.change_items);
+  const activityTimeline = useMemo(() => buildRunActivityTimeline(run.tool_calls), [run.tool_calls]);
+  const showInterleavedTimeline = activityTimeline.some((item) => item.type === "reasoning_update");
+  const isRunning = run.status === "running";
+
+  if (!hasActivityContent && !hasSummaryChanges) {
+    return null;
+  }
+
+  return (
+    <div className={cn("agent-run-block", showSummary && "agent-run-block-summary")}>
+      {showActivity ? (
+        <>
+          {run.error_text ? <p className="error">{run.error_text}</p> : null}
+
+          {run.tool_calls.length > 0 ? (
+            <div className="agent-run-tools">
+              {showInterleavedTimeline ? (
+                <div className="agent-run-activity-timeline">
+                  {activityTimeline.map((item) => {
+                    if (item.type === "reasoning_update") {
+                      return (
+                        <p key={item.key} className="agent-run-reasoning-update">
+                          {item.message}
+                        </p>
+                      );
+                    }
+                    return (
+                      <ToolCallBatchGroup key={item.key} toolCalls={item.toolCalls} isRunning={isRunning} />
+                    );
+                  })}
+                </div>
+              ) : (
+                <ToolCallBatchGroup toolCalls={run.tool_calls} isRunning={isRunning} />
+              )}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {hasSummaryChanges ? (
+        <div className="agent-run-changes-summary">
+          <h4>{pendingCount > 0 ? `${pendingCount} proposed changes pending review` : "No pending changes in this run"}</h4>
+          <Button type="button" size="sm" onClick={() => onReviewRun(run.id)} disabled={isMutating}>
+            {pendingCount > 0 ? "Click to review proposed changes" : "View reviewed changes"}
+          </Button>
+          <div className="agent-run-change-chips">
+            <span className="agent-run-change-chip">Entry x{typeSummary.entryCount}</span>
+            <span className="agent-run-change-chip">Tag x{typeSummary.tagCount}</span>
+            <span className="agent-run-change-chip">Entity x{typeSummary.entityCount}</span>
+          </div>
+          {failedCount > 0 ? (
+            <p className="error">
+              {failedCount} apply failure{failedCount === 1 ? "" : "s"} detected. Open review for details.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}

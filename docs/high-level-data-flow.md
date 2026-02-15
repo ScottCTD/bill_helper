@@ -122,6 +122,11 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `frontend/src/pages/EntryDetailPage.tsx`
   - `frontend/src/pages/DashboardPage.tsx`
   - `frontend/src/pages/AccountsPage.tsx`
+  - `frontend/src/features/accounts/*`
+  - `frontend/src/pages/PropertiesPage.tsx`
+  - `frontend/src/features/properties/*`
+  - `frontend/src/components/agent/AgentPanel.tsx`
+  - `frontend/src/components/agent/panel/*`
 
 ## Operational Impact
 

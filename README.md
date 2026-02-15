@@ -97,6 +97,10 @@ Implemented:
 - Refactor foundation for extensibility:
   - Backend agent internals are split by concern (`prompts`, `message_history`, `model_client`, `change_apply`, `runtime`, `review`).
   - Frontend query orchestration is centralized in `frontend/src/lib/queryKeys.ts` and `frontend/src/lib/queryInvalidation.ts`.
+  - Accounts and properties workspaces follow feature-module boundaries (thin page orchestrator + domain hooks + section components).
+  - Properties model internals are split into dedicated hooks for queries, UI section state, form state, and filtered views.
+  - Agent panel rendering concerns are split into panel modules (`frontend/src/components/agent/panel/*`) and attachment/composer helper hooks.
+  - Frontend test coverage includes page-level integration tests for accounts/properties in addition to agent rendering/diff helpers.
   - Existing API contracts remain compatible, with an added agent SSE stream endpoint for incremental assistant text.
 
 Deferred:
@@ -129,6 +133,7 @@ Primary docs are in `docs/`:
 - `docs/documentation-system.md`
 - `docs/feature-entry-lifecycle.md`
 - `docs/feature-dashboard-analytics.md`
+- `docs/feature-account-reconciliation.md`
 - `docs/adr/README.md`
 
 ## Quick Start
@@ -285,6 +290,13 @@ cd /path/to/bill_helper/frontend
 npm run build
 ```
 
+Frontend tests:
+
+```bash
+cd /path/to/bill_helper/frontend
+npm run test
+```
+
 Migration state:
 
 ```bash
@@ -311,7 +323,10 @@ uv run python scripts/check_docs_sync.py
 - Frontend app shell: `frontend/src/App.tsx`
 - Frontend guide: `frontend/README.md`
 - Frontend AI home page: `frontend/src/pages/HomePage.tsx`
+- Frontend agent panel modules: `frontend/src/components/agent/panel`
 - Frontend settings page: `frontend/src/pages/SettingsPage.tsx`
+- Frontend accounts feature modules: `frontend/src/features/accounts`
+- Frontend properties feature modules: `frontend/src/features/properties`
 - Frontend design tokens and component styles: `frontend/src/styles.css`
 - Frontend UI primitives: `frontend/src/components/ui`
 - Agent panel UI: `frontend/src/components/agent/AgentPanel.tsx`

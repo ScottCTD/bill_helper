@@ -39,10 +39,16 @@ The as-of date defaults to the server's current day when the query parameter is 
 
 ## Frontend Modules
 
-- `frontend/src/pages/AccountsPage.tsx`: table UX, create/edit dialogs, snapshot form/history, reconciliation display.
+- `frontend/src/pages/AccountsPage.tsx`: thin page orchestrator for accounts workspace composition.
+- `frontend/src/features/accounts/useAccountsPageModel.ts`: query/mutation state, derived selection/filter state, and form orchestration.
+- `frontend/src/features/accounts/AccountsTableSection.tsx`: account table/search/selection UI.
+- `frontend/src/features/accounts/ReconciliationSection.tsx`: reconciliation summary UI.
+- `frontend/src/features/accounts/SnapshotsSection.tsx`: snapshot create/history UI.
+- `frontend/src/features/accounts/AccountDialogs.tsx`: create/edit dialog UI.
 - `frontend/src/lib/api.ts`: account/snapshot/reconciliation client methods.
 - `frontend/src/lib/queryKeys.ts`: account query keys (`accounts`, `snapshots`, `reconciliation`).
 - `frontend/src/lib/queryInvalidation.ts`: `invalidateAccountReadModels` after account/snapshot writes.
+- `frontend/src/pages/AccountsPage.test.tsx`: integration tests for create-account and create-snapshot flows.
 
 ## Operational Notes and Constraints
 

@@ -1,7 +1,5 @@
 import {
   type ChangeEvent,
-  type ClipboardEvent,
-  type DragEvent,
   type FormEvent,
   type KeyboardEvent,
   useEffect,
@@ -9,7 +7,6 @@ import {
   useRef,
   useState
 } from "react";
-import { ChevronRight, Paperclip, SendHorizontal, Square, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -19,512 +16,67 @@ import {
   interruptAgentRun,
   listAgentThreads,
   rejectAgentChangeItem,
-  streamAgentMessage,
-  withApiBase
+  streamAgentMessage
 } from "../../lib/api";
 import { invalidateAgentThreadData, invalidateEntryReadModels } from "../../lib/queryInvalidation";
 import { queryKeys } from "../../lib/queryKeys";
-import type { AgentChangeItem, AgentRun, AgentStreamEvent, AgentThreadDetail, AgentThreadSummary } from "../../lib/types";
-import { cn } from "../../lib/utils";
+import type { AgentChangeItem, AgentStreamEvent, AgentThreadDetail } from "../../lib/types";
+import {
+  appendPendingReasoningUpdateToActivity,
+  appendPendingToolCallToActivity,
+  runsByAssistantMessage,
+  runsWithoutAssistantMessage,
+  sortRunsByCreatedAt,
+  totalRunMetric
+} from "./activity";
+import { AgentComposer } from "./panel/AgentComposer";
+import { AgentAttachmentPreviewDialog } from "./panel/AgentAttachmentPreviewDialog";
+import { AgentThreadList } from "./panel/AgentThreadList";
+import { AgentThreadUsageBar } from "./panel/AgentThreadUsageBar";
+import { AgentTimeline } from "./panel/AgentTimeline";
+import { useAgentDraftAttachments } from "./panel/useAgentDraftAttachments";
+import { COMPOSER_TEXTAREA_MAX_HEIGHT_PX, type PendingAssistantMessage, type PendingUserMessage } from "./panel/types";
 import { AgentRunReviewModal } from "./review/AgentRunReviewModal";
 import { Button } from "../ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
-import { MarkdownRenderer } from "../ui/MarkdownRenderer";
-import { Textarea } from "../ui/textarea";
 
 interface AgentPanelProps {
   isOpen: boolean;
   onClose?: () => void;
 }
 
-interface DraftAttachment {
-  id: string;
-  file: File;
-}
-
-interface DraftAttachmentPreview {
-  id: string;
-  file: File;
-  url: string;
-}
-
-interface PendingUserAttachmentPreview {
-  id: string;
-  name: string;
-  url: string;
-}
-
-interface PendingUserMessage {
-  id: string;
-  threadId: string;
-  content: string;
-  createdAt: string;
-  baselineLastUserMessageId: string | null;
-  attachments: PendingUserAttachmentPreview[];
-}
-
-interface PendingAssistantMessage {
-  id: string;
-  threadId: string;
-  createdAt: string;
-  content: string;
-  runId: string | null;
-  baselineLastAssistantMessageId: string | null;
-  activity: PendingAssistantActivityItem[];
-}
-
-type RunToolCall = AgentRun["tool_calls"][number];
-
-interface RunActivityToolBatch {
-  type: "tool_batch";
-  key: string;
-  toolCalls: RunToolCall[];
-}
-
-interface RunActivityReasoningUpdate {
-  type: "reasoning_update";
-  key: string;
-  message: string;
-  createdAt: string;
-}
-
-type RunActivityItem = RunActivityToolBatch | RunActivityReasoningUpdate;
-
-interface PendingAssistantToolBatchActivity {
-  type: "tool_batch";
-  key: string;
-  toolNames: string[];
-}
-
-interface PendingAssistantReasoningUpdateActivity {
-  type: "reasoning_update";
-  key: string;
-  message: string;
-}
-
-type PendingAssistantActivityItem = PendingAssistantToolBatchActivity | PendingAssistantReasoningUpdateActivity;
-
-const INTERMEDIATE_UPDATE_TOOL_NAME = "send_intermediate_update";
-const IMAGE_FILENAME_PATTERN = /\.(avif|bmp|gif|heic|heif|jpe?g|png|svg|tiff?|webp)$/i;
-const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 220;
-
-function prettyDateTime(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString();
-}
-
-function compactThreadName(thread: AgentThreadSummary): string {
-  const source = (thread.title || "").trim();
-  if (!source) {
-    return "Untitled thread";
-  }
-  const normalized = source.replace(/\s+/g, " ");
-  return normalized.slice(0, 20);
-}
-
-function sortRunsByCreatedAt(runs: AgentRun[]): AgentRun[] {
-  return [...runs].sort((left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime());
-}
-
-function runsByAssistantMessage(detail: AgentThreadDetail | undefined): Map<string, AgentRun[]> {
-  const map = new Map<string, AgentRun[]>();
-  sortRunsByCreatedAt(detail?.runs ?? []).forEach((run) => {
-    if (!run.assistant_message_id) {
-      return;
-    }
-    const runs = map.get(run.assistant_message_id);
-    if (runs) {
-      runs.push(run);
-      return;
-    }
-    map.set(run.assistant_message_id, [run]);
-  });
-  return map;
-}
-
-function runsWithoutAssistantMessage(detail: AgentThreadDetail | undefined): AgentRun[] {
-  return sortRunsByCreatedAt((detail?.runs ?? []).filter((run) => !run.assistant_message_id));
-}
-
-function totalRunMetric(
-  runs: AgentRun[],
-  field: "input_tokens" | "output_tokens" | "cache_read_tokens" | "cache_write_tokens" | "total_cost_usd"
-): number | null {
-  let total = 0;
-  let hasValue = false;
-  runs.forEach((run) => {
-    const value = run[field];
-    if (typeof value === "number") {
-      total += value;
-      hasValue = true;
-    }
-  });
-  return hasValue ? total : null;
-}
-
-function summarizeRunChangeTypes(changeItems: AgentChangeItem[]): {
-  entryCount: number;
-  tagCount: number;
-  entityCount: number;
-} {
-  let entryCount = 0;
-  let tagCount = 0;
-  let entityCount = 0;
-
-  changeItems.forEach((item) => {
-    if (item.change_type.endsWith("_entry")) {
-      entryCount += 1;
-      return;
-    }
-    if (item.change_type.endsWith("_tag")) {
-      tagCount += 1;
-      return;
-    }
-    if (item.change_type.endsWith("_entity")) {
-      entityCount += 1;
-    }
-  });
-
-  return {
-    entryCount,
-    tagCount,
-    entityCount
-  };
-}
-
-function formatUsageTokens(value: number | null): string {
-  return value === null ? "-" : value.toLocaleString();
-}
-
-function formatUsdCost(value: number | null): string {
-  if (value === null) {
-    return "-";
-  }
-  const abs = Math.abs(value);
-  const fractionDigits = abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6;
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits
-  }).format(value);
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
-}
-
-function extractIntermediateUpdateMessageFromToolCall(toolCall: RunToolCall): string | null {
-  if (toolCall.tool_name !== INTERMEDIATE_UPDATE_TOOL_NAME) {
-    return null;
-  }
-  const outputJson = asRecord(toolCall.output_json);
-  const outputMessage = outputJson?.message;
-  if (typeof outputMessage === "string" && outputMessage.trim()) {
-    return outputMessage.trim();
-  }
-
-  const inputJson = asRecord(toolCall.input_json);
-  const inputMessage = inputJson?.message;
-  if (typeof inputMessage === "string" && inputMessage.trim()) {
-    return inputMessage.trim();
-  }
-  return null;
-}
-
-function sortToolCallsByCreatedAt(toolCalls: RunToolCall[]): RunToolCall[] {
-  return [...toolCalls].sort((left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime());
-}
-
-function buildRunActivityTimeline(toolCalls: RunToolCall[]): RunActivityItem[] {
-  const timeline: RunActivityItem[] = [];
-  const sortedCalls = sortToolCallsByCreatedAt(toolCalls);
-  let pendingBatch: RunToolCall[] = [];
-
-  const flushPendingBatch = () => {
-    if (pendingBatch.length === 0) {
-      return;
-    }
-    const first = pendingBatch[0];
-    const last = pendingBatch[pendingBatch.length - 1];
-    timeline.push({
-      type: "tool_batch",
-      key: `${first.id}-${last.id}`,
-      toolCalls: pendingBatch,
-    });
-    pendingBatch = [];
-  };
-
-  sortedCalls.forEach((toolCall) => {
-    const reasoningUpdate = extractIntermediateUpdateMessageFromToolCall(toolCall);
-    if (!reasoningUpdate) {
-      pendingBatch.push(toolCall);
-      return;
-    }
-    flushPendingBatch();
-    timeline.push({
-      type: "reasoning_update",
-      key: toolCall.id,
-      message: reasoningUpdate,
-      createdAt: toolCall.created_at,
-    });
-  });
-  flushPendingBatch();
-  return timeline;
-}
-
-function appendPendingToolCallToActivity(
-  activity: PendingAssistantActivityItem[],
-  toolName: string,
-): PendingAssistantActivityItem[] {
-  if (!toolName || toolName === INTERMEDIATE_UPDATE_TOOL_NAME) {
-    return activity;
-  }
-
-  const last = activity[activity.length - 1];
-  if (last?.type === "tool_batch") {
-    const updatedBatch: PendingAssistantToolBatchActivity = {
-      ...last,
-      toolNames: [...last.toolNames, toolName],
-    };
-    return [...activity.slice(0, -1), updatedBatch];
-  }
-  return [
-    ...activity,
-    {
-      type: "tool_batch",
-      key: `tool-batch-${activity.length + 1}-${Date.now()}`,
-      toolNames: [toolName],
-    },
-  ];
-}
-
-function appendPendingReasoningUpdateToActivity(
-  activity: PendingAssistantActivityItem[],
-  message: string,
-): PendingAssistantActivityItem[] {
-  const normalized = message.trim();
-  if (!normalized) {
-    return activity;
-  }
-  return [
-    ...activity,
-    {
-      type: "reasoning_update",
-      key: `reasoning-update-${activity.length + 1}-${Date.now()}`,
-      message: normalized,
-    },
-  ];
-}
-
-interface AgentRunBlockProps {
-  run: AgentRun;
-  isMutating: boolean;
-  onReviewRun: (runId: string) => void;
-  mode?: "activity" | "summary" | "all";
-}
-
-function ToolCallDetailList({ toolCalls }: { toolCalls: RunToolCall[] }) {
-  return (
-    <ul className="agent-tool-call-list">
-      {toolCalls.map((toolCall) => (
-        <li key={toolCall.id}>
-          <details className="agent-tool-call">
-            <summary>
-              <ChevronRight className="agent-tool-call-chevron" />
-              <span className="agent-tool-call-name">{toolCall.tool_name}</span>
-              <span className="agent-tool-call-status">{toolCall.status}</span>
-              <span className="agent-tool-call-time muted">{prettyDateTime(toolCall.created_at)}</span>
-            </summary>
-            <div className="agent-tool-call-details">
-              <p className="agent-tool-call-details-label">Input</p>
-              <pre>{JSON.stringify(toolCall.input_json, null, 2)}</pre>
-              <p className="agent-tool-call-details-label">Output</p>
-              <pre>{JSON.stringify(toolCall.output_json, null, 2)}</pre>
-            </div>
-          </details>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ToolCallBatchGroup({
-  toolCalls,
-  isRunning,
-}: {
-  toolCalls: RunToolCall[];
-  isRunning: boolean;
-}) {
-  if (isRunning) {
-    return (
-      <div className="agent-tool-call-group agent-tool-call-group-static">
-        <div className="agent-tool-call-group-summary">
-          <span className="agent-tool-call-group-label">
-            {toolCalls.length} tool call{toolCalls.length === 1 ? "" : "s"}
-          </span>
-          <span className="agent-tool-call-status">live</span>
-        </div>
-        <ToolCallDetailList toolCalls={toolCalls} />
-      </div>
-    );
-  }
-
-  return (
-    <details className="agent-tool-call-group">
-      <summary>
-        <ChevronRight className="agent-tool-call-chevron" />
-        <span className="agent-tool-call-group-label">
-          {toolCalls.length} tool call{toolCalls.length === 1 ? "" : "s"}
-        </span>
-      </summary>
-      <ToolCallDetailList toolCalls={toolCalls} />
-    </details>
-  );
-}
-
-function PendingAssistantActivityBlock({ activity }: { activity: PendingAssistantActivityItem[] }) {
-  if (activity.length === 0) {
-    return null;
-  }
-  return (
-    <div className="agent-run-tools">
-      <div className="agent-run-activity-timeline">
-        {activity.map((item) => {
-          if (item.type === "reasoning_update") {
-            return (
-              <p key={item.key} className="agent-run-reasoning-update">
-                {item.message}
-              </p>
-            );
-          }
-          return (
-            <details key={item.key} className="agent-tool-call-group agent-tool-call-group-static" open>
-              <summary>
-                <ChevronRight className="agent-tool-call-chevron" />
-                <span className="agent-tool-call-group-label">
-                  {item.toolNames.length} tool call{item.toolNames.length === 1 ? "" : "s"}
-                </span>
-              </summary>
-              <ul className="agent-tool-call-list">
-                {item.toolNames.map((toolName, index) => (
-                  <li key={`${item.key}-${toolName}-${index}`}>
-                    <details className="agent-tool-call agent-tool-call-static" open>
-                      <summary>
-                        <ChevronRight className="agent-tool-call-chevron" />
-                        <span className="agent-tool-call-name">{toolName}</span>
-                        <span className="agent-tool-call-status">streaming</span>
-                      </summary>
-                      <div className="agent-tool-call-details">
-                        <p className="agent-tool-call-details-label">Details</p>
-                        <p className="muted agent-tool-call-pending-detail">Waiting for full tool payload...</p>
-                      </div>
-                    </details>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function AgentRunBlock({ run, isMutating, onReviewRun, mode = "all" }: AgentRunBlockProps) {
-  const showActivity = mode !== "summary";
-  const showSummary = mode !== "activity";
-  const hasSummaryChanges = showSummary && run.change_items.length > 0;
-  const hasActivityContent = Boolean(run.error_text) || run.tool_calls.length > 0;
-  const pendingCount = run.change_items.filter((item) => item.status === "PENDING_REVIEW").length;
-  const failedCount = run.change_items.filter((item) => item.status === "APPLY_FAILED").length;
-  const typeSummary = summarizeRunChangeTypes(run.change_items);
-  const activityTimeline = useMemo(() => buildRunActivityTimeline(run.tool_calls), [run.tool_calls]);
-  const showInterleavedTimeline = activityTimeline.some((item) => item.type === "reasoning_update");
-  const isRunning = run.status === "running";
-
-  if (!hasActivityContent && !hasSummaryChanges) {
-    return null;
-  }
-
-  return (
-    <div className={cn("agent-run-block", showSummary && "agent-run-block-summary")}>
-      {showActivity ? (
-        <>
-          {run.error_text ? <p className="error">{run.error_text}</p> : null}
-
-          {run.tool_calls.length > 0 ? (
-            <div className="agent-run-tools">
-              {showInterleavedTimeline ? (
-                <div className="agent-run-activity-timeline">
-                  {activityTimeline.map((item) => {
-                    if (item.type === "reasoning_update") {
-                      return (
-                        <p key={item.key} className="agent-run-reasoning-update">
-                          {item.message}
-                        </p>
-                      );
-                    }
-                    return (
-                      <ToolCallBatchGroup key={item.key} toolCalls={item.toolCalls} isRunning={isRunning} />
-                    );
-                  })}
-                </div>
-              ) : (
-                <ToolCallBatchGroup toolCalls={run.tool_calls} isRunning={isRunning} />
-              )}
-            </div>
-          ) : null}
-        </>
-      ) : null}
-
-      {hasSummaryChanges ? (
-        <div className="agent-run-changes-summary">
-          <h4>{pendingCount > 0 ? `${pendingCount} proposed changes pending review` : "No pending changes in this run"}</h4>
-          <Button type="button" size="sm" onClick={() => onReviewRun(run.id)} disabled={isMutating}>
-            {pendingCount > 0 ? "Click to review proposed changes" : "View reviewed changes"}
-          </Button>
-          <div className="agent-run-change-chips">
-            <span className="agent-run-change-chip">Entry x{typeSummary.entryCount}</span>
-            <span className="agent-run-change-chip">Tag x{typeSummary.tagCount}</span>
-            <span className="agent-run-change-chip">Entity x{typeSummary.entityCount}</span>
-          </div>
-          {failedCount > 0 ? (
-            <p className="error">
-              {failedCount} apply failure{failedCount === 1 ? "" : "s"} detected. Open review for details.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const queryClient = useQueryClient();
   const [selectedThreadId, setSelectedThreadId] = useState<string>("");
   const [draftMessage, setDraftMessage] = useState("");
-  const [draftFiles, setDraftFiles] = useState<DraftAttachment[]>([]);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isSendPolling, setIsSendPolling] = useState(false);
   const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null);
   const [pendingAssistantMessage, setPendingAssistantMessage] = useState<PendingAssistantMessage | null>(null);
-  const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reviewRunId, setReviewRunId] = useState<string | null>(null);
-  const [isComposerDragActive, setIsComposerDragActive] = useState(false);
-  const draftFileIdCounterRef = useRef(0);
-  const composerDragDepthRef = useRef(0);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
+  const attachmentState = useAgentDraftAttachments({ setActionError });
+  const {
+    draftFiles,
+    setDraftFiles,
+    draftAttachmentPreviews,
+    selectedDraftAttachmentPreview,
+    previewAttachmentId,
+    setPreviewAttachmentId,
+    isComposerDragActive,
+    fileInputRef,
+    handlers: {
+      handleDraftFileSelection,
+      handleComposerPaste,
+      handleComposerDragEnter,
+      handleComposerDragOver,
+      handleComposerDragLeave,
+      handleComposerDrop,
+      removeDraftAttachment
+    }
+  } = attachmentState;
 
   function autoSizeComposerTextarea(target?: HTMLTextAreaElement | null) {
     const textarea = target ?? composerTextareaRef.current;
@@ -697,6 +249,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
     setPendingUserMessage(null);
   }, [pendingUserMessage, selectedThreadId, threadQuery.data?.messages]);
+
   useEffect(() => {
     if (!pendingAssistantMessage) {
       return;
@@ -715,6 +268,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
     setPendingAssistantMessage(null);
   }, [pendingAssistantMessage, selectedThreadId, threadQuery.data?.messages]);
+
   const activeModelName = useMemo(() => {
     const runs = threadQuery.data?.runs ?? [];
     const latest = runs[runs.length - 1];
@@ -725,6 +279,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     const configuredModelName = threadQuery.data?.configured_model_name?.trim();
     return configuredModelName || "unknown model";
   }, [threadQuery.data?.runs, threadQuery.data?.configured_model_name]);
+
   const threadUsageTotals = useMemo(() => {
     const runs = threadQuery.data?.runs ?? [];
     return {
@@ -735,34 +290,6 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       totalCost: totalRunMetric(runs, "total_cost_usd")
     };
   }, [threadQuery.data?.runs]);
-
-  const draftAttachmentPreviews = useMemo<DraftAttachmentPreview[]>(
-    () => draftFiles.map((item) => ({ id: item.id, file: item.file, url: URL.createObjectURL(item.file) })),
-    [draftFiles]
-  );
-
-  useEffect(() => {
-    return () => {
-      draftAttachmentPreviews.forEach((preview) => {
-        URL.revokeObjectURL(preview.url);
-      });
-    };
-  }, [draftAttachmentPreviews]);
-
-  const selectedDraftAttachmentPreview = useMemo(
-    () => draftAttachmentPreviews.find((preview) => preview.id === previewAttachmentId) ?? null,
-    [draftAttachmentPreviews, previewAttachmentId]
-  );
-
-  useEffect(() => {
-    if (!previewAttachmentId) {
-      return;
-    }
-    if (selectedDraftAttachmentPreview) {
-      return;
-    }
-    setPreviewAttachmentId(null);
-  }, [previewAttachmentId, selectedDraftAttachmentPreview]);
 
   useEffect(() => {
     return () => {
@@ -799,127 +326,6 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
     setReviewRunId(null);
   }, [reviewRunId, selectedRunForReview]);
-
-  function nextDraftAttachmentId(): string {
-    draftFileIdCounterRef.current += 1;
-    return `draft-attachment-${draftFileIdCounterRef.current}`;
-  }
-
-  function handleDraftFileSelection(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    if (files.length === 0) {
-      return;
-    }
-    appendDraftAttachments(files);
-    event.target.value = "";
-  }
-
-  function isImageFile(file: File): boolean {
-    const mimeType = file.type.toLowerCase();
-    if (mimeType.startsWith("image/")) {
-      return true;
-    }
-    return IMAGE_FILENAME_PATTERN.test(file.name.toLowerCase());
-  }
-
-  function appendDraftAttachments(files: File[]): void {
-    if (files.length === 0) {
-      return;
-    }
-    const imageFiles = files.filter(isImageFile);
-    const rejectedCount = files.length - imageFiles.length;
-    if (rejectedCount > 0) {
-      setActionError(
-        rejectedCount === 1
-          ? "Only image files are supported in agent attachments."
-          : `${rejectedCount} files were skipped. Only image files are supported in agent attachments.`
-      );
-    } else {
-      setActionError(null);
-    }
-    if (imageFiles.length === 0) {
-      return;
-    }
-    setDraftFiles((current) => [
-      ...current,
-      ...imageFiles.map((file) => ({
-        id: nextDraftAttachmentId(),
-        file
-      }))
-    ]);
-  }
-
-  function extractClipboardFiles(event: ClipboardEvent<HTMLTextAreaElement>): File[] {
-    const itemFiles = Array.from(event.clipboardData.items ?? [])
-      .filter((item) => item.kind === "file")
-      .map((item) => item.getAsFile())
-      .filter((file): file is File => file !== null);
-    if (itemFiles.length > 0) {
-      return itemFiles;
-    }
-    return Array.from(event.clipboardData.files ?? []);
-  }
-
-  function handleComposerPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
-    const files = extractClipboardFiles(event);
-    if (files.length === 0) {
-      return;
-    }
-    event.preventDefault();
-    appendDraftAttachments(files);
-  }
-
-  function dataTransferHasFiles(dataTransfer: DataTransfer | null): boolean {
-    return !!dataTransfer && Array.from(dataTransfer.types).includes("Files");
-  }
-
-  function handleComposerDragEnter(event: DragEvent<HTMLFormElement>) {
-    if (!dataTransferHasFiles(event.dataTransfer)) {
-      return;
-    }
-    event.preventDefault();
-    composerDragDepthRef.current += 1;
-    setIsComposerDragActive(true);
-  }
-
-  function handleComposerDragOver(event: DragEvent<HTMLFormElement>) {
-    if (!dataTransferHasFiles(event.dataTransfer)) {
-      return;
-    }
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-    if (!isComposerDragActive) {
-      setIsComposerDragActive(true);
-    }
-  }
-
-  function handleComposerDragLeave(event: DragEvent<HTMLFormElement>) {
-    if (!dataTransferHasFiles(event.dataTransfer)) {
-      return;
-    }
-    event.preventDefault();
-    composerDragDepthRef.current = Math.max(composerDragDepthRef.current - 1, 0);
-    if (composerDragDepthRef.current === 0) {
-      setIsComposerDragActive(false);
-    }
-  }
-
-  function handleComposerDrop(event: DragEvent<HTMLFormElement>) {
-    if (!dataTransferHasFiles(event.dataTransfer)) {
-      return;
-    }
-    event.preventDefault();
-    composerDragDepthRef.current = 0;
-    setIsComposerDragActive(false);
-    appendDraftAttachments(Array.from(event.dataTransfer.files ?? []));
-  }
-
-  function removeDraftAttachment(attachmentId: string) {
-    setDraftFiles((current) => current.filter((item) => item.id !== attachmentId));
-    if (previewAttachmentId === attachmentId) {
-      setPreviewAttachmentId(null);
-    }
-  }
 
   async function handleCreateThread() {
     setActionError(null);
@@ -970,7 +376,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         return {
           ...current,
           runId: current.runId || streamEvent.run_id || null,
-          activity: appendPendingToolCallToActivity(current.activity, String(streamEvent.tool_name || "")),
+          activity: appendPendingToolCallToActivity(current.activity, String(streamEvent.tool_name || ""))
         };
       });
       return;
@@ -983,7 +389,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         return {
           ...current,
           runId: current.runId || streamEvent.run_id || null,
-          activity: appendPendingReasoningUpdateToActivity(current.activity, String(streamEvent.message || "")),
+          activity: appendPendingReasoningUpdateToActivity(current.activity, String(streamEvent.message || ""))
         };
       });
       return;
@@ -996,7 +402,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         return {
           ...current,
           runId: current.runId || streamEvent.run_id || null,
-          content: `${current.content}${String(streamEvent.delta || "")}`,
+          content: `${current.content}${String(streamEvent.delta || "")}`
         };
       });
       return;
@@ -1052,7 +458,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         content: "",
         runId: null,
         baselineLastAssistantMessageId,
-        activity: [],
+        activity: []
       });
       setDraftMessage("");
       setDraftFiles([]);
@@ -1209,275 +615,61 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         </header>
 
         <div className="agent-panel-body agent-panel-body-page">
-          <section className="agent-thread-list agent-thread-list-page">
-            <h3>Threads</h3>
-            {threadsQuery.isLoading ? <p>Loading threads...</p> : null}
-            {threadsQuery.isError ? <p className="error">{(threadsQuery.error as Error).message}</p> : null}
-            <div className="agent-thread-list-scroll">
-              {(threadsQuery.data ?? []).map((thread) => (
-                <Button
-                  key={thread.id}
-                  type="button"
-                  variant="ghost"
-                  className={thread.id === selectedThreadId ? "agent-thread-button selected" : "agent-thread-button"}
-                  onClick={() => setSelectedThreadId(thread.id)}
-                  title={thread.title || "Untitled thread"}
-                >
-                  <span className="agent-thread-label">{compactThreadName(thread)}</span>
-                </Button>
-              ))}
-            </div>
-          </section>
+          <AgentThreadList
+            threads={threadsQuery.data}
+            selectedThreadId={selectedThreadId}
+            isLoading={threadsQuery.isLoading}
+            errorMessage={threadsQuery.isError ? (threadsQuery.error as Error).message : null}
+            onSelectThread={setSelectedThreadId}
+          />
 
           <section className="agent-thread-timeline agent-thread-main">
-            <h3>Timeline</h3>
-            {!selectedThreadId ? <p className="muted">Create or select a thread to begin.</p> : null}
-            {threadQuery.isLoading ? <p>Loading timeline...</p> : null}
-            {threadQuery.isError ? <p className="error">{(threadQuery.error as Error).message}</p> : null}
+            <AgentTimeline
+              selectedThreadId={selectedThreadId}
+              isLoading={threadQuery.isLoading}
+              errorMessage={threadQuery.isError ? (threadQuery.error as Error).message : null}
+              messages={threadQuery.data?.messages}
+              timelineScrollRef={timelineScrollRef}
+              runsByAssistantMessageId={runsByAssistantMessageId}
+              pendingAssistantRuns={pendingAssistantRuns}
+              pendingUserMessage={pendingUserMessage}
+              pendingAssistantMessage={pendingAssistantMessage}
+              shouldShowOptimisticAssistantBubble={shouldShowOptimisticAssistantBubble}
+              pendingRunAttachedToOptimisticMessage={pendingRunAttachedToOptimisticMessage}
+              isMutating={isMutating}
+              pendingOptimisticActivityCount={pendingOptimisticActivity.length}
+              onReviewRun={setReviewRunId}
+            />
 
-            {selectedThreadId ? (
-              <div className="agent-timeline-scroll" ref={timelineScrollRef}>
-                {(threadQuery.data?.messages ?? []).map((message) => {
-                  const isAssistant = message.role === "assistant";
-                  const isUser = message.role === "user";
-                  const shouldRenderMarkdown = !isUser;
-                  const renderedContent = message.content_markdown;
-                  const messageRuns = isAssistant ? runsByAssistantMessageId.get(message.id) ?? [] : [];
+            <AgentThreadUsageBar selectedThreadId={selectedThreadId} totals={threadUsageTotals} />
 
-                  return (
-                    <article
-                      key={message.id}
-                      className={cn("agent-message", isAssistant && "agent-message-assistant", isUser && "agent-message-user")}
-                    >
-                      <header>
-                        <strong>{isUser ? "You" : isAssistant ? "Assistant" : message.role}</strong>
-                        <span className="muted">{prettyDateTime(message.created_at)}</span>
-                      </header>
-
-                      {isAssistant
-                        ? messageRuns.map((run) => (
-                            <AgentRunBlock
-                              key={`${run.id}-activity`}
-                              run={run}
-                              isMutating={isMutating}
-                              onReviewRun={setReviewRunId}
-                              mode="activity"
-                            />
-                          ))
-                        : null}
-
-                      {renderedContent.trim() ? (
-                        shouldRenderMarkdown ? (
-                          <MarkdownRenderer markdown={renderedContent} />
-                        ) : (
-                          <p className="agent-message-text">{renderedContent}</p>
-                        )
-                      ) : (
-                        <p className="muted">(no text)</p>
-                      )}
-
-                      {message.attachments.length > 0 ? (
-                        <div className="agent-message-images">
-                          {message.attachments.map((attachment) => (
-                            <img
-                              key={attachment.id}
-                              src={withApiBase(attachment.attachment_url)}
-                              alt="User upload"
-                              loading="lazy"
-                            />
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {isAssistant
-                        ? messageRuns.map((run) => (
-                            <AgentRunBlock
-                              key={`${run.id}-summary`}
-                              run={run}
-                              isMutating={isMutating}
-                              onReviewRun={setReviewRunId}
-                              mode="summary"
-                            />
-                          ))
-                        : null}
-                    </article>
-                  );
-                })}
-
-                {pendingUserMessage && pendingUserMessage.threadId === selectedThreadId ? (
-                  <article className="agent-message agent-message-user" key={pendingUserMessage.id}>
-                    <header>
-                      <strong>You</strong>
-                      <span className="muted">{prettyDateTime(pendingUserMessage.createdAt)}</span>
-                    </header>
-                    {pendingUserMessage.content ? (
-                      <p className="agent-message-text">{pendingUserMessage.content}</p>
-                    ) : (
-                      <p className="muted">(image-only message)</p>
-                    )}
-                    {pendingUserMessage.attachments.length > 0 ? (
-                      <div className="agent-message-images">
-                        {pendingUserMessage.attachments.map((attachment) => (
-                          <img key={attachment.id} src={attachment.url} alt={attachment.name} loading="lazy" />
-                        ))}
-                      </div>
-                    ) : null}
-                  </article>
-                ) : null}
-
-                {shouldShowOptimisticAssistantBubble && pendingAssistantMessage ? (
-                  <article className="agent-message agent-message-assistant agent-message-streaming" key={pendingAssistantMessage.id}>
-                    <header>
-                      <strong>Assistant</strong>
-                      <span className="muted">{prettyDateTime(pendingAssistantMessage.createdAt)}</span>
-                    </header>
-                    {pendingRunAttachedToOptimisticMessage ? (
-                      <AgentRunBlock
-                        run={pendingRunAttachedToOptimisticMessage}
-                        isMutating={isMutating}
-                        onReviewRun={setReviewRunId}
-                        mode="activity"
-                      />
-                    ) : pendingOptimisticActivity.length > 0 ? (
-                      <PendingAssistantActivityBlock activity={pendingOptimisticActivity} />
-                    ) : null}
-                    {pendingAssistantMessage.content.trim() ? (
-                      <p className="agent-message-text agent-message-streaming-text">
-                        {pendingAssistantMessage.content}
-                        <span className="agent-message-caret">{"\u258d"}</span>
-                      </p>
-                    ) : (
-                      <p className="agent-message-text">
-                        <span className="agent-message-caret">{"\u258d"}</span>
-                      </p>
-                    )}
-                  </article>
-                ) : null}
-
-                {pendingAssistantRuns.map((run) => {
-                  const hasVisibleContent = Boolean(run.error_text) || run.tool_calls.length > 0 || run.change_items.length > 0;
-                  const attachedToOptimisticMessage =
-                    pendingRunAttachedToOptimisticMessage && pendingRunAttachedToOptimisticMessage.id === run.id;
-                  if (attachedToOptimisticMessage) {
-                    return null;
-                  }
-                  if (!hasVisibleContent) {
-                    return null;
-                  }
-                  return (
-                    <article key={`pending-run-${run.id}`} className="agent-message agent-message-assistant agent-message-working">
-                      <header>
-                        <strong>Assistant</strong>
-                        <span className="muted">{prettyDateTime(run.created_at)}</span>
-                      </header>
-                      <AgentRunBlock run={run} isMutating={isMutating} onReviewRun={setReviewRunId} />
-                    </article>
-                  );
-                })}
-              </div>
-            ) : null}
-
-            {selectedThreadId ? (
-              <div className="agent-thread-usage" aria-label="Thread usage and cost">
-                <span>Input: {formatUsageTokens(threadUsageTotals.input)}</span>
-                <span>Output: {formatUsageTokens(threadUsageTotals.output)}</span>
-                <span>Cache read: {formatUsageTokens(threadUsageTotals.cacheRead)}</span>
-                <span>Cache write: {formatUsageTokens(threadUsageTotals.cacheWrite)}</span>
-                <span className="agent-thread-usage-total">Total cost: {formatUsdCost(threadUsageTotals.totalCost)}</span>
-              </div>
-            ) : null}
-
-            <form
-              className={cn("agent-composer", isComposerDragActive && "agent-composer-drop-active")}
+            <AgentComposer
+              isComposerDragActive={isComposerDragActive}
+              draftAttachmentPreviews={draftAttachmentPreviews}
+              previewAttachmentId={previewAttachmentId}
+              setPreviewAttachmentId={setPreviewAttachmentId}
+              onRemoveAttachment={removeDraftAttachment}
+              composerTextareaRef={composerTextareaRef}
+              fileInputRef={fileInputRef}
+              draftMessage={draftMessage}
+              isMutating={isMutating}
+              isRunInFlight={isRunInFlight}
+              isSendingMessage={isSendingMessage}
+              isInterruptPending={interruptRunMutation.isPending}
+              actionError={actionError}
               onSubmit={handleSubmitMessage}
               onDragEnter={handleComposerDragEnter}
               onDragOver={handleComposerDragOver}
               onDragLeave={handleComposerDragLeave}
               onDrop={handleComposerDrop}
-            >
-              {isComposerDragActive ? <p className="muted">Drop files to attach</p> : null}
-              {draftAttachmentPreviews.length > 0 ? (
-                <div className="agent-draft-attachments" aria-label="Pending attachments">
-                  {draftAttachmentPreviews.map((preview) => (
-                    <div key={preview.id} className="agent-draft-attachment-chip">
-                      <button
-                        type="button"
-                        className="agent-draft-attachment-preview"
-                        onClick={() => setPreviewAttachmentId(preview.id)}
-                        title={preview.file.name}
-                      >
-                        <img src={preview.url} alt={preview.file.name} loading="lazy" />
-                      </button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="agent-draft-attachment-remove !size-4"
-                        onClick={() => removeDraftAttachment(preview.id)}
-                        aria-label={`Remove ${preview.file.name}`}
-                      >
-                        <X className="h-2 w-2" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
-              <div className="agent-composer-box">
-                <Textarea
-                  ref={composerTextareaRef}
-                  className="agent-composer-textarea border-none shadow-none focus-visible:ring-0"
-                  placeholder="Ask a question or ask the agent to propose entries/tags/entities..."
-                  value={draftMessage}
-                  onChange={handleDraftMessageChange}
-                  onKeyDown={handleComposerKeyDown}
-                  onPaste={handleComposerPaste}
-                  rows={1}
-                />
-
-                <div className="agent-composer-toolbar">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleDraftFileSelection}
-                    className="sr-only"
-                    tabIndex={-1}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="agent-composer-attach"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Paperclip className="h-4 w-4" />
-                    Add Attachments
-                  </Button>
-
-                  {isRunInFlight ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="destructive"
-                      disabled={interruptRunMutation.isPending}
-                      className="agent-composer-send"
-                      onClick={handleStopRun}
-                    >
-                      {interruptRunMutation.isPending ? "Stopping..." : "Stop"}
-                      <Square className="h-3.5 w-3.5" />
-                    </Button>
-                  ) : (
-                    <Button type="submit" size="sm" disabled={isMutating} className="agent-composer-send">
-                      {isSendingMessage ? "Sending..." : "Send"}
-                      <SendHorizontal className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-              {actionError ? <p className="error">{actionError}</p> : null}
-            </form>
+              onMessageChange={handleDraftMessageChange}
+              onComposerKeyDown={handleComposerKeyDown}
+              onComposerPaste={handleComposerPaste}
+              onFileSelection={handleDraftFileSelection}
+              onStopRun={() => {
+                void handleStopRun();
+              }}
+            />
           </section>
         </div>
 
@@ -1495,27 +687,12 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         />
       </aside>
 
-      <Dialog
-        open={Boolean(selectedDraftAttachmentPreview)}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) {
-            setPreviewAttachmentId(null);
-          }
+      <AgentAttachmentPreviewDialog
+        preview={selectedDraftAttachmentPreview}
+        onClose={() => {
+          setPreviewAttachmentId(null);
         }}
-      >
-        <DialogContent className="agent-attachment-preview-dialog">
-          <DialogHeader>
-            <DialogTitle>{selectedDraftAttachmentPreview?.file.name ?? "Attachment preview"}</DialogTitle>
-          </DialogHeader>
-          {selectedDraftAttachmentPreview ? (
-            <img
-              src={selectedDraftAttachmentPreview.url}
-              alt={selectedDraftAttachmentPreview.file.name}
-              className="agent-attachment-preview-image"
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      />
     </>
   );
 }

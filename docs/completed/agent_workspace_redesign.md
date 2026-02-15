@@ -1,4 +1,4 @@
-# TODO Proposal: Agent Workspace Redesign (Conversation UX + Run Observability)
+# Completed Proposal: Agent Workspace Redesign (Conversation UX + Run Observability)
 
 ## Draft Date
 
