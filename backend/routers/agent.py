@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Thread
@@ -12,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.database import SessionLocal, get_db
-from backend.enums import AgentChangeStatus, AgentMessageRole
+from backend.enums import AgentChangeStatus, AgentMessageRole, AgentRunStatus
 from backend.models import (
     AgentChangeItem,
     AgentMessage,
@@ -105,6 +106,25 @@ def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:
             )
         )
     return summaries
+
+
+def _thread_attachment_directories(thread: AgentThread) -> set[Path]:
+    upload_root = (Path(".data") / "agent_uploads").resolve()
+    directories: set[Path] = set()
+    for message in thread.messages:
+        for attachment in message.attachments:
+            directory = Path(attachment.file_path).parent
+            resolved_directory = directory.resolve()
+            if resolved_directory == upload_root:
+                continue
+            if upload_root in resolved_directory.parents:
+                directories.add(resolved_directory)
+    return directories
+
+
+def _delete_attachment_directories(directories: set[Path]) -> None:
+    for directory in sorted(directories, key=lambda path: len(path.parts), reverse=True):
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 def _store_attachment_bytes(
@@ -230,6 +250,31 @@ def create_thread(payload: AgentThreadCreate | None = None, db: Session = Depend
     db.commit()
     db.refresh(thread)
     return thread_to_schema(thread)
+
+
+@router.delete("/threads/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_thread(thread_id: str, db: Session = Depends(get_db)) -> None:
+    thread = db.scalar(
+        select(AgentThread)
+        .where(AgentThread.id == thread_id)
+        .options(
+            selectinload(AgentThread.runs),
+            selectinload(AgentThread.messages).selectinload(AgentMessage.attachments),
+        )
+    )
+    if thread is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+
+    if any(run.status == AgentRunStatus.RUNNING for run in thread.runs):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a thread while an agent run is still running.",
+        )
+
+    attachment_directories = _thread_attachment_directories(thread)
+    db.delete(thread)
+    db.commit()
+    _delete_attachment_directories(attachment_directories)
 
 
 @router.get("/threads/{thread_id}", response_model=AgentThreadDetailRead)

@@ -107,6 +107,7 @@ Agent client methods:
 
 - `listAgentThreads`
 - `createAgentThread`
+- `deleteAgentThread`
 - `getAgentThread`
 - `streamAgentMessage`
 - `interruptAgentRun`
@@ -259,6 +260,9 @@ Timeline features:
 - left conversation history rail (thread list) with compact one-line thread buttons
 - thread label uses the first 20 characters of the thread title (thread titles are seeded from the first user message)
 - thread list uses plain list-row styling for non-selected items; only the active thread is boxed/highlighted
+- thread rows expose a right-side delete icon button inside the same row box on hover/focus (always visible on touch devices)
+- thread delete action confirms intent in the panel, then calls `DELETE /api/v1/agent/threads/{thread_id}`
+- deleting a selected thread automatically selects the next available thread (or clears selection when none remain)
 - click-to-open conversation behavior from history rail
 - creating a new thread via `New Thread` focuses the composer textarea for immediate typing
 - header title includes active model context (`Agent (<model>)`) based on the most recent run in the selected thread

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import time
 from inspect import signature
+from pathlib import Path
+from threading import Event
 
 import pymupdf
 
@@ -140,6 +142,80 @@ def test_thread_detail_includes_configured_model_name(client):
     detail = detail_response.json()
 
     assert detail["configured_model_name"] == get_settings().agent_model
+
+
+def test_delete_thread_removes_thread_from_list_and_detail(client):
+    thread = create_thread(client)
+
+    delete_response = client.delete(f"/api/v1/agent/threads/{thread['id']}")
+    assert delete_response.status_code == 204
+
+    list_response = client.get("/api/v1/agent/threads")
+    list_response.raise_for_status()
+    listed_ids = [row["id"] for row in list_response.json()]
+    assert thread["id"] not in listed_ids
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    assert detail_response.status_code == 404
+    assert detail_response.json()["detail"] == "Thread not found"
+
+
+def test_delete_thread_rejects_running_run(client, monkeypatch):
+    block_model = Event()
+    block_model.clear()
+
+    def waiting_model(_messages):
+        block_model.wait(timeout=1.0)
+        return {"role": "assistant", "content": "Done"}
+
+    patch_model(monkeypatch, waiting_model)
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Please wait", wait_for_completion=False)
+    assert run["status"] == "running"
+
+    delete_response = client.delete(f"/api/v1/agent/threads/{thread['id']}")
+    assert delete_response.status_code == 409
+    assert delete_response.json()["detail"] == "Cannot delete a thread while an agent run is still running."
+
+    block_model.set()
+    deadline = time.monotonic() + 2.0
+    final_status = "running"
+    while time.monotonic() < deadline:
+        run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
+        run_response.raise_for_status()
+        final_status = str(run_response.json().get("status") or "running")
+        if final_status != "running":
+            break
+        time.sleep(0.01)
+    assert final_status != "running"
+
+
+def test_delete_thread_removes_uploaded_attachment_files(client, monkeypatch):
+    patch_model(monkeypatch, lambda _messages: {"role": "assistant", "content": "Attachment processed."})
+
+    thread = create_thread(client)
+    send_message(
+        client,
+        thread["id"],
+        "Process the receipt",
+        files=[("receipt.png", b"\x89PNG\r\n\x1a\n", "image/png")],
+    )
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    attachment_paths = [
+        Path(attachment["file_path"])
+        for message in detail["messages"]
+        for attachment in message["attachments"]
+    ]
+    assert attachment_paths
+    assert all(path.exists() for path in attachment_paths)
+
+    delete_response = client.delete(f"/api/v1/agent/threads/{thread['id']}")
+    assert delete_response.status_code == 204
+    assert all(not path.exists() for path in attachment_paths)
 
 
 def test_default_agent_model_is_google_gemini_3_flash_preview():

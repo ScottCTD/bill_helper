@@ -41,6 +41,7 @@ This module hosts the React app, route pages, UI primitives, and API/query clien
 - `frontend/src/components/agent/panel/useAgentDraftAttachments.ts`: attachment input/paste/drag-drop/preview state + handlers.
 - `frontend/src/components/agent/review/*`: run review modal and payload diff renderer.
 - `frontend/src/components/agent/*.test.tsx`: agent UI unit tests.
+- `frontend/src/components/agent/panel/AgentThreadList.test.tsx`: thread-list selection/delete interaction coverage.
 - `frontend/src/pages/AccountsPage.test.tsx`, `frontend/src/pages/PropertiesPage.test.tsx`: page-level integration tests for workspace flows.
 - `frontend/src/test/renderWithQueryClient.tsx`: reusable query-client test renderer.
 - `frontend/src/test/factories/agent.ts`: shared typed test fixtures for agent domain models.
@@ -138,6 +139,8 @@ uv run python scripts/check_docs_sync.py
 - Agent review `Approve All` uses a themed in-app confirmation dialog instead of browser-native confirm prompts.
 - Agent home uses a dedicated right-pane timeline scroller while keeping the scrollbar at the panel edge (not beside message bubbles).
 - The left thread rail is viewport-bounded with independent overflow scrolling and does not move when timeline content scrolls.
+- Thread rows expose a right-side delete control inside the same row box on hover/focus (always visible on touch devices) and call `DELETE /api/v1/agent/threads/{thread_id}` after a confirmation prompt.
+- Deleting the selected thread auto-selects the next thread when available; if none remain, the timeline returns to empty-selection state.
 - The composer stays pinned at the bottom of the right pane; message input starts as one line and auto-expands up to a max height.
 - Agent composer attachments support images and PDFs (picker, paste, and drag-drop paths); unsupported files are skipped with a local error.
 - Draft and persisted PDF attachments render as file chips/links in timeline surfaces, while images continue to render as thumbnails.

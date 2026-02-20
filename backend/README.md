@@ -96,6 +96,8 @@ uv run python scripts/check_docs_sync.py
 - Agent message uploads accept image and PDF attachments; PDF files are parsed to markdown text via MarkItDown before model calls.
 - When the configured model supports vision (via LiteLLM capability checks), each uploaded PDF page is also rendered and sent as an image input.
 - Agent runs can be interrupted via `POST /api/v1/agent/runs/{run_id}/interrupt`; interrupted runs transition to `failed`.
+- Thread deletion is available via `DELETE /api/v1/agent/threads/{thread_id}` and is blocked (`409`) while that thread has a running run.
+- Thread deletion also removes that thread's persisted upload directories under `.data/agent_uploads/<message_id>/...`.
 - Follow-up user turns after an interrupted run now include an interruption context note in model input so the agent treats the interrupted request as unfinished context.
 - Agent message delivery now supports both modes:
   - async start + polling: `POST /api/v1/agent/threads/{thread_id}/messages`

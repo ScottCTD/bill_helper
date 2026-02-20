@@ -403,6 +403,23 @@ Body:
 
 Response: `AgentThreadRead`
 
+## `DELETE /agent/threads/{thread_id}`
+
+Delete one thread and its persisted timeline artifacts.
+
+Behavior:
+
+- deletes the thread row and cascades deletes for messages, runs, tool calls, change items, and review actions
+- removes local uploaded attachment directories under `.data/agent_uploads/<message_id>/...` for that thread
+- rejects delete when any run in the thread is still `running`
+
+Response: `204 No Content`
+
+Errors:
+
+- `404` thread not found
+- `409` thread has an active running run
+
 ## `GET /agent/threads/{thread_id}`
 
 Fetch timeline-ready thread detail.

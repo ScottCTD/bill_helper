@@ -846,20 +846,41 @@
     height: auto;
   }
 
+  .agent-thread-row {
+    @apply relative h-10 overflow-hidden rounded-md border border-transparent bg-transparent transition-colors;
+  }
+
+  .agent-thread-row:hover {
+    @apply bg-accent/60;
+  }
+
+  .agent-thread-row.selected {
+    @apply border-primary/45 bg-accent shadow-sm;
+  }
+
   .agent-thread-button {
-    @apply h-9 w-full justify-start rounded-md border border-transparent bg-transparent px-2.5 text-left text-sm font-medium;
+    @apply h-full w-full justify-start rounded-md border-none bg-transparent px-2.5 pr-10 text-left text-sm font-medium shadow-none hover:bg-transparent;
   }
 
   .agent-thread-label {
     @apply block w-full truncate;
   }
 
-  .agent-thread-button:hover {
-    @apply bg-accent/60;
+  .agent-thread-delete-button {
+    @apply absolute right-2 top-1/2 h-6 w-6 -translate-y-1/2 rounded-sm border-none bg-transparent p-0 text-muted-foreground opacity-0 pointer-events-none shadow-none transition-opacity focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0;
   }
 
-  .agent-thread-button.selected {
-    @apply border-primary/45 bg-accent shadow-sm;
+  .agent-thread-row:hover .agent-thread-delete-button,
+  .agent-thread-row:focus-within .agent-thread-delete-button {
+    @apply opacity-100 pointer-events-auto;
+  }
+
+  .agent-thread-delete-button:hover {
+    @apply bg-destructive/10 text-destructive;
+  }
+
+  .agent-thread-delete-button:disabled {
+    @apply opacity-40;
   }
 
   .agent-thread-timeline {
@@ -1481,5 +1502,11 @@
   .agent-thread-list-page .agent-thread-list-scroll {
     @apply max-h-40;
     height: auto;
+  }
+}
+
+@media (hover: none) {
+  .agent-thread-delete-button {
+    @apply opacity-100 pointer-events-auto;
   }
 }

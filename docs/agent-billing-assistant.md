@@ -37,6 +37,16 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 4. Runtime loops: model call → optional tool calls (including sparse `send_intermediate_update` progress notes) → tool results appended → repeat (bounded by `agent_max_steps`).
 5. Runtime persists final assistant message and marks run `completed` or `failed`.
 
+## Thread Lifecycle Endpoints
+
+- `GET /api/v1/agent/threads`: list thread summaries
+- `POST /api/v1/agent/threads`: create thread shell
+- `DELETE /api/v1/agent/threads/{thread_id}`: delete one thread history
+  - blocked with `409` while the thread has any `running` run
+  - cascades DB removal of thread messages/runs/change items/review actions
+  - removes persisted upload directories under `.data/agent_uploads/<message_id>/...`
+- `GET /api/v1/agent/threads/{thread_id}`: fetch full thread detail
+
 ## Configuration
 
 | Setting | Env | Default | Notes |

@@ -214,6 +214,7 @@ Agent router:
 - endpoints:
   - `GET /api/v1/agent/threads`
   - `POST /api/v1/agent/threads`
+  - `DELETE /api/v1/agent/threads/{thread_id}`
   - `GET /api/v1/agent/threads/{thread_id}`
   - `POST /api/v1/agent/threads/{thread_id}/messages` (multipart text + image/PDF attachments)
   - `POST /api/v1/agent/threads/{thread_id}/messages/stream` (multipart text + image/PDF attachments, SSE response)
@@ -264,6 +265,7 @@ Test modules:
 `test_agent.py` covers:
 
 - thread timeline persistence
+- thread deletion (`DELETE /agent/threads/{thread_id}`), including running-run conflict checks and attachment-file cleanup
 - final assistant message requirement
 - tool call persistence
 - unknown tool handling with persisted error status
@@ -291,14 +293,16 @@ Test modules:
 - stream divergence guard across retries
 - LiteLLM environment-validation behavior (including indeterminate-validation fallback)
 
-Current baseline for `backend/tests/test_agent.py`: `34 passed`.
+Current baseline for `backend/tests/test_agent.py`: `40 passed`.
 
 ## Operational Impact
 
 - agent image uploads are persisted under `.data/agent_uploads`
+- deleting a thread removes its persisted attachment directories under `.data/agent_uploads/<message_id>/...`
 - timeline rendering depends on attachment-serving endpoint
 - non-stream sends execute in a background thread; `POST /agent/threads/{thread_id}/messages` returns immediately with `status=running`
 - stream sends execute in-request and emit SSE events from `POST /agent/threads/{thread_id}/messages/stream`; disconnect fallback resumes the run in a background thread
+- `DELETE /api/v1/agent/threads/{thread_id}` returns `409` while that thread has any running run
 - streamed runs may emit `reasoning_update` events in addition to `tool_call` and `text_delta` events, enabling lightweight progress UI before final message persistence
 - interrupted runs are marked `failed` with user-facing interruption reason text
 - the next user turn after an interruption carries an explicit interruption note in model input (while preserving normal conversation history)

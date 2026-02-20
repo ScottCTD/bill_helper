@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   approveAgentChangeItem,
   createAgentThread,
+  deleteAgentThread,
   getAgentThread,
   interruptAgentRun,
   listAgentThreads,
@@ -20,7 +21,7 @@ import {
 } from "../../lib/api";
 import { invalidateAgentThreadData, invalidateEntryReadModels } from "../../lib/queryInvalidation";
 import { queryKeys } from "../../lib/queryKeys";
-import type { AgentChangeItem, AgentStreamEvent, AgentThreadDetail } from "../../lib/types";
+import type { AgentChangeItem, AgentStreamEvent, AgentThreadDetail, AgentThreadSummary } from "../../lib/types";
 import {
   appendPendingReasoningUpdateToActivity,
   appendPendingToolCallToActivity,
@@ -146,6 +147,24 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
   });
 
+  const deleteThreadMutation = useMutation({
+    mutationFn: deleteAgentThread,
+    onSuccess: (_, deletedThreadId) => {
+      const currentThreads = (queryClient.getQueryData(queryKeys.agent.threads) as AgentThreadSummary[] | undefined) ?? [];
+      const remainingThreads = currentThreads.filter((thread) => thread.id !== deletedThreadId);
+      queryClient.setQueryData(queryKeys.agent.threads, remainingThreads);
+      queryClient.removeQueries({ queryKey: queryKeys.agent.thread(deletedThreadId), exact: true });
+      setSelectedThreadId((currentSelectedThreadId) =>
+        currentSelectedThreadId === deletedThreadId ? (remainingThreads[0]?.id ?? "") : currentSelectedThreadId
+      );
+      setReviewRunId(null);
+      setPendingUserMessage(null);
+      setPendingAssistantMessage(null);
+      setActionError(null);
+      invalidateAgentThreadData(queryClient);
+    }
+  });
+
   const interruptRunMutation = useMutation({
     mutationFn: interruptAgentRun,
     onSuccess: () => {
@@ -175,6 +194,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
 
   const isMutating =
     createThreadMutation.isPending ||
+    deleteThreadMutation.isPending ||
     interruptRunMutation.isPending ||
     approveMutation.isPending ||
     rejectMutation.isPending;
@@ -339,6 +359,21 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       requestAnimationFrame(() => {
         composerTextareaRef.current?.focus();
       });
+    } catch (error) {
+      setActionError((error as Error).message);
+    }
+  }
+
+  async function handleDeleteThread(threadId: string) {
+    const thread = (threadsQuery.data ?? []).find((item) => item.id === threadId);
+    const threadName = (thread?.title || "").trim() || "Untitled thread";
+    if (!window.confirm(`Delete "${threadName}"?\n\nThis removes its full message and run history.`)) {
+      return;
+    }
+
+    setActionError(null);
+    try {
+      await deleteThreadMutation.mutateAsync(threadId);
     } catch (error) {
       setActionError((error as Error).message);
     }
@@ -628,6 +663,11 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
             isLoading={threadsQuery.isLoading}
             errorMessage={threadsQuery.isError ? (threadsQuery.error as Error).message : null}
             onSelectThread={setSelectedThreadId}
+            onDeleteThread={(threadId) => {
+              void handleDeleteThread(threadId);
+            }}
+            deletingThreadId={deleteThreadMutation.isPending ? (deleteThreadMutation.variables ?? null) : null}
+            isDeleteDisabled={isMutating || isRunInFlight}
           />
 
           <section className="agent-thread-timeline agent-thread-main">
