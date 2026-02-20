@@ -93,6 +93,8 @@ uv run python scripts/check_docs_sync.py
 - OpenRouter SSL `sslv3 alert bad record mac` transport failures get a one-shot immediate retry in both streamed and non-streamed model calls, even when `agent_retry_max_attempts=1`.
 - Stream retries after partial output are de-duplicated so already-emitted prefixes are not re-sent to the SSE client.
 - Agent model calls are routed through LiteLLM using the configured model string (`agent_model`), and credentials are resolved from provider environment variables.
+- Agent message uploads accept image and PDF attachments; PDF files are parsed to markdown text via MarkItDown before model calls.
+- When the configured model supports vision (via LiteLLM capability checks), each uploaded PDF page is also rendered and sent as an image input.
 - Agent runs can be interrupted via `POST /api/v1/agent/runs/{run_id}/interrupt`; interrupted runs transition to `failed`.
 - Follow-up user turns after an interrupted run now include an interruption context note in model input so the agent treats the interrupted request as unfinished context.
 - Agent message delivery now supports both modes:

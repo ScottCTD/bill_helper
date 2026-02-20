@@ -4,6 +4,8 @@ import json
 import time
 from inspect import signature
 
+import pymupdf
+
 
 def create_thread(client) -> dict:
     response = client.post("/api/v1/agent/threads", json={})
@@ -16,12 +18,19 @@ def send_message(
     thread_id: str,
     content: str,
     *,
+    files: list[tuple[str, bytes, str]] | None = None,
     wait_for_completion: bool = True,
     timeout_seconds: float = 2.0,
 ) -> dict:
+    request_files = (
+        [("files", (filename, file_bytes, mime_type)) for filename, file_bytes, mime_type in files]
+        if files
+        else None
+    )
     response = client.post(
         f"/api/v1/agent/threads/{thread_id}/messages",
         data={"content": content},
+        files=request_files,
     )
     response.raise_for_status()
     run = response.json()
@@ -39,6 +48,16 @@ def send_message(
         time.sleep(0.01)
 
     raise AssertionError("Timed out waiting for agent run to complete")
+
+
+def build_pdf_bytes(page_texts: list[str]) -> bytes:
+    document = pymupdf.open()
+    for text in page_texts:
+        page = document.new_page()
+        page.insert_text((72, 72), text)
+    pdf_bytes = document.tobytes()
+    document.close()
+    return pdf_bytes
 
 
 def patch_model(monkeypatch, handler):
@@ -127,6 +146,106 @@ def test_default_agent_model_is_google_gemini_3_flash_preview():
     from backend.config import get_settings
 
     assert get_settings().agent_model == "google/gemini-3-flash-preview"
+
+
+def test_send_message_rejects_unsupported_attachment_type(client):
+    thread = create_thread(client)
+    response = client.post(
+        f"/api/v1/agent/threads/{thread['id']}/messages",
+        data={"content": "process this"},
+        files=[("files", ("notes.txt", b"hello", "text/plain"))],
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Only image and PDF attachments are supported."
+
+
+def test_pdf_attachment_includes_markitdown_text_without_pdf_page_images_when_vision_is_disabled(client, monkeypatch):
+    from backend.services.agent import message_history
+
+    captured_messages: list[list[dict]] = []
+
+    monkeypatch.setattr(message_history, "_model_supports_vision", lambda _model: False)
+
+    def capture_model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "Processed PDF text."}
+
+    patch_model(monkeypatch, capture_model)
+
+    thread = create_thread(client)
+    pdf_bytes = build_pdf_bytes(["Invoice total CAD 123.45"])
+    run = send_message(
+        client,
+        thread["id"],
+        "Please summarize this attachment.",
+        files=[("statement.pdf", pdf_bytes, "application/pdf")],
+    )
+
+    assert run["status"] == "completed"
+    assert captured_messages
+
+    user_messages = [message for message in captured_messages[-1] if message.get("role") == "user"]
+    assert user_messages
+    user_content = user_messages[-1].get("content")
+    assert isinstance(user_content, str)
+    assert "Please summarize this attachment." in user_content
+    assert "PDF attachment 1 (parsed with MarkItDown):" in user_content
+    assert "Invoice total CAD" in user_content
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    first_user = next(message for message in detail["messages"] if message["role"] == "user")
+    assert len(first_user["attachments"]) == 1
+    assert first_user["attachments"][0]["mime_type"] == "application/pdf"
+
+
+def test_pdf_attachment_adds_page_images_when_vision_is_enabled(client, monkeypatch):
+    from backend.services.agent import message_history
+
+    captured_messages: list[list[dict]] = []
+
+    monkeypatch.setattr(message_history, "_model_supports_vision", lambda _model: True)
+
+    def capture_model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "Processed PDF pages."}
+
+    patch_model(monkeypatch, capture_model)
+
+    thread = create_thread(client)
+    pdf_bytes = build_pdf_bytes(
+        [
+            "Page one invoice line item",
+            "Page two invoice line item",
+        ]
+    )
+    run = send_message(
+        client,
+        thread["id"],
+        "Read every page.",
+        files=[("invoice.pdf", pdf_bytes, "application/pdf")],
+    )
+
+    assert run["status"] == "completed"
+    assert captured_messages
+
+    user_messages = [message for message in captured_messages[-1] if message.get("role") == "user"]
+    assert user_messages
+    user_content = user_messages[-1].get("content")
+    assert isinstance(user_content, list)
+
+    text_parts = [part for part in user_content if part.get("type") == "text"]
+    image_parts = [part for part in user_content if part.get("type") == "image_url"]
+    assert len(text_parts) == 1
+    assert "Read every page." in text_parts[0].get("text", "")
+    assert "Page one invoice line item" in text_parts[0].get("text", "")
+    assert "Page two invoice line item" in text_parts[0].get("text", "")
+    assert len(image_parts) == 2
+    assert all(
+        str(part.get("image_url", {}).get("url", "")).startswith("data:image/png;base64,")
+        for part in image_parts
+    )
 
 
 def test_system_prompt_requires_duplicate_then_reconcile_then_propose_entries():

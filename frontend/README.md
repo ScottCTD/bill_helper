@@ -139,6 +139,8 @@ uv run python scripts/check_docs_sync.py
 - Agent home uses a dedicated right-pane timeline scroller while keeping the scrollbar at the panel edge (not beside message bubbles).
 - The left thread rail is viewport-bounded with independent overflow scrolling and does not move when timeline content scrolls.
 - The composer stays pinned at the bottom of the right pane; message input starts as one line and auto-expands up to a max height.
+- Agent composer attachments support images and PDFs (picker, paste, and drag-drop paths); unsupported files are skipped with a local error.
+- Draft and persisted PDF attachments render as file chips/links in timeline surfaces, while images continue to render as thumbnails.
 - Agent message send uses backend SSE (`POST /api/v1/agent/threads/{thread_id}/messages/stream`) so assistant text appears incrementally in real time.
 - Streaming assistant activity now supports interleaved reasoning updates (`reasoning_update`) plus grouped tool-call traces, and the same interleaved trace remains visible after run completion.
 - Optimistic user bubbles are reconciled against persisted timeline messages to avoid temporary duplicate user-message blocks during send.

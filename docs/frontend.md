@@ -266,7 +266,7 @@ Timeline features:
 - timeline scroll behavior is a dedicated right-pane scroll surface with scrollbar at panel edge
 - desktop thread rail is viewport-bounded and keeps its own independent overflow scroll
 - assistant/system message bodies render markdown via `react-markdown` + `remark-gfm` (sanitized defaults, GFM tables/task lists/strikethrough)
-- attachment previews for uploaded images
+- attachment previews for uploaded images and PDF files
 - run blocks are anchored to assistant-side timeline events (`assistant_message_id`) to keep tool activity in assistant flow
 - active runs without an assistant message render only when there is visible activity payload (tool calls/errors/review summary)
 - running assistant bubbles interleave `send_intermediate_update` reasoning notes with grouped non-update tool-call batches
@@ -326,13 +326,13 @@ Composer:
 - toolbar contains an "Add Attachments" button (paperclip icon, triggers hidden file input) and a run-aware primary action:
   - idle: `Send`
   - assistant busy (active run or active SSE stream): destructive `Stop` (aborts stream request and interrupts run if still active)
-- compact removable attachment chips above the composer box (thumbnail + extra-small corner remove button that does not obscure preview)
-- click-to-preview image dialog before send
+- compact removable attachment chips above the composer box (image thumbnails and PDF file chips with extra-small corner remove buttons)
+- click-to-preview attachment dialog before send (image and PDF)
 - composer submit shortcut is line-aware:
   - `Cmd+Enter` (or `Ctrl+Enter`) always submits
   - plain `Enter` submits only when the draft is a single line
-- paste image attachments directly into the composer (`Cmd/Ctrl+V`)
-- drag-and-drop image files onto the composer drop target
+- paste image/PDF attachments directly into the composer (`Cmd/Ctrl+V`)
+- drag-and-drop image/PDF files onto the composer drop target
 - optimistic user message rendering: user bubble appears immediately after submit, before run completion
 - optimistic user bubble is auto-removed once the persisted server-side user message arrives, preventing temporary duplicate user blocks
 - optimistic assistant placeholder rendering: assistant bubble appears immediately after submit (without waiting for run-status polling) with a flashing block cursor (`▍`) while awaiting first assistant content/activity
@@ -437,7 +437,7 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 ## Operational Impact
 
 - frontend now depends on agent API contracts and attachment URLs
-- multipart requests are required for agent message send with images
+- multipart requests are required for agent message send with image/PDF attachments
 - agent send now depends on SSE parsing for incremental assistant text events (`run_started`, `text_delta`, `tool_call`, `reasoning_update`, `run_completed`, `run_failed`)
 - all query keys/invalidation rules are now centralized, so new pages/features should reuse `queryKeys` + `queryInvalidation` helpers
 - UI primitives should be sourced from `frontend/src/components/ui/*` before introducing one-off controls/styles
@@ -481,7 +481,7 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 - popup auto-save requires valid required fields; invalid dirty state keeps popup open and surfaces validation errors
 - entry property wrappers are non-label containers so only direct control clicks activate inputs/selects
 - streaming bubble renders plain text deltas during SSE; markdown formatting is applied after the final assistant message is persisted/refetched
-- composer paste/drag-drop paths accept only image files; non-image files are skipped with a local error message
+- composer paste/drag-drop paths accept image and PDF files; unsupported file types are skipped with a local error message
 - bundle output can still report large chunk warnings because `EntryEditorModal`/BlockNote and charting bundles are heavy even after route-level lazy loading
 - taxonomy UI is flat-list only in V1:
   - no delete flow for category terms

@@ -1,4 +1,5 @@
 import type { RefObject } from "react";
+import { FileText } from "lucide-react";
 
 import { withApiBase } from "../../../lib/api";
 import type { AgentMessage, AgentRun } from "../../../lib/types";
@@ -43,6 +44,10 @@ export function AgentTimeline(props: AgentTimelineProps) {
     onReviewRun
   } = props;
 
+  function isImageMimeType(mimeType: string): boolean {
+    return mimeType.toLowerCase().startsWith("image/");
+  }
+
   return (
     <>
       <h3>Timeline</h3>
@@ -83,9 +88,28 @@ export function AgentTimeline(props: AgentTimelineProps) {
                 )}
 
                 {message.attachments.length > 0 ? (
-                  <div className="agent-message-images">
+                  <div className="agent-message-attachments">
                     {message.attachments.map((attachment) => (
-                      <img key={attachment.id} src={withApiBase(attachment.attachment_url)} alt="User upload" loading="lazy" />
+                      isImageMimeType(attachment.mime_type) ? (
+                        <img
+                          key={attachment.id}
+                          className="agent-message-attachment-image"
+                          src={withApiBase(attachment.attachment_url)}
+                          alt="User upload"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <a
+                          key={attachment.id}
+                          className="agent-message-attachment-file"
+                          href={withApiBase(attachment.attachment_url)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <FileText className="h-4 w-4" />
+                          <span>{attachment.mime_type === "application/pdf" ? "Open PDF attachment" : "Open attachment"}</span>
+                        </a>
+                      )
                     ))}
                   </div>
                 ) : null}
@@ -108,12 +132,19 @@ export function AgentTimeline(props: AgentTimelineProps) {
               {pendingUserMessage.content ? (
                 <p className="agent-message-text">{pendingUserMessage.content}</p>
               ) : (
-                <p className="muted">(image-only message)</p>
+                <p className="muted">(attachment-only message)</p>
               )}
               {pendingUserMessage.attachments.length > 0 ? (
-                <div className="agent-message-images">
+                <div className="agent-message-attachments">
                   {pendingUserMessage.attachments.map((attachment) => (
-                    <img key={attachment.id} src={attachment.url} alt={attachment.name} loading="lazy" />
+                    attachment.kind === "image" ? (
+                      <img key={attachment.id} className="agent-message-attachment-image" src={attachment.url} alt={attachment.name} loading="lazy" />
+                    ) : (
+                      <a key={attachment.id} className="agent-message-attachment-file" href={attachment.url} target="_blank" rel="noreferrer">
+                        <FileText className="h-4 w-4" />
+                        <span>{attachment.name}</span>
+                      </a>
+                    )
                   ))}
                 </div>
               ) : null}

@@ -432,14 +432,17 @@ Content type: `multipart/form-data`
 Form fields:
 
 - `content` (text, optional if files provided)
-- `files` (0..N images)
+- `files` (0..N attachments: images and/or PDFs)
 
 Behavior:
 
-- validates image count/size against configured limits
+- validates attachment count/size against configured limits
+- accepts `image/*` and `application/pdf` uploads
 - persists message + attachments
 - creates an `agent_runs` row with initial `status=running`
 - starts bounded tool-calling execution in background
+- PDF attachments are parsed to markdown text via MarkItDown before model calls
+- when the configured model supports vision, each uploaded PDF page is also sent to the model as an `image_url` part
 - resolves provider routing via LiteLLM using configured model name + provider environment credentials
 - run/tool-call/change-item progress is available via `GET /agent/threads/{thread_id}` and `GET /agent/runs/{run_id}` polling
 
@@ -455,7 +458,7 @@ Usage behavior:
 
 Errors:
 
-- `400` invalid payload (for example no content/files, invalid image type, limits exceeded)
+- `400` invalid payload (for example no content/files, unsupported attachment type, limits exceeded)
 - `404` thread not found
 - `503` provider credentials unavailable for resolved model target
 
@@ -468,7 +471,7 @@ Content type: `multipart/form-data`
 Form fields:
 
 - `content` (text, optional if files provided)
-- `files` (0..N images)
+- `files` (0..N attachments: images and/or PDFs)
 
 Behavior:
 
@@ -507,7 +510,7 @@ Usage behavior:
 
 Errors:
 
-- `400` invalid payload (for example no content/files, invalid image type, limits exceeded)
+- `400` invalid payload (for example no content/files, unsupported attachment type, limits exceeded)
 - `404` thread not found
 - `503` provider credentials unavailable for resolved model target
 
@@ -586,7 +589,7 @@ State rules:
 
 ## `GET /agent/attachments/{attachment_id}`
 
-Serve uploaded image for timeline rendering.
+Serve uploaded agent attachment (image or PDF).
 
 Response:
 

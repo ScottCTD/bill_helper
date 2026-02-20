@@ -124,6 +124,8 @@ def _store_attachment_bytes(
             suffix = ".jpg"
         elif mime_type == "image/webp":
             suffix = ".webp"
+        elif mime_type == "application/pdf":
+            suffix = ".pdf"
         else:
             suffix = ".bin"
     file_path = upload_root / f"{uuid4()}{suffix}"
@@ -160,11 +162,14 @@ async def _create_user_message_and_start_run(
     thread = _get_thread_or_404(db, thread_id)
     clean_content = _normalize_optional_text(content)
     if not clean_content and not files:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message must include text or at least one image.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Message must include text or at least one attachment.",
+        )
     if len(files) > settings.agent_max_images_per_message:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Too many images. Max allowed is {settings.agent_max_images_per_message}.",
+            detail=f"Too many attachments. Max allowed is {settings.agent_max_images_per_message}.",
         )
 
     user_message = AgentMessage(
@@ -177,13 +182,16 @@ async def _create_user_message_and_start_run(
 
     for upload in files:
         mime_type = (upload.content_type or "").lower()
-        if not mime_type.startswith("image/"):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only image attachments are supported.")
+        if not (mime_type.startswith("image/") or mime_type == "application/pdf"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only image and PDF attachments are supported.",
+            )
         file_bytes = await upload.read()
         if len(file_bytes) > settings.agent_max_image_size_bytes:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Image too large. Max bytes allowed is {settings.agent_max_image_size_bytes}.",
+                detail=f"Attachment too large. Max bytes allowed is {settings.agent_max_image_size_bytes}.",
             )
         path = _store_attachment_bytes(
             message_id=user_message.id,

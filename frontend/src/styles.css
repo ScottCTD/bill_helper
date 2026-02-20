@@ -999,12 +999,21 @@
     @apply bg-transparent p-0;
   }
 
-  .agent-message-images {
+  .agent-message-attachments {
     @apply flex flex-wrap gap-2;
   }
 
-  .agent-message-images img {
+  .agent-message-attachment-image {
     @apply h-28 w-28 rounded-md border border-border object-cover;
+  }
+
+  .agent-message-attachment-file {
+    @apply inline-flex items-center gap-2 rounded-md border border-border/90 bg-background/80 px-2.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/45 hover:text-foreground;
+  }
+
+  .agent-message-attachment-file span {
+    @apply truncate;
+    max-width: 180px;
   }
 
   .agent-run-block {
@@ -1410,6 +1419,10 @@
     @apply relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/85 bg-muted/35 p-0.5;
   }
 
+  .agent-draft-attachment-chip-file {
+    @apply w-auto max-w-52 pl-1 pr-5;
+  }
+
   .agent-draft-attachment-preview {
     @apply inline-flex h-full w-full items-center justify-center overflow-hidden rounded-sm border border-transparent bg-transparent p-0;
   }
@@ -1422,6 +1435,18 @@
     @apply h-full w-full rounded-sm border border-border object-cover;
   }
 
+  .agent-draft-attachment-file {
+    @apply inline-flex h-full w-full items-center gap-1.5 overflow-hidden rounded-sm border border-transparent bg-transparent px-1 py-0 text-xs text-muted-foreground;
+  }
+
+  .agent-draft-attachment-file:hover {
+    @apply border-border/85 bg-background text-foreground;
+  }
+
+  .agent-draft-attachment-file-name {
+    @apply truncate text-left;
+  }
+
   .agent-draft-attachment-remove {
     @apply absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full border border-border/85 bg-card p-0 text-foreground;
   }
@@ -1432,6 +1457,10 @@
 
   .agent-attachment-preview-image {
     @apply max-h-[75vh] w-full rounded-md border border-border object-contain;
+  }
+
+  .agent-attachment-preview-document {
+    @apply h-[75vh] w-full rounded-md border border-border bg-background;
   }
 }
 

@@ -8,7 +8,12 @@ import {
   useState
 } from "react";
 
-import { IMAGE_FILENAME_PATTERN, type DraftAttachment, type DraftAttachmentPreview } from "./types";
+import {
+  detectDraftAttachmentKind,
+  isSupportedAgentAttachment,
+  type DraftAttachment,
+  type DraftAttachmentPreview
+} from "./types";
 
 interface UseAgentDraftAttachmentsArgs {
   setActionError: (message: string | null) => void;
@@ -25,7 +30,13 @@ export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const draftAttachmentPreviews = useMemo<DraftAttachmentPreview[]>(
-    () => draftFiles.map((item) => ({ id: item.id, file: item.file, url: URL.createObjectURL(item.file) })),
+    () =>
+      draftFiles.map((item) => ({
+        id: item.id,
+        file: item.file,
+        url: URL.createObjectURL(item.file),
+        kind: detectDraftAttachmentKind(item.file)
+      })),
     [draftFiles]
   );
 
@@ -57,35 +68,27 @@ export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
     return `draft-attachment-${draftFileIdCounterRef.current}`;
   }
 
-  function isImageFile(file: File): boolean {
-    const mimeType = file.type.toLowerCase();
-    if (mimeType.startsWith("image/")) {
-      return true;
-    }
-    return IMAGE_FILENAME_PATTERN.test(file.name.toLowerCase());
-  }
-
   function appendDraftAttachments(files: File[]): void {
     if (files.length === 0) {
       return;
     }
-    const imageFiles = files.filter(isImageFile);
-    const rejectedCount = files.length - imageFiles.length;
+    const allowedFiles = files.filter(isSupportedAgentAttachment);
+    const rejectedCount = files.length - allowedFiles.length;
     if (rejectedCount > 0) {
       setActionError(
         rejectedCount === 1
-          ? "Only image files are supported in agent attachments."
-          : `${rejectedCount} files were skipped. Only image files are supported in agent attachments.`
+          ? "Only image and PDF files are supported in agent attachments."
+          : `${rejectedCount} files were skipped. Only image and PDF files are supported in agent attachments.`
       );
     } else {
       setActionError(null);
     }
-    if (imageFiles.length === 0) {
+    if (allowedFiles.length === 0) {
       return;
     }
     setDraftFiles((current) => [
       ...current,
-      ...imageFiles.map((file) => ({
+      ...allowedFiles.map((file) => ({
         id: nextDraftAttachmentId(),
         file
       }))

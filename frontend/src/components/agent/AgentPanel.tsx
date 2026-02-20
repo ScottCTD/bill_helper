@@ -35,7 +35,12 @@ import { AgentThreadList } from "./panel/AgentThreadList";
 import { AgentThreadUsageBar } from "./panel/AgentThreadUsageBar";
 import { AgentTimeline } from "./panel/AgentTimeline";
 import { useAgentDraftAttachments } from "./panel/useAgentDraftAttachments";
-import { COMPOSER_TEXTAREA_MAX_HEIGHT_PX, type PendingAssistantMessage, type PendingUserMessage } from "./panel/types";
+import {
+  COMPOSER_TEXTAREA_MAX_HEIGHT_PX,
+  detectDraftAttachmentKind,
+  type PendingAssistantMessage,
+  type PendingUserMessage
+} from "./panel/types";
 import { AgentRunReviewModal } from "./review/AgentRunReviewModal";
 import { Button } from "../ui/button";
 
@@ -417,7 +422,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     setActionError(null);
     const content = draftMessage.trim();
     if (!content && draftFiles.length === 0) {
-      setActionError("Enter a message or attach at least one image.");
+      setActionError("Enter a message or attach at least one file.");
       return;
     }
     const sendingDraftFiles = [...draftFiles];
@@ -447,7 +452,9 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         attachments: sendingDraftFiles.map((item, index) => ({
           id: `${item.id}-${index}`,
           name: item.file.name,
-          url: URL.createObjectURL(item.file)
+          url: URL.createObjectURL(item.file),
+          mimeType: item.file.type || "",
+          kind: detectDraftAttachmentKind(item.file)
         }))
       };
       setPendingUserMessage(optimisticMessage);

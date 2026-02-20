@@ -136,7 +136,7 @@ export function SettingsPage() {
       const nextAgentMaxSteps = parsePositiveInteger(formState.agent_max_steps, "Agent max steps");
       const nextAgentMaxImagesPerMessage = parsePositiveInteger(
         formState.agent_max_images_per_message,
-        "Max images per message"
+        "Max attachments per message"
       );
       const nextAgentRetryMaxAttempts = parsePositiveInteger(
         formState.agent_retry_max_attempts,
@@ -158,9 +158,9 @@ export function SettingsPage() {
         throw new Error("Retry backoff multiplier must be at least 1.");
       }
 
-      const imageSizeMb = parseNonNegativeNumber(formState.agent_max_image_size_mb, "Image size limit");
+      const imageSizeMb = parseNonNegativeNumber(formState.agent_max_image_size_mb, "Attachment size limit");
       if (imageSizeMb <= 0) {
-        throw new Error("Image size limit must be greater than 0.");
+        throw new Error("Attachment size limit must be greater than 0.");
       }
       const nextAgentMaxImageSizeBytes = Math.round(imageSizeMb * 1024 * 1024);
 
@@ -307,7 +307,7 @@ export function SettingsPage() {
                   onChange={(event) => setFormState((state) => (state ? { ...state, agent_max_steps: event.target.value } : state))}
                 />
               </FormField>
-              <FormField label="Max images per message">
+              <FormField label="Max attachments per message">
                 <Input
                   type="number"
                   min={1}
@@ -319,7 +319,7 @@ export function SettingsPage() {
               </FormField>
             </div>
 
-            <FormField label="Max image size (MB)">
+            <FormField label="Max attachment size (MB)">
               <Input
                 type="number"
                 min={0.1}

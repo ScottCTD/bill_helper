@@ -6,11 +6,23 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import litellm
+from markitdown import MarkItDown
+import pymupdf
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.enums import AgentMessageRole, AgentRunStatus
-from backend.models import Account, AgentChangeItem, AgentMessage, AgentReviewAction, AgentRun, AgentToolCall, User
+from backend.models import (
+    Account,
+    AgentChangeItem,
+    AgentMessage,
+    AgentMessageAttachment,
+    AgentReviewAction,
+    AgentRun,
+    AgentToolCall,
+    User,
+)
 from backend.services.agent.prompts import system_prompt
 from backend.services.runtime_settings import resolve_runtime_settings
 
@@ -21,6 +33,77 @@ def attachment_to_data_url(file_path: str, mime_type: str) -> str | None:
         return None
     encoded = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{mime_type};base64,{encoded}"
+
+
+def _normalize_model_for_vision_check(model_name: str) -> str:
+    normalized = " ".join((model_name or "").split()).strip()
+    if normalized.lower().startswith("google/"):
+        suffix = normalized.split("/", 1)[1]
+        return f"gemini/{suffix}"
+    return normalized
+
+
+def _model_supports_vision(model_name: str) -> bool:
+    normalized = _normalize_model_for_vision_check(model_name)
+    if not normalized:
+        return False
+    candidates = [normalized]
+    raw = " ".join((model_name or "").split()).strip()
+    if raw and raw != normalized:
+        candidates.append(raw)
+    for candidate in candidates:
+        try:
+            if litellm.supports_vision(candidate):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _is_pdf_attachment(attachment: AgentMessageAttachment) -> bool:
+    mime_type = (attachment.mime_type or "").lower()
+    if mime_type == "application/pdf":
+        return True
+    return Path(attachment.file_path).suffix.lower() == ".pdf"
+
+
+def _extract_pdf_markdown(file_path: str) -> str | None:
+    path = Path(file_path)
+    if not path.exists():
+        return None
+    try:
+        result = MarkItDown().convert_local(path)
+    except Exception:
+        return None
+
+    markdown = getattr(result, "markdown", None)
+    if isinstance(markdown, str):
+        normalized = markdown.strip()
+        if normalized:
+            return normalized
+    text_content = getattr(result, "text_content", None)
+    if isinstance(text_content, str):
+        normalized = text_content.strip()
+        if normalized:
+            return normalized
+    return None
+
+
+def _pdf_page_image_data_urls(file_path: str) -> list[str]:
+    path = Path(file_path)
+    if not path.exists():
+        return []
+    try:
+        with pymupdf.open(path) as document:
+            data_urls: list[str] = []
+            for page in document:
+                pixmap = page.get_pixmap(alpha=False)
+                image_bytes = pixmap.tobytes("png")
+                encoded = base64.b64encode(image_bytes).decode("ascii")
+                data_urls.append(f"data:image/png;base64,{encoded}")
+            return data_urls
+    except Exception:
+        return []
 
 
 def _compose_user_feedback_text(
@@ -76,6 +159,7 @@ def build_user_content(
     *,
     review_results_prefix: str | None = None,
     interruption_prefix: str | None = None,
+    include_pdf_page_images: bool = True,
 ) -> str | list[dict[str, Any]]:
     content_text = _compose_user_feedback_text(
         message,
@@ -85,17 +169,42 @@ def build_user_content(
     if not message.attachments:
         return content_text
 
-    parts: list[dict[str, Any]] = []
+    text_sections: list[str] = []
     if content_text.strip():
-        parts.append({"type": "text", "text": content_text})
-    for attachment in message.attachments:
+        text_sections.append(content_text)
+    image_parts: list[dict[str, Any]] = []
+
+    for attachment_index, attachment in enumerate(message.attachments, start=1):
+        if _is_pdf_attachment(attachment):
+            pdf_markdown = _extract_pdf_markdown(attachment.file_path)
+            if pdf_markdown:
+                text_sections.append(
+                    f"PDF attachment {attachment_index} (parsed with MarkItDown):\n{pdf_markdown}"
+                )
+            else:
+                text_sections.append(
+                    f"PDF attachment {attachment_index} was provided, but text extraction returned no content."
+                )
+            if include_pdf_page_images:
+                for data_url in _pdf_page_image_data_urls(attachment.file_path):
+                    image_parts.append({"type": "image_url", "image_url": {"url": data_url}})
+            continue
+
         data_url = attachment_to_data_url(attachment.file_path, attachment.mime_type)
         if data_url is None:
             continue
-        parts.append({"type": "image_url", "image_url": {"url": data_url}})
-    if not parts:
-        return content_text or "User sent image attachments."
-    return parts
+        image_parts.append({"type": "image_url", "image_url": {"url": data_url}})
+
+    text_block = "\n\n".join(section for section in text_sections if section.strip())
+    if image_parts:
+        parts: list[dict[str, Any]] = []
+        if text_block:
+            parts.append({"type": "text", "text": text_block})
+        parts.extend(image_parts)
+        return parts
+    if text_block:
+        return text_block
+    return content_text or "User sent attachments."
 
 
 def _compact_json(value: Any, *, max_len: int = 600) -> str:
@@ -364,6 +473,9 @@ def build_llm_messages(
     *,
     current_user_message_id: str | None = None,
 ) -> list[dict[str, Any]]:
+    settings = resolve_runtime_settings(db)
+    include_pdf_page_images = _model_supports_vision(settings.agent_model)
+
     history = list(
         db.scalars(
             select(AgentMessage)
@@ -399,6 +511,7 @@ def build_llm_messages(
                         message,
                         review_results_prefix=message_review_prefix,
                         interruption_prefix=message_interruption_prefix,
+                        include_pdf_page_images=include_pdf_page_images,
                     ),
                 }
             )

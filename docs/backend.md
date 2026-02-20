@@ -8,6 +8,8 @@
 - Alembic
 - SQLite (local file)
 - LiteLLM model-provider routing for chat completions
+- MarkItDown (`markitdown[pdf]`) for PDF-to-markdown extraction in agent message history
+- PyMuPDF (`pymupdf`) for per-page PDF rendering when multimodal model input is enabled
 
 ## Entry Points
 
@@ -36,8 +38,8 @@ Agent settings:
 - `LANGFUSE_HOST` / `BILL_HELPER_LANGFUSE_HOST` (optional; defaults to Langfuse cloud host if unset)
 - `AGENT_MODEL` (default `google/gemini-3-flash-preview`)
 - `AGENT_MAX_STEPS` (default `100`)
-- `AGENT_MAX_IMAGE_SIZE_BYTES` (default `5MB`)
-- `AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`)
+- `AGENT_MAX_IMAGE_SIZE_BYTES` (default `5MB`; per-attachment size limit for image/PDF agent uploads)
+- `AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`; max image/PDF uploads per message)
 - runtime pricing uses LiteLLM model-cost mapping (`litellm`) and refreshes cost map from LiteLLM source with local fallback
 
 Runtime override behavior:
@@ -141,6 +143,8 @@ Agent services:
   - on tool errors/selector ambiguity, instructs the model to recover or ask for user clarification
 - `backend/services/agent/message_history.py`
   - converts persisted thread history and attachments into model-ready messages
+  - parses PDF attachments with MarkItDown and appends extracted markdown text into the user message content passed to the model
+  - checks LiteLLM model vision capability and, when supported, renders uploaded PDF pages to PNG data URLs (one page per image part)
   - builds account summaries for current user and injects them into the system prompt context
   - prepends reviewed proposal outcomes to the latest user message before user feedback text
   - for follow-up turns after interrupted runs, injects an interruption-context note so the model treats the prior request as unfinished context
@@ -211,8 +215,8 @@ Agent router:
   - `GET /api/v1/agent/threads`
   - `POST /api/v1/agent/threads`
   - `GET /api/v1/agent/threads/{thread_id}`
-  - `POST /api/v1/agent/threads/{thread_id}/messages` (multipart text + images)
-  - `POST /api/v1/agent/threads/{thread_id}/messages/stream` (multipart text + images, SSE response)
+  - `POST /api/v1/agent/threads/{thread_id}/messages` (multipart text + image/PDF attachments)
+  - `POST /api/v1/agent/threads/{thread_id}/messages/stream` (multipart text + image/PDF attachments, SSE response)
   - `GET /api/v1/agent/runs/{run_id}`
   - `POST /api/v1/agent/runs/{run_id}/interrupt`
   - `POST /api/v1/agent/change-items/{item_id}/approve`

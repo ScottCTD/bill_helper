@@ -1,5 +1,5 @@
 import type { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, KeyboardEvent, RefObject } from "react";
-import { Paperclip, SendHorizontal, Square, X } from "lucide-react";
+import { FileText, Paperclip, SendHorizontal, Square, X } from "lucide-react";
 
 import { cn } from "../../../lib/utils";
 import { Button } from "../../ui/button";
@@ -68,20 +68,36 @@ export function AgentComposer(props: AgentComposerProps) {
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      {isComposerDragActive ? <p className="muted">Drop files to attach</p> : null}
+      {isComposerDragActive ? <p className="muted">Drop images or PDFs to attach</p> : null}
       {draftAttachmentPreviews.length > 0 ? (
         <div className="agent-draft-attachments" aria-label="Pending attachments">
           {draftAttachmentPreviews.map((preview) => (
-            <div key={preview.id} className="agent-draft-attachment-chip">
-              <button
-                type="button"
-                className="agent-draft-attachment-preview"
-                onClick={() => setPreviewAttachmentId(preview.id)}
-                title={preview.file.name}
-                aria-pressed={previewAttachmentId === preview.id}
-              >
-                <img src={preview.url} alt={preview.file.name} loading="lazy" />
-              </button>
+            <div
+              key={preview.id}
+              className={cn("agent-draft-attachment-chip", preview.kind === "pdf" && "agent-draft-attachment-chip-file")}
+            >
+              {preview.kind === "image" ? (
+                <button
+                  type="button"
+                  className="agent-draft-attachment-preview"
+                  onClick={() => setPreviewAttachmentId(preview.id)}
+                  title={preview.file.name}
+                  aria-pressed={previewAttachmentId === preview.id}
+                >
+                  <img src={preview.url} alt={preview.file.name} loading="lazy" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="agent-draft-attachment-file"
+                  onClick={() => setPreviewAttachmentId(preview.id)}
+                  title={preview.file.name}
+                  aria-pressed={previewAttachmentId === preview.id}
+                >
+                  <FileText className="h-4 w-4" />
+                  <span className="agent-draft-attachment-file-name">{preview.file.name}</span>
+                </button>
+              )}
               <Button
                 type="button"
                 variant="ghost"
@@ -113,7 +129,7 @@ export function AgentComposer(props: AgentComposerProps) {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf,.pdf"
             multiple
             onChange={onFileSelection}
             className="sr-only"

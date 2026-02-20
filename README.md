@@ -82,8 +82,10 @@ Implemented:
   - Agent can emit sparse intermediate progress notes through `send_intermediate_update`; streamed runs surface these as `reasoning_update` events.
   - Existing `POST /api/v1/agent/threads/{thread_id}/messages` behavior remains available and still starts a background run for polling-based clients.
   - If a run is interrupted, the interrupted user request remains in conversation history and the next turn is annotated so the model knows the previous response was cut short.
-  - Composer now supports removable image chips with thumbnail previews before send.
-  - Composer now supports paste (`Cmd/Ctrl+V`) and drag-drop image attachment ingestion.
+  - Composer now supports removable attachment chips (image thumbnails + PDF file chips) before send.
+  - Composer now supports paste (`Cmd/Ctrl+V`) and drag-drop image/PDF attachment ingestion.
+  - Agent message uploads now accept PDF attachments in addition to images.
+  - PDF attachments are parsed with MarkItDown; extracted text is appended to model input, and when the configured model supports vision each PDF page is also sent as an image.
   - Attachment chips are compact icon thumbnails with an extra-small corner remove (`x`) control that stays off the image preview above the chat bar.
   - Run and tool events are anchored in the assistant-side timeline with collapsible tool-call payload panels.
   - Runs interleave reasoning updates and grouped tool-call batches in both active and completed states for a consistent trace view.
@@ -162,8 +164,8 @@ Set these environment variables (for example in `.env`):
 - `BILL_HELPER_AGENT_RETRY_INITIAL_WAIT_SECONDS` (default `0.25`)
 - `BILL_HELPER_AGENT_RETRY_MAX_WAIT_SECONDS` (default `4.0`)
 - `BILL_HELPER_AGENT_RETRY_BACKOFF_MULTIPLIER` (default `2.0`)
-- `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` (default `5242880`)
-- `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`)
+- `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` (default `5242880`; per-attachment size limit for image/PDF agent uploads)
+- `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`; max image/PDF uploads per agent message)
 
 Provider credential behavior:
 
@@ -254,7 +256,7 @@ Frontend URL:
 1. Open the app and use the `Home` route for the AI-native chat workspace.
 2. Use `Settings` to configure runtime defaults (currency/model/step and key fallback behavior) before running agent-heavy workflows if needed.
 3. Create/select a thread.
-4. Send text and optional images.
+4. Send text and optional attachments (images or PDFs).
 5. Review timeline:
    - user/assistant messages
    - newly sent user message appears immediately while run is in-flight
@@ -264,8 +266,8 @@ Frontend URL:
    - review request/action blocks appear below assistant message text
    - assistant-side run/tool-call observability with collapsible details
    - auto-refresh while the run is active
-   - removable image preview chips before send
-   - paste and drag-drop image attachments directly into the chat composer
+   - removable attachment chips before send
+   - paste and drag-drop image/PDF attachments directly into the chat composer
    - composer shortcut: `Cmd+Enter` (or `Ctrl+Enter`) sends the message
    - single cumulative thread usage bar above the composer (`Input`, `Output`, `Cache read`, `Cache write`, rightmost `Total cost`)
    - run-level proposal summary cards with pending counts

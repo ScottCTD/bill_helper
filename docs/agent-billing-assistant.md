@@ -19,7 +19,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | Runtime | `backend/services/agent/runtime.py` | Run lifecycle, bounded tool loop, persistence of tool calls and final assistant message |
 | Model client | `backend/services/agent/model_client.py` | LiteLLM adapter, tool wiring, retry-enabled model completion |
 | Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks, proposal ordering (including tag-delete sequencing), error recovery, and current-user context section |
-| Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; builds current-user account context for system prompt; prepends review outcomes before current user feedback in the latest user message |
+| Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; parses PDF attachments to markdown text via MarkItDown; when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt; prepends review outcomes before current user feedback in the latest user message |
 | Tools | `backend/services/agent/tools.py` | Read/progress/proposal tool schemas, validation, execution, tool-level retry |
 | Review/apply | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py` | Approval/rejection, apply handlers for proposed CRUD changes |
 | API router | `backend/routers/agent.py` | Threads/runs/send/review/attachment endpoints |
@@ -31,6 +31,8 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 3. Runtime builds model messages:
    - system prompt (including current-user account context)
    - thread message history
+   - PDF attachments converted to markdown text via MarkItDown (always)
+   - PDF page images appended to multimodal payloads when model vision is supported
    - for the latest user turn only, review outcomes (if any) prepended before that user feedback text
 4. Runtime loops: model call → optional tool calls (including sparse `send_intermediate_update` progress notes) → tool results appended → repeat (bounded by `agent_max_steps`).
 5. Runtime persists final assistant message and marks run `completed` or `failed`.
@@ -49,8 +51,8 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | `agent_retry_initial_wait_seconds` | `BILL_HELPER_AGENT_RETRY_INITIAL_WAIT_SECONDS` | `0.25` | Exponential backoff start |
 | `agent_retry_max_wait_seconds` | `BILL_HELPER_AGENT_RETRY_MAX_WAIT_SECONDS` | `4.0` | Exponential backoff cap |
 | `agent_retry_backoff_multiplier` | `BILL_HELPER_AGENT_RETRY_BACKOFF_MULTIPLIER` | `2.0` | Exponential growth factor |
-| `agent_max_images_per_message` | `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE` | `4` | Attachment count limit |
-| `agent_max_image_size_bytes` | `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` | `5242880` | Attachment size limit |
+| `agent_max_images_per_message` | `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE` | `4` | Image/PDF attachment count limit |
+| `agent_max_image_size_bytes` | `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` | `5242880` | Per-attachment size limit for image/PDF uploads |
 
 Retry behavior notes:
 
@@ -109,7 +111,7 @@ You are the Bill Helper assistant. Follow review-gated mutation policies strictl
 ### Message Format
 
 - **System**: Base prompt.
-- **User**: Thread messages; content may be plain text or a list of `{ type: "text", text: "..." }` and `{ type: "image_url", image_url: { url: "data:image/...;base64,..." } }`.
+- **User**: Thread messages; content may be plain text or a list of `{ type: "text", text: "..." }` and `{ type: "image_url", image_url: { url: "data:image/...;base64,..." } }`. PDF uploads are converted to markdown text blocks and, when vision is supported, per-page `image_url` items.
 - **Assistant**: Thread messages; when tool calls exist, format includes `content` and `tool_calls`.
 - **Tool**: `role: "tool"`, `tool_call_id`, `name`, `content` (plain text output from tool execution).
 
