@@ -50,7 +50,7 @@ Behavior notes:
 - app starts even when provider credentials are missing
 - only agent message execution is blocked (`503`) when LiteLLM cannot resolve credentials for the configured model target
 - LiteLLM resolves provider credentials from environment variables for the configured model (for example `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`)
-- when `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` are configured, LiteLLM Langfuse callbacks are enabled for success/failure traces
+- when `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` are configured, LiteLLM Langfuse callbacks are enabled for success/failure traces (Langfuse is pinned to `<3` because the legacy callback is incompatible with Langfuse v3; to use v3, migrate to `langfuse_otel` and OpenTelemetry)
 - credential pre-validation is best-effort; if provider validation is indeterminate, the run proceeds and provider/model errors are surfaced at model-call time
 - env settings are cached by `get_settings()` (`lru_cache`)
 - runtime behavior consumers use `backend/services/runtime_settings.py` for resolved effective values
@@ -151,7 +151,7 @@ Agent services:
   - applies configured retry policy to stream failures (including mid-stream transport failures)
   - performs a targeted one-shot retry for transient OpenRouter SSL `bad record mac` (`litellm.APIError`) failures in both streamed and non-streamed completions, including when `agent_retry_max_attempts=1`
   - suppresses duplicate streamed prefixes across retries so front-end token rendering remains incremental
-  - forwards observability fields through LiteLLM `metadata` for Langfuse trace/session/user linking and through `extra_body` for providers that support it
+  - forwards observability fields through LiteLLM `metadata` for Langfuse trace/session/user linking and through `extra_body` for providers that support it; supports `trace_id=thread_id` (one trace per thread), `is_first_run_in_thread`, `run_index`, and `step` for per-run/step generation names (`agent_turn_run_N_step_M`) and `existing_trace_id` for continuation steps or subsequent runs
   - enables LiteLLM `langfuse` success/failure callbacks when Langfuse credentials are configured
   - applies configurable tenacity retries for model completion calls
 - `backend/services/agent/pricing.py`
@@ -298,7 +298,7 @@ Current baseline for `backend/tests/test_agent.py`: `34 passed`.
 - streamed runs may emit `reasoning_update` events in addition to `tool_call` and `text_delta` events, enabling lightweight progress UI before final message persistence
 - interrupted runs are marked `failed` with user-facing interruption reason text
 - the next user turn after an interruption carries an explicit interruption note in model input (while preserving normal conversation history)
-- model requests include observability payload (`user`, `session_id=thread.id`, run trace metadata) with LiteLLM metadata mapping for Langfuse grouping (`trace_id`, `session_id`, `trace_user_id`, `generation_name`)
+- model requests include observability payload (`user`, `session_id=thread.id`, trace metadata) with LiteLLM metadata mapping for Langfuse grouping; one trace per thread (`trace_id=thread.id`), per-step generation names (`agent_turn_run_N_step_M`), and `existing_trace_id` for continuation steps or subsequent runs in the same thread so Langfuse displays one trace per conversation
 - each run includes persisted tool traces and change-item audit data
 - tool calls are committed incrementally per tool call to support near-real-time polling visibility
 - each run now includes nullable aggregated usage counters (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`)
@@ -327,3 +327,4 @@ Current baseline for `backend/tests/test_agent.py`: `34 passed`.
 - no autonomous/background agent runs
 - update/delete proposal types are supported and require review approval before apply
 - taxonomy assignment storage uses string `subject_id` and does not enforce cross-table FK integrity for subject rows
+- Langfuse SDK is constrained to `<3` because LiteLLM's legacy `langfuse` callback passes `sdk_integration`, which Langfuse v3 removed

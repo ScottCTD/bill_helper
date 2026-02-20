@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.enums import AgentMessageRole, AgentRunStatus, AgentToolCallStatus
@@ -104,17 +104,24 @@ def _model_observability_context(
     current_user_name: str,
     thread_id: str,
     run_id: str,
+    step: int | None = None,
+    is_first_run_in_thread: bool = True,
+    run_index: int = 1,
 ) -> dict[str, Any]:
+    trace: dict[str, Any] = {
+        "trace_id": thread_id,
+        "trace_name": "Bill Helper Agent",
+        "thread_id": thread_id,
+        "run_id": run_id,
+        "is_first_run_in_thread": is_first_run_in_thread,
+        "run_index": run_index,
+    }
+    if step is not None:
+        trace["step"] = step
     return {
         "user": current_user_name,
         "session_id": thread_id,
-        "trace": {
-            "trace_id": run_id,
-            "trace_name": "Bill Helper Agent Run",
-            "generation_name": "agent_turn",
-            "thread_id": thread_id,
-            "run_id": run_id,
-        },
+        "trace": trace,
     }
 
 
@@ -310,11 +317,9 @@ def _execute_agent_run(
 
     llm_messages = build_llm_messages(db, thread.id, current_user_message_id=run.user_message_id)
     tool_context = ToolContext(db=db, run_id=run.id)
-    observability_context = _model_observability_context(
-        current_user_name=settings.current_user_name,
-        thread_id=thread.id,
-        run_id=run.id,
-    )
+    run_count = db.scalar(select(func.count(AgentRun.id)).where(AgentRun.thread_id == thread.id)) or 0
+    is_first_run_in_thread = run_count == 1
+    run_index = run_count
     usage_totals: dict[str, int | None] = {
         "input_tokens": run.input_tokens,
         "output_tokens": run.output_tokens,
@@ -323,14 +328,22 @@ def _execute_agent_run(
     }
 
     try:
-        for _ in range(max_steps):
+        for step_index in range(max_steps):
             if _run_is_stopped(db, run):
                 return _load_run_snapshot(db, run.id)
 
+            observability = _model_observability_context(
+                current_user_name=settings.current_user_name,
+                thread_id=thread.id,
+                run_id=run.id,
+                step=step_index + 1,
+                is_first_run_in_thread=is_first_run_in_thread,
+                run_index=run_index,
+            )
             assistant_message = _call_model(
                 llm_messages,
                 db,
-                observability=observability_context,
+                observability=observability,
             )
             if _run_is_stopped(db, run):
                 return _load_run_snapshot(db, run.id)
@@ -440,11 +453,9 @@ def _execute_agent_run_stream(
 
     llm_messages = build_llm_messages(db, thread.id, current_user_message_id=run.user_message_id)
     tool_context = ToolContext(db=db, run_id=run.id)
-    observability_context = _model_observability_context(
-        current_user_name=settings.current_user_name,
-        thread_id=thread.id,
-        run_id=run.id,
-    )
+    run_count = db.scalar(select(func.count(AgentRun.id)).where(AgentRun.thread_id == thread.id)) or 0
+    is_first_run_in_thread = run_count == 1
+    run_index = run_count
     usage_totals: dict[str, int | None] = {
         "input_tokens": run.input_tokens,
         "output_tokens": run.output_tokens,
@@ -453,16 +464,24 @@ def _execute_agent_run_stream(
     }
 
     try:
-        for _ in range(max_steps):
+        for step_index in range(max_steps):
             if _run_is_stopped(db, run):
                 yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
                 return
 
+            observability = _model_observability_context(
+                current_user_name=settings.current_user_name,
+                thread_id=thread.id,
+                run_id=run.id,
+                step=step_index + 1,
+                is_first_run_in_thread=is_first_run_in_thread,
+                run_index=run_index,
+            )
             assistant_message: dict[str, Any] | None = None
             for event in _call_model_stream(
                 llm_messages,
                 db,
-                observability=observability_context,
+                observability=observability,
             ):
                 event_type = str(event.get("type") or "")
                 if event_type == "text_delta":

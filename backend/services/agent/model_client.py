@@ -96,6 +96,16 @@ def _build_observability_extra_body(observability: dict[str, Any] | None) -> dic
     return payload or None
 
 
+def _coerce_step(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
+
+
 def _build_observability_metadata(observability: dict[str, Any] | None) -> dict[str, Any] | None:
     if not isinstance(observability, dict):
         return None
@@ -116,12 +126,28 @@ def _build_observability_metadata(observability: dict[str, Any] | None) -> dict[
     if isinstance(trace, dict):
         trace_id = _normalize_observability_text(trace.get("trace_id"), max_length=256)
         trace_name = _normalize_observability_text(trace.get("trace_name"), max_length=256)
-        generation_name = _normalize_observability_text(trace.get("generation_name"), max_length=128) or generation_name
+        generation_name = _normalize_observability_text(trace.get("generation_name"), max_length=128)
         thread_id = _normalize_observability_text(trace.get("thread_id"), max_length=256)
         run_id = _normalize_observability_text(trace.get("run_id"), max_length=256)
+        step = _coerce_step(trace.get("step"))
+        is_first_run_in_thread = trace.get("is_first_run_in_thread", True)
+        run_index = _coerce_step(trace.get("run_index"))
 
+        if generation_name is None and run_index is not None and step is not None:
+            generation_name = f"agent_turn_run_{run_index}_step_{step}"
+        elif generation_name is None and step is not None:
+            generation_name = f"agent_turn_step_{step}"
+        elif generation_name is None:
+            generation_name = "agent_turn"
+
+        use_existing_trace = (step is not None and step > 1) or (
+            isinstance(is_first_run_in_thread, bool) and not is_first_run_in_thread
+        )
         if trace_id is not None:
-            metadata["trace_id"] = trace_id
+            if use_existing_trace:
+                metadata["existing_trace_id"] = trace_id
+            else:
+                metadata["trace_id"] = trace_id
         if trace_name is not None:
             metadata["trace_name"] = trace_name
         if thread_id is not None:

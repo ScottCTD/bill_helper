@@ -449,7 +449,8 @@ def test_model_observability_uses_thread_as_session_id(client, monkeypatch):
     assert captured_observability
     context = captured_observability[0]
     assert context["session_id"] == thread["id"]
-    assert context["trace"]["trace_id"] == run["id"]
+    assert context["trace"]["trace_id"] == thread["id"]
+    assert context["trace"]["run_id"] == run["id"]
 
 
 def test_interrupt_running_run_stops_background_processing(client, monkeypatch):

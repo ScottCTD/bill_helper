@@ -204,6 +204,99 @@ def test_complete_includes_langfuse_metadata(monkeypatch):
     assert response["content"] == "Hello"
 
 
+def test_complete_uses_step_based_generation_name_and_existing_trace_id(monkeypatch):
+    """Thread-scoped trace: one trace per thread, per-run generation names, existing_trace_id for step>1 or subsequent runs."""
+    captured_request: dict[str, object] = {}
+    client = _build_model_client(
+        langfuse_public_key="pk-test",
+        langfuse_secret_key="sk-test",
+    )
+
+    def fake_completion(**kwargs):
+        captured_request.clear()
+        captured_request.update(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="Hello",
+                        tool_calls=[],
+                    )
+                )
+            ],
+            usage={"input_tokens": 3, "output_tokens": 2},
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+
+    # First run in thread, step 1: trace_id=thread_id creates trace
+    client.complete(
+        [{"role": "user", "content": "hello"}],
+        observability={
+            "user": "u1",
+            "session_id": "t1",
+            "trace": {
+                "trace_id": "t1",
+                "trace_name": "Bill Helper Agent",
+                "thread_id": "t1",
+                "run_id": "run-1",
+                "step": 1,
+                "is_first_run_in_thread": True,
+                "run_index": 1,
+            },
+        },
+    )
+    meta = captured_request.get("metadata")
+    assert isinstance(meta, dict)
+    assert meta.get("trace_id") == "t1"
+    assert "existing_trace_id" not in meta
+    assert meta.get("generation_name") == "agent_turn_run_1_step_1"
+
+    # First run, step 2: existing_trace_id continues within same run
+    client.complete(
+        [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "Hi"}],
+        observability={
+            "user": "u1",
+            "session_id": "t1",
+            "trace": {
+                "trace_id": "t1",
+                "trace_name": "Bill Helper Agent",
+                "thread_id": "t1",
+                "run_id": "run-1",
+                "step": 2,
+                "is_first_run_in_thread": True,
+                "run_index": 1,
+            },
+        },
+    )
+    meta = captured_request.get("metadata")
+    assert isinstance(meta, dict)
+    assert meta.get("existing_trace_id") == "t1"
+    assert meta.get("generation_name") == "agent_turn_run_1_step_2"
+
+    # Second run in thread, step 1: existing_trace_id continues trace from prior run
+    client.complete(
+        [{"role": "user", "content": "follow-up"}],
+        observability={
+            "user": "u1",
+            "session_id": "t1",
+            "trace": {
+                "trace_id": "t1",
+                "trace_name": "Bill Helper Agent",
+                "thread_id": "t1",
+                "run_id": "run-2",
+                "step": 1,
+                "is_first_run_in_thread": False,
+                "run_index": 2,
+            },
+        },
+    )
+    meta = captured_request.get("metadata")
+    assert isinstance(meta, dict)
+    assert meta.get("existing_trace_id") == "t1"
+    assert meta.get("generation_name") == "agent_turn_run_2_step_1"
+
+
 def test_langfuse_callbacks_are_enabled_with_langfuse_credentials(monkeypatch):
     monkeypatch.setattr(litellm, "success_callback", [], raising=False)
     monkeypatch.setattr(litellm, "failure_callback", [], raising=False)
