@@ -4,6 +4,15 @@ import { Plus } from "lucide-react";
 import type { User } from "../../../lib/types";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "../../../components/ui/dialog";
+import { FormField } from "../../../components/ui/form-field";
 import { Input } from "../../../components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 
@@ -76,36 +85,12 @@ export function UsersSection(props: UsersSectionProps) {
           </label>
         </div>
         <div className="table-toolbar-action">
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            aria-label={createPanelOpen ? "Cancel add user" : "Add user"}
-            onClick={onToggleCreatePanel}
-          >
+          <Button type="button" size="icon" variant="outline" aria-label="Add user" onClick={onToggleCreatePanel}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {createPanelOpen ? (
-        <form className="table-inline-form" onSubmit={onCreateUserSubmit}>
-          <label className="field min-w-[220px] grow">
-            <span>Name</span>
-            <Input placeholder="e.g. Alice" value={newUserName} onChange={(event) => onNewUserNameChange(event.target.value)} />
-          </label>
-          <div className="table-inline-form-actions">
-            <Button type="submit" size="sm" disabled={isCreating}>
-              {isCreating ? "Creating..." : "Create"}
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={onCloseCreatePanel}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      ) : null}
-
-      {createErrorMessage ? <p className="error">{createErrorMessage}</p> : null}
       {isLoading ? <p>Loading users...</p> : null}
       {isError ? <p className="error">{queryErrorMessage}</p> : null}
 
@@ -124,31 +109,14 @@ export function UsersSection(props: UsersSectionProps) {
             <TableBody>
               {users.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell>
-                    {editingUserId === user.id ? (
-                      <Input value={editingUserName} className="h-8" onChange={(event) => onEditingUserNameChange(event.target.value)} />
-                    ) : (
-                      user.name
-                    )}
-                  </TableCell>
+                  <TableCell>{user.name}</TableCell>
                   <TableCell>{user.is_current_user ? <Badge variant="secondary">Current</Badge> : null}</TableCell>
                   <TableCell>{user.account_count ?? 0}</TableCell>
                   <TableCell>{user.entry_count ?? 0}</TableCell>
                   <TableCell>
-                    {editingUserId === user.id ? (
-                      <div className="table-actions">
-                        <Button type="button" size="sm" disabled={isUpdating} onClick={() => onSaveUser(user.id)}>
-                          Save
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={onCancelEditUser}>
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button type="button" size="sm" variant="outline" onClick={() => onStartEditUser(user)}>
-                        Edit
-                      </Button>
-                    )}
+                    <Button type="button" size="sm" variant="outline" onClick={() => onStartEditUser(user)}>
+                      Edit
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -159,7 +127,78 @@ export function UsersSection(props: UsersSectionProps) {
         )
       ) : null}
 
-      {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
+      <Dialog
+        open={createPanelOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            onCloseCreatePanel();
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create User</DialogTitle>
+            <DialogDescription>Add a new owner identity for account and entry assignment.</DialogDescription>
+          </DialogHeader>
+          <form className="grid gap-4" onSubmit={onCreateUserSubmit}>
+            <FormField label="Name">
+              <Input placeholder="e.g. Alice" value={newUserName} onChange={(event) => onNewUserNameChange(event.target.value)} />
+            </FormField>
+            {createErrorMessage ? <p className="error">{createErrorMessage}</p> : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onCloseCreatePanel}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isCreating}>
+                {isCreating ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(editingUserId)}
+        onOpenChange={(open) => {
+          if (!open) {
+            onCancelEditUser();
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>Update the display name used in owner assignments.</DialogDescription>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!editingUserId) {
+                return;
+              }
+              onSaveUser(editingUserId);
+            }}
+          >
+            <FormField label="Name">
+              <Input
+                placeholder="e.g. Alice"
+                value={editingUserName}
+                onChange={(event) => onEditingUserNameChange(event.target.value)}
+              />
+            </FormField>
+            {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onCancelEditUser}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isUpdating || !editingUserId}>
+                {isUpdating ? "Saving..." : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

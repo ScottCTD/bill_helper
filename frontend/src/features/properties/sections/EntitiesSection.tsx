@@ -4,6 +4,15 @@ import { Plus } from "lucide-react";
 import type { Entity } from "../../../lib/types";
 import { CreatableSingleSelect } from "../../../components/CreatableSingleSelect";
 import { Button } from "../../../components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "../../../components/ui/dialog";
+import { FormField } from "../../../components/ui/form-field";
 import { Input } from "../../../components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 
@@ -86,46 +95,12 @@ export function EntitiesSection(props: EntitiesSectionProps) {
           </label>
         </div>
         <div className="table-toolbar-action">
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            aria-label={createPanelOpen ? "Cancel add entity" : "Add entity"}
-            onClick={onToggleCreatePanel}
-          >
+          <Button type="button" size="icon" variant="outline" aria-label="Add entity" onClick={onToggleCreatePanel}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {createPanelOpen ? (
-        <form className="table-inline-form" onSubmit={onCreateEntitySubmit}>
-          <label className="field min-w-[220px] grow">
-            <span>Name</span>
-            <Input placeholder="e.g. Landlord" value={newEntityName} onChange={(event) => onNewEntityNameChange(event.target.value)} />
-          </label>
-          <label className="field min-w-[220px] grow">
-            <span>Category</span>
-            <CreatableSingleSelect
-              value={newEntityCategory}
-              options={entityCategoryOptions}
-              ariaLabel="Entity category"
-              placeholder="Select or create category..."
-              onChange={onNewEntityCategoryChange}
-            />
-          </label>
-          <div className="table-inline-form-actions">
-            <Button type="submit" size="sm" disabled={isCreating}>
-              {isCreating ? "Creating..." : "Create"}
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={onCloseCreatePanel}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      ) : null}
-
-      {createErrorMessage ? <p className="error">{createErrorMessage}</p> : null}
       {isLoading ? <p>Loading entities...</p> : null}
       {isError ? <p className="error">{queryErrorMessage}</p> : null}
 
@@ -146,47 +121,16 @@ export function EntitiesSection(props: EntitiesSectionProps) {
             <TableBody>
               {entities.map((entity) => (
                 <TableRow key={entity.id}>
-                  <TableCell>
-                    {editingEntityId === entity.id ? (
-                      <Input value={editingEntityName} className="h-8" onChange={(event) => onEditingEntityNameChange(event.target.value)} />
-                    ) : (
-                      entity.name
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingEntityId === entity.id ? (
-                      <div className="min-w-[200px]">
-                        <CreatableSingleSelect
-                          value={editingEntityCategory}
-                          options={entityCategoryOptions}
-                          ariaLabel="Edit entity category"
-                          placeholder="Select or create category..."
-                          onChange={onEditingEntityCategoryChange}
-                        />
-                      </div>
-                    ) : (
-                      entity.category || "(none)"
-                    )}
-                  </TableCell>
+                  <TableCell>{entity.name}</TableCell>
+                  <TableCell>{entity.category || "(none)"}</TableCell>
                   <TableCell>{entity.from_count ?? 0}</TableCell>
                   <TableCell>{entity.to_count ?? 0}</TableCell>
                   <TableCell>{entity.account_count ?? 0}</TableCell>
                   <TableCell>{entity.entry_count ?? 0}</TableCell>
                   <TableCell>
-                    {editingEntityId === entity.id ? (
-                      <div className="table-actions">
-                        <Button type="button" size="sm" disabled={isUpdating} onClick={() => onSaveEntity(entity.id)}>
-                          Save
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={onCancelEditEntity}>
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button type="button" size="sm" variant="outline" onClick={() => onStartEditEntity(entity)}>
-                        Edit
-                      </Button>
-                    )}
+                    <Button type="button" size="sm" variant="outline" onClick={() => onStartEditEntity(entity)}>
+                      Edit
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -197,7 +141,96 @@ export function EntitiesSection(props: EntitiesSectionProps) {
         )
       ) : null}
 
-      {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
+      <Dialog
+        open={createPanelOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            onCloseCreatePanel();
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Create Entity</DialogTitle>
+            <DialogDescription>Add a named counterparty and optional category.</DialogDescription>
+          </DialogHeader>
+          <form className="grid gap-4" onSubmit={onCreateEntitySubmit}>
+            <FormField label="Name">
+              <Input placeholder="e.g. Landlord" value={newEntityName} onChange={(event) => onNewEntityNameChange(event.target.value)} />
+            </FormField>
+            <FormField label="Category">
+              <CreatableSingleSelect
+                value={newEntityCategory}
+                options={entityCategoryOptions}
+                ariaLabel="Entity category"
+                placeholder="Select or create category..."
+                onChange={onNewEntityCategoryChange}
+              />
+            </FormField>
+            {createErrorMessage ? <p className="error">{createErrorMessage}</p> : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onCloseCreatePanel}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isCreating}>
+                {isCreating ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(editingEntityId)}
+        onOpenChange={(open) => {
+          if (!open) {
+            onCancelEditEntity();
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Edit Entity</DialogTitle>
+            <DialogDescription>Update entity naming and category metadata.</DialogDescription>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!editingEntityId) {
+                return;
+              }
+              onSaveEntity(editingEntityId);
+            }}
+          >
+            <FormField label="Name">
+              <Input
+                placeholder="e.g. Landlord"
+                value={editingEntityName}
+                onChange={(event) => onEditingEntityNameChange(event.target.value)}
+              />
+            </FormField>
+            <FormField label="Category">
+              <CreatableSingleSelect
+                value={editingEntityCategory}
+                options={entityCategoryOptions}
+                ariaLabel="Edit entity category"
+                placeholder="Select or create category..."
+                onChange={onEditingEntityCategoryChange}
+              />
+            </FormField>
+            {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onCancelEditEntity}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isUpdating || !editingEntityId}>
+                {isUpdating ? "Saving..." : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

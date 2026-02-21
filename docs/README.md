@@ -24,6 +24,7 @@ Historical implementation docs:
 - `completed/*.md`: closed implementation plans and migration notes. These are archival and not source-of-truth for current behavior.
 - `todo/*.md`: active/planned proposal notes that are not source-of-truth behavior docs.
 - `todo/account_markdown_notes.md`: proposal for adding account-level markdown notes editing (parity with entries).
+- `todo/agent_review_workflow_frontend_refactor.md`: proposal for pending-proposal editing workflow and review UX/tool-call transparency refactor.
 - `completed/entry_group_graph_workspace.md`: completed implementation plan for graph-first entry group workspace where group CRUD intent is handled through link operations (no first-class group CRUD).
 
 ## How To Use

@@ -3,6 +3,15 @@ import { Plus } from "lucide-react";
 
 import type { TaxonomyTerm } from "../../../lib/types";
 import { Button } from "../../../components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "../../../components/ui/dialog";
+import { FormField } from "../../../components/ui/form-field";
 import { Input } from "../../../components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 
@@ -77,36 +86,12 @@ export function TaxonomyTermsSection(props: TaxonomyTermsSectionProps) {
           </label>
         </div>
         <div className="table-toolbar-action">
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            aria-label={createPanelOpen ? "Cancel add category" : "Add category"}
-            onClick={onToggleCreatePanel}
-          >
+          <Button type="button" size="icon" variant="outline" aria-label="Add category" onClick={onToggleCreatePanel}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {createPanelOpen ? (
-        <form className="table-inline-form" onSubmit={onCreateTermSubmit}>
-          <label className="field min-w-[220px] grow">
-            <span>Name</span>
-            <Input placeholder="e.g. food" value={newTermName} onChange={(event) => onNewTermNameChange(event.target.value)} />
-          </label>
-          <div className="table-inline-form-actions">
-            <Button type="submit" size="sm" disabled={isCreating}>
-              {isCreating ? "Creating..." : "Create"}
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={onCloseCreatePanel}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      ) : null}
-
-      {createErrorMessage ? <p className="error">{createErrorMessage}</p> : null}
       {isLoading ? <p>Loading categories...</p> : null}
       {isError ? <p className="error">{queryErrorMessage}</p> : null}
 
@@ -123,29 +108,12 @@ export function TaxonomyTermsSection(props: TaxonomyTermsSectionProps) {
             <TableBody>
               {terms.map((term) => (
                 <TableRow key={term.id}>
-                  <TableCell>
-                    {editingTermId === term.id ? (
-                      <Input value={editingTermName} className="h-8" onChange={(event) => onEditingTermNameChange(event.target.value)} />
-                    ) : (
-                      term.name
-                    )}
-                  </TableCell>
+                  <TableCell>{term.name}</TableCell>
                   <TableCell>{term.usage_count}</TableCell>
                   <TableCell>
-                    {editingTermId === term.id ? (
-                      <div className="table-actions">
-                        <Button type="button" size="sm" disabled={isUpdating} onClick={() => onSaveTerm(term.id)}>
-                          Save
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={onCancelEditTerm}>
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button type="button" size="sm" variant="outline" onClick={() => onStartEditTerm(term)}>
-                        Rename
-                      </Button>
-                    )}
+                    <Button type="button" size="sm" variant="outline" onClick={() => onStartEditTerm(term)}>
+                      Rename
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -156,7 +124,78 @@ export function TaxonomyTermsSection(props: TaxonomyTermsSectionProps) {
         )
       ) : null}
 
-      {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
+      <Dialog
+        open={createPanelOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            onCloseCreatePanel();
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create Category</DialogTitle>
+            <DialogDescription>Add a taxonomy term to this category set.</DialogDescription>
+          </DialogHeader>
+          <form className="grid gap-4" onSubmit={onCreateTermSubmit}>
+            <FormField label="Name">
+              <Input placeholder="e.g. food" value={newTermName} onChange={(event) => onNewTermNameChange(event.target.value)} />
+            </FormField>
+            {createErrorMessage ? <p className="error">{createErrorMessage}</p> : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onCloseCreatePanel}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isCreating}>
+                {isCreating ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(editingTermId)}
+        onOpenChange={(open) => {
+          if (!open) {
+            onCancelEditTerm();
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Rename Category</DialogTitle>
+            <DialogDescription>Update the taxonomy term label used in selectors.</DialogDescription>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!editingTermId) {
+                return;
+              }
+              onSaveTerm(editingTermId);
+            }}
+          >
+            <FormField label="Name">
+              <Input
+                placeholder="e.g. food"
+                value={editingTermName}
+                onChange={(event) => onEditingTermNameChange(event.target.value)}
+              />
+            </FormField>
+            {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onCancelEditTerm}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isUpdating || !editingTermId}>
+                {isUpdating ? "Saving..." : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

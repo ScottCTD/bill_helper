@@ -67,14 +67,14 @@ echo "Syncing frontend dependencies..."
 )
 
 echo "Starting backend (log: $BACKEND_LOG)"
-uv run bill-helper-api >"$BACKEND_LOG" 2>&1 &
+uv run bill-helper-api > >(tee "$BACKEND_LOG") 2>&1 &
 BACKEND_PID=$!
 
 echo "Starting frontend (log: $FRONTEND_LOG)"
 (
   cd "$ROOT_DIR/frontend"
   npm run dev
-) >"$FRONTEND_LOG" 2>&1 &
+) > >(tee "$FRONTEND_LOG") 2>&1 &
 FRONTEND_PID=$!
 
 echo "Backend PID: $BACKEND_PID"

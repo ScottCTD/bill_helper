@@ -4,6 +4,15 @@ import { Plus } from "lucide-react";
 import type { Tag } from "../../../lib/types";
 import { CreatableSingleSelect } from "../../../components/CreatableSingleSelect";
 import { Button } from "../../../components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "../../../components/ui/dialog";
+import { FormField } from "../../../components/ui/form-field";
 import { Input } from "../../../components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 
@@ -98,50 +107,12 @@ export function TagsSection(props: TagsSectionProps) {
           </label>
         </div>
         <div className="table-toolbar-action">
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            aria-label={createPanelOpen ? "Cancel add tag" : "Add tag"}
-            onClick={onToggleCreatePanel}
-          >
+          <Button type="button" size="icon" variant="outline" aria-label="Add tag" onClick={onToggleCreatePanel}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {createPanelOpen ? (
-        <form className="table-inline-form" onSubmit={onCreateTagSubmit}>
-          <label className="field min-w-[200px] grow">
-            <span>Name</span>
-            <Input placeholder="e.g. groceries" value={newTagName} onChange={(event) => onNewTagNameChange(event.target.value)} />
-          </label>
-          <label className="field min-w-[220px] grow">
-            <span>Category</span>
-            <CreatableSingleSelect
-              value={newTagCategory}
-              options={tagCategoryOptions}
-              ariaLabel="Tag category"
-              placeholder="Select or create category..."
-              onChange={onNewTagCategoryChange}
-            />
-          </label>
-          <label className="field min-w-[180px]">
-            <span>Color</span>
-            <Input placeholder="e.g. #7fb069" value={newTagColor} onChange={(event) => onNewTagColorChange(event.target.value)} />
-          </label>
-          <div className="table-inline-form-actions">
-            <Button type="submit" size="sm" disabled={isCreating}>
-              {isCreating ? "Creating..." : "Create"}
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={onCloseCreatePanel}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      ) : null}
-
-      {createErrorMessage ? <p className="error">{createErrorMessage}</p> : null}
       {isLoading ? <p>Loading tags...</p> : null}
       {isError ? <p className="error">{queryErrorMessage}</p> : null}
 
@@ -160,54 +131,19 @@ export function TagsSection(props: TagsSectionProps) {
             <TableBody>
               {tags.map((tag) => (
                 <TableRow key={tag.id}>
+                  <TableCell>{tag.name}</TableCell>
+                  <TableCell>{tag.category || "(none)"}</TableCell>
                   <TableCell>
-                    {editingTagId === tag.id ? (
-                      <Input value={editingTagName} className="h-8" onChange={(event) => onEditingTagNameChange(event.target.value)} />
-                    ) : (
-                      tag.name
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingTagId === tag.id ? (
-                      <div className="min-w-[200px]">
-                        <CreatableSingleSelect
-                          value={editingTagCategory}
-                          options={tagCategoryOptions}
-                          ariaLabel="Edit tag category"
-                          placeholder="Select or create category..."
-                          onChange={onEditingTagCategoryChange}
-                        />
-                      </div>
-                    ) : (
-                      tag.category || "(none)"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingTagId === tag.id ? (
-                      <Input value={editingTagColor} className="h-8" onChange={(event) => onEditingTagColorChange(event.target.value)} />
-                    ) : (
-                      <span className="tag-color-cell">
-                        <span className="tag-color-dot" style={{ backgroundColor: tag.color || "hsl(var(--muted))" }} />
-                        {tag.color || "(none)"}
-                      </span>
-                    )}
+                    <span className="tag-color-cell">
+                      <span className="tag-color-dot" style={{ backgroundColor: tag.color || "hsl(var(--muted))" }} />
+                      {tag.color || "(none)"}
+                    </span>
                   </TableCell>
                   <TableCell>{tag.entry_count ?? 0}</TableCell>
                   <TableCell>
-                    {editingTagId === tag.id ? (
-                      <div className="table-actions">
-                        <Button type="button" size="sm" disabled={isUpdating} onClick={() => onSaveTag(tag.id)}>
-                          Save
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={onCancelEditTag}>
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button type="button" size="sm" variant="outline" onClick={() => onStartEditTag(tag)}>
-                        Edit
-                      </Button>
-                    )}
+                    <Button type="button" size="sm" variant="outline" onClick={() => onStartEditTag(tag)}>
+                      Edit
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -218,7 +154,102 @@ export function TagsSection(props: TagsSectionProps) {
         )
       ) : null}
 
-      {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
+      <Dialog
+        open={createPanelOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            onCloseCreatePanel();
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Create Tag</DialogTitle>
+            <DialogDescription>Add a tag with optional taxonomy category and color token.</DialogDescription>
+          </DialogHeader>
+          <form className="grid gap-4" onSubmit={onCreateTagSubmit}>
+            <FormField label="Name">
+              <Input placeholder="e.g. groceries" value={newTagName} onChange={(event) => onNewTagNameChange(event.target.value)} />
+            </FormField>
+            <FormField label="Category">
+              <CreatableSingleSelect
+                value={newTagCategory}
+                options={tagCategoryOptions}
+                ariaLabel="Tag category"
+                placeholder="Select or create category..."
+                onChange={onNewTagCategoryChange}
+              />
+            </FormField>
+            <FormField label="Color">
+              <Input placeholder="e.g. #7fb069" value={newTagColor} onChange={(event) => onNewTagColorChange(event.target.value)} />
+            </FormField>
+            {createErrorMessage ? <p className="error">{createErrorMessage}</p> : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onCloseCreatePanel}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isCreating}>
+                {isCreating ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={editingTagId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            onCancelEditTag();
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Edit Tag</DialogTitle>
+            <DialogDescription>Update tag naming, category, and display color.</DialogDescription>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (editingTagId === null) {
+                return;
+              }
+              onSaveTag(editingTagId);
+            }}
+          >
+            <FormField label="Name">
+              <Input
+                placeholder="e.g. groceries"
+                value={editingTagName}
+                onChange={(event) => onEditingTagNameChange(event.target.value)}
+              />
+            </FormField>
+            <FormField label="Category">
+              <CreatableSingleSelect
+                value={editingTagCategory}
+                options={tagCategoryOptions}
+                ariaLabel="Edit tag category"
+                placeholder="Select or create category..."
+                onChange={onEditingTagCategoryChange}
+              />
+            </FormField>
+            <FormField label="Color">
+              <Input placeholder="e.g. #7fb069" value={editingTagColor} onChange={(event) => onEditingTagColorChange(event.target.value)} />
+            </FormField>
+            {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onCancelEditTag}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isUpdating || editingTagId === null}>
+                {isUpdating ? "Saving..." : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
