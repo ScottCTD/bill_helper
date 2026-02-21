@@ -73,6 +73,20 @@ export function totalRunMetric(
   return hasValue ? total : null;
 }
 
+export function latestRunMetric(
+  runs: AgentRun[],
+  field: "input_tokens" | "output_tokens" | "cache_read_tokens" | "cache_write_tokens" | "total_cost_usd"
+): number | null {
+  const sorted = sortRunsByCreatedAt(runs);
+  for (let index = sorted.length - 1; index >= 0; index -= 1) {
+    const value = sorted[index][field];
+    if (typeof value === "number") {
+      return value;
+    }
+  }
+  return null;
+}
+
 export function summarizeRunChangeTypes(changeItems: AgentChangeItem[]): {
   entryCount: number;
   tagCount: number;

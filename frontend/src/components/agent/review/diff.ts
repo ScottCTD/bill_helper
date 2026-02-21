@@ -30,11 +30,33 @@ export interface ProposalDiff {
 }
 
 interface FlatField {
-  path: string;
+  rawPath: string;
+  displayPath: string;
   value: string;
 }
 
 type JsonRecord = Record<string, unknown>;
+type FlatFieldMap = Map<string, FlatField>;
+
+const ENTRY_FIELD_ORDER: Record<string, number> = {
+  date: 0,
+  name: 1,
+  kind: 2,
+  amount_minor: 3,
+  currency_code: 4,
+  from_entity: 5,
+  to_entity: 6,
+  tags: 7,
+  markdown_notes: 8
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  amount_minor: "amount",
+  currency_code: "currency",
+  from_entity: "from",
+  to_entity: "to",
+  markdown_notes: "notes"
+};
 
 function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -51,18 +73,85 @@ function normalizeForComparison(value: unknown): unknown {
   return value;
 }
 
+function lastPathSegment(path: string): string {
+  const trimmed = path.split(".").at(-1) ?? path;
+  return trimmed.replace(/\[\d+\]/g, "");
+}
+
+function displayPath(path: string): string {
+  return path
+    .split(".")
+    .map((segment) => {
+      const base = segment.replace(/\[\d+\]/g, "");
+      const suffix = segment.slice(base.length);
+      return `${FIELD_LABELS[base] ?? base}${suffix}`;
+    })
+    .join(".");
+}
+
+function formatMinorAmount(value: number): string {
+  const sign = value < 0 ? "-" : "";
+  const absoluteMajor = Math.abs(value) / 100;
+  const formatted = absoluteMajor.toFixed(2).replace(/\.?0+$/, "");
+  return `${sign}${formatted}`;
+}
+
+function formatArrayValue(value: unknown[], rawPath: string): string {
+  if (value.length === 0) {
+    return "[]";
+  }
+  const allSimple = value.every((item) => ["string", "number", "boolean"].includes(typeof item) || item === null);
+  if (!allSimple) {
+    return `${value.length} items`;
+  }
+  return `[${value.map((item) => formatLeafValue(item, rawPath)).join(", ")}]`;
+}
+
+function formatLeafValue(value: unknown, rawPath: string): string {
+  const leafKey = lastPathSegment(rawPath);
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (leafKey === "amount_minor") {
+      return formatMinorAmount(value);
+    }
+    return String(value);
+  }
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+  if (value === null) {
+    return "null";
+  }
+  if (Array.isArray(value)) {
+    return formatArrayValue(value, rawPath);
+  }
+  if (isRecord(value)) {
+    return `${Object.keys(value).length} fields`;
+  }
+  return "";
+}
+
+function fieldOrderIndex(path: string): number {
+  const leaf = lastPathSegment(path);
+  return ENTRY_FIELD_ORDER[leaf] ?? 999;
+}
+
+function compareRawPaths(left: string, right: string): number {
+  const orderDelta = fieldOrderIndex(left) - fieldOrderIndex(right);
+  if (orderDelta !== 0) {
+    return orderDelta;
+  }
+  return left.localeCompare(right);
+}
+
 function flattenValue(value: unknown, path: string, output: FlatField[]): void {
   if (Array.isArray(value)) {
-    if (value.length === 0) {
-      output.push({
-        path,
-        value: "[]"
-      });
-      return;
-    }
-    value.forEach((child, index) => {
-      const childPath = `${path}[${index}]`;
-      flattenValue(child, childPath, output);
+    output.push({
+      rawPath: path,
+      displayPath: displayPath(path),
+      value: formatArrayValue(value, path)
     });
     return;
   }
@@ -71,7 +160,8 @@ function flattenValue(value: unknown, path: string, output: FlatField[]): void {
     const entries = Object.entries(value).sort(([left], [right]) => left.localeCompare(right));
     if (entries.length === 0) {
       output.push({
-        path,
+        rawPath: path,
+        displayPath: displayPath(path),
         value: "{}"
       });
       return;
@@ -84,8 +174,9 @@ function flattenValue(value: unknown, path: string, output: FlatField[]): void {
   }
 
   output.push({
-    path,
-    value: JSON.stringify(value)
+    rawPath: path,
+    displayPath: displayPath(path),
+    value: formatLeafValue(value, path)
   });
 }
 
@@ -97,13 +188,14 @@ function flattenRecord(record: JsonRecord): FlatField[] {
     flattenValue(value, key, fields);
   });
 
+  fields.sort((left, right) => compareRawPaths(left.rawPath, right.rawPath));
   return fields;
 }
 
-function mapByPath(fields: FlatField[]): Map<string, string> {
-  const map = new Map<string, string>();
+function mapByPath(fields: FlatField[]): FlatFieldMap {
+  const map: FlatFieldMap = new Map();
   fields.forEach((field) => {
-    map.set(field.path, field.value);
+    map.set(field.rawPath, field);
   });
   return map;
 }
@@ -151,7 +243,7 @@ function pushMetadata(
 function buildSnapshotLines(record: JsonRecord, sign: DiffLineSign): DiffLine[] {
   return flattenRecord(record).map((field) => ({
     sign,
-    path: field.path,
+    path: field.displayPath,
     value: field.value
   }));
 }
@@ -159,22 +251,20 @@ function buildSnapshotLines(record: JsonRecord, sign: DiffLineSign): DiffLine[] 
 function buildDeltaLines(before: JsonRecord, after: JsonRecord): DiffLine[] {
   const beforeMap = mapByPath(flattenRecord(before));
   const afterMap = mapByPath(flattenRecord(after));
-  const allPaths = Array.from(new Set([...beforeMap.keys(), ...afterMap.keys()])).sort((left, right) =>
-    left.localeCompare(right)
-  );
+  const allPaths = Array.from(new Set([...beforeMap.keys(), ...afterMap.keys()])).sort(compareRawPaths);
 
   const lines: DiffLine[] = [];
   allPaths.forEach((path) => {
     const previous = beforeMap.get(path);
     const next = afterMap.get(path);
-    if (previous === next) {
+    if (previous?.value === next?.value) {
       return;
     }
     if (previous !== undefined) {
-      lines.push({ sign: "-", path, value: previous });
+      lines.push({ sign: "-", path: previous.displayPath, value: previous.value });
     }
     if (next !== undefined) {
-      lines.push({ sign: "+", path, value: next });
+      lines.push({ sign: "+", path: next.displayPath, value: next.value });
     }
   });
   return lines;
@@ -219,7 +309,7 @@ function selectorSummary(selector: JsonRecord): string {
   const name = typeof selector.name === "string" ? selector.name : null;
   const amountMinor = typeof selector.amount_minor === "number" ? selector.amount_minor : null;
 
-  const parts = [date, name, amountMinor !== null ? String(amountMinor) : null].filter(Boolean);
+  const parts = [date, name, amountMinor !== null ? formatMinorAmount(amountMinor) : null].filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : "selector";
 }
 

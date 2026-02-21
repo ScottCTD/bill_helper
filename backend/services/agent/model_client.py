@@ -20,6 +20,7 @@ _TRANSIENT_SSL_BAD_RECORD_MAC_MARKERS = (
     "sslv3 alert bad record mac",
     "bad record mac",
 )
+_PROMPT_CACHE_INJECTION_POINTS_MAX = 4
 
 
 def _normalize_secret(value: Any) -> str | None:
@@ -66,6 +67,43 @@ def _is_transient_ssl_bad_record_mac_error(exc: Exception) -> bool:
         error_text_parts.append(message)
     normalized = " ".join(error_text_parts).lower()
     return any(marker in normalized for marker in _TRANSIENT_SSL_BAD_RECORD_MAC_MARKERS)
+
+
+def _supports_prompt_caching(model_name: str) -> bool:
+    try:
+        return bool(litellm.utils.supports_prompt_caching(model_name))
+    except Exception:
+        return False
+
+
+def _cache_injection_points_for_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    # Prefer stable anchors for tool-heavy loops:
+    # 1) all system messages (long-lived instruction/context prefix)
+    # 2) latest user turn (stable across intra-run tool steps)
+    if len(messages) < 2:
+        return []
+
+    points: list[dict[str, Any]] = [
+        {"location": "message", "role": "system"},
+    ]
+
+    latest_user_index = next(
+        (index for index in range(len(messages) - 1, -1, -1) if messages[index].get("role") == "user"),
+        None,
+    )
+    if latest_user_index is not None:
+        negative_index = latest_user_index - len(messages)
+        points.append({"location": "message", "index": negative_index})
+
+    unique_points: list[dict[str, Any]] = []
+    seen: set[tuple[tuple[str, Any], ...]] = set()
+    for point in points:
+        key = tuple(sorted(point.items()))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_points.append(point)
+    return unique_points[:_PROMPT_CACHE_INJECTION_POINTS_MAX]
 
 
 def _enable_langfuse_callbacks() -> None:
@@ -193,6 +231,10 @@ def _normalize_usage(usage: Any) -> dict[str, int | None]:
 
     cache_read_tokens = _read_int(usage, "cache_read_tokens")
     if cache_read_tokens is None:
+        cache_read_tokens = _read_int(usage, "cache_read_input_tokens")
+    if cache_read_tokens is None:
+        cache_read_tokens = _read_int(usage, "cached_tokens")
+    if cache_read_tokens is None:
         cache_read_tokens = _read_int(prompt_details, "cache_read_tokens")
     if cache_read_tokens is None:
         cache_read_tokens = _read_int(prompt_details, "cache_read_input_tokens")
@@ -200,6 +242,10 @@ def _normalize_usage(usage: Any) -> dict[str, int | None]:
         cache_read_tokens = _read_int(prompt_details, "cached_tokens")
 
     cache_write_tokens = _read_int(usage, "cache_write_tokens")
+    if cache_write_tokens is None:
+        cache_write_tokens = _read_int(usage, "cache_creation_tokens")
+    if cache_write_tokens is None:
+        cache_write_tokens = _read_int(usage, "cache_creation_input_tokens")
     if cache_write_tokens is None:
         cache_write_tokens = _read_int(prompt_details, "cache_write_tokens")
     if cache_write_tokens is None:
@@ -296,6 +342,11 @@ class LiteLLMModelClient:
             "tool_choice": "auto",
             "temperature": 0.1,
         }
+        if _supports_prompt_caching(self._model_name):
+            injection_points = _cache_injection_points_for_messages(messages)
+            if injection_points:
+                request["cache_control_injection_points"] = injection_points
+
         if self._langfuse_enabled:
             request["langfuse_public_key"] = self._langfuse_public_key
             request["langfuse_secret_key"] = self._langfuse_secret_key

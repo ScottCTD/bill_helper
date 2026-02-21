@@ -100,13 +100,17 @@ uv run python scripts/check_docs_sync.py
 - Agent tool contracts are name/selector-based (no domain IDs in model-facing arguments/outputs).
 - Agent can emit sparse intermediate progress notes via `send_intermediate_update`; runtime streams these as `reasoning_update` SSE events.
 - Entry create proposals can omit currency and fall back to the resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
+- Proposal tool outputs include `proposal_id` + `proposal_short_id` for follow-up reference in later turns.
+- Pending proposals can be edited or removed in-thread via `update_pending_proposal` / `remove_pending_proposal` (pending-only, thread-scoped).
 - Tag deletion proposals are blocked when the tag is still referenced by any non-deleted entries; apply path re-validates this constraint before delete.
 - Agent prompt policy requires entry retag/update proposals before tag-delete proposals when the tag is still referenced.
+- Agent prompt policy prefers parallel tool-call batches when requested reads/proposals are independent.
 - Agent model/tool execution retries and limits can be overridden at runtime via `/settings`.
 - Streamed model calls retry transient failures using the same retry policy.
 - OpenRouter SSL `sslv3 alert bad record mac` transport failures get a one-shot immediate retry in both streamed and non-streamed model calls, even when `agent_retry_max_attempts=1`.
 - Stream retries after partial output are de-duplicated so already-emitted prefixes are not re-sent to the SSE client.
 - Agent model calls are routed through LiteLLM using the configured model string (`agent_model`), and credentials are resolved from provider environment variables.
+- For models that support prompt caching, LiteLLM requests include explicit `cache_control_injection_points` anchored to system context and latest user turn (negative message index) so tool-loop steps can reuse cached prompt prefixes.
 - Agent message uploads accept image and PDF attachments; PDF files are parsed to markdown text via MarkItDown before model calls.
 - When the configured model supports vision (via LiteLLM capability checks), each uploaded PDF page is also rendered and sent as an image input.
 - Agent runs can be interrupted via `POST /api/v1/agent/runs/{run_id}/interrupt`; interrupted runs transition to `failed`.
@@ -117,6 +121,8 @@ uv run python scripts/check_docs_sync.py
   - async start + polling: `POST /api/v1/agent/threads/{thread_id}/messages`
   - SSE token stream: `POST /api/v1/agent/threads/{thread_id}/messages/stream`
 - SSE streams can include `text_delta`, `tool_call`, and `reasoning_update` events before terminal run status events.
+- Run tool-call payloads include exact model-visible tool text (`output_text`) in addition to structured `output_json`.
+- Usage normalization maps provider-specific cache fields (`cached_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`) into run-level `cache_read_tokens` / `cache_write_tokens`.
 - Observability context (`user`, `session_id=AgentThread.id`, run trace metadata) is propagated on each model call.
 - When `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` are configured, LiteLLM `langfuse` success/failure callbacks are enabled and trace metadata is sent through LiteLLM `metadata`.
 - Dashboard currency defaults to runtime settings (`/settings` override, else `BILL_HELPER_DASHBOARD_CURRENCY_CODE` / `CAD`).

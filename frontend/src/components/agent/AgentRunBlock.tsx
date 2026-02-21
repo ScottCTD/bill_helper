@@ -39,10 +39,14 @@ function ToolCallDetailList({ toolCalls }: { toolCalls: RunToolCall[] }) {
               <span className="agent-tool-call-time muted">{prettyDateTime(toolCall.created_at)}</span>
             </summary>
             <div className="agent-tool-call-details">
-              <p className="agent-tool-call-details-label">Input</p>
+              <p className="agent-tool-call-details-label">Arguments</p>
               <pre>{JSON.stringify(toolCall.input_json, null, 2)}</pre>
-              <p className="agent-tool-call-details-label">Output</p>
-              <pre>{JSON.stringify(toolCall.output_json, null, 2)}</pre>
+              <p className="agent-tool-call-details-label">Model-visible tool result</p>
+              <pre>{toolCall.output_text || "(empty)"}</pre>
+              <details>
+                <summary className="agent-tool-call-details-label">Structured output (debug)</summary>
+                <pre>{JSON.stringify(toolCall.output_json, null, 2)}</pre>
+              </details>
             </div>
           </details>
         </li>

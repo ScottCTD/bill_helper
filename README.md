@@ -22,6 +22,7 @@ Implemented:
   - `0012_remove_related_link_type`
   - `0013_add_account_markdown_body`
   - `0014_remove_account_institution_type`
+  - `0015_add_agent_tool_call_output_text`
 - Taxonomy subsystem for generalized category management:
   - shared `taxonomies` / `taxonomy_terms` / `taxonomy_assignments` tables
   - default category taxonomies for `entities` and `tags`
@@ -91,6 +92,9 @@ Implemented:
   - Agent now supports real-time token streaming to the timeline via `POST /api/v1/agent/threads/{thread_id}/messages/stream` (SSE).
   - Agent can emit sparse intermediate progress notes through `send_intermediate_update`; streamed runs surface these as `reasoning_update` events.
   - Existing `POST /api/v1/agent/threads/{thread_id}/messages` behavior remains available and still starts a background run for polling-based clients.
+  - Proposal tool outputs now include reusable proposal ids (`proposal_id`, `proposal_short_id`).
+  - Pending proposals can be revised or removed by the agent in later turns via `update_pending_proposal` / `remove_pending_proposal` (pending-only, thread-scoped).
+  - System prompt now instructs the model to batch independent tool calls in parallel when possible, instead of serial one-by-one calls.
   - If a run is interrupted, the interrupted user request remains in conversation history and the next turn is annotated so the model knows the previous response was cut short.
   - Agent system context now includes current-user account markdown notes (`notes_markdown`) with truncation safeguards for oversized markdown/data-url image payloads.
   - Composer now supports removable attachment chips (image thumbnails + PDF file chips) before send.
@@ -102,11 +106,14 @@ Implemented:
   - Runs interleave reasoning updates and grouped tool-call batches in both active and completed states for a consistent trace view.
   - In-flight run cards no longer show `Run: running (...)` header/timestamp rows; only thinking/tool activity is shown.
   - System messages now render with markdown formatting (including list markers).
-  - Thread workspace now shows one cumulative usage/cost bar above the composer (`Input`, `Output`, `Cache read`, `Cache write`, rightmost `Total cost` in USD).
+  - Thread workspace now shows one cumulative usage/cost bar above the composer (`Context`, `Input`, `Output`, `Cache read`, `Cache hit rate`, rightmost `Total cost` in USD), with token metrics compacted as `x.xxK`.
   - Run costs are derived from LiteLLM model-cost mapping using the configured model name.
   - Timeline run cards surface pending proposal summaries and open a dedicated unified diff review modal.
-  - Review modal supports `Reject`, `Approve`, `Approve & Next`, and sequential `Approve All` flows with inline failure visibility.
+  - Review modal supports `Reject`, `Approve`, `Approve All`, and `Reject All` flows with inline failure visibility.
+  - Review diff rows now use friendly field labels/order and human-readable amount values.
+  - Tool-call details now prioritize model-visible tool output text and keep structured JSON as secondary debug data.
   - Approved entry proposals are persisted directly to `entries` without a separate entry-level status field.
+  - LiteLLM request payloads now explicitly inject prompt-caching breakpoints (`cache_control_injection_points`) anchored to system context and latest user turn (negative message index) for models that support prompt caching.
 - Refactor foundation for extensibility:
   - Backend agent internals are split by concern (`prompts`, `message_history`, `model_client`, `change_apply`, `runtime`, `review`).
   - Frontend query orchestration is centralized in `frontend/src/lib/queryKeys.ts` and `frontend/src/lib/queryInvalidation.ts`.
@@ -280,7 +287,7 @@ Frontend URL:
    - removable attachment chips before send
    - paste and drag-drop image/PDF attachments directly into the chat composer
    - composer shortcut: `Cmd+Enter` (or `Ctrl+Enter`) sends the message
-   - single cumulative thread usage bar above the composer (`Input`, `Output`, `Cache read`, `Cache write`, rightmost `Total cost`)
+   - single cumulative thread usage bar above the composer (`Context`, `Input`, `Output`, `Cache read`, `Cache hit rate`, rightmost `Total cost`)
    - run-level proposal summary cards with pending counts
 6. Open the run review modal and process proposals:
    - entry proposals support JSON edit-before-approve with unified payload diff
@@ -344,5 +351,5 @@ uv run python scripts/check_docs_sync.py
 - Frontend design tokens and component styles: `frontend/src/styles.css`
 - Frontend UI primitives: `frontend/src/components/ui`
 - Agent panel UI: `frontend/src/components/agent/AgentPanel.tsx`
-- Latest migration: `alembic/versions/0014_remove_account_institution_type.py`
+- Latest migration: `alembic/versions/0015_add_agent_tool_call_output_text.py`
 - Demo seed: `scripts/seed_demo.py`

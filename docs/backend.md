@@ -155,7 +155,8 @@ Agent services:
   - for follow-up turns after interrupted runs, injects an interruption-context note so the model treats the prior request as unfinished context
 - `backend/services/agent/model_client.py`
   - LiteLLM client adapter with normalized model error handling
-  - normalizes usage metadata from model responses into the runtime contract (`input/output/cache_*` tokens)
+  - normalizes usage metadata from model responses into the runtime contract (`input/output/cache_*` tokens), including provider-specific cache field variants (`cached_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`)
+  - for prompt-caching-capable models, injects explicit LiteLLM `cache_control_injection_points` anchored to system context + latest user turn (negative message index) so tool-loop steps can reuse stable prompt prefixes
   - supports streamed model responses (`complete_stream`) that emit incremental text deltas and final assembled tool-call/message payload
   - applies configured retry policy to stream failures (including mid-stream transport failures)
   - performs a targeted one-shot retry for transient OpenRouter SSL `bad record mac` (`litellm.APIError`) failures in both streamed and non-streamed completions, including when `agent_retry_max_attempts=1`
@@ -176,8 +177,12 @@ Agent services:
     - entries: `propose_create_entry`, `propose_update_entry`, `propose_delete_entry`
     - tags: `propose_create_tag`, `propose_update_tag`, `propose_delete_tag`
     - entities: `propose_create_entity`, `propose_update_entity`, `propose_delete_entity`
+  - proposal mutation tool:
+    - `update_pending_proposal` (edit existing pending proposal payload by id + patch map)
+    - `remove_pending_proposal` (remove existing pending proposal by id from current thread pending pool)
   - all model-facing tool interfaces avoid domain IDs (names/selectors only)
-  - `propose_*` calls are blocked while prior thread proposals remain `PENDING_REVIEW`
+  - proposal tools now return proposal ids (`proposal_id`, `proposal_short_id`) in tool outputs
+  - pending proposals from prior runs no longer block new `propose_*` tool calls in the same thread
   - `propose_delete_tag` returns `ERROR` when the tag is still referenced by non-deleted entries (with count + sample context)
   - proposal tools only create `agent_change_items` (`PENDING_REVIEW`)
 - `backend/services/runtime_settings.py`
@@ -254,6 +259,7 @@ Settings router:
 - `0012_remove_related_link_type`
 - `0013_add_account_markdown_body`
 - `0014_remove_account_institution_type`
+- `0015_add_agent_tool_call_output_text`
 
 Commands:
 
@@ -294,6 +300,7 @@ Test modules:
 - LiteLLM routing behavior with provider env credential resolution
 - prompt contract for entry ingestion ordering (duplicate check -> tag/entity reconciliation -> entry proposal)
 - prompt contract for tag-deletion ordering (retag/update entries first -> then `propose_delete_tag`)
+- prompt contract for parallelization: independent tools should be called in the same tool-call batch when possible
 - prompt contract for sparse intermediate reasoning updates (`send_intermediate_update`) during multi-step tool loops
 
 `test_agent_model_client.py` covers:
@@ -303,7 +310,7 @@ Test modules:
 - stream divergence guard across retries
 - LiteLLM environment-validation behavior (including indeterminate-validation fallback)
 
-Current baseline for `backend/tests/test_agent.py`: `40 passed`.
+Current baseline for `backend/tests/test_agent.py`: `42 passed`.
 
 ## Operational Impact
 
@@ -319,8 +326,10 @@ Current baseline for `backend/tests/test_agent.py`: `40 passed`.
 - model requests include observability payload (`user`, `session_id=thread.id`, trace metadata) with LiteLLM metadata mapping for Langfuse grouping; one trace per thread (`trace_id=thread.id`), per-step generation names (`agent_turn_run_N_step_M`), and `existing_trace_id` for continuation steps or subsequent runs in the same thread so Langfuse displays one trace per conversation
 - each run includes persisted tool traces and change-item audit data
 - tool calls are committed incrementally per tool call to support near-real-time polling visibility
+- persisted tool calls now store both structured payload (`output_json`) and exact model-visible text (`output_text`)
 - each run now includes nullable aggregated usage counters (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`)
 - each run API payload now includes nullable derived USD cost fields from LiteLLM pricing (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
+- cache counters include parsed provider-specific aliases for better cross-provider accuracy (`cache_read_input_tokens`/`cached_tokens` -> `cache_read_tokens`; `cache_creation_input_tokens` -> `cache_write_tokens`)
 - final assistant messages are sanitized to drop empty boilerplate footers (`Tools used ... Pending review item ids: []`) when no pending review items exist
 - runtime settings can be updated through `/api/v1/settings`; changes apply to subsequent requests/runs without restarting the app
 - dashboard currency and default entry currency are now runtime-configurable
@@ -328,6 +337,8 @@ Current baseline for `backend/tests/test_agent.py`: `40 passed`.
 - account create/read/update schemas no longer expose `institution` and `account_type`
 - entry-ingestion prompts now require duplicate detection before any entry proposal, reducing duplicate proposal risk
 - prompt policy now requires entry retag/update proposals before tag deletion proposals when references exist
+- prompt policy now prefers parallel tool-call batches for independent operations instead of serial one-by-one calls
+- pending-proposal workflow now supports intra-thread proposal edits/removals via `update_pending_proposal` / `remove_pending_proposal` (id + patch map or id-only, pending-only)
 - entry domain no longer includes `status`; API/model/migration are synchronized on statusless entries
 - group read models now include:
   - `GET /api/v1/groups` derived summaries for frontend group discovery

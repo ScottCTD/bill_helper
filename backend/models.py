@@ -484,6 +484,7 @@ class AgentToolCall(Base):
     tool_name: Mapped[str] = mapped_column(String(128), nullable=False)
     input_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     output_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    output_text: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[AgentToolCallStatus] = mapped_column(Enum(AgentToolCallStatus), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 

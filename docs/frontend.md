@@ -290,6 +290,7 @@ Timeline features:
 - thread list uses plain list-row styling for non-selected items; only the active thread is boxed/highlighted
 - thread rows expose a right-side delete icon button inside the same row box on hover/focus (always visible on touch devices)
 - thread delete action confirms intent in the panel, then calls `DELETE /api/v1/agent/threads/{thread_id}`
+- when delete is disabled during active execution, delete controls are hidden entirely
 - deleting a selected thread automatically selects the next available thread (or clears selection when none remain)
 - click-to-open conversation behavior from history rail
 - creating a new thread via `New Thread` focuses the composer textarea for immediate typing
@@ -297,6 +298,7 @@ Timeline features:
 - main chat timeline with user/assistant message bubbles
 - timeline scroll behavior is a dedicated right-pane scroll surface with scrollbar at panel edge
 - desktop thread rail is viewport-bounded and keeps its own independent overflow scroll
+- thread-rail rows are fixed-height non-shrinking items so overflow stays scrollable instead of vertically compressing entries
 - assistant/system message bodies render markdown via `react-markdown` + `remark-gfm` (sanitized defaults, GFM tables/task lists/strikethrough)
 - attachment previews for uploaded images and PDF files
 - run blocks are anchored to assistant-side timeline events (`assistant_message_id`) to keep tool activity in assistant flow
@@ -305,7 +307,7 @@ Timeline features:
 - completed runs retain the same interleaved reasoning/tool-batch structure for consistency with in-flight rendering
 - tool-call traces now use two-level disclosure:
   - outer run-level toggle (`N tool calls`)
-  - inner per-tool toggle (input/output JSON)
+  - inner per-tool toggle (arguments + model-visible output text; structured JSON remains as secondary debug disclosure)
 - during active execution, outer tool-batch collapse is intentionally disabled to avoid flicker while batches are growing
 - a rotating chevron icon indicates the expand/collapse state of each tool call
 - expanded tool-call details are indented with a left border line for visual hierarchy
@@ -317,7 +319,8 @@ Timeline features:
 - when a run has review items, the review request/action block renders below the assistant message content
 - completed assistant messages no longer render per-message run metadata rows (`Run: completed ...`)
 - cumulative thread usage/cost bar is shown once above the composer:
-  - `Input`, `Output`, `Cache read`, `Cache write`
+  - `Context`, `Input`, `Output`, `Cache read`, `Cache hit rate`
+  - token counters use compact `x.xxK` formatting
   - rightmost `Total cost` (USD; computed from backend LiteLLM pricing fields)
 - run-level proposal summary cards:
   - pending copy (`N proposed changes pending review`)
@@ -335,6 +338,8 @@ Review actions:
     - create proposals render additive `+` field lines
     - update proposals render changed fields only (`-` old / `+` new)
     - delete proposals render removed `-` field lines for the target identity/resource payload
+    - entry-oriented fields are rendered in user-friendly order (`date`, `name`, `kind`, `amount`, `currency`, `from`, `to`, `tags`, `notes`)
+    - scalar values render without JSON quoting; `amount_minor` is shown in major units for readability
   - reviewer-edited create-entry JSON still renders paired `-`/`+` lines against the original payload
   - per-proposal stat badges (`Changed`, `Added`, `Removed`) and compact metadata pills (target/selector/patch scope/impact counts)
   - supports labeled proposal blocks for entry/tag/entity create/update/delete types
@@ -342,9 +347,10 @@ Review actions:
 - sticky action bar:
   - `Reject` (focused pending item)
   - `Approve` (focused pending item)
-  - `Approve & Next` (focused item, then smooth-scroll/focus next pending item after current index)
   - `Approve All` opens an in-app themed confirmation dialog (no browser `window.confirm`)
+  - `Reject All` opens an in-app themed confirmation dialog
   - confirmed `Approve All` sequentially applies all pending items in deterministic order and continues through failures
+  - confirmed `Reject All` sequentially rejects all pending items in deterministic order
   - pending context text (`Pending X of Y`) and focused ordinal
 - apply-failure handling:
   - failures are surfaced inline on proposal blocks
@@ -522,8 +528,8 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 - no pagination controls in agent thread/timeline UI yet
 - entry edit-before-approve in the review modal still uses raw JSON override (no structured form editor yet)
 - legacy delete proposals created before CRUD-aware rendering may still include verbose `impact_preview` payload context from historical runs
-- `Approve & Next` intentionally looks for the next pending item after current index only; if remaining pending items are above, reviewers must scroll back
 - `Approve All` is implemented as sequential per-item API calls (no batch endpoint), so very large runs may feel slower
+- `Reject All` is implemented as sequential per-item API calls (no batch endpoint), so very large runs may feel slower
 - popup auto-save requires valid required fields; invalid dirty state keeps popup open and surfaces validation errors
 - entry property wrappers are non-label containers so only direct control clicks activate inputs/selects
 - streaming bubble renders plain text deltas during SSE; markdown formatting is applied after the final assistant message is persisted/refetched

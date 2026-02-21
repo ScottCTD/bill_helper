@@ -51,6 +51,7 @@ def tool_call_to_schema(tool_call: AgentToolCall) -> AgentToolCallRead:
         tool_name=tool_call.tool_name,
         input_json=tool_call.input_json,
         output_json=tool_call.output_json,
+        output_text=tool_call.output_text,
         status=tool_call.status,
         created_at=tool_call.created_at,
     )

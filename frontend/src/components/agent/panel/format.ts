@@ -18,19 +18,29 @@ export function compactThreadName(thread: AgentThreadSummary): string {
 }
 
 export function formatUsageTokens(value: number | null): string {
-  return value === null ? "-" : value.toLocaleString();
+  if (value === null) {
+    return "-";
+  }
+  return `${(value / 1000).toFixed(2)}K`;
+}
+
+export function formatUsagePercent(value: number | null): string {
+  if (value === null) {
+    return "-";
+  }
+  const percentValue = value * 100;
+  const fractionDigits = percentValue >= 10 ? 0 : 1;
+  return `${percentValue.toFixed(fractionDigits)}%`;
 }
 
 export function formatUsdCost(value: number | null): string {
   if (value === null) {
     return "-";
   }
-  const abs = Math.abs(value);
-  const fractionDigits = abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6;
   return new Intl.NumberFormat(undefined, {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits
+    minimumSignificantDigits: 2,
+    maximumSignificantDigits: 2
   }).format(value);
 }

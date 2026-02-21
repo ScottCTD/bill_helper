@@ -114,21 +114,6 @@ function replaceItemById(items: AgentChangeItem[], updated: AgentChangeItem): Ag
   });
 }
 
-function findNextPendingAfter(items: AgentChangeItem[], itemId: string): AgentChangeItem | null {
-  const startIndex = items.findIndex((item) => item.id === itemId);
-  if (startIndex < 0) {
-    return null;
-  }
-
-  for (let index = startIndex + 1; index < items.length; index += 1) {
-    if (isPending(items[index])) {
-      return items[index];
-    }
-  }
-
-  return null;
-}
-
 export function AgentRunReviewModal({
   open,
   run,
@@ -144,7 +129,9 @@ export function AgentRunReviewModal({
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [batchSummary, setBatchSummary] = useState<BatchSummary | null>(null);
   const [isBatchRunning, setIsBatchRunning] = useState(false);
+  const [batchAction, setBatchAction] = useState<"approve" | "reject" | null>(null);
   const [isApproveAllConfirmOpen, setIsApproveAllConfirmOpen] = useState(false);
+  const [isRejectAllConfirmOpen, setIsRejectAllConfirmOpen] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -158,7 +145,9 @@ export function AgentRunReviewModal({
       setActionNotice(null);
       setBatchSummary(null);
       setIsBatchRunning(false);
+      setBatchAction(null);
       setIsApproveAllConfirmOpen(false);
+      setIsRejectAllConfirmOpen(false);
       return;
     }
 
@@ -166,7 +155,9 @@ export function AgentRunReviewModal({
     setActionNotice(null);
     setBatchSummary(null);
     setIsBatchRunning(false);
+    setBatchAction(null);
     setIsApproveAllConfirmOpen(false);
+    setIsRejectAllConfirmOpen(false);
   }, [open, run?.id]);
 
   useEffect(() => {
@@ -384,36 +375,6 @@ export function AgentRunReviewModal({
     }
   }
 
-  async function handleApproveAndNext() {
-    if (!focusedPendingItem || isBatchRunning || isBusy) {
-      return;
-    }
-
-    setBatchSummary(null);
-    setActionNotice(null);
-
-    const nextPendingItem = findNextPendingAfter(items, focusedPendingItem.id);
-    const approved = await approveItem(focusedPendingItem);
-    if (!approved) {
-      return;
-    }
-
-    if (nextPendingItem) {
-      setFocusedItemId(nextPendingItem.id);
-      scrollToItem(nextPendingItem.id);
-      setActionNotice(`Approved ${shortId(focusedPendingItem.id)}. Focus moved to ${shortId(nextPendingItem.id)}.`);
-      return;
-    }
-
-    const remainingPending = items.filter((item) => isPending(item) && item.id !== focusedPendingItem.id).length;
-    if (remainingPending === 0) {
-      setActionNotice("All pending proposals are reviewed.");
-      return;
-    }
-
-    setActionNotice("Reached end of this run. Remaining pending items are above.");
-  }
-
   function handleApproveAllClick() {
     if (isBatchRunning || isBusy) {
       return;
@@ -424,6 +385,18 @@ export function AgentRunReviewModal({
       return;
     }
     setIsApproveAllConfirmOpen(true);
+  }
+
+  function handleRejectAllClick() {
+    if (isBatchRunning || isBusy) {
+      return;
+    }
+
+    const queue = items.filter(isPending);
+    if (queue.length === 0) {
+      return;
+    }
+    setIsRejectAllConfirmOpen(true);
   }
 
   async function handleApproveAllConfirm() {
@@ -442,6 +415,7 @@ export function AgentRunReviewModal({
     setActionNotice(null);
     setBatchSummary(null);
     setIsBatchRunning(true);
+    setBatchAction("approve");
 
     let applied = 0;
     let failed = 0;
@@ -479,6 +453,7 @@ export function AgentRunReviewModal({
     }
 
     setIsBatchRunning(false);
+    setBatchAction(null);
     setBatchSummary({
       applied,
       failed,
@@ -496,6 +471,53 @@ export function AgentRunReviewModal({
     }
 
     setActionError(`${failed} proposal${failed === 1 ? "" : "s"} failed while approving all.`);
+  }
+
+  async function handleRejectAllConfirm() {
+    if (isBatchRunning || isBusy) {
+      return;
+    }
+
+    const queue = items.filter(isPending);
+    if (queue.length === 0) {
+      setIsRejectAllConfirmOpen(false);
+      return;
+    }
+
+    setIsRejectAllConfirmOpen(false);
+    setActionError(null);
+    setActionNotice(null);
+    setBatchSummary(null);
+    setIsBatchRunning(true);
+    setBatchAction("reject");
+
+    let rejected = 0;
+    let failed = 0;
+    const failedItemIds: string[] = [];
+
+    for (const item of queue) {
+      try {
+        const updated = await onRejectItem({ itemId: item.id });
+        mergeUpdatedItem(updated);
+        rejected += 1;
+      } catch (error) {
+        failed += 1;
+        failedItemIds.push(item.id);
+        setActionError(resolveErrorMessage(error));
+      }
+    }
+
+    setIsBatchRunning(false);
+    setBatchAction(null);
+
+    if (failedItemIds.length > 0) {
+      setFocusedItemId(failedItemIds[0]);
+      scrollToItem(failedItemIds[0]);
+      setActionError(`${failed} proposal${failed === 1 ? "" : "s"} failed while rejecting all.`);
+      return;
+    }
+
+    setActionNotice(`Rejected ${rejected} proposal${rejected === 1 ? "" : "s"}.`);
   }
 
   if (!run) {
@@ -662,16 +684,21 @@ export function AgentRunReviewModal({
               <Button type="button" onClick={handleApproveFocused} disabled={isActionDisabled}>
                 Approve
               </Button>
-              <Button type="button" variant="secondary" onClick={handleApproveAndNext} disabled={isActionDisabled}>
-                Approve &amp; Next
-              </Button>
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleApproveAllClick}
                 disabled={pendingCount === 0 || isBatchRunning || isBusy}
               >
-                {isBatchRunning ? "Approving..." : "Approve All"}
+                {isBatchRunning && batchAction === "approve" ? "Approving..." : "Approve All"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleRejectAllClick}
+                disabled={pendingCount === 0 || isBatchRunning || isBusy}
+              >
+                {isBatchRunning && batchAction === "reject" ? "Rejecting..." : "Reject All"}
               </Button>
             </div>
 
@@ -728,7 +755,32 @@ export function AgentRunReviewModal({
               Cancel
             </Button>
             <Button type="button" onClick={handleApproveAllConfirm} disabled={isBatchRunning || pendingCount === 0 || isBusy}>
-              {isBatchRunning ? "Approving..." : "Approve all"}
+              {isBatchRunning && batchAction === "approve" ? "Approving..." : "Approve all"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isRejectAllConfirmOpen} onOpenChange={setIsRejectAllConfirmOpen}>
+        <DialogContent className="agent-approve-all-confirm-content">
+          <DialogHeader>
+            <DialogTitle>Reject all pending proposals?</DialogTitle>
+            <DialogDescription>
+              This will reject all {pendingCount} pending proposal{pendingCount === 1 ? "" : "s"} in this run.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="muted">This action does not apply changes to domain data.</p>
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => setIsRejectAllConfirmOpen(false)} disabled={isBatchRunning}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleRejectAllConfirm}
+              disabled={isBatchRunning || pendingCount === 0 || isBusy}
+            >
+              {isBatchRunning && batchAction === "reject" ? "Rejecting..." : "Reject all"}
             </Button>
           </DialogFooter>
         </DialogContent>

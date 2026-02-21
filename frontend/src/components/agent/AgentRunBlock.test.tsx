@@ -41,4 +41,28 @@ describe("AgentRunBlock", () => {
     expect(screen.getByText("Validating candidate entries")).toBeInTheDocument();
     expect(screen.getByText("1 tool call")).toBeInTheDocument();
   });
+
+  it("renders model-visible tool output in tool-call details", async () => {
+    const run = buildRun({
+      id: "run-tool-output",
+      status: "completed",
+      tool_calls: [
+        buildToolCall({
+          id: "tool-1",
+          tool_name: "list_entries",
+          output_text: "OK\nsummary: found 2 entries",
+          output_json: { status: "OK", summary: "found 2 entries" }
+        })
+      ]
+    });
+
+    render(<AgentRunBlock run={run} isMutating={false} onReviewRun={() => undefined} mode="activity" />);
+
+    await userEvent.click(screen.getByText("1 tool call"));
+    await userEvent.click(screen.getByText("list_entries"));
+
+    expect(screen.getByText("Model-visible tool result")).toBeInTheDocument();
+    expect(screen.getByText(/OK\s+summary: found 2 entries/i)).toBeInTheDocument();
+    expect(screen.getByText("Structured output (debug)")).toBeInTheDocument();
+  });
 });

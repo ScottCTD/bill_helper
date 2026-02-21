@@ -160,15 +160,22 @@ uv run python scripts/check_docs_sync.py
 - Runtime settings are loaded from `/api/v1/settings` and affect default currency/model behavior across pages.
 - Agent review timeline supports create/update/delete change items for entries, tags, and entities.
 - Agent review modal now renders CRUD-aware, field-level diffs (create/add, update delta, delete removal) instead of full payload snapshots.
+- Entry proposal diff rows now use friendly field labels/order (`date`, `name`, `kind`, `amount`, `currency`, `from`, `to`, `tags`, `notes`) and human-readable amount values.
 - Agent review `Approve All` uses a themed in-app confirmation dialog instead of browser-native confirm prompts.
+- Agent review modal includes `Reject All` with confirmation; per-item `Approve & Next` is removed in favor of direct approve/reject + batch actions.
+- Expanded tool-call details prioritize model-visible tool output text and keep structured JSON as secondary debug output.
 - Agent home uses a dedicated right-pane timeline scroller while keeping the scrollbar at the panel edge (not beside message bubbles).
 - The left thread rail is viewport-bounded with independent overflow scrolling and does not move when timeline content scrolls.
+- Thread rows in the left rail are fixed-height, non-shrinking list items so long thread lists overflow and scroll instead of compressing.
 - Thread rows expose a right-side delete control inside the same row box on hover/focus (always visible on touch devices) and call `DELETE /api/v1/agent/threads/{thread_id}` after a confirmation prompt.
+- When thread deletion is temporarily disabled (for example, while a run is active), delete controls are hidden entirely to avoid misleading disabled clutter.
 - Deleting the selected thread auto-selects the next thread when available; if none remain, the timeline returns to empty-selection state.
 - The composer stays pinned at the bottom of the right pane; message input starts as one line and auto-expands up to a max height.
 - Agent composer attachments support images and PDFs (picker, paste, and drag-drop paths); unsupported files are skipped with a local error.
 - Draft and persisted PDF attachments render as file chips/links in timeline surfaces, while images continue to render as thumbnails.
 - Agent message send uses backend SSE (`POST /api/v1/agent/threads/{thread_id}/messages/stream`) so assistant text appears incrementally in real time.
+- Thread usage bar now includes `Context` (latest run input token size) plus `Cache hit rate`, in addition to raw input/output/cache read counters and total cost.
+- Token counters in the usage bar are compactly formatted as `x.xxK` to reduce horizontal space pressure.
 - Streaming assistant activity now supports interleaved reasoning updates (`reasoning_update`) plus grouped tool-call traces, and the same interleaved trace remains visible after run completion.
 - Optimistic user bubbles are reconciled against persisted timeline messages to avoid temporary duplicate user-message blocks during send.
 - Route pages are lazy-loaded from `App.tsx` to keep initial bundle load bounded as feature count grows.

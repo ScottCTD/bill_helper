@@ -194,6 +194,7 @@ def _record_tool_call_and_result(
         tool_name=name or "(unknown)",
         input_json=arguments,
         output_json=result.output_json,
+        output_text=result.output_text,
         status=AgentToolCallStatus.OK if result.status == "ok" else AgentToolCallStatus.ERROR,
     )
     db.add(tool_row)

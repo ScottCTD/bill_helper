@@ -352,6 +352,18 @@ def test_system_prompt_requires_entry_updates_before_tag_delete():
     assert prompt.index(reference_phrase) < prompt.index(update_phrase) < prompt.index(delete_phrase)
 
 
+def test_system_prompt_guides_pending_proposal_revisions_and_removals():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    revise_phrase = "If the user asks to revise an existing pending proposal, prefer update_pending_proposal"
+    remove_phrase = "If the user asks to discard/cancel/remove a pending proposal, use remove_pending_proposal"
+
+    assert revise_phrase in prompt
+    assert remove_phrase in prompt
+    assert prompt.index(revise_phrase) < prompt.index(remove_phrase)
+
+
 def test_system_prompt_includes_error_recovery_and_no_domain_ids():
     from backend.services.agent.prompts import system_prompt
 
@@ -372,6 +384,14 @@ def test_system_prompt_requires_sparse_intermediate_updates():
     prompt = system_prompt()
     assert "send_intermediate_update" in prompt
     assert "do not call it on every tool step" in prompt
+
+
+def test_system_prompt_prefers_parallel_tool_calls_for_independent_work():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    assert "Prefer parallel tool calls when tasks are independent." in prompt
+    assert "call them in the same tool-call batch instead of one by one." in prompt
 
 
 def test_system_prompt_includes_current_date_tag():
@@ -468,6 +488,8 @@ def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
     assert "propose_delete_tag" in names
     assert "propose_update_entity" in names
     assert "propose_delete_entity" in names
+    assert "update_pending_proposal" in names
+    assert "remove_pending_proposal" in names
 
 
 def test_run_persists_tool_calls(client, monkeypatch):
@@ -497,6 +519,8 @@ def test_run_persists_tool_calls(client, monkeypatch):
     assert len(run["tool_calls"]) == 1
     assert run["tool_calls"][0]["tool_name"] == "list_tags"
     assert run["tool_calls"][0]["status"] == "ok"
+    assert isinstance(run["tool_calls"][0]["output_text"], str)
+    assert run["tool_calls"][0]["output_text"].startswith("OK")
 
     run_detail = client.get(f"/api/v1/agent/runs/{run['id']}")
     run_detail.raise_for_status()
@@ -964,6 +988,9 @@ def test_proposal_creation_for_each_create_change_type(client, monkeypatch):
     assert run_tag["change_items"][0]["status"] == "PENDING_REVIEW"
     assert run_entity["change_items"][0]["status"] == "PENDING_REVIEW"
     assert run_entry["change_items"][0]["status"] == "PENDING_REVIEW"
+    assert run_tag["tool_calls"][0]["output_json"]["proposal_id"] == run_tag["change_items"][0]["id"]
+    assert run_entity["tool_calls"][0]["output_json"]["proposal_id"] == run_entity["change_items"][0]["id"]
+    assert run_entry["tool_calls"][0]["output_json"]["proposal_id"] == run_entry["change_items"][0]["id"]
     assert "account_id" not in run_entry["change_items"][0]["payload_json"]
 
 
@@ -1391,7 +1418,7 @@ def test_reviewed_items_are_injected_into_followup_turn(client, monkeypatch):
     assert followup_content.index("User feedback:") < followup_content.index("Try again")
 
 
-def test_propose_tools_blocked_when_pending_reviews_exist(client, monkeypatch):
+def test_propose_tools_allowed_when_pending_reviews_exist(client, monkeypatch):
     # First run creates a pending proposal and we intentionally skip review.
     def first_model(messages):
         if messages[-1]["role"] == "tool":
@@ -1416,10 +1443,10 @@ def test_propose_tools_blocked_when_pending_reviews_exist(client, monkeypatch):
     first_run = send_message(client, thread["id"], "Create tag pending-tag")
     assert first_run["change_items"][0]["status"] == "PENDING_REVIEW"
 
-    # Second run attempts another proposal while first one is still pending.
+    # Second run creates another proposal while first one is still pending.
     def second_model(messages):
         if messages[-1]["role"] == "tool":
-            return {"role": "assistant", "content": "Need review before proposing more changes."}
+            return {"role": "assistant", "content": "Entity proposal created."}
         return {
             "role": "assistant",
             "content": "",
@@ -1438,11 +1465,155 @@ def test_propose_tools_blocked_when_pending_reviews_exist(client, monkeypatch):
     patch_model(monkeypatch, second_model)
     second_run = send_message(client, thread["id"], "Create blocked entity")
     assert second_run["status"] == "completed"
+    assert len(second_run["change_items"]) == 1
+    assert second_run["change_items"][0]["status"] == "PENDING_REVIEW"
+    assert second_run["change_items"][0]["change_type"] == "create_entity"
+    assert second_run["tool_calls"][0]["output_json"]["status"] == "OK"
+    assert second_run["tool_calls"][0]["output_json"]["proposal_id"] == second_run["change_items"][0]["id"]
+
+
+def test_update_pending_proposal_tool_updates_existing_item(client, monkeypatch):
+    pending_short_id: str | None = None
+    pending_item_id: str | None = None
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done."}
+        user_message = next(message for message in reversed(messages) if message["role"] == "user")
+        content = user_message["content"] if isinstance(user_message["content"], str) else ""
+        if "create initial proposal" in content:
+            return {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_propose_entry",
+                        "type": "function",
+                        "function": {
+                            "name": "propose_create_entry",
+                            "arguments": json.dumps(
+                                {
+                                    "kind": "EXPENSE",
+                                    "date": "2026-01-14",
+                                    "name": "Lunch",
+                                    "amount_minor": 1200,
+                                    "currency_code": "CAD",
+                                    "from_entity": "Main Checking",
+                                    "to_entity": "Lunch Spot",
+                                    "tags": ["food"],
+                                }
+                            ),
+                        },
+                    }
+                ],
+            }
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_update_pending",
+                    "type": "function",
+                    "function": {
+                        "name": "update_pending_proposal",
+                        "arguments": json.dumps(
+                            {
+                                "proposal_id": pending_short_id,
+                                "patch_map": {
+                                    "date": "2026-01-15",
+                                    "amount_minor": 1350,
+                                },
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    first_run = send_message(client, thread["id"], "Please create initial proposal")
+    pending_item_id = first_run["change_items"][0]["id"]
+    pending_short_id = pending_item_id[:8]
+
+    second_run = send_message(client, thread["id"], "Please revise that pending proposal")
+    assert second_run["status"] == "completed"
     assert second_run["change_items"] == []
     assert len(second_run["tool_calls"]) == 1
-    output_json = second_run["tool_calls"][0]["output_json"]
-    assert output_json["status"] == "ERROR"
-    assert "blocked" in output_json["summary"]
+    update_output = second_run["tool_calls"][0]["output_json"]
+    assert update_output["status"] == "OK"
+    assert update_output["proposal_id"] == pending_item_id
+    assert "amount_minor" in update_output["patch_fields"]
+    assert "date" in update_output["patch_fields"]
+
+    run_detail = client.get(f"/api/v1/agent/runs/{first_run['id']}")
+    run_detail.raise_for_status()
+    updated_item = run_detail.json()["change_items"][0]
+    assert updated_item["id"] == pending_item_id
+    assert updated_item["status"] == "PENDING_REVIEW"
+    assert updated_item["payload_json"]["date"] == "2026-01-15"
+    assert updated_item["payload_json"]["amount_minor"] == 1350
+
+
+def test_remove_pending_proposal_tool_removes_existing_item(client, monkeypatch):
+    pending_short_id: str | None = None
+    pending_item_id: str | None = None
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done."}
+        user_message = next(message for message in reversed(messages) if message["role"] == "user")
+        content = user_message["content"] if isinstance(user_message["content"], str) else ""
+        if "create initial proposal" in content:
+            return {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_propose_tag",
+                        "type": "function",
+                        "function": {
+                            "name": "propose_create_tag",
+                            "arguments": json.dumps({"name": "Temporary Tag", "category": "expense"}),
+                        },
+                    }
+                ],
+            }
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_remove_pending",
+                    "type": "function",
+                    "function": {
+                        "name": "remove_pending_proposal",
+                        "arguments": json.dumps({"proposal_id": pending_short_id}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    first_run = send_message(client, thread["id"], "Please create initial proposal")
+    pending_item_id = first_run["change_items"][0]["id"]
+    pending_short_id = pending_item_id[:8]
+
+    second_run = send_message(client, thread["id"], "Please remove that pending proposal")
+    assert second_run["status"] == "completed"
+    assert second_run["change_items"] == []
+    assert len(second_run["tool_calls"]) == 1
+
+    remove_output = second_run["tool_calls"][0]["output_json"]
+    assert remove_output["status"] == "OK"
+    assert remove_output["proposal_id"] == pending_item_id
+    assert remove_output["proposal_short_id"] == pending_short_id
+    assert remove_output["removed"] is True
+
+    run_detail = client.get(f"/api/v1/agent/runs/{first_run['id']}")
+    run_detail.raise_for_status()
+    assert run_detail.json()["change_items"] == []
 
 
 def test_create_entry_uses_default_currency_when_omitted(client, monkeypatch):

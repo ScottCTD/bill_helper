@@ -25,6 +25,7 @@ import type { AgentChangeItem, AgentStreamEvent, AgentThreadDetail, AgentThreadS
 import {
   appendPendingReasoningUpdateToActivity,
   appendPendingToolCallToActivity,
+  latestRunMetric,
   runsByAssistantMessage,
   runsWithoutAssistantMessage,
   sortRunsByCreatedAt,
@@ -308,10 +309,10 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const threadUsageTotals = useMemo(() => {
     const runs = threadQuery.data?.runs ?? [];
     return {
+      context: latestRunMetric(runs, "input_tokens"),
       input: totalRunMetric(runs, "input_tokens"),
       output: totalRunMetric(runs, "output_tokens"),
       cacheRead: totalRunMetric(runs, "cache_read_tokens"),
-      cacheWrite: totalRunMetric(runs, "cache_write_tokens"),
       totalCost: totalRunMetric(runs, "total_cost_usd")
     };
   }, [threadQuery.data?.runs]);

@@ -935,7 +935,7 @@
   }
 
   .agent-thread-list-scroll {
-    @apply flex max-h-48 flex-col gap-1.5 overflow-y-auto overflow-x-hidden pr-1;
+    @apply flex min-h-0 flex-col gap-1.5 overflow-y-auto overflow-x-hidden pr-1;
   }
 
   .agent-thread-list-page .agent-thread-list-scroll {
@@ -944,7 +944,7 @@
   }
 
   .agent-thread-row {
-    @apply relative h-10 overflow-hidden rounded-md border border-transparent bg-transparent transition-colors;
+    @apply relative h-10 shrink-0 overflow-hidden rounded-md border border-transparent bg-transparent transition-colors;
   }
 
   .agent-thread-row:hover {
@@ -977,6 +977,11 @@
   }
 
   .agent-thread-delete-button:disabled {
+    @apply opacity-0 pointer-events-none;
+  }
+
+  .agent-thread-row:hover .agent-thread-delete-button:disabled,
+  .agent-thread-row:focus-within .agent-thread-delete-button:disabled {
     @apply opacity-40;
   }
 
@@ -1597,7 +1602,7 @@
   }
 
   .agent-thread-list-page .agent-thread-list-scroll {
-    @apply max-h-40;
+    @apply min-h-0 flex-1 max-h-none;
     height: auto;
   }
 }

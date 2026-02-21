@@ -159,7 +159,7 @@ Current seeded taxonomies:
 - `entry_id` (PK/FK -> `entries.id`)
 - `tag_id` (PK/FK -> `tags.id`)
 
-## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`)
+## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`)
 
 ## `agent_threads`
 
@@ -236,6 +236,7 @@ Fields:
 - `tool_name`
 - `input_json`
 - `output_json`
+- `output_text` (exact tool result text that was sent to the model)
 - `status` (`AgentToolCallStatus`)
 - `created_at`
 
@@ -271,11 +272,14 @@ Fields:
 ## Derived Rules
 
 - `agent_change_items` are created as `PENDING_REVIEW` by proposal tools.
+- proposal tools include proposal ids in tool outputs so subsequent turns can target existing pending items.
+- pending proposals can be updated in-place (status remains `PENDING_REVIEW`) via agent tooling before human review.
+- pending proposals can also be removed from the pending pool via agent tooling (`remove_pending_proposal` deletes the pending row).
 - only `PENDING_REVIEW` items can be approved/rejected.
 - approving applies exactly one proposed mutation and records review action.
 - rejecting records review action and does not create domain resources.
 - approving `create_entry` persists an entry directly without an entry-level status column.
-- `delete_tag` detaches tag links from entries before deleting the tag.
+- `delete_tag` is allowed only when the tag has no non-deleted entry references.
 - `delete_entity` nulls/detaches entity references from entries/accounts before deleting the entity.
 - resolved runtime settings drive current-user attribution defaults, dashboard currency, and agent runtime limits/model selection.
 

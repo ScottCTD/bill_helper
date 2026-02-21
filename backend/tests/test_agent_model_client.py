@@ -153,6 +153,151 @@ def test_complete_retries_transient_ssl_bad_record_mac_when_max_attempts_is_one(
     assert response["usage"]["output_tokens"] == 2
 
 
+def test_complete_injects_prompt_cache_control_points_when_supported(monkeypatch):
+    captured_request: dict[str, object] = {}
+    client = _build_model_client()
+
+    monkeypatch.setattr(
+        "backend.services.agent.model_client.litellm.utils.supports_prompt_caching",
+        lambda _model: True,
+    )
+
+    def fake_completion(**kwargs):
+        captured_request.update(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="Hello",
+                        tool_calls=[],
+                    )
+                )
+            ],
+            usage={"input_tokens": 3, "output_tokens": 2},
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    client.complete(
+        [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "hello"},
+        ]
+    )
+
+    assert captured_request["cache_control_injection_points"] == [
+        {"location": "message", "role": "system"},
+        {"location": "message", "index": -1},
+    ]
+
+
+def test_complete_injects_latest_user_index_for_tool_loop_histories(monkeypatch):
+    captured_request: dict[str, object] = {}
+    client = _build_model_client()
+
+    monkeypatch.setattr(
+        "backend.services.agent.model_client.litellm.utils.supports_prompt_caching",
+        lambda _model: True,
+    )
+
+    def fake_completion(**kwargs):
+        captured_request.update(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="Hello",
+                        tool_calls=[],
+                    )
+                )
+            ],
+            usage={"input_tokens": 3, "output_tokens": 2},
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    client.complete(
+        [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Please process this receipt."},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "list_entities", "arguments": "{}"},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call_1", "name": "list_entities", "content": "OK"},
+        ]
+    )
+
+    assert captured_request["cache_control_injection_points"] == [
+        {"location": "message", "role": "system"},
+        {"location": "message", "index": -3},
+    ]
+
+
+def test_complete_does_not_inject_prompt_cache_control_for_short_message_lists(monkeypatch):
+    captured_request: dict[str, object] = {}
+    client = _build_model_client()
+
+    monkeypatch.setattr(
+        "backend.services.agent.model_client.litellm.utils.supports_prompt_caching",
+        lambda _model: True,
+    )
+
+    def fake_completion(**kwargs):
+        captured_request.update(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="Hello",
+                        tool_calls=[],
+                    )
+                )
+            ],
+            usage={"input_tokens": 3, "output_tokens": 2},
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    client.complete([{"role": "user", "content": "hello"}])
+
+    assert "cache_control_injection_points" not in captured_request
+
+
+def test_complete_normalizes_top_level_prompt_cache_usage_fields(monkeypatch):
+    client = _build_model_client()
+
+    def fake_completion(**_kwargs):
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="Hello",
+                        tool_calls=[],
+                    )
+                )
+            ],
+            usage={
+                "input_tokens": 120,
+                "output_tokens": 15,
+                "cache_read_input_tokens": 80,
+                "cache_creation_input_tokens": 20,
+            },
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    response = client.complete([{"role": "user", "content": "hello"}])
+
+    assert response["usage"]["input_tokens"] == 120
+    assert response["usage"]["output_tokens"] == 15
+    assert response["usage"]["cache_read_tokens"] == 80
+    assert response["usage"]["cache_write_tokens"] == 20
+
+
 def test_complete_includes_langfuse_metadata(monkeypatch):
     captured_request: dict[str, object] = {}
     client = _build_model_client(

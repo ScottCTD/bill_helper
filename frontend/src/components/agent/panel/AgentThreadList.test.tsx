@@ -65,4 +65,22 @@ describe("AgentThreadList", () => {
 
     expect(screen.getByRole("button", { name: "Delete thread Groceries" })).toBeDisabled();
   });
+
+  it("hides delete controls when thread deletion is globally disabled", () => {
+    render(
+      <AgentThreadList
+        threads={THREADS}
+        selectedThreadId="thread-1"
+        isLoading={false}
+        errorMessage={null}
+        onSelectThread={() => undefined}
+        onDeleteThread={() => undefined}
+        deletingThreadId={null}
+        isDeleteDisabled={true}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "Delete thread Groceries" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete thread Utilities" })).not.toBeInTheDocument();
+  });
 });

@@ -36,10 +36,36 @@ describe("proposal diff", () => {
 
     expect(diff.mode).toBe("delete");
     expect(diff.lines.every((line) => line.sign === "-")).toBe(true);
-    expect(diff.lines.map((line) => line.path)).toEqual(["color", "name"]);
+    expect(diff.lines.map((line) => line.path)).toEqual(["name", "color"]);
   });
 
   it("normalizes record equality regardless of key order", () => {
     expect(jsonRecordsAreEquivalent({ a: 1, b: { c: 2, d: 3 } }, { b: { d: 3, c: 2 }, a: 1 })).toBe(true);
+  });
+
+  it("formats entry fields with friendly labels and ordering", () => {
+    const diff = buildProposalDiff("create_entry", {
+      tags: ["food", "daily"],
+      currency_code: "CAD",
+      to_entity: "Coffee Shop",
+      amount_minor: 1230,
+      kind: "EXPENSE",
+      from_entity: "Main Checking",
+      date: "2026-02-18",
+      name: "Coffee"
+    });
+
+    expect(diff.lines.map((line) => line.path)).toEqual([
+      "date",
+      "name",
+      "kind",
+      "amount",
+      "currency",
+      "from",
+      "to",
+      "tags"
+    ]);
+    expect(diff.lines.find((line) => line.path === "amount")?.value).toBe("12.3");
+    expect(diff.lines.find((line) => line.path === "currency")?.value).toBe("CAD");
   });
 });

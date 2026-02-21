@@ -8,6 +8,7 @@ import {
   runsWithoutAssistantMessage,
   sortRunsByCreatedAt,
   summarizeRunChangeTypes,
+  latestRunMetric,
   totalRunMetric
 } from "./activity";
 import { buildChangeItem, buildRun, buildToolCall } from "../../test/factories/agent";
@@ -97,6 +98,9 @@ describe("activity helpers", () => {
 
     const none = [buildRun({ id: "run-4", input_tokens: null })];
     expect(totalRunMetric(none, "input_tokens")).toBeNull();
+    expect(latestRunMetric(none, "input_tokens")).toBeNull();
+    expect(latestRunMetric(runs, "input_tokens")).toBe(15);
+    expect(latestRunMetric([buildRun({ id: "run-5", input_tokens: 33 })], "input_tokens")).toBe(33);
 
     const changeSummary = summarizeRunChangeTypes([
       buildChangeItem({ id: "change-1", change_type: "create_entry" }),

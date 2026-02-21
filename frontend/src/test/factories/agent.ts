@@ -7,6 +7,7 @@ export function buildToolCall(overrides: Partial<AgentToolCall> = {}): AgentTool
     tool_name: overrides.tool_name ?? "list_entries",
     input_json: overrides.input_json ?? {},
     output_json: overrides.output_json ?? {},
+    output_text: overrides.output_text ?? "OK\nsummary: test",
     status: overrides.status ?? "ok",
     created_at: overrides.created_at ?? "2026-02-15T10:00:00Z"
   };

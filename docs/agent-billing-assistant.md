@@ -17,10 +17,10 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | Component | File | Responsibility |
 |-----------|------|----------------|
 | Runtime | `backend/services/agent/runtime.py` | Run lifecycle, bounded tool loop, persistence of tool calls and final assistant message |
-| Model client | `backend/services/agent/model_client.py` | LiteLLM adapter, tool wiring, retry-enabled model completion |
+| Model client | `backend/services/agent/model_client.py` | LiteLLM adapter, tool wiring, retry-enabled model completion, explicit prompt-cache breakpoint injection (system + latest user anchors via negative index) for cache-capable models |
 | Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks, proposal ordering (including tag-delete sequencing), error recovery, and current-user context section |
 | Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; parses PDF attachments to markdown text via MarkItDown; when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` excerpts with truncation safeguards); prepends review outcomes before current user feedback in the latest user message |
-| Tools | `backend/services/agent/tools.py` | Read/progress/proposal tool schemas, validation, execution, tool-level retry |
+| Tools | `backend/services/agent/tools.py` | Read/progress/proposal tool schemas, pending-proposal mutation tool, validation, execution, tool-level retry |
 | Review/apply | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py` | Approval/rejection, apply handlers for proposed CRUD changes |
 | API router | `backend/routers/agent.py` | Threads/runs/send/review/attachment endpoints |
 
@@ -107,13 +107,19 @@ You are the Bill Helper assistant. Follow review-gated mutation policies strictl
 8. Reviewed proposal results are prepended in the latest user message before user feedback.
    Use review statuses/comments to improve the next proposal iteration.
    If no explicit user feedback exists, explore missing context and improve proposals proactively.
-9. When transitioning between distinct tool-call batches, use send_intermediate_update
+9. If the user asks to revise an existing pending proposal, prefer update_pending_proposal
+   using proposal_id/proposal_short_id instead of creating a duplicate proposal.
+10. If the user asks to discard/cancel/remove a pending proposal, use remove_pending_proposal
+   with the proposal id so it leaves the pending proposal pool.
+11. Prefer parallel tool calls when tasks are independent.
+   If multiple reads/proposals do not depend on each other, call them in the same tool-call batch instead of one by one.
+12. When transitioning between distinct tool-call batches, use send_intermediate_update
    with a brief progress note so the user can follow your reasoning.
-10. Use send_intermediate_update sparingly for meaningful transitions; do not call it on every tool step.
-11. End every run with one final assistant message.
-12. Final message should prioritize a concise direct answer.
+13. Use send_intermediate_update sparingly for meaningful transitions; do not call it on every tool step.
+14. End every run with one final assistant message.
+15. Final message should prioritize a concise direct answer.
    Mention tools only when they materially change the answer or next action.
-13. Do not ask to run non-existent tools.
+16. Do not ask to run non-existent tools.
 
 ## Current User Context
 ...
@@ -399,17 +405,48 @@ Proposal tools create `AgentChangeItem` rows with status `PENDING_REVIEW`. They 
 
 ---
 
+#### `update_pending_proposal`
+
+**Description:** Update an existing pending proposal in the current thread. This mutates only the proposal payload (`PENDING_REVIEW` item) and does not apply domain data changes.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `proposal_id` | string | yes | full id or unique short-id prefix of a pending proposal |
+| `patch_map` | object | yes | map of field-path -> new value |
+
+**Expected output:** `OK` with updated proposal preview, `proposal_id`, and `proposal_short_id`. Returns `ERROR` for missing/ambiguous/non-pending proposals or invalid patch paths.
+
+---
+
+#### `remove_pending_proposal`
+
+**Description:** Remove an existing pending proposal from the current thread's pending proposal pool. This is for discarding/canceling proposals before review.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `proposal_id` | string | yes | full id or unique short-id prefix of a pending proposal |
+
+**Expected output:** `OK` with removed proposal metadata (`proposal_id`, `proposal_short_id`, `change_type`) and a payload preview. Returns `ERROR` for missing/ambiguous/non-pending proposals.
+
+---
+
 ## Tool Output Semantics
 
 Each tool emits model-visible text plus structured `output_json`:
 
 - Success: `status: "OK"`, `summary`, optional `preview`, `item_status`
 - Failure: `status: "ERROR"`, `summary`, optional `details`
+- Proposal tools additionally return `proposal_id` and `proposal_short_id`.
 
 Runtime persists every tool call in `agent_tool_calls` and feeds tool output text back to the model for next-step decisions.
 When `send_intermediate_update` is called during SSE runs, runtime emits a `reasoning_update` stream event so the frontend can render progress updates in real time.
 For continuation after review, `message_history.py` prepends a compact review-results block to the latest user message, then includes user feedback text below it (not as dynamic system prompt text).
-Proposal tools are blocked when older pending review items still exist in the same thread; the agent receives an `ERROR` tool output instructing it to ask for review completion first.
+Pending proposals from older runs do not block new proposal tools; the model can continue proposing while unresolved items remain pending.
+Pending proposals can be revised or removed by id in later turns without forcing immediate human review.
 
 ## Review Loop and Continuation
 

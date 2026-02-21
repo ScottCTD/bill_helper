@@ -467,6 +467,9 @@ Response: `AgentThreadDetailRead` with:
   - `input_cost_usd`
   - `output_cost_usd`
   - `total_cost_usd`
+- each tool call in a run includes both:
+  - `output_json` (structured payload)
+  - `output_text` (exact model-visible tool result text persisted from runtime)
 
 ## `POST /agent/threads/{thread_id}/messages`
 
@@ -489,13 +492,17 @@ Behavior:
 - PDF attachments are parsed to markdown text via MarkItDown before model calls
 - when the configured model supports vision, each uploaded PDF page is also sent to the model as an `image_url` part
 - resolves provider routing via LiteLLM using configured model name + provider environment credentials
+- for prompt-caching-capable models, LiteLLM request payload includes explicit `cache_control_injection_points` anchored to system context + latest user turn (negative index)
 - run/tool-call/change-item progress is available via `GET /agent/threads/{thread_id}` and `GET /agent/runs/{run_id}` polling
+- proposal tool results include `proposal_id` + `proposal_short_id` so later turns can reference/update pending proposals
+- pending proposals can be revised/removed in later turns via internal `update_pending_proposal` / `remove_pending_proposal` tools (thread-scoped, `PENDING_REVIEW` only)
 
 Response: `AgentRunRead`
 
 Usage behavior:
 
 - usage counters are aggregated across all model calls within the run (including tool-calling loops)
+- cache counters normalize provider-specific aliases (`cached_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`)
 - pricing fields are computed from aggregated input/output tokens using LiteLLM `cost_per_token`
 - pricing lookup uses the configured run model name directly
 - fields are nullable for providers/responses that do not supply usage metadata
@@ -568,7 +575,7 @@ Response: `AgentRunRead`
 Returned run payload includes:
 
 - run lifecycle metadata (`status`, `model_name`, `error_text`)
-- tool calls and change items
+- tool calls (including `output_text` + `output_json`) and change items
 - usage counters (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`)
 - derived pricing fields (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
 

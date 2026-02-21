@@ -25,7 +25,7 @@ export function AgentThreadList(props: AgentThreadListProps) {
         <h3>Threads</h3>
         {isLoading ? <p>Loading threads...</p> : null}
         {errorMessage ? <p className="error">{errorMessage}</p> : null}
-        <div className="agent-thread-list-scroll">
+        <div className="agent-thread-list-scroll scroll-surface">
           {(threads ?? []).map((thread) => {
             const isSelected = thread.id === selectedThreadId;
             return (
@@ -39,21 +39,23 @@ export function AgentThreadList(props: AgentThreadListProps) {
                 >
                   <span className="agent-thread-label">{compactThreadName(thread)}</span>
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="agent-thread-delete-button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onDeleteThread(thread.id);
-                  }}
-                  disabled={isDeleteDisabled || deletingThreadId === thread.id}
-                  aria-label={`Delete thread ${thread.title || "untitled thread"}`}
-                  title="Delete thread"
-                >
-                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                </Button>
+                {!isDeleteDisabled ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="agent-thread-delete-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDeleteThread(thread.id);
+                    }}
+                    disabled={deletingThreadId === thread.id}
+                    aria-label={`Delete thread ${thread.title || "untitled thread"}`}
+                    title="Delete thread"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Button>
+                ) : null}
               </div>
             );
           })}

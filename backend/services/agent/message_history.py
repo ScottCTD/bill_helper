@@ -423,6 +423,9 @@ def _build_review_results_prefix_for_current_turn(
         summary = source_output_json.get("summary")
         if summary is not None:
             lines.append(f"   proposal_summary: {summary}")
+        proposal_id = source_output_json.get("proposal_id") if isinstance(source_output_json, dict) else None
+        lines.append(f"   proposal_id: {proposal_id or item.id}")
+        lines.append(f"   proposal_short_id: {(proposal_id or item.id)[:8]}")
         lines.extend(
             [
                 f"   review_action: {action.action.value}",

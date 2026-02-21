@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date as DateValue
 from typing import Any, Callable
@@ -382,6 +383,38 @@ class ProposeDeleteEntryArgs(BaseModel):
     selector: EntrySelectorArgs
 
 
+class UpdatePendingProposalArgs(BaseModel):
+    proposal_id: str = Field(min_length=4, max_length=36)
+    patch_map: dict[str, Any]
+
+    @field_validator("proposal_id")
+    @classmethod
+    def normalize_proposal_id(cls, value: str) -> str:
+        normalized = _normalize_required_text(value)
+        return normalized.lower()
+
+    @field_validator("patch_map")
+    @classmethod
+    def normalize_patch_map(cls, value: dict[str, Any]) -> dict[str, Any]:
+        normalized: dict[str, Any] = {}
+        for raw_key, raw_value in value.items():
+            key = _normalize_required_text(str(raw_key))
+            normalized[key] = raw_value
+        if not normalized:
+            raise ValueError("patch_map must include at least one field")
+        return normalized
+
+
+class RemovePendingProposalArgs(BaseModel):
+    proposal_id: str = Field(min_length=4, max_length=36)
+
+    @field_validator("proposal_id")
+    @classmethod
+    def normalize_proposal_id(cls, value: str) -> str:
+        normalized = _normalize_required_text(value)
+        return normalized.lower()
+
+
 def _format_lines(lines: list[str]) -> str:
     return "\n".join(lines)
 
@@ -438,6 +471,8 @@ def _proposal_result(summary: str, *, preview: dict[str, Any], item: AgentChange
         "status": "OK",
         "summary": summary,
         "item_status": item.status.value,
+        "proposal_id": item.id,
+        "proposal_short_id": _proposal_short_id(item.id),
         "preview": preview,
     }
     return ToolExecutionResult(
@@ -446,6 +481,8 @@ def _proposal_result(summary: str, *, preview: dict[str, Any], item: AgentChange
                 "OK",
                 f"summary: {summary}",
                 f"status: {item.status.value}",
+                f"proposal_id: {item.id}",
+                f"proposal_short_id: {_proposal_short_id(item.id)}",
                 f"preview: {preview}",
             ]
         ),
@@ -506,6 +543,203 @@ def _entry_ambiguity_details(entries: list[Entry]) -> dict[str, Any]:
         "candidate_count": len(entries),
         "candidates": [_entry_to_public_record(entry) for entry in entries],
     }
+
+
+PROPOSAL_MUTABLE_ROOTS: dict[AgentChangeType, set[str]] = {
+    AgentChangeType.CREATE_TAG: {"name", "category"},
+    AgentChangeType.UPDATE_TAG: {"name", "patch"},
+    AgentChangeType.DELETE_TAG: {"name"},
+    AgentChangeType.CREATE_ENTITY: {"name", "category"},
+    AgentChangeType.UPDATE_ENTITY: {"name", "patch"},
+    AgentChangeType.DELETE_ENTITY: {"name"},
+    AgentChangeType.CREATE_ENTRY: {
+        "kind",
+        "date",
+        "name",
+        "amount_minor",
+        "currency_code",
+        "from_entity",
+        "to_entity",
+        "tags",
+        "markdown_notes",
+    },
+    AgentChangeType.UPDATE_ENTRY: {"selector", "patch"},
+    AgentChangeType.DELETE_ENTRY: {"selector"},
+}
+
+
+def _proposal_short_id(item_id: str) -> str:
+    return item_id[:8]
+
+
+def _parse_patch_path(path: str) -> list[str]:
+    normalized = _normalize_required_text(path)
+    parts = [part.strip() for part in normalized.split(".")]
+    if any(not part for part in parts):
+        raise ValueError("patch_map path segments cannot be empty")
+    return parts
+
+
+def _set_nested_value(target: dict[str, Any], path_parts: list[str], value: Any) -> None:
+    node: dict[str, Any] = target
+    for part in path_parts[:-1]:
+        child = node.get(part)
+        if child is None:
+            child = {}
+            node[part] = child
+        if not isinstance(child, dict):
+            raise ValueError(f"patch_map path '{'.'.join(path_parts)}' crosses non-object field '{part}'")
+        node = child
+    node[path_parts[-1]] = value
+
+
+def _apply_patch_map_to_payload(payload: dict[str, Any], patch_map: dict[str, Any]) -> dict[str, Any]:
+    updated = deepcopy(payload)
+    for path, value in patch_map.items():
+        parts = _parse_patch_path(path)
+        _set_nested_value(updated, parts, value)
+    return updated
+
+
+def _validate_patch_map_paths(change_type: AgentChangeType, patch_map: dict[str, Any]) -> None:
+    allowed_roots = PROPOSAL_MUTABLE_ROOTS.get(change_type)
+    if not allowed_roots:
+        raise ValueError(f"unsupported proposal change type: {change_type.value}")
+    disallowed = sorted(
+        path for path in patch_map if _parse_patch_path(path)[0] not in allowed_roots
+    )
+    if disallowed:
+        allowed = ", ".join(sorted(allowed_roots))
+        raise ValueError(
+            f"patch_map includes non-editable fields for {change_type.value}: {', '.join(disallowed)}. "
+            f"Allowed roots: {allowed}"
+        )
+
+
+def _proposal_payload_from_create_entry_args(context: ToolContext, args: ProposeCreateEntryArgs) -> dict[str, Any]:
+    settings = resolve_runtime_settings(context.db)
+    currency_code = (args.currency_code or settings.default_currency_code).strip().upper()
+    return {
+        "kind": args.kind,
+        "date": args.date.isoformat(),
+        "name": args.name,
+        "amount_minor": args.amount_minor,
+        "currency_code": currency_code,
+        "from_entity": args.from_entity,
+        "to_entity": args.to_entity,
+        "tags": args.tags,
+        "markdown_notes": args.markdown_notes,
+    }
+
+
+def _normalize_update_entry_patch_for_payload(patch_model: EntryPatchArgs) -> dict[str, Any]:
+    patch = patch_model.model_dump(exclude_unset=True)
+    if "date" in patch and patch["date"] is not None:
+        patch["date"] = patch["date"].isoformat()
+    return patch
+
+
+def _normalize_payload_for_change_type(
+    context: ToolContext,
+    *,
+    change_type: AgentChangeType,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    if change_type == AgentChangeType.CREATE_TAG:
+        parsed = ProposeCreateTagArgs.model_validate(payload)
+        return parsed.model_dump()
+    if change_type == AgentChangeType.UPDATE_TAG:
+        parsed = ProposeUpdateTagArgs.model_validate({"name": payload.get("name"), "patch": payload.get("patch")})
+        normalized_payload: dict[str, Any] = {
+            "name": parsed.name,
+            "patch": parsed.patch.model_dump(exclude_unset=True),
+        }
+        if isinstance(payload.get("current"), dict):
+            normalized_payload["current"] = payload["current"]
+        return normalized_payload
+    if change_type == AgentChangeType.DELETE_TAG:
+        parsed = ProposeDeleteTagArgs.model_validate(payload)
+        return parsed.model_dump()
+    if change_type == AgentChangeType.CREATE_ENTITY:
+        parsed = ProposeCreateEntityArgs.model_validate(payload)
+        return parsed.model_dump()
+    if change_type == AgentChangeType.UPDATE_ENTITY:
+        parsed = ProposeUpdateEntityArgs.model_validate(
+            {"name": payload.get("name"), "patch": payload.get("patch")}
+        )
+        normalized_payload = {
+            "name": parsed.name,
+            "patch": parsed.patch.model_dump(exclude_unset=True),
+        }
+        if isinstance(payload.get("current"), dict):
+            normalized_payload["current"] = payload["current"]
+        return normalized_payload
+    if change_type == AgentChangeType.DELETE_ENTITY:
+        parsed = ProposeDeleteEntityArgs.model_validate(payload)
+        normalized_payload = parsed.model_dump()
+        if isinstance(payload.get("impact_preview"), dict):
+            normalized_payload["impact_preview"] = payload["impact_preview"]
+        return normalized_payload
+    if change_type == AgentChangeType.CREATE_ENTRY:
+        parsed = ProposeCreateEntryArgs.model_validate(payload)
+        return _proposal_payload_from_create_entry_args(context, parsed)
+    if change_type == AgentChangeType.UPDATE_ENTRY:
+        parsed = ProposeUpdateEntryArgs.model_validate(
+            {"selector": payload.get("selector"), "patch": payload.get("patch")}
+        )
+        normalized_payload = {
+            "selector": _entry_selector_to_json(parsed.selector),
+            "patch": _normalize_update_entry_patch_for_payload(parsed.patch),
+        }
+        if isinstance(payload.get("target"), dict):
+            normalized_payload["target"] = payload["target"]
+        return normalized_payload
+    if change_type == AgentChangeType.DELETE_ENTRY:
+        parsed = ProposeDeleteEntryArgs.model_validate({"selector": payload.get("selector")})
+        normalized_payload = {
+            "selector": _entry_selector_to_json(parsed.selector),
+        }
+        if isinstance(payload.get("target"), dict):
+            normalized_payload["target"] = payload["target"]
+        return normalized_payload
+    raise ValueError(f"unsupported proposal change type: {change_type.value}")
+
+
+def _pending_proposals_for_thread(context: ToolContext) -> list[AgentChangeItem]:
+    thread_id = context.db.scalar(select(AgentRun.thread_id).where(AgentRun.id == context.run_id))
+    if thread_id is None:
+        return []
+    return list(
+        context.db.scalars(
+            select(AgentChangeItem)
+            .join(AgentRun, AgentRun.id == AgentChangeItem.run_id)
+            .where(
+                AgentRun.thread_id == thread_id,
+                AgentChangeItem.status == AgentChangeStatus.PENDING_REVIEW,
+            )
+            .order_by(AgentChangeItem.created_at.asc())
+        )
+    )
+
+
+def _resolve_pending_proposal_by_id(context: ToolContext, proposal_id: str) -> AgentChangeItem | None:
+    pending_items = _pending_proposals_for_thread(context)
+    if not pending_items:
+        return None
+
+    exact = next((item for item in pending_items if item.id.lower() == proposal_id.lower()), None)
+    if exact is not None:
+        return exact
+
+    matches = [item for item in pending_items if item.id.lower().startswith(proposal_id.lower())]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        example_ids = [item.id[:8] for item in matches[:5]]
+        raise ValueError(
+            f"proposal_id '{proposal_id}' is ambiguous across pending proposals: {example_ids}"
+        )
+    return None
 
 
 def _list_entries(context: ToolContext, args: ListEntriesArgs) -> ToolExecutionResult:
@@ -909,19 +1143,7 @@ def _propose_delete_entity(context: ToolContext, args: ProposeDeleteEntityArgs) 
 
 
 def _propose_create_entry(context: ToolContext, args: ProposeCreateEntryArgs) -> ToolExecutionResult:
-    settings = resolve_runtime_settings(context.db)
-    currency_code = (args.currency_code or settings.default_currency_code).strip().upper()
-    payload = {
-        "kind": args.kind,
-        "date": args.date.isoformat(),
-        "name": args.name,
-        "amount_minor": args.amount_minor,
-        "currency_code": currency_code,
-        "from_entity": args.from_entity,
-        "to_entity": args.to_entity,
-        "tags": args.tags,
-        "markdown_notes": args.markdown_notes,
-    }
+    payload = _proposal_payload_from_create_entry_args(context, args)
     item = _create_change_item(
         context,
         change_type=AgentChangeType.CREATE_ENTRY,
@@ -1010,6 +1232,123 @@ def _propose_delete_entry(context: ToolContext, args: ProposeDeleteEntryArgs) ->
         "target": payload["target"],
     }
     return _proposal_result("proposed entry deletion", preview=preview, item=item)
+
+
+def _update_pending_proposal(context: ToolContext, args: UpdatePendingProposalArgs) -> ToolExecutionResult:
+    try:
+        item = _resolve_pending_proposal_by_id(context, args.proposal_id)
+    except ValueError as exc:
+        return _error_result("invalid proposal id", details=str(exc))
+    if item is None:
+        return _error_result(
+            "pending proposal not found",
+            details={"proposal_id": args.proposal_id},
+        )
+
+    if item.status != AgentChangeStatus.PENDING_REVIEW:
+        return _error_result(
+            "only pending proposals can be updated",
+            details={
+                "proposal_id": item.id,
+                "status": item.status.value,
+            },
+        )
+
+    try:
+        _validate_patch_map_paths(item.change_type, args.patch_map)
+        patched_payload = _apply_patch_map_to_payload(item.payload_json, args.patch_map)
+        normalized_payload = _normalize_payload_for_change_type(
+            context,
+            change_type=item.change_type,
+            payload=patched_payload,
+        )
+    except ValidationError as exc:
+        return _error_result("invalid proposal patch", details=exc.errors())
+    except ValueError as exc:
+        return _error_result("invalid proposal patch", details=str(exc))
+
+    item.payload_json = normalized_payload
+    context.db.add(item)
+    context.db.flush()
+
+    output_json = {
+        "status": "OK",
+        "summary": "updated pending proposal",
+        "proposal_id": item.id,
+        "proposal_short_id": _proposal_short_id(item.id),
+        "change_type": item.change_type.value,
+        "item_status": item.status.value,
+        "patch_fields": sorted(args.patch_map),
+        "preview": normalized_payload,
+    }
+    output_lines = [
+        "OK",
+        "summary: updated pending proposal",
+        f"proposal_id: {item.id}",
+        f"proposal_short_id: {_proposal_short_id(item.id)}",
+        f"change_type: {item.change_type.value}",
+        f"status: {item.status.value}",
+        f"patch_fields: {sorted(args.patch_map)}",
+        f"preview: {normalized_payload}",
+    ]
+    return ToolExecutionResult(
+        output_text=_format_lines(output_lines),
+        output_json=output_json,
+        status="ok",
+    )
+
+
+def _remove_pending_proposal(context: ToolContext, args: RemovePendingProposalArgs) -> ToolExecutionResult:
+    try:
+        item = _resolve_pending_proposal_by_id(context, args.proposal_id)
+    except ValueError as exc:
+        return _error_result("invalid proposal id", details=str(exc))
+    if item is None:
+        return _error_result(
+            "pending proposal not found",
+            details={"proposal_id": args.proposal_id},
+        )
+
+    if item.status != AgentChangeStatus.PENDING_REVIEW:
+        return _error_result(
+            "only pending proposals can be removed",
+            details={
+                "proposal_id": item.id,
+                "status": item.status.value,
+            },
+        )
+
+    removed_payload = deepcopy(item.payload_json)
+    removed_change_type = item.change_type.value
+    removed_item_id = item.id
+    removed_short_id = _proposal_short_id(item.id)
+
+    context.db.delete(item)
+    context.db.flush()
+
+    output_json = {
+        "status": "OK",
+        "summary": "removed pending proposal",
+        "proposal_id": removed_item_id,
+        "proposal_short_id": removed_short_id,
+        "change_type": removed_change_type,
+        "removed": True,
+        "removed_preview": removed_payload,
+    }
+    output_lines = [
+        "OK",
+        "summary: removed pending proposal",
+        f"proposal_id: {removed_item_id}",
+        f"proposal_short_id: {removed_short_id}",
+        f"change_type: {removed_change_type}",
+        "removed: true",
+        f"removed_preview: {removed_payload}",
+    ]
+    return ToolExecutionResult(
+        output_text=_format_lines(output_lines),
+        output_json=output_json,
+        status="ok",
+    )
 
 
 TOOLS: dict[str, AgentToolDefinition] = {
@@ -1140,6 +1479,24 @@ TOOLS: dict[str, AgentToolDefinition] = {
         args_model=ProposeDeleteEntryArgs,
         handler=_propose_delete_entry,
     ),
+    "update_pending_proposal": AgentToolDefinition(
+        name="update_pending_proposal",
+        description=(
+            "Update a pending review proposal by proposal_id using a patch_map of field paths to new values. "
+            "Only pending proposals in the current thread are mutable."
+        ),
+        args_model=UpdatePendingProposalArgs,
+        handler=_update_pending_proposal,
+    ),
+    "remove_pending_proposal": AgentToolDefinition(
+        name="remove_pending_proposal",
+        description=(
+            "Remove a pending review proposal by proposal_id from the current thread's pending proposal pool. "
+            "Use this when the user asks to discard/cancel a pending proposal."
+        ),
+        args_model=RemovePendingProposalArgs,
+        handler=_remove_pending_proposal,
+    ),
 }
 
 
@@ -1147,41 +1504,10 @@ def build_openai_tool_schemas() -> list[dict[str, Any]]:
     return [tool.openai_tool_schema for tool in TOOLS.values()]
 
 
-def _pending_review_count_for_other_runs(context: ToolContext) -> int:
-    thread_id = context.db.scalar(select(AgentRun.thread_id).where(AgentRun.id == context.run_id))
-    if thread_id is None:
-        return 0
-    return int(
-        context.db.scalar(
-            select(func.count(AgentChangeItem.id))
-            .join(AgentRun, AgentRun.id == AgentChangeItem.run_id)
-            .where(
-                AgentRun.thread_id == thread_id,
-                AgentChangeItem.status == AgentChangeStatus.PENDING_REVIEW,
-                AgentChangeItem.run_id != context.run_id,
-            )
-        )
-        or 0
-    )
-
-
 def execute_tool(name: str, arguments: dict[str, Any], context: ToolContext) -> ToolExecutionResult:
     definition = TOOLS.get(name)
     if definition is None:
         return _error_result(f"unknown tool '{name}'")
-
-    if name.startswith("propose_"):
-        pending_count = _pending_review_count_for_other_runs(context)
-        if pending_count > 0:
-            return _error_result(
-                "proposal tools are blocked until pending review items are reviewed",
-                details={
-                    "pending_review_count": pending_count,
-                    "instruction": (
-                        "Ask the user to review pending proposal items (approve/reject), then continue with new proposals."
-                    ),
-                },
-            )
 
     try:
         parsed = definition.args_model.model_validate(arguments)

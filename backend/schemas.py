@@ -482,6 +482,7 @@ class AgentToolCallRead(BaseModel):
     tool_name: str
     input_json: dict[str, Any]
     output_json: dict[str, Any]
+    output_text: str
     status: AgentToolCallStatus
     created_at: datetime
 

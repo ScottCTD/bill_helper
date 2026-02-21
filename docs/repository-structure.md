@@ -30,6 +30,7 @@
 - `versions/0012_remove_related_link_type.py`: migrates legacy `RELATED` entry links to `BUNDLE` and removes `RELATED` from `LinkType`.
 - `versions/0013_add_account_markdown_body.py`: adds optional account-level markdown notes (`accounts.markdown_body`).
 - `versions/0014_remove_account_institution_type.py`: drops legacy account columns (`accounts.institution`, `accounts.account_type`).
+- `versions/0015_add_agent_tool_call_output_text.py`: adds persisted model-visible tool output text (`agent_tool_calls.output_text`).
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
