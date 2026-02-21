@@ -13,17 +13,18 @@ export function normalizeOptionalText(value: string): string | undefined {
   return normalized ? normalized : undefined;
 }
 
-export function normalizeNullableText(value: string): string | null {
-  const normalized = value.trim();
-  return normalized ? normalized : null;
+export function normalizeNullableMarkdown(value: string): string | null {
+  if (value.trim().length === 0) {
+    return null;
+  }
+  return value;
 }
 
 export function buildEditForm(account: Account, fallbackOwnerUserId: string): AccountFormState {
   return {
     owner_user_id: account.owner_user_id ?? fallbackOwnerUserId,
     name: account.name,
-    institution: account.institution ?? "",
-    account_type: account.account_type ?? "",
+    markdown_body: account.markdown_body ?? "",
     currency_code: account.currency_code,
     is_active: account.is_active
   };

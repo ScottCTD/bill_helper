@@ -31,7 +31,7 @@ This module hosts the React app, route pages, UI primitives, and API/query clien
 - `frontend/src/pages/PropertiesPage.tsx`: thin page orchestrator for property catalogs.
 - `frontend/src/features/properties/usePropertiesPageModel.ts`: properties page coordinator that composes queries/state/mutations hooks.
 - `frontend/src/features/properties/usePropertiesQueries.ts`: properties queries + taxonomy display/option derivation.
-- `frontend/src/features/properties/usePropertiesSectionState.ts`: active section/search/create-panel UI state.
+- `frontend/src/features/properties/usePropertiesSectionState.ts`: active section/search/create-dialog UI state.
 - `frontend/src/features/properties/usePropertiesFormState.ts`: properties CRUD form state.
 - `frontend/src/features/properties/usePropertiesFilteredData.ts`: section-scoped filtered lists.
 - `frontend/src/features/properties/sections/*.tsx`: section-specific UI for users/entities/tags/currencies/taxonomy terms.
@@ -176,6 +176,9 @@ uv run python scripts/check_docs_sync.py
 - Agent panel layout surfaces are further split into panel modules (`agent/panel/*`) to keep rendering concerns separate from orchestration logic.
 - Accounts and properties pages now follow a feature-module split (page orchestrator + domain hook + section components) rather than single-file implementations.
 - Properties model logic is decomposed into dedicated query/section-state/form/filter hooks for maintainable ownership boundaries.
+- Accounts create/edit dialogs include optional markdown notes (`markdown_body`) using the shared markdown editor.
+- Accounts no longer expose `institution`/`type` fields in table rows or create/edit dialogs.
+- Properties create/edit flows are modal-driven for editable sections (`users`, `entities`, `tags`, and taxonomy terms); inline table-row create/edit forms are removed.
 - Frontend tests are now first-class (`vitest` + Testing Library) with coverage over agent activity helpers, run block rendering, review diff generation, and accounts/properties page integration flows.
 - Dashboard visualizations use Recharts and consume the backend-configured dashboard currency payload.
 

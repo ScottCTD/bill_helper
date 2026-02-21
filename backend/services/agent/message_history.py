@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,11 @@ from backend.models import (
 )
 from backend.services.agent.prompts import system_prompt
 from backend.services.runtime_settings import resolve_runtime_settings
+
+MAX_ACCOUNT_MARKDOWN_CONTEXT_CHARS = 1_500
+MAX_ACCOUNT_MARKDOWN_CONTEXT_LINES = 40
+MAX_ACCOUNT_IMAGE_DATA_URL_CHARS = 120
+MARKDOWN_IMAGE_DATA_URL_PATTERN = re.compile(r"!\[([^\]]*)\]\((data:image[^)]+)\)", re.IGNORECASE)
 
 
 def attachment_to_data_url(file_path: str, mime_type: str) -> str | None:
@@ -119,6 +125,37 @@ def _compose_user_feedback_text(
     return f"{'\n\n'.join(prefixes)}\n\nUser feedback:\n{feedback}"
 
 
+def _truncate_markdown_image_data_urls(markdown: str) -> str:
+    def _replace(match: re.Match[str]) -> str:
+        alt = match.group(1)
+        url = match.group(2)
+        if len(url) <= MAX_ACCOUNT_IMAGE_DATA_URL_CHARS:
+            return match.group(0)
+        preview = f"{url[:MAX_ACCOUNT_IMAGE_DATA_URL_CHARS]}...(truncated)"
+        return f"![{alt}]({preview})"
+
+    return MARKDOWN_IMAGE_DATA_URL_PATTERN.sub(_replace, markdown)
+
+
+def _normalize_account_markdown_for_context(markdown: str | None) -> str | None:
+    if markdown is None:
+        return None
+    normalized = markdown.strip()
+    if not normalized:
+        return None
+
+    normalized = _truncate_markdown_image_data_urls(normalized)
+    lines = normalized.splitlines()
+    if len(lines) > MAX_ACCOUNT_MARKDOWN_CONTEXT_LINES:
+        normalized = "\n".join(lines[:MAX_ACCOUNT_MARKDOWN_CONTEXT_LINES]).rstrip()
+        normalized = f"{normalized}\n...(truncated)"
+
+    if len(normalized) > MAX_ACCOUNT_MARKDOWN_CONTEXT_CHARS:
+        normalized = normalized[:MAX_ACCOUNT_MARKDOWN_CONTEXT_CHARS].rstrip()
+        normalized = f"{normalized}\n...(truncated)"
+    return normalized
+
+
 def _build_current_user_context(db: Session) -> str:
     settings = resolve_runtime_settings(db)
     current_user_name = (settings.current_user_name or "").strip() or "(unknown)"
@@ -146,9 +183,14 @@ def _build_current_user_context(db: Session) -> str:
         status = "active" if account.is_active else "inactive"
         lines.append(
             f"- {index}. name={account.name}; currency={account.currency_code}; status={status}; "
-            f"type={account.account_type or '-'}; institution={account.institution or '-'}; "
             f"entity={account.entity.name if account.entity is not None else '-'}"
         )
+        notes_markdown = _normalize_account_markdown_for_context(account.markdown_body)
+        if notes_markdown:
+            lines.append("  notes_markdown:")
+            lines.extend(f"    {line}" for line in notes_markdown.splitlines())
+        else:
+            lines.append("  notes_markdown: (none)")
     if len(accounts) > max_accounts:
         lines.append(f"- ... (+{len(accounts) - max_accounts} more)")
     return "\n".join(lines)

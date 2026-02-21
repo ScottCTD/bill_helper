@@ -15,7 +15,7 @@ import {
 import { invalidateAccountReadModels } from "../../lib/queryInvalidation";
 import { queryKeys } from "../../lib/queryKeys";
 import type { Account } from "../../lib/types";
-import { buildEditForm, normalizeNullableText, normalizeOptionalText } from "./helpers";
+import { buildEditForm, normalizeNullableMarkdown, normalizeOptionalText } from "./helpers";
 import { ACCOUNT_FORM_DEFAULTS, TODAY_ISO, type AccountFormState, type SnapshotFormState } from "./types";
 
 export function useAccountsPageModel() {
@@ -72,10 +72,7 @@ export function useAccountsPageModel() {
 
     return accounts.filter((account) => {
       const ownerName = account.owner_user_id ? ownerNamesById.get(account.owner_user_id) ?? "" : "";
-      return [account.name, account.institution ?? "", account.account_type ?? "", account.currency_code, ownerName]
-        .join(" ")
-        .toLowerCase()
-        .includes(query);
+      return [account.name, account.currency_code, ownerName].join(" ").toLowerCase().includes(query);
     });
   }, [accountSearch, accountsQuery.data, ownerNamesById]);
 
@@ -172,8 +169,7 @@ export function useAccountsPageModel() {
     createAccountMutation.mutate({
       owner_user_id: createForm.owner_user_id || undefined,
       name: createForm.name.trim(),
-      institution: normalizeOptionalText(createForm.institution),
-      account_type: normalizeOptionalText(createForm.account_type),
+      markdown_body: normalizeNullableMarkdown(createForm.markdown_body),
       currency_code: createForm.currency_code.toUpperCase(),
       is_active: true
     });
@@ -190,8 +186,7 @@ export function useAccountsPageModel() {
       payload: {
         owner_user_id: editForm.owner_user_id || null,
         name: editForm.name.trim(),
-        institution: normalizeNullableText(editForm.institution),
-        account_type: normalizeNullableText(editForm.account_type),
+        markdown_body: normalizeNullableMarkdown(editForm.markdown_body),
         currency_code: editForm.currency_code.toUpperCase(),
         is_active: editForm.is_active
       }

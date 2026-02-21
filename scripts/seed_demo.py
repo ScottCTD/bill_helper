@@ -161,8 +161,6 @@ def seed() -> None:
             owner_user_id=scott_user.id,
             entity_id=debit_entity.id,
             name=debit_entity.name,
-            institution="Scotiabank",
-            account_type="debit",
             currency_code=DEFAULT_ENTRY_CURRENCY,
             is_active=True,
         )
@@ -170,8 +168,6 @@ def seed() -> None:
             owner_user_id=scott_user.id,
             entity_id=credit_entity.id,
             name=credit_entity.name,
-            institution="Scotiabank",
-            account_type="credit",
             currency_code=DEFAULT_ENTRY_CURRENCY,
             is_active=True,
         )

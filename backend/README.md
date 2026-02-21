@@ -92,6 +92,8 @@ uv run python scripts/check_docs_sync.py
 
 ## Current Constraints
 
+- Account contracts include `name`, `markdown_body`, `currency_code`, and owner/active state; legacy `institution`/`account_type` fields were removed.
+- Agent current-user system context now includes per-account `notes_markdown` summaries, with truncation safeguards for oversized markdown/data-url image payloads.
 - Entry-level `status` was removed; agent review state remains only on `agent_change_items`.
 - Entry groups are derived from entry-link connected components; `/groups` is read-model only (no group create/update/delete endpoints).
 - `GET /api/v1/groups` omits singleton components (`entry_count < 2`) to focus on linked groups.

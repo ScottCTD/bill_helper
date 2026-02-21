@@ -54,7 +54,7 @@ export function AccountsTableSection(props: AccountsTableSectionProps) {
               <Input
                 value={accountSearch}
                 onChange={(event) => onAccountSearchChange(event.target.value)}
-                placeholder="Name, institution, owner, or currency"
+                placeholder="Name, owner, or currency"
               />
             </label>
           </div>
@@ -75,8 +75,6 @@ export function AccountsTableSection(props: AccountsTableSectionProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Institution</TableHead>
-                    <TableHead>Type</TableHead>
                     <TableHead>Owner</TableHead>
                     <TableHead>Currency</TableHead>
                     <TableHead>Status</TableHead>
@@ -93,8 +91,6 @@ export function AccountsTableSection(props: AccountsTableSectionProps) {
                       onClick={() => onSelectAccount(account.id)}
                     >
                       <TableCell className="font-medium">{account.name}</TableCell>
-                      <TableCell>{account.institution ?? "-"}</TableCell>
-                      <TableCell>{account.account_type ?? "-"}</TableCell>
                       <TableCell>{ownerNameForId(account.owner_user_id)}</TableCell>
                       <TableCell>{account.currency_code}</TableCell>
                       <TableCell>

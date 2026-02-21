@@ -28,6 +28,8 @@
 - `versions/0010_runtime_settings_overrides.py`: adds persisted runtime settings override table (`runtime_settings`).
 - `versions/0011_remove_openrouter_runtime_settings_fields.py`: removes legacy OpenRouter-specific runtime settings columns.
 - `versions/0012_remove_related_link_type.py`: migrates legacy `RELATED` entry links to `BUNDLE` and removes `RELATED` from `LinkType`.
+- `versions/0013_add_account_markdown_body.py`: adds optional account-level markdown notes (`accounts.markdown_body`).
+- `versions/0014_remove_account_institution_type.py`: drops legacy account columns (`accounts.institution`, `accounts.account_type`).
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)

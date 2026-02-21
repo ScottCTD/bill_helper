@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import type { Account, User } from "../../lib/types";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
+import { MarkdownBlockEditor } from "../../components/MarkdownBlockEditor";
 import {
   Dialog,
   DialogContent,
@@ -60,6 +61,8 @@ export function AccountDialogs(props: AccountDialogsProps) {
     onResetCreateMutationError,
     onResetUpdateMutationError
   } = props;
+  const createMarkdownResetKey = `account-create-${createDialogOpen ? "open" : "closed"}`;
+  const editMarkdownResetKey = `account-edit-${editingAccount?.id ?? "none"}-${editDialogOpen ? "open" : "closed"}`;
 
   return (
     <>
@@ -96,18 +99,6 @@ export function AccountDialogs(props: AccountDialogsProps) {
               <FormField label="Name">
                 <Input required value={createForm.name} onChange={(event) => onCreateFormChange({ ...createForm, name: event.target.value })} />
               </FormField>
-              <FormField label="Institution">
-                <Input
-                  value={createForm.institution}
-                  onChange={(event) => onCreateFormChange({ ...createForm, institution: event.target.value })}
-                />
-              </FormField>
-              <FormField label="Type">
-                <Input
-                  value={createForm.account_type}
-                  onChange={(event) => onCreateFormChange({ ...createForm, account_type: event.target.value })}
-                />
-              </FormField>
               <FormField label="Currency">
                 <NativeSelect
                   value={createForm.currency_code}
@@ -121,6 +112,18 @@ export function AccountDialogs(props: AccountDialogsProps) {
                 </NativeSelect>
               </FormField>
             </div>
+            <section className="entry-editor-markdown">
+              <div className="grid gap-2 text-sm">
+                <p className="text-sm font-medium leading-none">Notes</p>
+                <MarkdownBlockEditor
+                  markdown={createForm.markdown_body}
+                  resetKey={createMarkdownResetKey}
+                  disabled={isCreating}
+                  onChange={(markdown) => onCreateFormChange({ ...createForm, markdown_body: markdown })}
+                />
+                <p className="text-xs text-muted-foreground">Optional markdown notes for account context and agent prompts.</p>
+              </div>
+            </section>
             {createErrorMessage ? <p className="error">{createErrorMessage}</p> : null}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onCreateDialogOpenChange(false)}>
@@ -167,18 +170,6 @@ export function AccountDialogs(props: AccountDialogsProps) {
               <FormField label="Name">
                 <Input required value={editForm.name} onChange={(event) => onEditFormChange({ ...editForm, name: event.target.value })} />
               </FormField>
-              <FormField label="Institution">
-                <Input
-                  value={editForm.institution}
-                  onChange={(event) => onEditFormChange({ ...editForm, institution: event.target.value })}
-                />
-              </FormField>
-              <FormField label="Type">
-                <Input
-                  value={editForm.account_type}
-                  onChange={(event) => onEditFormChange({ ...editForm, account_type: event.target.value })}
-                />
-              </FormField>
               <FormField label="Currency">
                 <NativeSelect
                   value={editForm.currency_code}
@@ -201,6 +192,18 @@ export function AccountDialogs(props: AccountDialogsProps) {
                 </label>
               </FormField>
             </div>
+            <section className="entry-editor-markdown">
+              <div className="grid gap-2 text-sm">
+                <p className="text-sm font-medium leading-none">Notes</p>
+                <MarkdownBlockEditor
+                  markdown={editForm.markdown_body}
+                  resetKey={editMarkdownResetKey}
+                  disabled={isUpdating || !editingAccount}
+                  onChange={(markdown) => onEditFormChange({ ...editForm, markdown_body: markdown })}
+                />
+                <p className="text-xs text-muted-foreground">Optional markdown notes for account context and agent prompts.</p>
+              </div>
+            </section>
             {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onEditDialogOpenChange(false)}>

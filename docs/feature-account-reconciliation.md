@@ -17,6 +17,8 @@ This doc is the fast path for understanding account management UX, snapshot chec
 - Accounts are displayed in a table workspace (search + row selection + row-level edit action).
 - Account creation is handled by the icon-only `+` action, which opens a modal.
 - Account edits are handled by the `Edit` button in each row, which opens a modal.
+- Account metadata now excludes legacy `institution` and `type`; dialogs focus on owner/name/currency/notes/active state.
+- Account create/edit modals include optional markdown notes (`markdown_body`) for richer account-level context.
 - Snapshot and reconciliation panels are bound to the currently selected table row.
 - Snapshot creation is append-only in the UI (no snapshot edit/delete controls).
 - Reconciliation and snapshot panels include plain-language term definitions directly in the page so users can understand fields without leaving the workflow.
@@ -34,6 +36,7 @@ The as-of date defaults to the server's current day when the query parameter is 
 ## Backend Modules
 
 - `backend/routers/accounts.py`: account/snapshot/reconciliation routes.
+- `backend/services/agent/message_history.py`: current-user account context assembly for agent system prompt (includes account notes).
 - `backend/services/finance.py`: ledger aggregation + latest-snapshot lookup.
 - `backend/schemas.py`: `Account*`, `Snapshot*`, and `ReconciliationRead` contracts.
 

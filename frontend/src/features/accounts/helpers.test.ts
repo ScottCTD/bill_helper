@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildEditForm, normalizeNullableText, normalizeOptionalText, toDateLabel } from "./helpers";
+import { buildEditForm, normalizeOptionalText, toDateLabel } from "./helpers";
 import type { Account } from "../../lib/types";
 
 describe("accounts helpers", () => {
@@ -9,12 +9,9 @@ describe("accounts helpers", () => {
     expect(toDateLabel("2026-02-15T12:30:00Z")).toBe("2026-02-15");
   });
 
-  it("normalizes optional and nullable text inputs", () => {
+  it("normalizes optional text inputs", () => {
     expect(normalizeOptionalText("  ")).toBeUndefined();
     expect(normalizeOptionalText("  Savings  ")).toBe("Savings");
-
-    expect(normalizeNullableText("  ")).toBeNull();
-    expect(normalizeNullableText("  chequing  ")).toBe("chequing");
   });
 
   it("builds edit form state with owner fallback", () => {
@@ -23,8 +20,7 @@ describe("accounts helpers", () => {
       owner_user_id: null,
       entity_id: null,
       name: "Main account",
-      institution: null,
-      account_type: "checking",
+      markdown_body: "## Notes",
       currency_code: "CAD",
       is_active: true,
       created_at: "2026-02-15T00:00:00Z",
@@ -34,8 +30,7 @@ describe("accounts helpers", () => {
     expect(buildEditForm(account, "user-1")).toEqual({
       owner_user_id: "user-1",
       name: "Main account",
-      institution: "",
-      account_type: "checking",
+      markdown_body: "## Notes",
       currency_code: "CAD",
       is_active: true
     });

@@ -20,6 +20,8 @@ Implemented:
   - `0010_runtime_settings_overrides`
   - `0011_remove_openrouter_runtime_settings_fields`
   - `0012_remove_related_link_type`
+  - `0013_add_account_markdown_body`
+  - `0014_remove_account_institution_type`
 - Taxonomy subsystem for generalized category management:
   - shared `taxonomies` / `taxonomy_terms` / `taxonomy_assignments` tables
   - default category taxonomies for `entities` and `tags`
@@ -77,7 +79,9 @@ Implemented:
   - two-level navigation (`Core` / `Taxonomies`) with one active table surface at a time
   - dedicated taxonomy tables for `Entity Categories` and `Tag Categories` (name, usage, rename)
   - entities/tags category fields now use taxonomy-sourced creatable pickers
+  - create/edit actions for users/entities/tags/taxonomy terms are modal-driven (`+` and row `Edit`/`Rename`)
   - shared table toolbar pattern with compact right-aligned `+` add actions across `Entries` and editable `Properties` sections
+- Accounts workspace now supports optional markdown notes per account (`markdown_body`) in create/edit dialogs.
 - AI agent flow with review-gated proposals and per-item human review:
   - Agent can answer questions and call read tools.
   - Agent can propose CRUD changes for entries, tags, and entities (`create_*`, `update_*`, `delete_*`).
@@ -88,6 +92,7 @@ Implemented:
   - Agent can emit sparse intermediate progress notes through `send_intermediate_update`; streamed runs surface these as `reasoning_update` events.
   - Existing `POST /api/v1/agent/threads/{thread_id}/messages` behavior remains available and still starts a background run for polling-based clients.
   - If a run is interrupted, the interrupted user request remains in conversation history and the next turn is annotated so the model knows the previous response was cut short.
+  - Agent system context now includes current-user account markdown notes (`notes_markdown`) with truncation safeguards for oversized markdown/data-url image payloads.
   - Composer now supports removable attachment chips (image thumbnails + PDF file chips) before send.
   - Composer now supports paste (`Cmd/Ctrl+V`) and drag-drop image/PDF attachment ingestion.
   - Agent message uploads now accept PDF attachments in addition to images.
@@ -339,5 +344,5 @@ uv run python scripts/check_docs_sync.py
 - Frontend design tokens and component styles: `frontend/src/styles.css`
 - Frontend UI primitives: `frontend/src/components/ui`
 - Agent panel UI: `frontend/src/components/agent/AgentPanel.tsx`
-- Latest migration: `alembic/versions/0012_remove_related_link_type.py`
+- Latest migration: `alembic/versions/0014_remove_account_institution_type.py`
 - Demo seed: `scripts/seed_demo.py`

@@ -388,8 +388,7 @@ def test_system_prompt_includes_current_user_account_context(client, monkeypatch
         "/api/v1/accounts",
         json={
             "name": "Main Checking",
-            "institution": "Bank Co",
-            "account_type": "checking",
+            "markdown_body": "## Checking notes\n- reconcile every Friday",
             "currency_code": "usd",
             "is_active": True,
         },
@@ -416,6 +415,43 @@ def test_system_prompt_includes_current_user_account_context(client, monkeypatch
     assert "accounts_count: 1" in system_content
     assert "name=Main Checking" in system_content
     assert "currency=USD" in system_content
+    assert "notes_markdown:" in system_content
+    assert "## Checking notes" in system_content
+    assert "- reconcile every Friday" in system_content
+
+
+def test_system_prompt_truncates_account_markdown_image_data_urls(client, monkeypatch):
+    huge_data_url = "data:image/png;base64," + ("a" * 300)
+    create_account_response = client.post(
+        "/api/v1/accounts",
+        json={
+            "name": "Travel Card",
+            "markdown_body": f"![statement]({huge_data_url})",
+            "currency_code": "usd",
+            "is_active": True,
+        },
+    )
+    create_account_response.raise_for_status()
+
+    captured_messages: list[list[dict]] = []
+
+    def model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "ok"}
+
+    patch_model(monkeypatch, model)
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "hello")
+    assert run["status"] == "completed"
+    assert captured_messages
+
+    system_message = captured_messages[-1][0]
+    assert system_message.get("role") == "system"
+    system_content = str(system_message.get("content", ""))
+    assert "![statement](data:image/png;base64," in system_content
+    assert "...(truncated)" in system_content
+    assert huge_data_url not in system_content
 
 
 def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():

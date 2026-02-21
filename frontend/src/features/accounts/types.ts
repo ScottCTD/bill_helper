@@ -1,8 +1,7 @@
 export interface AccountFormState {
   owner_user_id: string;
   name: string;
-  institution: string;
-  account_type: string;
+  markdown_body: string;
   currency_code: string;
   is_active: boolean;
 }
@@ -18,8 +17,7 @@ export const TODAY_ISO = new Date().toISOString().slice(0, 10);
 export const ACCOUNT_FORM_DEFAULTS: AccountFormState = {
   owner_user_id: "",
   name: "",
-  institution: "",
-  account_type: "",
+  markdown_body: "",
   currency_code: "CAD",
   is_active: true
 };

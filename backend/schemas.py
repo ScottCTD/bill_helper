@@ -118,8 +118,7 @@ class TaxonomyTermRead(BaseModel):
 
 class AccountBase(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    institution: str | None = Field(default=None, max_length=200)
-    account_type: str | None = Field(default=None, max_length=100)
+    markdown_body: str | None = None
     currency_code: str = Field(min_length=3, max_length=3)
 
 
@@ -131,8 +130,7 @@ class AccountCreate(AccountBase):
 class AccountUpdate(BaseModel):
     owner_user_id: str | None = None
     name: str | None = Field(default=None, min_length=1, max_length=200)
-    institution: str | None = Field(default=None, max_length=200)
-    account_type: str | None = Field(default=None, max_length=100)
+    markdown_body: str | None = None
     currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     is_active: bool | None = None
 

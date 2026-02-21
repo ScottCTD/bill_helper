@@ -150,6 +150,7 @@ Agent services:
   - parses PDF attachments with MarkItDown and appends extracted markdown text into the user message content passed to the model
   - checks LiteLLM model vision capability and, when supported, renders uploaded PDF pages to PNG data URLs (one page per image part)
   - builds account summaries for current user and injects them into the system prompt context
+  - includes account-level markdown notes in current-user context (`notes_markdown`) with truncation safeguards for large notes/data-url images
   - prepends reviewed proposal outcomes to the latest user message before user feedback text
   - for follow-up turns after interrupted runs, injects an interruption-context note so the model treats the prior request as unfinished context
 - `backend/services/agent/model_client.py`
@@ -251,6 +252,8 @@ Settings router:
 - `0010_runtime_settings_overrides`
 - `0011_remove_openrouter_runtime_settings_fields`
 - `0012_remove_related_link_type`
+- `0013_add_account_markdown_body`
+- `0014_remove_account_institution_type`
 
 Commands:
 
@@ -322,6 +325,7 @@ Current baseline for `backend/tests/test_agent.py`: `40 passed`.
 - runtime settings can be updated through `/api/v1/settings`; changes apply to subsequent requests/runs without restarting the app
 - dashboard currency and default entry currency are now runtime-configurable
 - current user attribution defaults (`owner`/review actor) now resolve from runtime settings rather than env-only config
+- account create/read/update schemas no longer expose `institution` and `account_type`
 - entry-ingestion prompts now require duplicate detection before any entry proposal, reducing duplicate proposal risk
 - prompt policy now requires entry retag/update proposals before tag deletion proposals when references exist
 - entry domain no longer includes `status`; API/model/migration are synchronized on statusless entries

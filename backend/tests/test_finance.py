@@ -6,8 +6,6 @@ def create_account(client, name: str = "Checking") -> dict:
         "/api/v1/accounts",
         json={
             "name": name,
-            "institution": "Test Bank",
-            "account_type": "checking",
             "currency_code": "CAD",
             "is_active": True,
         },

@@ -88,8 +88,7 @@ def create_account(payload: AccountCreate, db: Session = Depends(get_db)) -> Acc
         owner_user_id=_resolve_owner_user_id(db, payload.owner_user_id),
         entity_id=_resolve_account_entity_id(db, normalized_name),
         name=normalized_name,
-        institution=payload.institution,
-        account_type=payload.account_type,
+        markdown_body=payload.markdown_body,
         currency_code=payload.currency_code.upper(),
         is_active=payload.is_active,
     )

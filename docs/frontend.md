@@ -184,6 +184,9 @@ Agent client methods:
 - compact toolbar with search and icon-only `+` action for account creation
 - create account via modal dialog (`Dialog` + shared form primitives)
 - per-row `Edit` action opens modal dialog for account updates (including active/inactive toggle)
+- account dialogs now edit `Owner`, `Name`, `Currency`, `Notes`, and `Active`; legacy `institution`/`type` fields are removed
+- account create/edit dialogs include optional markdown notes (`markdown_body`) via `MarkdownBlockEditor`
+- account notes editor is mounted as a direct editable surface in dialogs (not wrapped by form-label containers) so caret/focus editing works reliably
 - selected table row drives snapshot create/history and reconciliation side panels
 - both side panels include plain-language helper copy so terms are understandable in-product:
   - reconciliation definitions for `As of`, `Ledger`, `Snapshot`, `Delta`
@@ -199,7 +202,7 @@ Agent client methods:
 - page is now a thin orchestrator; domain state/actions live in `frontend/src/features/properties/usePropertiesPageModel.ts`
 - properties model internals are split into focused hooks:
   - `frontend/src/features/properties/usePropertiesQueries.ts` (queries + taxonomy option/label derivation)
-  - `frontend/src/features/properties/usePropertiesSectionState.ts` (active section/search/create-panel UI state)
+  - `frontend/src/features/properties/usePropertiesSectionState.ts` (active section/search/create-dialog UI state)
   - `frontend/src/features/properties/usePropertiesFormState.ts` (CRUD form/editing state)
   - `frontend/src/features/properties/usePropertiesFilteredData.ts` (section-specific filtered lists)
 - section UI is split by concern under `frontend/src/features/properties/sections/*`:
@@ -217,6 +220,10 @@ Agent client methods:
   - title/subtitle row
   - unified filter toolbar
   - compact right-aligned `+` add action for editable sections
+- create and edit interactions are modal-driven across editable sections (`users`, `entities`, `tags`, `entity categories`, `tag categories`):
+  - `+` opens create dialog
+  - row `Edit`/`Rename` opens edit dialog
+  - no inline row edit/create panels in the table body
 - taxonomy term CRUD tables:
   - `Entity Categories`: name, usage count, rename
   - `Tag Categories`: name, usage count, rename
@@ -486,6 +493,10 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
   - create action is the icon `+` button in the table toolbar
   - edits are per-row and open from `Edit` action buttons
   - snapshot/reconciliation panels reflect the currently selected row
+- properties workspace create/edit actions are dialog-based across editable sections:
+  - `+` triggers section create dialogs
+  - row `Edit`/`Rename` triggers section edit dialogs
+  - inline table-row form editing is removed
 - taxonomy term create/rename and entity/tag category assignment changes now invalidate taxonomy-term usage caches
 - entry popup save flow is now close-driven:
   - clicking outside/closing attempts to auto-save when there are changes

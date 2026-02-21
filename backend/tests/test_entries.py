@@ -8,8 +8,6 @@ def create_account(client) -> str:
         "/api/v1/accounts",
         json={
             "name": "Checking",
-            "institution": "Test Bank",
-            "account_type": "checking",
             "currency_code": "USD",
             "is_active": True,
         },

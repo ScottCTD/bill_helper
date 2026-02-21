@@ -28,7 +28,7 @@ Agent:
 - `id` (PK UUID string)
 - `owner_user_id` (nullable FK -> `users.id`)
 - `entity_id` (nullable FK -> `entities.id`)
-- `name`, `institution`, `account_type`, `currency_code`, `is_active`
+- `name`, `markdown_body`, `currency_code`, `is_active`
 - `created_at`, `updated_at`
 
 ## `account_snapshots`

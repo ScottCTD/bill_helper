@@ -19,8 +19,7 @@ Body:
 
 - `owner_user_id` (optional)
 - `name` (required)
-- `institution` (optional)
-- `account_type` (optional)
+- `markdown_body` (optional)
 - `currency_code` (required)
 - `is_active` (optional, default `true`)
 
@@ -35,6 +34,14 @@ Response: `AccountRead[]`
 ## `PATCH /accounts/{account_id}`
 
 Partial update.
+
+Body fields (all optional):
+
+- `owner_user_id`
+- `name`
+- `markdown_body`
+- `currency_code`
+- `is_active`
 
 Response: `AccountRead`
 
