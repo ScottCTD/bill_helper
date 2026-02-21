@@ -111,7 +111,7 @@ uv run python scripts/check_docs_sync.py
 - Stream retries after partial output are de-duplicated so already-emitted prefixes are not re-sent to the SSE client.
 - Agent model calls are routed through LiteLLM using the configured model string (`agent_model`), and credentials are resolved from provider environment variables.
 - For models that support prompt caching, LiteLLM requests include explicit `cache_control_injection_points` anchored to system context and latest user turn (negative message index) so tool-loop steps can reuse cached prompt prefixes.
-- Agent message uploads accept image and PDF attachments; PDF files are parsed to markdown text via MarkItDown before model calls.
+- Agent message uploads accept image and PDF attachments; PDF files are parsed to normalized text via PyMuPDF before model calls.
 - When the configured model supports vision (via LiteLLM capability checks), each uploaded PDF page is also rendered and sent as an image input.
 - Agent runs can be interrupted via `POST /api/v1/agent/runs/{run_id}/interrupt`; interrupted runs transition to `failed`.
 - Thread deletion is available via `DELETE /api/v1/agent/threads/{thread_id}` and is blocked (`409`) while that thread has a running run.

@@ -19,7 +19,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | Runtime | `backend/services/agent/runtime.py` | Run lifecycle, bounded tool loop, persistence of tool calls and final assistant message |
 | Model client | `backend/services/agent/model_client.py` | LiteLLM adapter, tool wiring, retry-enabled model completion, explicit prompt-cache breakpoint injection (system + latest user anchors via negative index) for cache-capable models |
 | Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks, proposal ordering (including tag-delete sequencing), error recovery, and current-user context section |
-| Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; parses PDF attachments to markdown text via MarkItDown; when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` excerpts with truncation safeguards); prepends review outcomes before current user feedback in the latest user message |
+| Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; parses PDF attachments to text via PyMuPDF (line-trimmed and internal-whitespace-normalized); when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` excerpts with truncation safeguards); prepends review outcomes before current user feedback in the latest user message |
 | Tools | `backend/services/agent/tools.py` | Read/progress/proposal tool schemas, pending-proposal mutation tool, validation, execution, tool-level retry |
 | Review/apply | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py` | Approval/rejection, apply handlers for proposed CRUD changes |
 | API router | `backend/routers/agent.py` | Threads/runs/send/review/attachment endpoints |
@@ -32,7 +32,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
    - system prompt (including current-user account context)
    - current-user account context includes account markdown notes (`notes_markdown`) when present
    - thread message history
-   - PDF attachments converted to markdown text via MarkItDown (always)
+   - PDF attachments converted to normalized text via PyMuPDF (always)
    - PDF page images appended to multimodal payloads when model vision is supported
    - for the latest user turn only, review outcomes (if any) prepended before that user feedback text
 4. Runtime loops: model call → optional tool calls (including sparse `send_intermediate_update` progress notes) → tool results appended → repeat (bounded by `agent_max_steps`).

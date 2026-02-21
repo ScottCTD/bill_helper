@@ -489,7 +489,7 @@ Behavior:
 - persists message + attachments
 - creates an `agent_runs` row with initial `status=running`
 - starts bounded tool-calling execution in background
-- PDF attachments are parsed to markdown text via MarkItDown before model calls
+- PDF attachments are parsed to text via PyMuPDF (line-trimmed and internal-whitespace-normalized) before model calls
 - when the configured model supports vision, each uploaded PDF page is also sent to the model as an `image_url` part
 - resolves provider routing via LiteLLM using configured model name + provider environment credentials
 - for prompt-caching-capable models, LiteLLM request payload includes explicit `cache_control_injection_points` anchored to system context + latest user turn (negative index)

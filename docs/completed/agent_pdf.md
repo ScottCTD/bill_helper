@@ -7,7 +7,7 @@ Enable agent attachments to accept PDF files in addition to images, then expose 
 ## Implemented Behavior
 
 1. Backend accepts `application/pdf` attachments (plus existing image attachments).
-2. Each PDF is parsed to text using MarkItDown and included in the user message context.
+2. Each PDF is parsed to text using PyMuPDF (line-trimmed and internal-whitespace-normalized) and included in the user message context.
 3. If the selected model supports vision, each PDF page is rendered to an image and also attached to the model input.
 4. Frontend upload validation now accepts both images and PDFs.
 5. Frontend attachment UI supports:
@@ -35,8 +35,7 @@ Enable agent attachments to accept PDF files in addition to images, then expose 
 
 ## Operational Impact
 
-1. New backend dependencies:
-   - `markitdown[pdf]`
+1. New backend dependency:
    - `pymupdf`
 2. Existing agent attachment limits still apply:
    - `BILL_HELPER_AGENT_MAX_ATTACHMENTS_PER_MESSAGE`
@@ -51,7 +50,6 @@ Enable agent attachments to accept PDF files in addition to images, then expose 
 
 1. PDFs are treated as attachments only (no change to external API shape beyond accepted MIME types).
 2. If vision is not supported for the current model, only parsed PDF text is sent to the model.
-
 
 
 

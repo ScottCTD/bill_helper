@@ -8,8 +8,7 @@
 - Alembic
 - SQLite (local file)
 - LiteLLM model-provider routing for chat completions
-- MarkItDown (`markitdown[pdf]`) for PDF-to-markdown extraction in agent message history
-- PyMuPDF (`pymupdf`) for per-page PDF rendering when multimodal model input is enabled
+- PyMuPDF (`pymupdf`) for PDF text extraction (line-trimmed and whitespace-normalized) and per-page rendering in agent message history
 
 ## Entry Points
 
@@ -147,7 +146,7 @@ Agent services:
   - on tool errors/selector ambiguity, instructs the model to recover or ask for user clarification
 - `backend/services/agent/message_history.py`
   - converts persisted thread history and attachments into model-ready messages
-  - parses PDF attachments with MarkItDown and appends extracted markdown text into the user message content passed to the model
+  - parses PDF attachments with PyMuPDF, normalizes text per line (trim + collapse internal whitespace), and appends extracted text into the user message content passed to the model
   - checks LiteLLM model vision capability and, when supported, renders uploaded PDF pages to PNG data URLs (one page per image part)
   - builds account summaries for current user and injects them into the system prompt context
   - includes account-level markdown notes in current-user context (`notes_markdown`) with truncation safeguards for large notes/data-url images

@@ -7,9 +7,10 @@ requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.14.1",
     "fastapi>=0.115.8",
+    "ipywidgets>=8.1.8",
     "langfuse>=2.0.0,<3",
     "litellm>=1.76.2",
-    "markitdown[pdf]>=0.1.5",
+    "notebook>=7.5.3",
     "pydantic-settings>=2.7.1",
     "pymupdf>=1.27.1",
     "python-multipart>=0.0.20",

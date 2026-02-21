@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import litellm
-from markitdown import MarkItDown
 import pymupdf
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -73,26 +72,24 @@ def _is_pdf_attachment(attachment: AgentMessageAttachment) -> bool:
     return Path(attachment.file_path).suffix.lower() == ".pdf"
 
 
-def _extract_pdf_markdown(file_path: str) -> str | None:
+def _normalize_pdf_text_lines(text: str) -> str:
+    normalized_lines = []
+    for line in text.splitlines():
+        normalized_lines.append(" ".join(line.split()))
+    return "\n".join(normalized_lines).strip()
+
+
+def _extract_pdf_text(file_path: str) -> str | None:
     path = Path(file_path)
     if not path.exists():
         return None
     try:
-        result = MarkItDown().convert_local(path)
+        with pymupdf.open(path) as document:
+            page_texts = [_normalize_pdf_text_lines(page.get_text("text", sort=True)) for page in document]
     except Exception:
         return None
-
-    markdown = getattr(result, "markdown", None)
-    if isinstance(markdown, str):
-        normalized = markdown.strip()
-        if normalized:
-            return normalized
-    text_content = getattr(result, "text_content", None)
-    if isinstance(text_content, str):
-        normalized = text_content.strip()
-        if normalized:
-            return normalized
-    return None
+    extracted = "\n\n".join(text for text in page_texts if text)
+    return extracted or None
 
 
 def _pdf_page_image_data_urls(file_path: str) -> list[str]:
@@ -218,10 +215,10 @@ def build_user_content(
 
     for attachment_index, attachment in enumerate(message.attachments, start=1):
         if _is_pdf_attachment(attachment):
-            pdf_markdown = _extract_pdf_markdown(attachment.file_path)
-            if pdf_markdown:
+            pdf_text = _extract_pdf_text(attachment.file_path)
+            if pdf_text:
                 text_sections.append(
-                    f"PDF attachment {attachment_index} (parsed with MarkItDown):\n{pdf_markdown}"
+                    f"PDF attachment {attachment_index} (parsed with PyMuPDF text extraction):\n{pdf_text}"
                 )
             else:
                 text_sections.append(

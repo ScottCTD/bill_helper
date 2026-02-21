@@ -100,7 +100,7 @@ Implemented:
   - Composer now supports removable attachment chips (image thumbnails + PDF file chips) before send.
   - Composer now supports paste (`Cmd/Ctrl+V`) and drag-drop image/PDF attachment ingestion.
   - Agent message uploads now accept PDF attachments in addition to images.
-  - PDF attachments are parsed with MarkItDown; extracted text is appended to model input, and when the configured model supports vision each PDF page is also sent as an image.
+  - PDF attachments are parsed with PyMuPDF text extraction (line-trimmed + whitespace-normalized); extracted text is appended to model input, and when the configured model supports vision each PDF page is also sent as an image.
   - Attachment chips are compact icon thumbnails with an extra-small corner remove (`x`) control that stays off the image preview above the chat bar.
   - Run and tool events are anchored in the assistant-side timeline with collapsible tool-call payload panels.
   - Runs interleave reasoning updates and grouped tool-call batches in both active and completed states for a consistent trace view.

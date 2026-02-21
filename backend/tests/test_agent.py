@@ -224,6 +224,13 @@ def test_default_agent_model_is_google_gemini_3_flash_preview():
     assert get_settings().agent_model == "google/gemini-3-flash-preview"
 
 
+def test_pdf_line_normalization_collapses_internal_whitespace_and_trims_edges():
+    from backend.services.agent.message_history import _normalize_pdf_text_lines
+
+    normalized = _normalize_pdf_text_lines("  Invoice   total\tCAD  123.45  \n\n  Line   2  ")
+    assert normalized == "Invoice total CAD 123.45\n\nLine 2"
+
+
 def test_send_message_rejects_unsupported_attachment_type(client):
     thread = create_thread(client)
     response = client.post(
@@ -235,7 +242,7 @@ def test_send_message_rejects_unsupported_attachment_type(client):
     assert response.json()["detail"] == "Only image and PDF attachments are supported."
 
 
-def test_pdf_attachment_includes_markitdown_text_without_pdf_page_images_when_vision_is_disabled(client, monkeypatch):
+def test_pdf_attachment_includes_pymupdf_text_without_pdf_page_images_when_vision_is_disabled(client, monkeypatch):
     from backend.services.agent import message_history
 
     captured_messages: list[list[dict]] = []
@@ -265,7 +272,7 @@ def test_pdf_attachment_includes_markitdown_text_without_pdf_page_images_when_vi
     user_content = user_messages[-1].get("content")
     assert isinstance(user_content, str)
     assert "Please summarize this attachment." in user_content
-    assert "PDF attachment 1 (parsed with MarkItDown):" in user_content
+    assert "PDF attachment 1 (parsed with PyMuPDF text extraction):" in user_content
     assert "Invoice total CAD" in user_content
 
     detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
