@@ -8,6 +8,7 @@
 - React Router
 - TanStack Query
 - Recharts
+- React Flow
 - Tailwind CSS
 - `shadcn/ui` component primitives
 - Radix UI primitives (Dialog/Select/Checkbox/Label/Slot)
@@ -25,7 +26,7 @@ Defined in `frontend/src/App.tsx`.
 
 Current shell behavior:
 
-- collapsible left sidebar (`Sidebar.tsx`) with vertical navigation links (`Agent`, `Dashboard`, `Entries`, `Accounts`, `Properties`, `Settings`)
+- collapsible left sidebar (`Sidebar.tsx`) with vertical navigation links (`Agent`, `Dashboard`, `Entries`, `Groups`, `Accounts`, `Properties`, `Settings`)
 - sidebar shows app title, icon+label nav links, and a footer tagline; collapses to icon-only mode via toggle button
 - content canvas is route-driven (no global right-side agent occupancy on non-home pages)
 - home route is AI-native and renders the agent experience as full-height primary page content (bypasses app-content padding to fill the viewport)
@@ -40,6 +41,7 @@ Pages:
 - `/dashboard` -> dashboard analytics
 - `/entries` -> entry list
 - `/entries/:entryId` -> entry detail
+- `/groups` -> derived group workspace (summary + graph + link operations)
 - `/accounts` -> accounts
 - `/properties` -> core catalogs + taxonomy term management
 - `/settings` -> runtime settings workspace
@@ -75,6 +77,9 @@ Responsibilities:
   - `listTaxonomyTerms`
   - `createTaxonomyTerm`
   - `updateTaxonomyTerm`
+- group client methods:
+  - `listGroups`
+  - `getGroup`
 
 ## `frontend/src/lib/queryKeys.ts`
 
@@ -83,6 +88,9 @@ Responsibilities:
 - centralized TanStack Query key factory by domain
 - stable key shapes for list/detail/thread/account-derived queries
 - avoids ad-hoc string arrays across pages/components
+- groups domain includes:
+  - `groups.list`
+  - `groups.detail(groupId)`
 - properties domain includes dedicated taxonomy keys:
   - `properties.taxonomies`
   - `properties.taxonomyTermsRoot`
@@ -146,10 +154,23 @@ Agent client methods:
 ## `EntryDetailPage.tsx`
 
 - entry details and group graph
-- link create/delete
+- link create/delete with modal creation flow (icon `+` opens shared `LinkEditorModal`)
+- source/target entry pickers in link modal use searchable `SingleSelect` controls
+- includes shortcut action to open the dedicated groups workspace
 - uses shared popup editor for edits (same auto-save behavior as entries list popup)
-- now uses shared shadcn primitives for cards, action buttons, and link form controls
+- now uses shared shadcn primitives for cards, action buttons, and link editor modal controls
 - editor wiring also consumes runtime settings defaults for consistency with create flow
+
+## `GroupsPage.tsx`
+
+- dedicated derived-group workspace (`/groups`)
+- left summary list sourced from `GET /groups` (linked groups only; `entry_count >= 2`)
+- selected group graph detail sourced from `GET /groups/{group_id}`
+- link operation panel for group-shape mutations using existing link endpoints:
+  - create: icon `+` action opens `LinkEditorModal`, submits `POST /entries/{entry_id}/links`
+  - delete: `DELETE /links/{link_id}`
+- entry member table for the selected graph component
+- group operations are link-driven only (no first-class group CRUD UI)
 
 ## `AccountsPage.tsx`
 
@@ -361,7 +382,8 @@ Cache invalidation after review apply:
 - `CreatableSingleSelect.tsx`
 - `TagMultiSelect.tsx`
 - `MarkdownBlockEditor.tsx`
-- `GroupGraphView.tsx`
+- `LinkEditorModal.tsx`
+- `GroupGraphView.tsx` (React Flow-based graph renderer shared by entry detail and groups workspace)
 - `MetricCard.tsx`
 - `ui/MarkdownRenderer.tsx`
 - `agent/AgentRunBlock.tsx`
@@ -387,6 +409,10 @@ Includes:
   - base app background/surfaces now default to white with restrained neutral accents
 - global UI typography uses a product-style sans stack (`Inter` -> SF Pro -> Segoe UI/Roboto fallbacks) instead of editorial/body-copy-first styling
 - component classes for legacy/transitioned surfaces (`.card`, `.form-grid`, `.field`, `.agent-panel`, `.tag-multiselect`, editor/chart helpers)
+- group workspace and React Flow styling hooks:
+  - `.groups-layout`
+  - `.groups-summary-*`
+  - `.group-flow-*`
 - entries filter `TagMultiSelect` controls now share the same baseline chrome (height/padding/focus/hover treatment) as adjacent select/input filters
 - shared table surface classes:
   - `.table-shell*`
@@ -440,6 +466,9 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 
 ## Operational Impact
 
+- frontend now depends on group read-model APIs for the groups workspace:
+  - `GET /groups`
+  - `GET /groups/{group_id}`
 - frontend now depends on agent API contracts and attachment URLs
 - multipart requests are required for agent message send with image/PDF attachments
 - agent send now depends on SSE parsing for incremental assistant text events (`run_started`, `text_delta`, `tool_call`, `reasoning_update`, `run_completed`, `run_failed`)
@@ -473,6 +502,8 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
   - install: `npm install`
   - test: `npm run test`
   - build: `npm run build`
+- graph rendering now uses `reactflow` dependency for pan/zoom/layouted group visualization
+- groups workspace summary rail is viewport-bounded on wide screens and uses internal scrolling to avoid long-page growth for large group counts
 - scrollbar width jitter is reduced across route switches and entry editor popup open/edit states by reserving gutter space
 
 ## Constraints / Known Limitations

@@ -16,7 +16,11 @@ This module hosts the React app, route pages, UI primitives, and API/query clien
 ## File Map
 
 - `frontend/src/pages/EntriesPage.tsx`: entry list/filter/table interactions.
+- `frontend/src/pages/EntryDetailPage.tsx`: entry-level detail and link controls with embedded group graph.
+- `frontend/src/pages/GroupsPage.tsx`: derived group workspace (summary list, graph detail, and link operations).
 - `frontend/src/components/EntryEditorModal.tsx`: entry create/edit modal.
+- `frontend/src/components/LinkEditorModal.tsx`: shared link create modal used by entry detail and groups workspace.
+- `frontend/src/components/GroupGraphView.tsx`: shared React Flow renderer for entry-group graphs.
 - `frontend/src/pages/DashboardPage.tsx`: tabbed interactive analytics.
 - `frontend/src/pages/AccountsPage.tsx`: thin page orchestrator for accounts feature modules.
 - `frontend/src/features/accounts/useAccountsPageModel.ts`: account queries/mutations/form state orchestration.
@@ -110,6 +114,19 @@ Touch together:
 - `frontend/src/lib/queryInvalidation.ts`
 - `frontend/src/styles.css`
 
+## 7) Group Workspace / Graph UX
+
+Touch together:
+
+- `frontend/src/pages/GroupsPage.tsx`
+- `frontend/src/pages/EntryDetailPage.tsx`
+- `frontend/src/components/GroupGraphView.tsx`
+- `frontend/src/lib/api.ts`
+- `frontend/src/lib/types.ts`
+- `frontend/src/lib/queryKeys.ts`
+- `frontend/src/lib/queryInvalidation.ts`
+- `frontend/src/styles.css`
+
 ## Run and Verify
 
 ```bash
@@ -133,6 +150,13 @@ uv run python scripts/check_docs_sync.py
 - Entries `Tag` and `Currency` filters are chip-based multi-select controls (`TagMultiSelect`) and apply local row filtering for selected values.
 - Entries filter controls use consistent baseline sizing/chrome across `Kind`, `Tags`, `Currencies`, and `Source text`.
 - Entry status is not part of frontend entry models.
+- Entry groups are derived from link topology; there is no first-class group CRUD UI/API.
+- Groups workspace reads from `/api/v1/groups` and `/api/v1/groups/{group_id}` and mutates topology only through link endpoints.
+- Link creation in entry detail and groups workspace is modal-only (icon `+` action -> `LinkEditorModal`), with no inline link-create form.
+- Link modal source/target entry fields use searchable single-select pickers for faster large-list selection.
+- `/api/v1/groups` omits singleton components (`entry_count < 2`), so the list focuses on linked groups.
+- On wide layouts, the left groups summary panel is viewport-bounded and scrolls internally so long group lists do not stretch overall page height.
+- Graph rendering uses `reactflow` (pan/zoom/controls/minimap) via `GroupGraphView`.
 - Runtime settings are loaded from `/api/v1/settings` and affect default currency/model behavior across pages.
 - Agent review timeline supports create/update/delete change items for entries, tags, and entities.
 - Agent review modal now renders CRUD-aware, field-level diffs (create/add, update delta, delete removal) instead of full payload snapshots.

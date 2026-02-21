@@ -67,13 +67,13 @@ def test_link_create_and_delete_recomputes_groups(client):
 
     link1 = client.post(
         f"/api/v1/entries/{entry1['id']}/links",
-        json={"target_entry_id": entry2["id"], "link_type": "RELATED"},
+        json={"target_entry_id": entry2["id"], "link_type": "BUNDLE"},
     )
     link1.raise_for_status()
 
     link2 = client.post(
         f"/api/v1/entries/{entry2['id']}/links",
-        json={"target_entry_id": entry3["id"], "link_type": "RELATED"},
+        json={"target_entry_id": entry3["id"], "link_type": "BUNDLE"},
     )
     link2.raise_for_status()
 
@@ -91,6 +91,66 @@ def test_link_create_and_delete_recomputes_groups(client):
 
     assert entry2_after["group_id"] == entry3_after["group_id"]
     assert entry1_after["group_id"] != entry2_after["group_id"]
+
+
+def test_link_create_rejects_related_link_type(client):
+    account_id = create_account(client)
+    source = create_entry(client, account_id, "Source")
+    target = create_entry(client, account_id, "Target")
+
+    response = client.post(
+        f"/api/v1/entries/{source['id']}/links",
+        json={"target_entry_id": target["id"], "link_type": "RELATED"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_list_groups_returns_derived_group_summaries(client):
+    account_id = create_account(client)
+    first = create_entry(client, account_id, "Gym", occurred_at="2026-01-02")
+    second = create_entry(client, account_id, "Coffee", occurred_at="2026-01-06")
+    third = create_entry(client, account_id, "Groceries", occurred_at="2026-01-05")
+
+    link_response = client.post(
+        f"/api/v1/entries/{first['id']}/links",
+        json={"target_entry_id": second["id"], "link_type": "BUNDLE"},
+    )
+    link_response.raise_for_status()
+
+    response = client.get("/api/v1/groups")
+    response.raise_for_status()
+    payload = response.json()
+
+    assert len(payload) == 1
+
+    merged_group = next(group for group in payload if group["entry_count"] == 2)
+
+    first_after = client.get(f"/api/v1/entries/{first['id']}")
+    first_after.raise_for_status()
+    second_after = client.get(f"/api/v1/entries/{second['id']}")
+    second_after.raise_for_status()
+    merged_group_id = first_after.json()["group_id"]
+    assert second_after.json()["group_id"] == merged_group_id
+
+    assert merged_group["group_id"] == merged_group_id
+    assert merged_group["edge_count"] == 1
+    assert merged_group["first_occurred_at"] == "2026-01-02"
+    assert merged_group["last_occurred_at"] == "2026-01-06"
+    assert merged_group["latest_entry_name"] == "Coffee"
+
+    assert merged_group["group_id"] != third["group_id"]
+
+
+def test_list_groups_omits_single_entry_components(client):
+    account_id = create_account(client)
+    create_entry(client, account_id, "Singleton")
+
+    response = client.get("/api/v1/groups")
+    response.raise_for_status()
+    payload = response.json()
+
+    assert payload == []
 
 
 def test_soft_delete_entry_removes_links(client):

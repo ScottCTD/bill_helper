@@ -27,6 +27,7 @@
 - `versions/0009_remove_entry_status.py`: drops the obsolete entry `status` column.
 - `versions/0010_runtime_settings_overrides.py`: adds persisted runtime settings override table (`runtime_settings`).
 - `versions/0011_remove_openrouter_runtime_settings_fields.py`: removes legacy OpenRouter-specific runtime settings columns.
+- `versions/0012_remove_related_link_type.py`: migrates legacy `RELATED` entry links to `BUNDLE` and removes `RELATED` from `LinkType`.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
@@ -50,7 +51,7 @@
 - `taxonomies.py`: taxonomy/term list and term create/rename endpoints.
 - `currencies.py`: currency catalog placeholder endpoint for selector/property tables.
 - `links.py`: link deletion endpoint.
-- `groups.py`: graph view of an entry group.
+- `groups.py`: derived entry-group read models (`GET /groups` summary + `GET /groups/{id}` graph).
 - `dashboard.py`: monthly analytics endpoint.
 - `agent.py`: append-only agent thread/message/run/review endpoints.
 - `settings.py`: runtime settings read/update endpoints for user overrides with env fallback.
@@ -97,7 +98,7 @@
 - `Sidebar.tsx`: collapsible left-panel navigation with icon+label links.
 - `MetricCard.tsx`: reusable metric container.
 - `LineChart.tsx`: legacy SVG daily expense chart helper (dashboard now uses Recharts).
-- `GroupGraphView.tsx`: SVG graph rendering for entry groups.
+- `GroupGraphView.tsx`: React Flow-based graph rendering for entry groups.
 - `TagMultiSelect.tsx`: Notion-style chip/dropdown multi-select for entry tags.
 - `EntryEditorModal.tsx`: shared popup for entry create/edit.
 - `MarkdownBlockEditor.tsx`: BlockNote wrapper for markdown + pasted images.
@@ -111,6 +112,7 @@
 - `SettingsPage.tsx`: responsive runtime settings workspace (general, agent runtime, reliability).
 - `EntriesPage.tsx`: list/filter/delete entries and open popup create/edit editor.
 - `EntryDetailPage.tsx`: manage links/group graph and open popup editor for updates.
+- `GroupsPage.tsx`: derived group workspace (group list, graph detail, and link-driven topology edits).
 - `AccountsPage.tsx`: thin page orchestrator that composes accounts feature modules.
 - `PropertiesPage.tsx`: thin page orchestrator that composes properties feature modules.
 - `AccountsPage.test.tsx`: page-level integration tests for account create/snapshot flows.

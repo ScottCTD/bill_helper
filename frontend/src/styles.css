@@ -596,17 +596,114 @@
     min-height: 360px;
   }
 
-  .line-chart,
-  .group-graph {
+  .line-chart {
     @apply h-auto w-full rounded-lg border border-border/80 bg-card;
   }
 
-  .graph-label {
-    @apply fill-foreground/80 text-[10px] font-medium;
+  .groups-layout {
+    @apply grid gap-6 xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)];
   }
 
-  .graph-node-id {
-    @apply fill-card text-[8px] font-semibold;
+  .groups-list-card {
+    @apply xl:sticky xl:top-5 xl:flex xl:max-h-[calc(100vh-4.5rem)] xl:flex-col xl:overflow-hidden;
+  }
+
+  .groups-list-content {
+    @apply grid gap-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto;
+  }
+
+  .groups-summary-table {
+    @apply text-sm;
+  }
+
+  .groups-summary-row {
+    @apply cursor-pointer;
+  }
+
+  .groups-summary-row-selected {
+    @apply cursor-pointer bg-accent/55;
+  }
+
+  .groups-summary-id {
+    @apply text-xs text-muted-foreground;
+  }
+
+  .group-flow-container {
+    @apply h-[460px] w-full overflow-hidden rounded-lg border border-border/80 bg-card;
+  }
+
+  .group-flow-canvas {
+    @apply h-full w-full bg-card;
+  }
+
+  .group-flow-canvas .react-flow__edge-path {
+    stroke: hsl(var(--muted-foreground));
+    stroke-width: 1.7px;
+  }
+
+  .group-flow-canvas .react-flow__controls {
+    border-color: hsl(var(--border));
+    background: hsl(var(--card));
+    box-shadow: none;
+  }
+
+  .group-flow-canvas .react-flow__controls button {
+    background: hsl(var(--card));
+    border-bottom-color: hsl(var(--border) / 0.8);
+    color: hsl(var(--foreground));
+  }
+
+  .group-flow-canvas .react-flow__controls button:hover {
+    background: hsl(var(--accent));
+  }
+
+  .group-flow-canvas .react-flow__attribution {
+    @apply hidden;
+  }
+
+  .group-flow-canvas .react-flow__background {
+    color: hsl(var(--muted-foreground) / 0.2);
+  }
+
+  .group-flow-canvas .react-flow__minimap {
+    border: 1px solid hsl(var(--border));
+    border-radius: 10px;
+    background: hsl(var(--card));
+  }
+
+  .group-flow-node {
+    min-width: 188px;
+    border-radius: 12px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    box-shadow: 0 1px 2px hsl(var(--foreground) / 0.03);
+  }
+
+  .group-flow-node-income {
+    border-color: hsl(var(--success) / 0.5);
+    box-shadow: inset 0 0 0 1px hsl(var(--success) / 0.18);
+  }
+
+  .group-flow-node-expense {
+    border-color: hsl(var(--destructive) / 0.5);
+    box-shadow: inset 0 0 0 1px hsl(var(--destructive) / 0.15);
+  }
+
+  .group-flow-node-content {
+    @apply grid gap-1 px-3 py-2;
+  }
+
+  .group-flow-node-name {
+    @apply truncate text-sm font-semibold;
+  }
+
+  .group-flow-node-meta {
+    @apply text-xs text-muted-foreground;
+  }
+
+  .group-flow-edge {
+    stroke: hsl(var(--muted-foreground));
   }
 
   .tag-multiselect {

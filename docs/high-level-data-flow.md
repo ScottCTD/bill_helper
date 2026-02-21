@@ -37,7 +37,7 @@ Implemented in `backend/services/groups.py`.
 Primary tables:
 
 - `entries`: core expense/income records, entity refs, soft-delete flags, group membership, markdown note body.
-- `entry_links`: typed directional links (`RECURRING`, `SPLIT`, `BUNDLE`, `RELATED`).
+- `entry_links`: typed directional links (`RECURRING`, `SPLIT`, `BUNDLE`).
 - `entry_groups`: connected-component identities for linked entries.
 - `accounts`, `account_snapshots`: account metadata and reconciliation checkpoints.
 - `users`: normalized owners used by entries/accounts.

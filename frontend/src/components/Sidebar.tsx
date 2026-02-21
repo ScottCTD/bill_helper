@@ -1,11 +1,12 @@
 import { NavLink } from "react-router-dom";
-import { Bot, CreditCard, FolderKanban, Home, Layers3, Settings2, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Bot, CreditCard, FolderKanban, Home, Layers3, Network, Settings2, PanelLeftClose, PanelLeft } from "lucide-react";
 import { cn } from "../lib/utils";
 
 const navItems = [
   { to: "/", label: "Agent", icon: Bot },
   { to: "/dashboard", label: "Dashboard", icon: Home },
   { to: "/entries", label: "Entries", icon: Layers3 },
+  { to: "/groups", label: "Groups", icon: Network },
   { to: "/accounts", label: "Accounts", icon: CreditCard },
   { to: "/properties", label: "Properties", icon: FolderKanban },
   { to: "/settings", label: "Settings", icon: Settings2 },

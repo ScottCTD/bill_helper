@@ -86,6 +86,10 @@ Agent models (review-gated mutation audit system):
 ## Schemas (`backend/schemas.py`)
 
 Existing schemas cover accounts, entries, links, groups, dashboard, users/entities/tags/currencies.
+Group read models include:
+
+- `GroupSummaryRead` (derived list row for `GET /groups`)
+- `GroupGraphRead` (`nodes` + `edges` for `GET /groups/{group_id}`)
 
 Agent schemas add API contracts for:
 
@@ -199,6 +203,8 @@ Core routers:
 - `entries.py`
 - `links.py`
 - `groups.py`
+  - `GET /api/v1/groups`: list derived linked-group summaries (`entry_count >= 2`, `edge_count`, date range, latest entry name)
+  - `GET /api/v1/groups/{group_id}`: fetch one group graph (`nodes` + `edges`)
 - `dashboard.py`
 - `users.py`
 - `entities.py`
@@ -244,6 +250,7 @@ Settings router:
 - `0009_remove_entry_status`
 - `0010_runtime_settings_overrides`
 - `0011_remove_openrouter_runtime_settings_fields`
+- `0012_remove_related_link_type`
 
 Commands:
 
@@ -318,6 +325,11 @@ Current baseline for `backend/tests/test_agent.py`: `40 passed`.
 - entry-ingestion prompts now require duplicate detection before any entry proposal, reducing duplicate proposal risk
 - prompt policy now requires entry retag/update proposals before tag deletion proposals when references exist
 - entry domain no longer includes `status`; API/model/migration are synchronized on statusless entries
+- group read models now include:
+  - `GET /api/v1/groups` derived summaries for frontend group discovery
+  - `GET /api/v1/groups/{group_id}` graph detail
+- `/api/v1/groups` omits single-entry components so the read model focuses on linked groups
+- group topology mutations remain link-driven (`POST /entries/{entry_id}/links`, `DELETE /links/{link_id}`); no first-class group CRUD endpoints
 - dashboard API serves runtime-configured currency analytics payloads; entries in other currencies are excluded from that dashboard response
 - new agent module boundaries reduce coupling and make it safer to add new model providers/change types
 - taxonomy defaults (`entity_category`, `tag_category`) are auto-provisioned by service logic when missing

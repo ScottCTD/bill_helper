@@ -1,6 +1,8 @@
 import { KeyboardEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
+import { Input } from "./ui/input";
+
 interface SingleSelectOption {
   value: string;
   label: string;
@@ -13,12 +15,37 @@ interface SingleSelectProps {
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  emptyLabel?: string;
 }
 
-export function SingleSelect({ options, value, onChange, placeholder = "Select...", disabled = false, ariaLabel }: SingleSelectProps) {
+export function SingleSelect({
+  options,
+  value,
+  onChange,
+  placeholder = "Select...",
+  disabled = false,
+  ariaLabel,
+  searchable = false,
+  searchPlaceholder = "Search...",
+  emptyLabel = "No matching options."
+}: SingleSelectProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const selectedOption = useMemo(() => options.find((option) => option.value === value) ?? null, [options, value]);
+  const filteredOptions = useMemo(() => {
+    if (!searchable) {
+      return options;
+    }
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return options;
+    }
+    return options.filter((option) => option.label.toLowerCase().includes(normalizedQuery));
+  }, [options, query, searchable]);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -33,6 +60,16 @@ export function SingleSelect({ options, value, onChange, placeholder = "Select..
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setQuery("");
+      return;
+    }
+    if (searchable) {
+      searchInputRef.current?.focus();
+    }
+  }, [isOpen, searchable]);
 
   function toggleMenu() {
     if (disabled) {
@@ -91,6 +128,22 @@ export function SingleSelect({ options, value, onChange, placeholder = "Select..
     }
   }
 
+  function onSearchInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsOpen(false);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const firstOption = filteredOptions[0];
+      if (firstOption) {
+        selectOption(firstOption.value);
+      }
+    }
+  }
+
   return (
     <div className={`single-select ${disabled ? "is-disabled" : ""}`} ref={rootRef}>
       <button
@@ -110,7 +163,21 @@ export function SingleSelect({ options, value, onChange, placeholder = "Select..
       </button>
       {isOpen ? (
         <div className="single-select-menu" role="listbox" aria-label="Select option">
-          {options.map((option) => {
+          {searchable ? (
+            <div className="p-1">
+              <Input
+                ref={searchInputRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={onSearchInputKeyDown}
+                placeholder={searchPlaceholder}
+                className="h-8"
+                aria-label={searchPlaceholder}
+              />
+            </div>
+          ) : null}
+          {filteredOptions.length === 0 ? <p className="tag-multiselect-empty">{emptyLabel}</p> : null}
+          {filteredOptions.map((option) => {
             const isSelected = option.value === value;
             return (
               <button

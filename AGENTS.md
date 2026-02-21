@@ -4,6 +4,14 @@
 
 These rules apply to any coding agent working in this repository.
 
+## Prototype-First Policy
+
+This project is a prototype. Optimize for fast, elegant iteration over compatibility preservation.
+
+- Prefer simplifying and replacing outdated paths over layering compatibility shims.
+- Do not retain old behavior, old fields, or old endpoints solely for backward compatibility unless explicitly requested.
+- When a direction changes, remove deprecated code and stale abstractions instead of keeping dual paths.
+
 ## Python Tooling
 
 For any Python-related work in this repository, use `uv` by default.
@@ -78,6 +86,10 @@ uv run python scripts/check_docs_sync.py
 ```
 
 If it fails, fix docs before finalizing.
+
+## Feature Requests from docs/todo
+
+When the user requests a feature from `docs/todo`, after implementing the feature according to the user, the agent must ask whether to move the feature request to `docs/completed`.
 
 ## Suggested Documentation Targets
 

@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { EntryEditorModal, type EntryEditorSubmitPayload } from "../components/EntryEditorModal";
 import { GroupGraphView } from "../components/GroupGraphView";
+import { LinkEditorModal } from "../components/LinkEditorModal";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { Input } from "../components/ui/input";
-import { NativeSelect } from "../components/ui/native-select";
 import {
   createLink,
   deleteLink,
@@ -16,6 +16,7 @@ import {
   getRuntimeSettings,
   listCurrencies,
   listEntities,
+  listEntries,
   listTags,
   listUsers,
   updateEntry
@@ -32,11 +33,16 @@ function kindSymbol(kind: string) {
   return kind === "INCOME" ? "+" : "-";
 }
 
+const ENTRY_LINK_PICKER_FILTERS = {
+  limit: 200,
+  offset: 0
+} as const;
+
 export function EntryDetailPage() {
   const { entryId } = useParams();
   const queryClient = useQueryClient();
   const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [newLink, setNewLink] = useState({ target_entry_id: "", link_type: "RELATED", note: "" });
+  const [isLinkEditorOpen, setIsLinkEditorOpen] = useState(false);
 
   const entryQuery = useQuery({
     queryKey: queryKeys.entries.detail(entryId ?? ""),
@@ -45,7 +51,7 @@ export function EntryDetailPage() {
   });
 
   const groupQuery = useQuery({
-    queryKey: queryKeys.entries.group(entryQuery.data?.group_id ?? ""),
+    queryKey: queryKeys.groups.detail(entryQuery.data?.group_id ?? ""),
     queryFn: () => getGroup(entryQuery.data!.group_id),
     enabled: Boolean(entryQuery.data?.group_id)
   });
@@ -55,6 +61,10 @@ export function EntryDetailPage() {
   const usersQuery = useQuery({ queryKey: queryKeys.properties.users, queryFn: listUsers });
   const tagsQuery = useQuery({ queryKey: queryKeys.properties.tags, queryFn: listTags });
   const runtimeSettingsQuery = useQuery({ queryKey: queryKeys.settings.runtime, queryFn: getRuntimeSettings });
+  const entryPickerQuery = useQuery({
+    queryKey: queryKeys.entries.list(ENTRY_LINK_PICKER_FILTERS),
+    queryFn: () => listEntries(ENTRY_LINK_PICKER_FILTERS)
+  });
 
   const currentUserId = useMemo(
     () => usersQuery.data?.find((user) => user.is_current_user)?.id ?? "",
@@ -73,10 +83,15 @@ export function EntryDetailPage() {
   });
 
   const createLinkMutation = useMutation({
-    mutationFn: () => createLink(entryId!, newLink),
+    mutationFn: (payload: { source_entry_id: string; target_entry_id: string; link_type: string; note?: string }) =>
+      createLink(payload.source_entry_id, {
+        target_entry_id: payload.target_entry_id,
+        link_type: payload.link_type,
+        note: payload.note
+      }),
     onSuccess: () => {
-      setNewLink({ target_entry_id: "", link_type: "RELATED", note: "" });
       invalidateEntryLinkReadModels(queryClient, entryId);
+      setIsLinkEditorOpen(false);
     }
   });
 
@@ -90,6 +105,15 @@ export function EntryDetailPage() {
   const sortedLinks = useMemo(() => {
     return [...(entryQuery.data?.links ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
   }, [entryQuery.data]);
+
+  const entryPickerOptions = useMemo(() => {
+    return (entryPickerQuery.data?.items ?? [])
+      .map((entry) => ({
+        id: entry.id,
+        label: `${entry.occurred_at} - ${entry.name} (${entry.id.slice(0, 8)})`
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [entryPickerQuery.data]);
 
   if (!entryId) {
     return <p>Missing entry id.</p>;
@@ -127,43 +151,13 @@ export function EntryDetailPage() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="section-header">
           <CardTitle>Links</CardTitle>
+          <Button type="button" size="icon" variant="outline" aria-label="Add link" onClick={() => setIsLinkEditorOpen(true)}>
+            <Plus className="h-4 w-4" />
+          </Button>
         </CardHeader>
         <CardContent>
-          <form
-            className="stack-sm"
-            onSubmit={(event) => {
-              event.preventDefault();
-              createLinkMutation.mutate();
-            }}
-          >
-            <label className="field">
-              <span>Target entry id</span>
-              <Input
-                required
-                value={newLink.target_entry_id}
-                onChange={(event) => setNewLink((state) => ({ ...state, target_entry_id: event.target.value }))}
-              />
-            </label>
-            <label className="field">
-              <span>Link type</span>
-              <NativeSelect value={newLink.link_type} onChange={(event) => setNewLink((state) => ({ ...state, link_type: event.target.value }))}>
-                <option value="RELATED">Related</option>
-                <option value="RECURRING">Recurring</option>
-                <option value="SPLIT">Split</option>
-                <option value="BUNDLE">Bundle</option>
-              </NativeSelect>
-            </label>
-            <label className="field">
-              <span>Note</span>
-              <Input value={newLink.note} onChange={(event) => setNewLink((state) => ({ ...state, note: event.target.value }))} />
-            </label>
-            <Button type="submit" disabled={createLinkMutation.isPending}>
-              Add link
-            </Button>
-          </form>
-
           {sortedLinks.length === 0 ? (
             <p className="muted">No links yet.</p>
           ) : (
@@ -191,13 +185,18 @@ export function EntryDetailPage() {
           <CardDescription>
             Entry amount: {formatMinor(entry.amount_minor, entry.currency_code)} | Group: {entry.group_id}
           </CardDescription>
+          <div className="table-actions">
+            <Button asChild variant="outline" size="sm">
+              <Link to="/groups">Open groups workspace</Link>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {groupQuery.isLoading ? <p>Loading graph...</p> : null}
           {groupQuery.data ? <GroupGraphView graph={groupQuery.data} /> : <p className="muted">No graph data.</p>}
         </CardContent>
       </Card>
-      
+
       <EntryEditorModal
         isOpen={isEditorOpen}
         mode="edit"
@@ -212,6 +211,29 @@ export function EntryDetailPage() {
         saveError={(updateMutation.error as Error | null)?.message ?? null}
         onClose={() => setIsEditorOpen(false)}
         onSubmit={(payload: EntryEditorSubmitPayload) => updateMutation.mutate(payload)}
+      />
+
+      <LinkEditorModal
+        isOpen={isLinkEditorOpen}
+        title="Create Link"
+        description="Add a directional relation from this entry to another entry."
+        entryOptions={entryPickerOptions}
+        fixedSourceEntryId={entry.id}
+        fixedSourceLabel={`${entry.occurred_at} - ${entry.name} (${entry.id.slice(0, 8)})`}
+        entryOptionsLoading={entryPickerQuery.isLoading}
+        entryOptionsError={entryPickerQuery.isError ? (entryPickerQuery.error as Error).message : null}
+        entryOptionsNotice={
+          (entryPickerQuery.data?.total ?? 0) > (entryPickerQuery.data?.items.length ?? 0)
+            ? "Entry picker is limited to the first 200 entries."
+            : null
+        }
+        isSaving={createLinkMutation.isPending}
+        saveError={createLinkMutation.isError ? (createLinkMutation.error as Error).message : null}
+        onClose={() => {
+          setIsLinkEditorOpen(false);
+          createLinkMutation.reset();
+        }}
+        onSubmit={(payload) => createLinkMutation.mutate(payload)}
       />
     </div>
   );

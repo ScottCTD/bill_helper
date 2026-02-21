@@ -32,8 +32,14 @@ This doc is the fast path for understanding how entries are created, edited, lin
    - `POST /entries/{entry_id}/links`
    - `DELETE /links/{link_id}`
 2. Group recomputation in `backend/services/groups.py`.
-3. Group graph read from `backend/routers/groups.py`.
-4. Frontend graph view in `frontend/src/components/GroupGraphView.tsx`.
+3. Group read models from `backend/routers/groups.py`:
+   - `GET /groups` for derived linked-group summaries (`entry_count >= 2`)
+   - `GET /groups/{group_id}` for graph detail
+4. Frontend group workspace and graph view:
+   - `frontend/src/pages/GroupsPage.tsx`
+   - `frontend/src/components/LinkEditorModal.tsx` for modal link creation from `+` actions
+   - `frontend/src/components/GroupGraphView.tsx` (React Flow renderer)
+5. Group-shape CRUD intent is link-driven only (no first-class group CRUD endpoints).
 
 ## Agent-Proposed Entry Flow
 

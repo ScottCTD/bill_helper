@@ -14,6 +14,7 @@ This module hosts the FastAPI app, SQLAlchemy models, Pydantic schemas, and doma
 ## File Map
 
 - `backend/routers/entries.py`: entry CRUD, filters, link creation.
+- `backend/routers/groups.py`: derived group summaries and graph detail read models.
 - `backend/routers/dashboard.py`: monthly dashboard analytics endpoint.
 - `backend/routers/agent.py`: agent thread/run/review endpoints.
 - `backend/routers/settings.py`: runtime settings read/update endpoints.
@@ -44,7 +45,16 @@ Touch together:
 - `backend/schemas.py` (`DashboardRead` and nested types)
 - `backend/tests/test_finance.py`
 
-## 3) Agent Review Apply Changes
+## 3) Entry Group Graph Read Model Changes
+
+Touch together:
+
+- `backend/routers/groups.py`
+- `backend/services/groups.py`
+- `backend/schemas.py`
+- `backend/tests/test_entries.py`
+
+## 4) Agent Review Apply Changes
 
 Touch together:
 
@@ -53,7 +63,7 @@ Touch together:
 - `backend/services/agent/tools.py` (proposal/read outputs)
 - `backend/tests/test_agent.py`
 
-## 4) Agent Run Lifecycle / Interrupt Changes
+## 5) Agent Run Lifecycle / Interrupt Changes
 
 Touch together:
 
@@ -61,7 +71,7 @@ Touch together:
 - `backend/services/agent/runtime.py`
 - `backend/tests/test_agent.py`
 
-## 5) Runtime Settings Changes
+## 6) Runtime Settings Changes
 
 Touch together:
 
@@ -83,6 +93,8 @@ uv run python scripts/check_docs_sync.py
 ## Current Constraints
 
 - Entry-level `status` was removed; agent review state remains only on `agent_change_items`.
+- Entry groups are derived from entry-link connected components; `/groups` is read-model only (no group create/update/delete endpoints).
+- `GET /api/v1/groups` omits singleton components (`entry_count < 2`) to focus on linked groups.
 - Agent tool contracts are name/selector-based (no domain IDs in model-facing arguments/outputs).
 - Agent can emit sparse intermediate progress notes via `send_intermediate_update`; runtime streams these as `reasoning_update` SSE events.
 - Entry create proposals can omit currency and fall back to the resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).

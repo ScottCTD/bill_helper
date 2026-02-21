@@ -12,7 +12,6 @@ class LinkType(StrEnum):
     RECURRING = "RECURRING"
     SPLIT = "SPLIT"
     BUNDLE = "BUNDLE"
-    RELATED = "RELATED"
 
 
 class AgentMessageRole(StrEnum):

@@ -284,6 +284,15 @@ class GroupGraphRead(BaseModel):
     edges: list[GroupEdge]
 
 
+class GroupSummaryRead(BaseModel):
+    group_id: str
+    entry_count: int
+    edge_count: int
+    first_occurred_at: date
+    last_occurred_at: date
+    latest_entry_name: str
+
+
 class DailyExpensePoint(BaseModel):
     date: date
     currency_code: str

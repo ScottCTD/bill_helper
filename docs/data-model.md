@@ -7,7 +7,7 @@ All data is persisted in SQLite via SQLAlchemy.
 Core:
 
 - `EntryKind`: `EXPENSE`, `INCOME`
-- `LinkType`: `RECURRING`, `SPLIT`, `BUNDLE`, `RELATED`
+- `LinkType`: `RECURRING`, `SPLIT`, `BUNDLE`
 
 Agent:
 

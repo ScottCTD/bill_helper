@@ -19,12 +19,18 @@ Implemented:
   - `0009_remove_entry_status`
   - `0010_runtime_settings_overrides`
   - `0011_remove_openrouter_runtime_settings_fields`
+  - `0012_remove_related_link_type`
 - Taxonomy subsystem for generalized category management:
   - shared `taxonomies` / `taxonomy_terms` / `taxonomy_assignments` tables
   - default category taxonomies for `entities` and `tags`
   - backward-compatible `entities.category` field still returned by API while sourced through taxonomy assignments
   - `PATCH /entities/{entity_id}` now resolves response category from taxonomy assignments, so term renames are reflected immediately
-- React frontend with AI-native home page plus routes for dashboard, entries, entry detail, accounts, properties, and settings.
+- React frontend with AI-native home page plus routes for dashboard, entries, entry detail, groups, accounts, properties, and settings.
+- Derived group workspace:
+  - dedicated `/groups` page for group summaries + graph detail
+  - link-driven topology edits (create/remove links)
+  - icon-only `+` link creation opens a shared modal editor in both entry detail and group workspace
+  - group graph rendering uses React Flow (no bespoke graph engine)
 - Runtime settings system for user-configurable defaults (persisted in DB with env fallback semantics):
   - configurable default currency and dashboard currency
   - configurable current user name used for owner/review attribution
@@ -325,6 +331,7 @@ uv run python scripts/check_docs_sync.py
 - Frontend app shell: `frontend/src/App.tsx`
 - Frontend guide: `frontend/README.md`
 - Frontend AI home page: `frontend/src/pages/HomePage.tsx`
+- Frontend groups page: `frontend/src/pages/GroupsPage.tsx`
 - Frontend agent panel modules: `frontend/src/components/agent/panel`
 - Frontend settings page: `frontend/src/pages/SettingsPage.tsx`
 - Frontend accounts feature modules: `frontend/src/features/accounts`
@@ -332,5 +339,5 @@ uv run python scripts/check_docs_sync.py
 - Frontend design tokens and component styles: `frontend/src/styles.css`
 - Frontend UI primitives: `frontend/src/components/ui`
 - Agent panel UI: `frontend/src/components/agent/AgentPanel.tsx`
-- Latest migration: `alembic/versions/0011_remove_openrouter_runtime_settings_fields.py`
+- Latest migration: `alembic/versions/0012_remove_related_link_type.py`
 - Demo seed: `scripts/seed_demo.py`

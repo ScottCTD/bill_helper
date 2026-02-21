@@ -32,12 +32,7 @@ function kindSymbol(kind: string) {
   return kind === "INCOME" ? "+" : "-";
 }
 
-function groupLabel(groupId: string, groupName?: string | null) {
-  const normalizedGroupName = groupName?.trim();
-  if (normalizedGroupName) {
-    return normalizedGroupName;
-  }
-
+function groupLabel(groupId: string) {
   const isUuidGroupId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(groupId);
   return isUuidGroupId ? "" : groupId;
 }
@@ -282,7 +277,7 @@ export function EntriesPage() {
                           <span className="entries-tag-empty">-</span>
                         )}
                       </TableCell>
-                      <TableCell>{groupLabel(entry.group_id, entry.group_name)}</TableCell>
+                      <TableCell>{groupLabel(entry.group_id)}</TableCell>
                       <TableCell>
                         <div className="table-actions">
                           <Button

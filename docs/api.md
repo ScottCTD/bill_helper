@@ -296,7 +296,7 @@ Create link.
 Body:
 
 - `target_entry_id`
-- `link_type` (`RECURRING` | `SPLIT` | `BUNDLE` | `RELATED`)
+- `link_type` (`RECURRING` | `SPLIT` | `BUNDLE`)
 - `note` (optional)
 
 Response: `LinkRead`
@@ -310,6 +310,27 @@ Delete link.
 Response: `204`
 
 ## Groups
+
+## `GET /groups`
+
+List derived group summaries.
+
+Response: `GroupSummaryRead[]`
+
+`GroupSummaryRead` fields:
+
+- `group_id`
+- `entry_count`
+- `edge_count`
+- `first_occurred_at`
+- `last_occurred_at`
+- `latest_entry_name`
+
+Behavior:
+
+- groups are connected components derived from active entry links
+- single-entry components are omitted (response includes groups with `entry_count >= 2` only)
+- endpoint is read-only (no group create/update/delete API)
 
 ## `GET /groups/{group_id}`
 
