@@ -176,6 +176,7 @@ Set these environment variables (for example in `.env`):
 - `LANGFUSE_HOST` (optional; default Langfuse cloud host is `https://cloud.langfuse.com`)
 - `BILL_HELPER_AGENT_MODEL` (default `google/gemini-3-flash-preview`)
 - `BILL_HELPER_AGENT_MAX_STEPS` (default `100`)
+- `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` (default `America/Toronto`; controls system-prompt current date context)
 - `BILL_HELPER_DEFAULT_CURRENCY_CODE` (default `CAD`)
 - `BILL_HELPER_DASHBOARD_CURRENCY_CODE` (default `CAD`)
 - `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS` (default `3`)

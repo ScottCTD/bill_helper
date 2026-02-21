@@ -345,6 +345,32 @@ def test_system_prompt_requires_duplicate_then_reconcile_then_propose_entries():
     assert prompt.index(duplicate_phrase) < prompt.index(reconcile_phrase) < prompt.index(propose_phrase)
 
 
+def test_system_prompt_uses_duplicate_enrichment_before_create():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    assert "If a duplicate exists, check whether the new input adds complementary information." in prompt
+    assert "prefer propose_update_entry for the existing entry instead of propose_create_entry." in prompt
+
+
+def test_system_prompt_requires_canonical_name_normalization_examples():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    assert "Normalize new tag and entity names to canonical, general forms." in prompt
+    assert "Starbucks (not SBUX)" in prompt
+    assert "Apple (not Apple Store #R121)." in prompt
+
+
+def test_system_prompt_requires_human_readable_markdown_notes_for_notes_fields():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    assert "For tools that include a markdown_notes field, write human-readable markdown notes" in prompt
+    assert "If the content is short, avoid headings." in prompt
+    assert "ordered/unordered lists when they improve readability." in prompt
+
+
 def test_system_prompt_requires_entry_updates_before_tag_delete():
     from backend.services.agent.prompts import system_prompt
 
@@ -371,18 +397,24 @@ def test_system_prompt_guides_pending_proposal_revisions_and_removals():
     assert prompt.index(revise_phrase) < prompt.index(remove_phrase)
 
 
-def test_system_prompt_includes_error_recovery_and_no_domain_ids():
+def test_system_prompt_includes_error_recovery_and_core_identity():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
-    assert "# Bill Helper System Prompt" in prompt
+    assert "## Identity" in prompt
     assert "## Rules" in prompt
     assert "append-only policies" not in prompt
-    assert "You are the Bill Helper assistant." in prompt
     assert "Final message should prioritize a concise direct answer" in prompt
     assert "Include pending review item ids only when pending items exist" not in prompt
-    assert "Do not use domain IDs in proposals" in prompt
     assert "If a tool returns an ERROR" in prompt
+
+
+def test_system_prompt_requires_first_tool_call_update_for_tool_runs():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    assert "If you need any tool calls for the task, call send_intermediate_update first" in prompt
+    assert "before calling other tools." in prompt
 
 
 def test_system_prompt_requires_sparse_intermediate_updates():
@@ -407,7 +439,25 @@ def test_system_prompt_includes_current_date_tag():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt(current_date=date(2026, 2, 10))
-    assert "## Current Date (UTC)\n2026-02-10" in prompt
+    assert "## Current Date (User Timezone: America/Toronto)\n2026-02-10" in prompt
+
+
+def test_system_prompt_uses_requested_current_timezone_for_date_label():
+    from datetime import date
+
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt(current_date=date(2026, 2, 10), current_timezone="America/Vancouver")
+    assert "## Current Date (User Timezone: America/Vancouver)\n2026-02-10" in prompt
+
+
+def test_system_prompt_falls_back_to_toronto_for_invalid_timezone():
+    from datetime import date
+
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt(current_date=date(2026, 2, 10), current_timezone="Not/AZone")
+    assert "## Current Date (User Timezone: America/Toronto)\n2026-02-10" in prompt
 
 
 def test_system_prompt_includes_current_user_account_context(client, monkeypatch):
@@ -438,6 +488,7 @@ def test_system_prompt_includes_current_user_account_context(client, monkeypatch
     system_message = captured_messages[-1][0]
     assert system_message.get("role") == "system"
     system_content = str(system_message.get("content", ""))
+    assert "## Current Date (User Timezone: America/Toronto)" in system_content
     assert "## Current User Context" in system_content
     assert "accounts_count: 1" in system_content
     assert "name=Main Checking" in system_content
@@ -497,6 +548,37 @@ def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
     assert "propose_delete_entity" in names
     assert "update_pending_proposal" in names
     assert "remove_pending_proposal" in names
+
+
+def test_intermediate_update_tool_description_requires_first_call_for_tool_runs():
+    from backend.services.agent.tools import INTERMEDIATE_UPDATE_TOOL_NAME, build_openai_tool_schemas
+
+    tool_by_name = {
+        tool["function"]["name"]: tool["function"]
+        for tool in build_openai_tool_schemas()
+    }
+    description = str(tool_by_name[INTERMEDIATE_UPDATE_TOOL_NAME]["description"])
+    assert "call this first" in description
+    assert "before other tools" in description
+
+
+def test_entry_proposal_tool_descriptions_define_markdown_notes_style():
+    from backend.services.agent.tools import build_openai_tool_schemas
+
+    tool_by_name = {
+        tool["function"]["name"]: tool["function"]
+        for tool in build_openai_tool_schemas()
+    }
+    create_description = str(tool_by_name["propose_create_entry"]["description"])
+    update_description = str(tool_by_name["propose_update_entry"]["description"])
+
+    assert "When markdown_notes is provided" in create_description
+    assert "avoid headings" in create_description
+    assert "ordered/unordered lists" in create_description
+
+    assert "When patch.markdown_notes is provided" in update_description
+    assert "avoid headings" in update_description
+    assert "ordered/unordered lists" in update_description
 
 
 def test_run_persists_tool_calls(client, monkeypatch):

@@ -27,6 +27,7 @@ Core app settings:
 - `DATABASE_URL` (default `sqlite:///./.data/bill_helper.db`)
 - `CORS_ORIGINS` (default `http://localhost:5173`)
 - `CURRENT_USER_NAME` (default `scott`)
+- `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` (default `America/Toronto`)
 - `DEFAULT_CURRENCY_CODE` (default `CAD`)
 - `DASHBOARD_CURRENCY_CODE` (default `CAD`)
 
@@ -138,9 +139,14 @@ Agent services:
   - delegates message assembly and model calls to dedicated modules
 - `backend/services/agent/prompts.py`
   - central system prompt definition
+  - organizes policy into sectioned rule groups (tool discipline, proposal workflows, execution, final response)
+  - computes current-date context in user timezone (defaults to `America/Toronto`)
   - enforces entry-ingestion order: duplicate check first, then tag/entity reconciliation, then entry proposals
+  - when a duplicate exists, prefers enriching the existing entry via `propose_update_entry` over creating a new duplicate entry
+  - enforces canonical tag/entity normalization guidance (generalized merchant/location/entity names)
+  - requires human-readable markdown note formatting for `markdown_notes` fields (preserve input detail; avoid headings for short notes; use line breaks/lists)
   - enforces tag-delete sequencing: update/retag affected entries before proposing `delete_tag`
-  - requires sparse `send_intermediate_update` calls between meaningful tool-call batches
+  - requires `send_intermediate_update` as the first tool call when tools are needed, then sparse usage between meaningful tool-call batches
   - enforces name/selector-based proposals (no domain IDs in tool contracts)
   - includes a lightweight current-user context section (current user + owned accounts) at runtime
   - on tool errors/selector ambiguity, instructs the model to recover or ask for user clarification
@@ -169,7 +175,8 @@ Agent services:
   - periodic model-cost map refresh from LiteLLM URL with fallback to bundled map when remote fetch fails
 - `backend/services/agent/tools.py`
   - read tools: `list_entries`, `list_tags`, `list_entities`, `get_dashboard_summary`
-  - progress tool: `send_intermediate_update` (brief user-visible intermediate reasoning/progress note)
+  - progress tool: `send_intermediate_update` (brief user-visible intermediate reasoning/progress note; first tool call when tool work is needed)
+  - entry proposal tools include explicit `markdown_notes` style guidance for human-readable, information-complete markdown
   - `list_entries` is the single entry query tool (date/name/from/to/tags/kind; exact-first then fuzzy ranking)
   - `list_tags` / `list_entities` support name+category query and include category in outputs
   - proposal tools cover CRUD:
@@ -309,7 +316,7 @@ Test modules:
 - stream divergence guard across retries
 - LiteLLM environment-validation behavior (including indeterminate-validation fallback)
 
-Current baseline for `backend/tests/test_agent.py`: `42 passed`.
+Current baseline for `backend/tests/test_agent.py`: `52 passed`.
 
 ## Operational Impact
 
@@ -335,8 +342,12 @@ Current baseline for `backend/tests/test_agent.py`: `42 passed`.
 - current user attribution defaults (`owner`/review actor) now resolve from runtime settings rather than env-only config
 - account create/read/update schemas no longer expose `institution` and `account_type`
 - entry-ingestion prompts now require duplicate detection before any entry proposal, reducing duplicate proposal risk
+- duplicate-handling prompts now require checking for complementary new information and preferring `propose_update_entry` on the existing entry when appropriate
+- prompt policy now requires canonical/generalized tag/entity naming (for example, `SBUX` -> `Starbucks`, store-branch names -> parent merchant names)
 - prompt policy now requires entry retag/update proposals before tag deletion proposals when references exist
-- prompt policy now prefers parallel tool-call batches for independent operations instead of serial one-by-one calls
+- prompt policy now requires parallel tool-call batches whenever operations are independent instead of serial one-by-one calls
+- prompt policy now requires `send_intermediate_update` as the first tool call when the run needs tools
+- system prompt rules are grouped into explicit markdown sections for tool discipline, workflow sequencing, error handling, and final response behavior
 - pending-proposal workflow now supports intra-thread proposal edits/removals via `update_pending_proposal` / `remove_pending_proposal` (id + patch map or id-only, pending-only)
 - entry domain no longer includes `status`; API/model/migration are synchronized on statusless entries
 - group read models now include:

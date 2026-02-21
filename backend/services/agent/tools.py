@@ -1392,8 +1392,9 @@ TOOLS: dict[str, AgentToolDefinition] = {
     INTERMEDIATE_UPDATE_TOOL_NAME: AgentToolDefinition(
         name=INTERMEDIATE_UPDATE_TOOL_NAME,
         description=(
-            "Share a brief, user-visible progress update between distinct batches of tool calls. "
-            "Use sparingly for meaningful transitions; do not call this on every step."
+            "Share a brief, user-visible progress update. If a task needs tool calls, call this first "
+            "to describe what you are about to do before other tools. Then use sparingly for meaningful "
+            "transitions between distinct tool-call batches; do not call this on every step."
         ),
         args_model=SendIntermediateUpdateArgs,
         handler=_send_intermediate_update,
@@ -1456,7 +1457,9 @@ TOOLS: dict[str, AgentToolDefinition] = {
         name="propose_create_entry",
         description=(
             "Create a review-gated proposal to add a new entry. "
-            "This does not mutate entries immediately; it creates a pending review item only."
+            "This does not mutate entries immediately; it creates a pending review item only. "
+            "When markdown_notes is provided, keep it human-readable markdown that preserves all relevant "
+            "input details. For short notes, avoid headings; prefer clear line breaks and ordered/unordered lists."
         ),
         args_model=ProposeCreateEntryArgs,
         handler=_propose_create_entry,
@@ -1465,7 +1468,9 @@ TOOLS: dict[str, AgentToolDefinition] = {
         name="propose_update_entry",
         description=(
             "Create a review-gated proposal to update an existing entry selected by date/amount/name/from/to. "
-            "If selector matches multiple entries, the tool reports ambiguity so the user can clarify."
+            "If selector matches multiple entries, the tool reports ambiguity so the user can clarify. "
+            "When patch.markdown_notes is provided, keep it human-readable markdown that preserves all relevant "
+            "input details. For short notes, avoid headings; prefer clear line breaks and ordered/unordered lists."
         ),
         args_model=ProposeUpdateEntryArgs,
         handler=_propose_update_entry,

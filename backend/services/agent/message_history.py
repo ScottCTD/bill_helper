@@ -23,6 +23,7 @@ from backend.models import (
     AgentToolCall,
     User,
 )
+from backend.config import get_settings
 from backend.services.agent.prompts import system_prompt
 from backend.services.runtime_settings import resolve_runtime_settings
 
@@ -540,7 +541,13 @@ def build_llm_messages(
     )
 
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_prompt(current_user_context=_build_current_user_context(db))}
+        {
+            "role": "system",
+            "content": system_prompt(
+                current_user_context=_build_current_user_context(db),
+                current_timezone=get_settings().current_user_timezone,
+            ),
+        }
     ]
     for message in history:
         if message.role == AgentMessageRole.USER:

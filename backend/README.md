@@ -94,17 +94,22 @@ uv run python scripts/check_docs_sync.py
 
 - Account contracts include `name`, `markdown_body`, `currency_code`, and owner/active state; legacy `institution`/`account_type` fields were removed.
 - Agent current-user system context now includes per-account `notes_markdown` summaries, with truncation safeguards for oversized markdown/data-url image payloads.
+- Agent system prompt current-date context is rendered in `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` (default `America/Toronto`).
 - Entry-level `status` was removed; agent review state remains only on `agent_change_items`.
 - Entry groups are derived from entry-link connected components; `/groups` is read-model only (no group create/update/delete endpoints).
 - `GET /api/v1/groups` omits singleton components (`entry_count < 2`) to focus on linked groups.
 - Agent tool contracts are name/selector-based (no domain IDs in model-facing arguments/outputs).
-- Agent can emit sparse intermediate progress notes via `send_intermediate_update`; runtime streams these as `reasoning_update` SSE events.
+- Agent emits progress notes via `send_intermediate_update`; when a run needs tool calls, prompt policy requires it as the first tool call, and runtime streams successful calls as `reasoning_update` SSE events.
 - Entry create proposals can omit currency and fall back to the resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
 - Proposal tool outputs include `proposal_id` + `proposal_short_id` for follow-up reference in later turns.
 - Pending proposals can be edited or removed in-thread via `update_pending_proposal` / `remove_pending_proposal` (pending-only, thread-scoped).
 - Tag deletion proposals are blocked when the tag is still referenced by any non-deleted entries; apply path re-validates this constraint before delete.
+- Agent prompt policy requires duplicate-entry checks to prefer `propose_update_entry` when new input complements an existing entry.
+- Agent prompt policy requires canonical/generalized tag and entity naming (e.g., abbreviations/store-branch variants normalize to base names).
+- Agent prompt/tool policy requires human-readable `markdown_notes` formatting that preserves input detail; short notes should avoid headings and prefer clear line breaks/lists.
 - Agent prompt policy requires entry retag/update proposals before tag-delete proposals when the tag is still referenced.
-- Agent prompt policy prefers parallel tool-call batches when requested reads/proposals are independent.
+- Agent prompt policy requires parallel tool-call batches whenever requested reads/proposals are independent.
+- Agent system-prompt policy is organized into explicit markdown rule sections (tool discipline, proposal workflows, error handling, execution, final response).
 - Agent model/tool execution retries and limits can be overridden at runtime via `/settings`.
 - Streamed model calls retry transient failures using the same retry policy.
 - OpenRouter SSL `sslv3 alert bad record mac` transport failures get a one-shot immediate retry in both streamed and non-streamed model calls, even when `agent_retry_max_attempts=1`.

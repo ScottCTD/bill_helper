@@ -18,7 +18,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 |-----------|------|----------------|
 | Runtime | `backend/services/agent/runtime.py` | Run lifecycle, bounded tool loop, persistence of tool calls and final assistant message |
 | Model client | `backend/services/agent/model_client.py` | LiteLLM adapter, tool wiring, retry-enabled model completion, explicit prompt-cache breakpoint injection (system + latest user anchors via negative index) for cache-capable models |
-| Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks, proposal ordering (including tag-delete sequencing), error recovery, and current-user context section |
+| Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks (including duplicate enrichment via `propose_update_entry`), canonical tag/entity normalization, proposal ordering (including tag-delete sequencing), error recovery, and current-user context section |
 | Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; parses PDF attachments to text via PyMuPDF (line-trimmed and internal-whitespace-normalized); when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` excerpts with truncation safeguards); prepends review outcomes before current user feedback in the latest user message |
 | Tools | `backend/services/agent/tools.py` | Read/progress/proposal tool schemas, pending-proposal mutation tool, validation, execution, tool-level retry |
 | Review/apply | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py` | Approval/rejection, apply handlers for proposed CRUD changes |
@@ -57,6 +57,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | `langfuse_host` | `LANGFUSE_HOST` / `BILL_HELPER_LANGFUSE_HOST` | `None` | Optional Langfuse host (defaults to Langfuse cloud host if omitted) |
 | `agent_model` | `BILL_HELPER_AGENT_MODEL` | `google/gemini-3-flash-preview` | Model name; runtime override supported via `/api/v1/settings` |
 | `agent_max_steps` | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool loop iterations |
+| `current_user_timezone` | `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` | `America/Toronto` | User-local date basis for the system-prompt current-date section |
 | `default_currency_code` | `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `CAD` | Fallback for entry proposals missing currency (`/settings` override first, env fallback second) |
 | `agent_retry_max_attempts` | `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS` | `3` | Model completion retry attempts |
 | `agent_retry_initial_wait_seconds` | `BILL_HELPER_AGENT_RETRY_INITIAL_WAIT_SECONDS` | `0.25` | Exponential backoff start |
@@ -76,50 +77,65 @@ Retry behavior notes:
 
 The agent receives a markdown-structured system prompt at the start of each run. It includes:
 
-- `## Current Date (UTC)` (runtime-generated)
-- `## Rules` (numbered policy list)
+- `## Current Date (User Timezone: <IANA timezone>)` (runtime-generated; defaults to `America/Toronto`)
+- `## Rules` (sectioned policy groups)
 - `## Current User Context` (runtime-generated account summaries + optional account `notes_markdown` excerpts)
 
 ```markdown
-# Bill Helper System Prompt
-
 ## Identity
-You are the Bill Helper assistant. Follow review-gated mutation policies strictly.
+You are an expert in personal finance and accounting. You always call the right tools with the right arguments.
 
-## Current Date (UTC)
+## Current Date (User Timezone: America/Toronto)
 2026-02-10
 
 ## Rules
-1. You may call tools to gather facts and create review-gated proposals.
-2. Never claim a proposal is already applied. Proposals require explicit human approval.
-3. Before calling any propose_* tool, use read tools to check existing entries/tags/entities.
-4. Workflow for entry ingestion:
-   0. Before proposing any entry, check for duplicates using existing entry data.
-   1. If not duplicate: list existing tags and entities, then propose missing tags/entities first.
-   2. Only after duplicate checks and tag/entity reconciliation, propose entries.
-5. Before proposing delete_tag:
-   0. Check whether entries still reference the tag.
-   1. If referenced, propose update_entry changes first to remove/replace that tag on affected entries.
-   2. Only propose delete_tag after references are cleared.
-6. Do not use domain IDs in proposals; use names and selector fields only.
-7. If a tool returns an ERROR, decide whether to recover with other tools or ask the user to clarify.
-   If selector ambiguity is reported, ask the user for clarification before proposing a mutation.
-8. Reviewed proposal results are prepended in the latest user message before user feedback.
-   Use review statuses/comments to improve the next proposal iteration.
-   If no explicit user feedback exists, explore missing context and improve proposals proactively.
-9. If the user asks to revise an existing pending proposal, prefer update_pending_proposal
-   using proposal_id/proposal_short_id instead of creating a duplicate proposal.
-10. If the user asks to discard/cancel/remove a pending proposal, use remove_pending_proposal
-   with the proposal id so it leaves the pending proposal pool.
-11. Prefer parallel tool calls when tasks are independent.
-   If multiple reads/proposals do not depend on each other, call them in the same tool-call batch instead of one by one.
-12. When transitioning between distinct tool-call batches, use send_intermediate_update
-   with a brief progress note so the user can follow your reasoning.
-13. Use send_intermediate_update sparingly for meaningful transitions; do not call it on every tool step.
-14. End every run with one final assistant message.
-15. Final message should prioritize a concise direct answer.
-   Mention tools only when they materially change the answer or next action.
-16. Do not ask to run non-existent tools.
+### Tool Discipline
+- You may call tools to gather facts and create proposals.
+- Before calling any propose_* tool, use read tools to check existing entries/tags/entities.
+- Prefer parallel tool calls when tasks are independent.
+  If multiple reads/proposals do not depend on each other, call them in the same tool-call batch instead of one by one.
+  Use parallel tool calls whenever possible for independent work.
+- If you need any tool calls for the task, call send_intermediate_update first
+  to briefly describe what you are about to do before calling other tools.
+- When transitioning between distinct tool-call batches, use send_intermediate_update
+  with a brief progress note so the user can follow your reasoning.
+- Use send_intermediate_update sparingly for meaningful transitions; do not call it on every tool step.
+
+### Entry Proposal Workflow
+- Before proposing any entry, check for duplicates using existing entry data.
+- If a duplicate exists, check whether the new input adds complementary information.
+  If it does, prefer propose_update_entry for the existing entry instead of propose_create_entry.
+- If not duplicate: list existing tags and entities, then propose missing tags/entities first.
+- Normalize new tag and entity names to canonical, general forms.
+  Prefer normalized names such as IKEA (not IKEA TORONTO DOWNTWON 6423TORONTO), Toronto (not Toronto ON),
+  Starbucks (not SBUX), and Apple (not Apple Store #R121).
+- For tools that include a markdown_notes field, write human-readable markdown notes that preserve all relevant
+  details from the input. If the content is short, avoid headings. Keep notes clear with line breaks and
+  ordered/unordered lists when they improve readability.
+- Only after duplicate checks and tag/entity reconciliation, propose entries.
+
+### Tag Deletion Workflow
+- Check whether entries still reference the tag.
+- If referenced, propose update_entry changes first to remove/replace that tag on affected entries.
+- Only propose delete_tag after references are cleared.
+
+### Pending Proposal Lifecycle
+- If the user asks to revise an existing pending proposal, prefer update_pending_proposal
+  using proposal_id/proposal_short_id instead of creating a duplicate proposal.
+- If the user asks to discard/cancel/remove a pending proposal, use remove_pending_proposal
+  with the proposal id so it leaves the pending proposal pool.
+
+### Error Handling and Continuation
+- If a tool returns an ERROR, decide whether to recover with other tools or ask the user to clarify.
+  If selector ambiguity is reported, ask the user for clarification before proposing a mutation.
+- Reviewed proposal results are prepended in the latest user message before user feedback.
+  Use review statuses/comments to improve the next proposal iteration.
+  If no explicit user feedback exists, explore missing context and improve proposals proactively.
+
+### Final Response
+- End every run with one final assistant message.
+- Final message should prioritize a concise direct answer.
+  Mention tools only when they materially change the answer or next action.
 
 ## Current User Context
 ...
@@ -234,7 +250,7 @@ top_tags: tag:USD:1000; ...
 
 #### `send_intermediate_update`
 
-**Description:** Emit a brief user-visible progress note between distinct tool-call batches. Use sparingly; do not call on every tool step.
+**Description:** Emit a brief user-visible progress note. If a task needs tool calls, call this first to describe the initial plan before other tools. Then use sparingly between distinct tool-call batches; do not call on every tool step.
 
 **Arguments:**
 
@@ -350,7 +366,7 @@ Proposal tools create `AgentChangeItem` rows with status `PENDING_REVIEW`. They 
 
 #### `propose_create_entry`
 
-**Description:** Create a review-gated proposal to add a new entry. This does not mutate entries immediately; it creates a pending review item only.
+**Description:** Create a review-gated proposal to add a new entry. This does not mutate entries immediately; it creates a pending review item only. When `markdown_notes` is provided, keep it human-readable markdown that preserves all relevant input details; for short notes, avoid headings and prefer clear line breaks plus ordered/unordered lists.
 
 **Arguments:**
 
@@ -372,7 +388,7 @@ Proposal tools create `AgentChangeItem` rows with status `PENDING_REVIEW`. They 
 
 #### `propose_update_entry`
 
-**Description:** Create a review-gated proposal to update an existing entry selected by date/amount/name/from/to. If selector matches multiple entries, the tool reports ambiguity so the user can clarify.
+**Description:** Create a review-gated proposal to update an existing entry selected by date/amount/name/from/to. If selector matches multiple entries, the tool reports ambiguity so the user can clarify. When `patch.markdown_notes` is provided, keep it human-readable markdown that preserves all relevant input details; for short notes, avoid headings and prefer clear line breaks plus ordered/unordered lists.
 
 **Arguments:**
 
