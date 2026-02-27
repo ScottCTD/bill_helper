@@ -35,6 +35,7 @@ vi.mock("../lib/api", async () => {
 
 const runtimeSettingsFixture: RuntimeSettings = {
   current_user_name: "Alice",
+  user_memory: null,
   default_currency_code: "CAD",
   dashboard_currency_code: "CAD",
   agent_model: "gpt-5",
@@ -47,6 +48,7 @@ const runtimeSettingsFixture: RuntimeSettings = {
   agent_max_images_per_message: 4,
   overrides: {
     current_user_name: null,
+    user_memory: null,
     default_currency_code: null,
     dashboard_currency_code: null,
     agent_model: null,

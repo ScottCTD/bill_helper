@@ -23,6 +23,7 @@ Implemented:
   - `0013_add_account_markdown_body`
   - `0014_remove_account_institution_type`
   - `0015_add_agent_tool_call_output_text`
+  - `0016_add_user_memory_to_runtime_settings`
 - Taxonomy subsystem for generalized category management:
   - shared `taxonomies` / `taxonomy_terms` / `taxonomy_assignments` tables
   - default category taxonomies for `entities` and `tags`
@@ -34,9 +35,10 @@ Implemented:
   - link-driven topology edits (create/remove links)
   - icon-only `+` link creation opens a shared modal editor in both entry detail and group workspace
   - group graph rendering uses React Flow (no bespoke graph engine)
-- Runtime settings system for user-configurable defaults (persisted in DB with env fallback semantics):
+- Runtime settings system for user-configurable defaults (persisted in DB with env fallback semantics where applicable):
   - configurable default currency and dashboard currency
   - configurable current user name used for owner/review attribution
+  - optional persistent user memory text injected into every agent system prompt
   - configurable agent runtime controls (model, max steps, retry/image limits)
   - model execution is LiteLLM-based and provider-agnostic (for example OpenAI/Anthropic/Google/OpenRouter)
 - Dashboard analytics redesign:
@@ -352,5 +354,5 @@ uv run python scripts/check_docs_sync.py
 - Frontend design tokens and component styles: `frontend/src/styles.css`
 - Frontend UI primitives: `frontend/src/components/ui`
 - Agent panel UI: `frontend/src/components/agent/AgentPanel.tsx`
-- Latest migration: `alembic/versions/0015_add_agent_tool_call_output_text.py`
+- Latest migration: `alembic/versions/0016_add_user_memory_to_runtime_settings.py`
 - Demo seed: `scripts/seed_demo.py`

@@ -74,9 +74,11 @@ def test_settings_endpoint_returns_effective_defaults(client):
 
     settings = get_settings()
     assert payload["current_user_name"] == settings.current_user_name
+    assert payload["user_memory"] is None
     assert payload["default_currency_code"] == settings.default_currency_code
     assert payload["dashboard_currency_code"] == settings.dashboard_currency_code
     assert payload["agent_model"] == settings.agent_model
+    assert payload["overrides"]["user_memory"] is None
     assert payload["overrides"]["agent_model"] is None
 
 
@@ -92,6 +94,21 @@ def test_settings_model_override_and_clear(client):
     clear_payload = clear_override.json()
     assert clear_payload["agent_model"] == "google/gemini-3-flash-preview"
     assert clear_payload["overrides"]["agent_model"] is None
+
+
+def test_settings_user_memory_override_and_clear(client):
+    memory_text = "Prefers terse answers.\nUses CAD unless stated otherwise."
+    set_override = client.patch("/api/v1/settings", json={"user_memory": memory_text})
+    set_override.raise_for_status()
+    set_payload = set_override.json()
+    assert set_payload["user_memory"] == memory_text
+    assert set_payload["overrides"]["user_memory"] == memory_text
+
+    clear_override = client.patch("/api/v1/settings", json={"user_memory": " \n  "})
+    clear_override.raise_for_status()
+    clear_payload = clear_override.json()
+    assert clear_payload["user_memory"] is None
+    assert clear_payload["overrides"]["user_memory"] is None
 
 
 def test_settings_override_updates_agent_model_for_new_runs(client, monkeypatch):

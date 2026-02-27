@@ -442,6 +442,17 @@ def test_system_prompt_includes_current_date_tag():
     assert "## Current Date (User Timezone: America/Toronto)\n2026-02-10" in prompt
 
 
+def test_system_prompt_includes_user_memory_when_present():
+    from backend.services.agent.prompts import system_prompt
+
+    memory_text = "Prefers terse answers.\nAlways mention CAD explicitly."
+    prompt = system_prompt(user_memory=memory_text)
+
+    assert "## User Memory" in prompt
+    assert memory_text in prompt
+    assert "persistent user-provided background and preferences" in prompt
+
+
 def test_system_prompt_uses_requested_current_timezone_for_date_label():
     from datetime import date
 
@@ -530,6 +541,32 @@ def test_system_prompt_truncates_account_markdown_image_data_urls(client, monkey
     assert "![statement](data:image/png;base64," in system_content
     assert "...(truncated)" in system_content
     assert huge_data_url not in system_content
+
+
+def test_settings_user_memory_is_injected_into_system_prompt(client, monkeypatch):
+    response = client.patch(
+        "/api/v1/settings",
+        json={"user_memory": "Prefers terse answers.\nWorks in CAD."},
+    )
+    response.raise_for_status()
+
+    captured_messages: list[list[dict]] = []
+
+    def model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "ok"}
+
+    patch_model(monkeypatch, model)
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "hello")
+    assert run["status"] == "completed"
+    assert captured_messages
+
+    system_message = captured_messages[-1][0]
+    system_content = str(system_message.get("content", ""))
+    assert "## User Memory" in system_content
+    assert "Prefers terse answers.\nWorks in CAD." in system_content
 
 
 def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():

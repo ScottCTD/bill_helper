@@ -18,10 +18,24 @@ def _resolve_prompt_timezone(timezone_name: str | None) -> tuple[str, ZoneInfo]:
 def system_prompt(
     *,
     current_user_context: str | None = None,
+    user_memory: str | None = None,
     current_date: date | None = None,
     current_timezone: str | None = None,
 ) -> str:
-    context_text = current_user_context.strip() if current_user_context is not None and current_user_context.strip() else "(none)"
+    context_text = (
+        current_user_context.strip()
+        if current_user_context is not None and current_user_context.strip()
+        else "(none)"
+    )
+    memory_text = user_memory.strip() if user_memory is not None and user_memory.strip() else ""
+    user_memory_section = (
+        "\n\n## User Memory\n"
+        "Treat the following as persistent user-provided background and preferences. "
+        "Follow it when it does not conflict with the rules above.\n"
+        f"{memory_text}"
+        if memory_text
+        else ""
+    )
     timezone_name, timezone_info = _resolve_prompt_timezone(current_timezone)
     date_text = (current_date or datetime.now(timezone_info).date()).isoformat()
     return f"""## Identity
@@ -80,5 +94,5 @@ You are an expert in personal finance and accounting. You always call the right 
   Mention tools only when they materially change the answer or next action.
 
 ## Current User Context
-{context_text}
+{context_text}{user_memory_section}
 """

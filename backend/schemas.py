@@ -375,6 +375,7 @@ class DashboardRead(BaseModel):
 
 class RuntimeSettingsOverridesRead(BaseModel):
     current_user_name: str | None = None
+    user_memory: str | None = None
     default_currency_code: str | None = None
     dashboard_currency_code: str | None = None
     agent_model: str | None = None
@@ -389,6 +390,7 @@ class RuntimeSettingsOverridesRead(BaseModel):
 
 class RuntimeSettingsRead(BaseModel):
     current_user_name: str
+    user_memory: str | None = None
     default_currency_code: str
     dashboard_currency_code: str
     agent_model: str
@@ -404,6 +406,7 @@ class RuntimeSettingsRead(BaseModel):
 
 class RuntimeSettingsUpdate(BaseModel):
     current_user_name: str | None = Field(default=None, max_length=255)
+    user_memory: str | None = Field(default=None, max_length=4000)
     default_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     dashboard_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     agent_model: str | None = Field(default=None, max_length=255)
@@ -425,6 +428,15 @@ class RuntimeSettingsUpdate(BaseModel):
         if value is None:
             return None
         normalized = " ".join(str(value).split()).strip()
+        return normalized or None
+
+    @field_validator("user_memory", mode="before")
+    @classmethod
+    def normalize_optional_multiline_text(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).replace("\r\n", "\n").replace("\r", "\n")
+        normalized = "\n".join(line.rstrip() for line in normalized.split("\n")).strip()
         return normalized or None
 
     @field_validator("default_currency_code", "dashboard_currency_code", mode="before")

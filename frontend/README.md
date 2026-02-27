@@ -35,7 +35,7 @@ This module hosts the React app, route pages, UI primitives, and API/query clien
 - `frontend/src/features/properties/usePropertiesFormState.ts`: properties CRUD form state.
 - `frontend/src/features/properties/usePropertiesFilteredData.ts`: section-scoped filtered lists.
 - `frontend/src/features/properties/sections/*.tsx`: section-specific UI for users/entities/tags/currencies/taxonomy terms.
-- `frontend/src/pages/SettingsPage.tsx`: runtime configuration workspace for user overrides.
+- `frontend/src/pages/SettingsPage.tsx`: runtime configuration workspace for user overrides, including persistent agent memory.
 - `frontend/src/components/agent/AgentPanel.tsx`: top-level coordinator for agent state/mutations and panel composition.
 - `frontend/src/components/agent/AgentRunBlock.tsx`: run activity and summary rendering.
 - `frontend/src/components/agent/activity.ts`: run/activity derivation helpers shared across agent UI.
@@ -158,6 +158,7 @@ uv run python scripts/check_docs_sync.py
 - On wide layouts, the left groups summary panel is viewport-bounded and scrolls internally so long group lists do not stretch overall page height.
 - Graph rendering uses `reactflow` (pan/zoom/controls/minimap) via `GroupGraphView`.
 - Runtime settings are loaded from `/api/v1/settings` and affect default currency/model behavior across pages.
+- Runtime settings include an `Agent memory` textarea; when set, that text is attached to every backend agent system prompt.
 - Agent review timeline supports create/update/delete change items for entries, tags, and entities.
 - Agent review modal now renders CRUD-aware, field-level diffs (create/add, update delta, delete removal) instead of full payload snapshots.
 - Entry proposal diff rows now use friendly field labels/order (`date`, `name`, `kind`, `amount`, `currency`, `from`, `to`, `tags`, `notes`) and human-readable amount values.

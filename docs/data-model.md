@@ -54,6 +54,7 @@ Agent:
 - `scope` (unique string, current runtime uses `default`)
 - nullable override fields:
   - `current_user_name`
+  - `user_memory`
   - `default_currency_code`
   - `dashboard_currency_code`
   - `agent_model`
@@ -69,7 +70,8 @@ Agent:
 Purpose:
 
 - stores optional runtime overrides managed by `/api/v1/settings`
-- effective runtime values are resolved as `override -> env default`
+- effective runtime values are resolved as `override -> env default` where applicable
+- `user_memory` is an optional DB-only text field used for persistent agent prompt context
 
 ## `entities`
 

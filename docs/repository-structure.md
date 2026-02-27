@@ -31,6 +31,7 @@
 - `versions/0013_add_account_markdown_body.py`: adds optional account-level markdown notes (`accounts.markdown_body`).
 - `versions/0014_remove_account_institution_type.py`: drops legacy account columns (`accounts.institution`, `accounts.account_type`).
 - `versions/0015_add_agent_tool_call_output_text.py`: adds persisted model-visible tool output text (`agent_tool_calls.output_text`).
+- `versions/0016_add_user_memory_to_runtime_settings.py`: adds optional persistent agent memory text to runtime settings (`runtime_settings.user_memory`).
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
@@ -57,7 +58,7 @@
 - `groups.py`: derived entry-group read models (`GET /groups` summary + `GET /groups/{id}` graph).
 - `dashboard.py`: monthly analytics endpoint.
 - `agent.py`: append-only agent thread/message/run/review endpoints.
-- `settings.py`: runtime settings read/update endpoints for user overrides with env fallback.
+- `settings.py`: runtime settings read/update endpoints for user overrides with env fallback where applicable and DB-backed `user_memory`.
 
 ### Backend Services (`/backend/services`)
 
@@ -69,7 +70,7 @@
 - `finance.py`: reconciliation, CAD dashboard analytics, projections, and chart-ready breakdown aggregations.
 - `serializers.py`: ORM-to-schema mapping helpers.
 - `taxonomy.py`: shared taxonomy normalization, term assignment, and usage-count helpers.
-- `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults.
+- `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, plus DB-backed `user_memory`.
 - `agent/`: agent runtime, tool execution, serialization, prompt/model adapters, and review apply handlers.
 
 ### Backend Tests (`/backend/tests`)
@@ -112,7 +113,7 @@
 #### Pages (`/frontend/src/pages`)
 
 - `DashboardPage.tsx`: tabbed interactive analytics dashboard (overview/daily/breakdowns/insights) backed by Recharts.
-- `SettingsPage.tsx`: responsive runtime settings workspace (general, agent runtime, reliability).
+- `SettingsPage.tsx`: responsive runtime settings workspace (general, persistent agent memory, agent runtime, reliability).
 - `EntriesPage.tsx`: list/filter/delete entries and open popup create/edit editor.
 - `EntryDetailPage.tsx`: manage links/group graph and open popup editor for updates.
 - `GroupsPage.tsx`: derived group workspace (group list, graph detail, and link-driven topology edits).

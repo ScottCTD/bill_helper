@@ -20,7 +20,7 @@ This module hosts the FastAPI app, SQLAlchemy models, Pydantic schemas, and doma
 - `backend/routers/settings.py`: runtime settings read/update endpoints.
 - `backend/services/finance.py`: reconciliation + dashboard aggregations/projection.
 - `backend/services/agent/change_apply.py`: apply approved proposals.
-- `backend/services/runtime_settings.py`: persisted override + env fallback resolver for runtime settings.
+- `backend/services/runtime_settings.py`: persisted override + env fallback resolver for runtime settings, plus DB-backed `user_memory`.
 - `backend/services/serializers.py`: ORM -> API schema conversion.
 
 ## Common Change Paths
@@ -94,6 +94,7 @@ uv run python scripts/check_docs_sync.py
 
 - Account contracts include `name`, `markdown_body`, `currency_code`, and owner/active state; legacy `institution`/`account_type` fields were removed.
 - Agent current-user system context now includes per-account `notes_markdown` summaries, with truncation safeguards for oversized markdown/data-url image payloads.
+- Runtime settings include optional `user_memory` text that is injected into every agent system prompt.
 - Agent system prompt current-date context is rendered in `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` (default `America/Toronto`).
 - Entry-level `status` was removed; agent review state remains only on `agent_change_items`.
 - Entry groups are derived from entry-link connected components; `/groups` is read-model only (no group create/update/delete endpoints).

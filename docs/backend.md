@@ -44,8 +44,9 @@ Agent settings:
 
 Runtime override behavior:
 
-- `runtime_settings` table stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`
-- effective runtime settings are resolved as `override -> env default`
+- `runtime_settings` table stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`, including `user_memory`
+- effective runtime settings are resolved as `override -> env default` where applicable
+- `user_memory` is an optional DB-only text field used for persistent per-user agent context
 
 Behavior notes:
 
@@ -149,6 +150,7 @@ Agent services:
   - requires `send_intermediate_update` as the first tool call when tools are needed, then sparse usage between meaningful tool-call batches
   - enforces name/selector-based proposals (no domain IDs in tool contracts)
   - includes a lightweight current-user context section (current user + owned accounts) at runtime
+  - appends optional persistent `user_memory` from runtime settings to every system prompt
   - on tool errors/selector ambiguity, instructs the model to recover or ask for user clarification
 - `backend/services/agent/message_history.py`
   - converts persisted thread history and attachments into model-ready messages
@@ -192,7 +194,8 @@ Agent services:
   - `propose_delete_tag` returns `ERROR` when the tag is still referenced by non-deleted entries (with count + sample context)
   - proposal tools only create `agent_change_items` (`PENDING_REVIEW`)
 - `backend/services/runtime_settings.py`
-  - resolves effective runtime settings from `runtime_settings` overrides + env defaults
+  - resolves effective runtime settings from `runtime_settings` overrides + env defaults where applicable
+  - carries optional DB-backed `user_memory` text for agent prompt injection
   - exposes read-model payload for `/settings` API (`effective values + override metadata`)
   - used by agent runtime, dashboard currency selection, current-user attribution defaults, and entry-currency fallback
 - `backend/services/agent/review.py`
@@ -266,6 +269,7 @@ Settings router:
 - `0013_add_account_markdown_body`
 - `0014_remove_account_institution_type`
 - `0015_add_agent_tool_call_output_text`
+- `0016_add_user_memory_to_runtime_settings`
 
 Commands:
 

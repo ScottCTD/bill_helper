@@ -44,7 +44,7 @@ Pages:
 - `/groups` -> derived group workspace (summary + graph + link operations)
 - `/accounts` -> accounts
 - `/properties` -> core catalogs + taxonomy term management
-- `/settings` -> runtime settings workspace
+- `/settings` -> runtime settings workspace (including persistent agent memory)
 
 Providers in `frontend/src/main.tsx`:
 
@@ -60,6 +60,7 @@ Defines typed API models for:
 - ledger domain (`Entry`, `Account`, `User`, `Entity`, `Tag`, ...)
 - analytics (`Dashboard`, `Reconciliation`, ...)
 - runtime settings domain (`RuntimeSettings`, `RuntimeSettingsOverrides`)
+  - includes optional `user_memory` text persisted from the settings workspace
 - agent domain (`AgentThread*`, `AgentMessage*`, `AgentRun`, `AgentToolCall`, `AgentChangeItem`, `AgentReviewAction`)
 
 ## `frontend/src/lib/api.ts`
@@ -256,12 +257,13 @@ Agent client methods:
 ## `SettingsPage.tsx`
 
 - categorized runtime settings workspace with responsive card layout:
-  - `General` (current user name, default currency, dashboard currency)
+  - `General` (current user name, agent memory, default currency, dashboard currency)
   - `Agent Runtime` (model, step/image limits)
   - `Reliability` (retry policy controls)
 - top summary surface shows active model
 - supports save/update and reset-to-server-default flows
 - setting changes trigger cache invalidation across dependent pages (agent/dashboard/accounts/entries/users)
+- `Agent memory` is a multiline textarea and, when set, its text is attached to every backend agent system prompt
 
 ## Agent UI
 

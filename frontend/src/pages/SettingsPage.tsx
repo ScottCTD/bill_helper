@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { FormField } from "../components/ui/form-field";
 import { Input } from "../components/ui/input";
 import { NativeSelect } from "../components/ui/native-select";
+import { Textarea } from "../components/ui/textarea";
 import { getRuntimeSettings, listCurrencies, updateRuntimeSettings } from "../lib/api";
 import { invalidateRuntimeSettingsReadModels } from "../lib/queryInvalidation";
 import { queryKeys } from "../lib/queryKeys";
@@ -14,6 +15,7 @@ import type { RuntimeSettings } from "../lib/types";
 
 interface SettingsFormState {
   current_user_name: string;
+  user_memory: string;
   default_currency_code: string;
   dashboard_currency_code: string;
   agent_model: string;
@@ -35,6 +37,7 @@ function bytesToMegabytes(value: number): string {
 function buildFormState(data: RuntimeSettings): SettingsFormState {
   return {
     current_user_name: data.current_user_name,
+    user_memory: data.user_memory ?? "",
     default_currency_code: data.default_currency_code,
     dashboard_currency_code: data.dashboard_currency_code,
     agent_model: data.agent_model,
@@ -166,6 +169,7 @@ export function SettingsPage() {
 
       updateMutation.mutate({
         current_user_name: nextCurrentUserName,
+        user_memory: formState.user_memory,
         default_currency_code: nextDefaultCurrencyCode,
         dashboard_currency_code: nextDashboardCurrencyCode,
         agent_model: formState.agent_model.trim(),
@@ -185,6 +189,7 @@ export function SettingsPage() {
   function resetOverrides() {
     updateMutation.mutate({
       current_user_name: null,
+      user_memory: null,
       default_currency_code: null,
       dashboard_currency_code: null,
       agent_model: null,
@@ -250,6 +255,16 @@ export function SettingsPage() {
               <Input
                 value={formState.current_user_name}
                 onChange={(event) => setFormState((state) => (state ? { ...state, current_user_name: event.target.value } : state))}
+              />
+            </FormField>
+
+            <FormField
+              label="Agent memory"
+              hint="Persistent user context added to every agent system prompt. Use it for standing preferences, constraints, or background."
+            >
+              <Textarea
+                value={formState.user_memory}
+                onChange={(event) => setFormState((state) => (state ? { ...state, user_memory: event.target.value } : state))}
               />
             </FormField>
 

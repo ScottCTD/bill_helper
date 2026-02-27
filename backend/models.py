@@ -78,6 +78,7 @@ class RuntimeSettings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     scope: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, default="default")
     current_user_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    user_memory: Mapped[str | None] = mapped_column(Text, nullable=True)
     default_currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
     dashboard_currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
     agent_model: Mapped[str | None] = mapped_column(String(255), nullable=True)

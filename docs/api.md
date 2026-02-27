@@ -202,15 +202,20 @@ Response: `CurrencyRead[]`
 
 ## `GET /settings`
 
-Fetch effective runtime settings (`override -> env default`) plus override metadata.
+Fetch effective runtime settings (`override -> env default` where applicable) plus override metadata.
 
 Response: `RuntimeSettingsRead`
 
 Response highlights:
 
-- `current_user_name`, `default_currency_code`, `dashboard_currency_code`
+- `current_user_name`, optional `user_memory`, `default_currency_code`, `dashboard_currency_code`
 - agent runtime fields (`agent_model`, `agent_max_steps`, retry/image limits)
-- `overrides` object with nullable override values for the same runtime fields
+- `overrides` object with nullable override values for the same runtime fields, including `user_memory`
+
+Behavior:
+
+- `user_memory` is DB-backed only (no environment fallback)
+- when `user_memory` is set, it is injected into every agent system prompt as persistent user context
 
 ## `PATCH /settings`
 
@@ -219,6 +224,7 @@ Partially update runtime settings overrides.
 Body: any subset of:
 
 - `current_user_name`
+- `user_memory`
 - `default_currency_code`
 - `dashboard_currency_code`
 - `agent_model`

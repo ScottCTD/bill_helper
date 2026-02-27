@@ -20,6 +20,14 @@ def _normalize_optional_text(value: str | None) -> str | None:
     return normalized or None
 
 
+def _normalize_optional_multiline_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = "\n".join(line.rstrip() for line in normalized.split("\n")).strip()
+    return normalized or None
+
+
 def _normalize_optional_currency(value: str | None) -> str | None:
     normalized = _normalize_optional_text(value)
     if normalized is None:
@@ -53,6 +61,7 @@ def _sanitize_float(value: float, *, minimum: float, fallback: float) -> float:
 class ResolvedRuntimeSettings:
     api_prefix: str
     current_user_name: str
+    user_memory: str | None
     default_currency_code: str
     dashboard_currency_code: str
     langfuse_public_key: str | None
@@ -98,6 +107,7 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
     current_user_name = (
         _normalize_optional_text(override.current_user_name) if override is not None else None
     ) or _normalize_optional_text(defaults.current_user_name) or "scott"
+    user_memory = _normalize_optional_multiline_text(override.user_memory) if override is not None else None
     default_currency_code = (
         _normalize_optional_currency(override.default_currency_code) if override is not None else None
     ) or _normalize_optional_currency(defaults.default_currency_code) or "CAD"
@@ -162,6 +172,7 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
     return ResolvedRuntimeSettings(
         api_prefix=defaults.api_prefix,
         current_user_name=current_user_name,
+        user_memory=user_memory,
         default_currency_code=default_currency_code,
         dashboard_currency_code=dashboard_currency_code,
         langfuse_public_key=langfuse_public_key,
@@ -184,6 +195,7 @@ def build_runtime_settings_read(db: Session) -> RuntimeSettingsRead:
 
     return RuntimeSettingsRead(
         current_user_name=resolved.current_user_name,
+        user_memory=resolved.user_memory,
         default_currency_code=resolved.default_currency_code,
         dashboard_currency_code=resolved.dashboard_currency_code,
         agent_model=resolved.agent_model,
@@ -196,6 +208,7 @@ def build_runtime_settings_read(db: Session) -> RuntimeSettingsRead:
         agent_max_images_per_message=resolved.agent_max_images_per_message,
         overrides=RuntimeSettingsOverridesRead(
             current_user_name=_normalize_optional_text(override.current_user_name) if override else None,
+            user_memory=_normalize_optional_multiline_text(override.user_memory) if override else None,
             default_currency_code=_normalize_optional_currency(override.default_currency_code) if override else None,
             dashboard_currency_code=_normalize_optional_currency(override.dashboard_currency_code) if override else None,
             agent_model=_normalize_optional_text(override.agent_model) if override else None,

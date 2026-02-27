@@ -545,6 +545,7 @@ def build_llm_messages(
             "role": "system",
             "content": system_prompt(
                 current_user_context=_build_current_user_context(db),
+                user_memory=settings.user_memory,
                 current_timezone=get_settings().current_user_timezone,
             ),
         }
