@@ -18,7 +18,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 |-----------|------|----------------|
 | Runtime | `backend/services/agent/runtime.py` | Run lifecycle, bounded tool loop, persistence of tool calls and final assistant message |
 | Model client | `backend/services/agent/model_client.py` | LiteLLM adapter, tool wiring, retry-enabled model completion, explicit prompt-cache breakpoint injection (system + latest user anchors via negative index) for cache-capable models |
-| Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks (including duplicate enrichment via `propose_update_entry`), canonical tag/entity normalization, proposal ordering (including tag-delete sequencing), error recovery, and current-user context section |
+| Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks (including duplicate enrichment via `propose_update_entry`), proposal ordering, explicit new entry/tag/entity specifications, canonical tag/entity normalization (including general tag examples and non-location/default anti-collision rules), error recovery, and current-user context section |
 | Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; parses PDF attachments to text via PyMuPDF (line-trimmed and internal-whitespace-normalized); when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` excerpts with truncation safeguards); prepends review outcomes before current user feedback in the latest user message |
 | Tools | `backend/services/agent/tools.py` | Read/progress/proposal tool schemas, pending-proposal mutation tool, validation, execution, tool-level retry |
 | Review/apply | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py` | Approval/rejection, apply handlers for proposed CRUD changes |
@@ -55,7 +55,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | `langfuse_public_key` | `LANGFUSE_PUBLIC_KEY` / `BILL_HELPER_LANGFUSE_PUBLIC_KEY` | `None` | Enables LiteLLM Langfuse callbacks when paired with `langfuse_secret_key` |
 | `langfuse_secret_key` | `LANGFUSE_SECRET_KEY` / `BILL_HELPER_LANGFUSE_SECRET_KEY` | `None` | Enables LiteLLM Langfuse callbacks when paired with `langfuse_public_key` |
 | `langfuse_host` | `LANGFUSE_HOST` / `BILL_HELPER_LANGFUSE_HOST` | `None` | Optional Langfuse host (defaults to Langfuse cloud host if omitted) |
-| `agent_model` | `BILL_HELPER_AGENT_MODEL` | `google/gemini-3-flash-preview` | Model name; runtime override supported via `/api/v1/settings` |
+| `agent_model` | `BILL_HELPER_AGENT_MODEL` | `openrouter/moonshotai/kimi-k2.5` | Model name; runtime override supported via `/api/v1/settings` |
 | `agent_max_steps` | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool loop iterations |
 | `current_user_timezone` | `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` | `America/Toronto` | User-local date basis for the system-prompt current-date section |
 | `default_currency_code` | `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `CAD` | Fallback for entry proposals missing currency (`/settings` override first, env fallback second) |
@@ -106,13 +106,26 @@ You are an expert in personal finance and accounting. You always call the right 
 - If a duplicate exists, check whether the new input adds complementary information.
   If it does, prefer propose_update_entry for the existing entry instead of propose_create_entry.
 - If not duplicate: list existing tags and entities, then propose missing tags/entities first.
-- Normalize new tag and entity names to canonical, general forms.
-  Prefer normalized names such as IKEA (not IKEA TORONTO DOWNTWON 6423TORONTO), Toronto (not Toronto ON),
-  Starbucks (not SBUX), and Apple (not Apple Store #R121).
+- Follow the new entry/tag/entity specifications below when proposing missing records.
+- Only after duplicate checks and tag/entity reconciliation, propose entries.
+
+### New Proposal Specifications
+#### New Entry Specification
+- Ground all proposed fields in explicit source facts. Do not invent missing dates, amounts, counterparties, tags, or locations.
 - For tools that include a markdown_notes field, write human-readable markdown notes that preserve all relevant
   details from the input. If the content is short, avoid headings. Keep notes clear with line breaks and
   ordered/unordered lists when they improve readability.
-- Only after duplicate checks and tag/entity reconciliation, propose entries.
+
+#### New Tag Specification
+- Normalize new tags to canonical, general descriptors rather than specific names.
+- Prefer tags such as groceries, dining, transit, online, recurring, reimbursement, or daily.
+- Avoid tags that collide with entity names or merchant labels such as credit, loblaw, or heytea.
+- Do not include locations in tags unless the user explicitly asks for location-specific tagging.
+
+#### New Entity Specification
+- Normalize new entity names to canonical, general forms.
+- Prefer normalized names such as IKEA (not IKEA TORONTO DOWNTWON 6423TORONTO), Toronto (not Toronto ON),
+  Starbucks (not SBUX), and Apple (not Apple Store #R121).
 
 ### Tag Deletion Workflow
 - Check whether entries still reference the tag.
@@ -460,6 +473,7 @@ Each tool emits model-visible text plus structured `output_json`:
 
 Runtime persists every tool call in `agent_tool_calls` and feeds tool output text back to the model for next-step decisions.
 When `send_intermediate_update` is called during SSE runs, runtime emits a `reasoning_update` stream event so the frontend can render progress updates in real time.
+If the model emits assistant text in the same turn as tool calls, runtime also persists that text as a synthetic `send_intermediate_update` trace (`output_json.source="assistant_content"`) and emits the same `reasoning_update` event shape.
 For continuation after review, `message_history.py` prepends a compact review-results block to the latest user message, then includes user feedback text below it (not as dynamic system prompt text).
 Pending proposals from older runs do not block new proposal tools; the model can continue proposing while unresolved items remain pending.
 Pending proposals can be revised or removed by id in later turns without forcing immediate human review.

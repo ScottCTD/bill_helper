@@ -278,7 +278,7 @@ def _coerce_index(value: Any) -> int | None:
 
 
 def validate_litellm_environment(*, model_name: str) -> tuple[bool, list[str], str]:
-    normalized_model = (model_name or "").strip() or "google/gemini-3-flash-preview"
+    normalized_model = (model_name or "").strip() or "openrouter/moonshotai/kimi-k2.5"
     try:
         validation = litellm.validate_environment(
             model=normalized_model,
@@ -316,7 +316,7 @@ class LiteLLMModelClient:
         langfuse_secret_key: str | None = None,
         langfuse_host: str | None = None,
     ) -> None:
-        self._model_name = (model_name or "").strip() or "google/gemini-3-flash-preview"
+        self._model_name = (model_name or "").strip() or "openrouter/moonshotai/kimi-k2.5"
         self._tools = tools
         self._retry_max_attempts = max(1, retry_max_attempts)
         self._retry_initial_wait_seconds = max(0.0, retry_initial_wait_seconds)

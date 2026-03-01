@@ -31,7 +31,7 @@ This document captures an implementation-ready plan for V1.
 
 1. Backend-hosted LangGraph ReAct workflow.
 2. LangChain model client configured to call OpenRouter.
-3. Default model identifier: `google/gemini-3-flash-preview` (configurable).
+3. Default model identifier: `openrouter/moonshotai/kimi-k2.5` (configurable).
 4. Graph terminates only when a final assistant message is produced.
 
 ### Tooling Strategy
@@ -368,7 +368,7 @@ Tasks:
 1. Add env settings:
    - `BILL_HELPER_OPENROUTER_API_KEY`
    - `BILL_HELPER_OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`)
-   - `BILL_HELPER_AGENT_MODEL` (default `google/gemini-3-flash-preview`)
+   - `BILL_HELPER_AGENT_MODEL` (default `openrouter/moonshotai/kimi-k2.5`)
    - `BILL_HELPER_AGENT_MAX_STEPS` (reasonable default like `100`)
 2. Add optional limits:
    - max image size

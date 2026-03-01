@@ -218,10 +218,10 @@ def test_delete_thread_removes_uploaded_attachment_files(client, monkeypatch):
     assert all(not path.exists() for path in attachment_paths)
 
 
-def test_default_agent_model_is_google_gemini_3_flash_preview():
+def test_default_agent_model_is_openrouter_moonshotai_kimi_k2_5():
     from backend.config import get_settings
 
-    assert get_settings().agent_model == "google/gemini-3-flash-preview"
+    assert get_settings().agent_model == "openrouter/moonshotai/kimi-k2.5"
 
 
 def test_pdf_line_normalization_collapses_internal_whitespace_and_trims_edges():
@@ -655,6 +655,37 @@ def test_run_persists_tool_calls(client, monkeypatch):
     assert len(payload["tool_calls"]) == 1
 
 
+def test_run_persists_assistant_tool_step_text_as_intermediate_update(client, monkeypatch):
+    calls = [
+        {
+            "role": "assistant",
+            "content": "I am checking current tags before making any changes.",
+            "tool_calls": [
+                {
+                    "id": "call_list_tags",
+                    "type": "function",
+                    "function": {"name": "list_tags", "arguments": "{}"},
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": "I checked tags and found no pending proposals.",
+        },
+    ]
+    patch_model(monkeypatch, lambda _messages: calls.pop(0))
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "List current tags.")
+
+    assert run["status"] == "completed"
+    assert len(run["tool_calls"]) == 2
+    assert run["tool_calls"][0]["tool_name"] == "send_intermediate_update"
+    assert run["tool_calls"][0]["output_json"]["message"] == "I am checking current tags before making any changes."
+    assert run["tool_calls"][0]["output_json"]["source"] == "assistant_content"
+    assert run["tool_calls"][1]["tool_name"] == "list_tags"
+
+
 def test_final_message_strips_empty_pending_review_footer(client, monkeypatch):
     patch_model(
         monkeypatch,
@@ -812,6 +843,81 @@ def test_stream_message_endpoint_emits_reasoning_update_events(client, monkeypat
     assert len(run["tool_calls"]) == 1
     assert run["tool_calls"][0]["tool_name"] == "send_intermediate_update"
     assert run["tool_calls"][0]["output_json"]["message"] == "I am checking existing entries and tags."
+
+
+def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasoning_update(client, monkeypatch):
+    from backend.services.agent import runtime
+
+    stream_responses = [
+        [
+            {
+                "type": "text_delta",
+                "delta": "I am checking current tags before making any changes.",
+            },
+            {
+                "type": "done",
+                "message": {
+                    "role": "assistant",
+                    "content": "I am checking current tags before making any changes.",
+                    "tool_calls": [
+                        {
+                            "id": "call_list_tags",
+                            "type": "function",
+                            "function": {
+                                "name": "list_tags",
+                                "arguments": "{}",
+                            },
+                        }
+                    ],
+                },
+            },
+        ],
+        [
+            {
+                "type": "text_delta",
+                "delta": "Done.",
+            },
+            {
+                "type": "done",
+                "message": {
+                    "role": "assistant",
+                    "content": "Done.",
+                    "tool_calls": [],
+                },
+            },
+        ],
+    ]
+
+    def stream_model(_messages, _db, **_kwargs):
+        for event in stream_responses.pop(0):
+            yield event
+
+    monkeypatch.setattr(runtime, "_call_model_stream", stream_model)
+
+    thread = create_thread(client)
+    events = collect_sse_events(client, thread["id"], "process this import")
+
+    reasoning_updates = [event for event in events if event.get("type") == "reasoning_update"]
+    assert len(reasoning_updates) == 1
+    assert reasoning_updates[0]["message"] == "I am checking current tags before making any changes."
+
+    tool_calls = [event for event in events if event.get("type") == "tool_call"]
+    assert len(tool_calls) == 1
+    assert tool_calls[0]["tool_name"] == "list_tags"
+
+    text = "".join(event.get("delta", "") for event in events if event.get("type") == "text_delta")
+    assert text == "I am checking current tags before making any changes.Done."
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    assert len(detail["runs"]) == 1
+    run = detail["runs"][0]
+    assert len(run["tool_calls"]) == 2
+    assert run["tool_calls"][0]["tool_name"] == "send_intermediate_update"
+    assert run["tool_calls"][0]["output_json"]["message"] == "I am checking current tags before making any changes."
+    assert run["tool_calls"][0]["output_json"]["source"] == "assistant_content"
+    assert run["tool_calls"][1]["tool_name"] == "list_tags"
 
 
 def test_model_observability_uses_thread_as_session_id(client, monkeypatch):

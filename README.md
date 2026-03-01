@@ -176,7 +176,7 @@ Set these environment variables (for example in `.env`):
 - `LANGFUSE_PUBLIC_KEY` (optional; enables LiteLLM Langfuse callback tracing when paired with secret key)
 - `LANGFUSE_SECRET_KEY` (optional; enables LiteLLM Langfuse callback tracing when paired with public key)
 - `LANGFUSE_HOST` (optional; default Langfuse cloud host is `https://cloud.langfuse.com`)
-- `BILL_HELPER_AGENT_MODEL` (default `google/gemini-3-flash-preview`)
+- `BILL_HELPER_AGENT_MODEL` (default `openrouter/moonshotai/kimi-k2.5`)
 - `BILL_HELPER_AGENT_MAX_STEPS` (default `100`)
 - `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` (default `America/Toronto`; controls system-prompt current date context)
 - `BILL_HELPER_DEFAULT_CURRENCY_CODE` (default `CAD`)
@@ -194,7 +194,7 @@ Provider credential behavior:
 - examples:
   - `OPENAI_API_KEY` with `BILL_HELPER_AGENT_MODEL=openai/gpt-4.1-mini`
   - `ANTHROPIC_API_KEY` with `BILL_HELPER_AGENT_MODEL=anthropic/claude-3-5-sonnet-20240620`
-  - `OPENROUTER_API_KEY` with `BILL_HELPER_AGENT_MODEL=openrouter/google/gemini-3-flash-preview`
+  - `OPENROUTER_API_KEY` with `BILL_HELPER_AGENT_MODEL=openrouter/moonshotai/kimi-k2.5` (default)
 
 Observability behavior:
 

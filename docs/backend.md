@@ -36,7 +36,7 @@ Agent settings:
 - `LANGFUSE_PUBLIC_KEY` / `BILL_HELPER_LANGFUSE_PUBLIC_KEY` (optional; enables LiteLLM Langfuse callbacks when both keys are set)
 - `LANGFUSE_SECRET_KEY` / `BILL_HELPER_LANGFUSE_SECRET_KEY` (optional; enables LiteLLM Langfuse callbacks when both keys are set)
 - `LANGFUSE_HOST` / `BILL_HELPER_LANGFUSE_HOST` (optional; defaults to Langfuse cloud host if unset)
-- `AGENT_MODEL` (default `google/gemini-3-flash-preview`)
+- `AGENT_MODEL` (default `openrouter/moonshotai/kimi-k2.5`)
 - `AGENT_MAX_STEPS` (default `100`)
 - `AGENT_MAX_IMAGE_SIZE_BYTES` (default `5MB`; per-attachment size limit for image/PDF agent uploads)
 - `AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`; max image/PDF uploads per message)
@@ -133,7 +133,7 @@ Agent services:
   - executes one run per user message
   - orchestrates bounded tool-calling loop and run lifecycle persistence
   - supports both non-stream execution and SSE execution (`run_existing_agent_run_stream`) for incremental text delivery
-  - emits `reasoning_update` SSE events when `send_intermediate_update` tool calls succeed
+  - emits `reasoning_update` SSE events when `send_intermediate_update` tool calls succeed, and when a tool-calling model step includes assistant text that should be treated as the same user-visible progress signal
   - supports manual run interruption (`interrupt_agent_run`) and cooperative stop checks between model/tool steps
   - aggregates model usage metrics across all model calls in a run and persists totals on `agent_runs`
   - passes model observability context (`user`, `session_id=thread.id`, run-level `trace`) on each model request for conversation-level trace grouping
@@ -331,6 +331,7 @@ Current baseline for `backend/tests/test_agent.py`: `52 passed`.
 - stream sends execute in-request and emit SSE events from `POST /agent/threads/{thread_id}/messages/stream`; disconnect fallback resumes the run in a background thread
 - `DELETE /api/v1/agent/threads/{thread_id}` returns `409` while that thread has any running run
 - streamed runs may emit `reasoning_update` events in addition to `tool_call` and `text_delta` events, enabling lightweight progress UI before final message persistence
+- if a model emits assistant text in the same step as tool calls, runtime persists that text as a synthetic `send_intermediate_update` tool call (`output_json.message`, `output_json.source="assistant_content"`) so polling/history and SSE both render it as progress instead of a final assistant message
 - interrupted runs are marked `failed` with user-facing interruption reason text
 - the next user turn after an interruption carries an explicit interruption note in model input (while preserving normal conversation history)
 - model requests include observability payload (`user`, `session_id=thread.id`, trace metadata) with LiteLLM metadata mapping for Langfuse grouping; one trace per thread (`trace_id=thread.id`), per-step generation names (`agent_turn_run_N_step_M`), and `existing_trace_id` for continuation steps or subsequent runs in the same thread so Langfuse displays one trace per conversation
@@ -347,11 +348,15 @@ Current baseline for `backend/tests/test_agent.py`: `52 passed`.
 - account create/read/update schemas no longer expose `institution` and `account_type`
 - entry-ingestion prompts now require duplicate detection before any entry proposal, reducing duplicate proposal risk
 - duplicate-handling prompts now require checking for complementary new information and preferring `propose_update_entry` on the existing entry when appropriate
-- prompt policy now requires canonical/generalized tag/entity naming (for example, `SBUX` -> `Starbucks`, store-branch names -> parent merchant names)
+- prompt policy now requires canonical/generalized tag/entity naming
+- tag guidance is explicit: use general descriptor tags (for example, `groceries`, `dining`, `online`), avoid entity-like or merchant-name tags (for example, `credit`, `loblaw`, `heytea`), and omit locations unless the user explicitly requests location-specific tagging
+- entity normalization still maps abbreviations/store-branch variants to canonical names (for example, `SBUX` -> `Starbucks`)
+- prompt policy now has a dedicated new-proposal specifications section for entries, tags, and entities
+- new entry specs require grounding proposed fields in explicit source facts and avoiding invented missing details
 - prompt policy now requires entry retag/update proposals before tag deletion proposals when references exist
 - prompt policy now requires parallel tool-call batches whenever operations are independent instead of serial one-by-one calls
 - prompt policy now requires `send_intermediate_update` as the first tool call when the run needs tools
-- system prompt rules are grouped into explicit markdown sections for tool discipline, workflow sequencing, error handling, and final response behavior
+- system prompt rules are grouped into explicit markdown sections for tool discipline, workflow sequencing, new proposal specifications, error handling, and final response behavior
 - pending-proposal workflow now supports intra-thread proposal edits/removals via `update_pending_proposal` / `remove_pending_proposal` (id + patch map or id-only, pending-only)
 - entry domain no longer includes `status`; API/model/migration are synchronized on statusless entries
 - group read models now include:
