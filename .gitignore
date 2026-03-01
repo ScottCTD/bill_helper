@@ -219,6 +219,10 @@ __marimo__/
 frontend/node_modules/
 frontend/dist/
 
+# Playwright artifacts
+.playwright-cli/
+output/playwright/
+
 # Runtime data
 .data/
 logs/

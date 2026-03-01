@@ -235,6 +235,7 @@ Agent client methods:
 
 - tabbed interactive analytics surface (`Overview`, `Daily Spend`, `Breakdowns`, `Insights`)
 - uses Recharts for bar/area/pie plots with tooltips and legends
+- charts mount through a measured container wrapper in `frontend/src/pages/DashboardPage.tsx` so Recharts only renders after each card has non-zero dimensions
 - runtime-configured dashboard currency analytics (non-matching currency entries are excluded)
 - daily vs non-daily expense segmentation:
   - `daily` tag marks an expense as daily

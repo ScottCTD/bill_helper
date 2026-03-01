@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Area,
@@ -10,7 +10,6 @@ import {
   Legend,
   Pie,
   PieChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis
@@ -81,6 +80,58 @@ function tooltipAmount(currencyCode: string, value: unknown): string {
 
 function tooltipAmountWithName(currencyCode: string, value: unknown, name: string | number | undefined): [string, string] {
   return [tooltipAmount(currencyCode, value), String(name ?? "")];
+}
+
+type ChartDimensions = {
+  width: number;
+  height: number;
+};
+
+function DashboardChartContainer({ children }: { children: (dimensions: ChartDimensions) => ReactElement }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState<ChartDimensions | null>(null);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateDimensions = () => {
+      const nextWidth = Math.floor(element.clientWidth);
+      const nextHeight = Math.floor(element.clientHeight);
+      if (nextWidth <= 0 || nextHeight <= 0) {
+        return;
+      }
+
+      setDimensions((current) => {
+        if (current?.width === nextWidth && current?.height === nextHeight) {
+          return current;
+        }
+        return { width: nextWidth, height: nextHeight };
+      });
+    };
+
+    updateDimensions();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateDimensions();
+    });
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  return (
+    <div ref={containerRef} className="h-full min-w-0">
+      {dimensions ? children(dimensions) : null}
+    </div>
+  );
 }
 
 export function DashboardPage() {
@@ -192,21 +243,23 @@ export function DashboardPage() {
               <CardHeader>
                 <CardTitle>Income vs Expense Trend</CardTitle>
               </CardHeader>
-              <CardContent className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.monthly_trend}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                    <XAxis dataKey="month" />
-                    <YAxis tickFormatter={axisTick} />
-                    <Tooltip
-                      formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)}
-                      cursor={{ fill: "hsl(var(--muted) / 0.35)" }}
-                    />
-                    <Legend />
-                    <Bar dataKey="income_total_minor" name="Income" fill={CHART_COLORS.income} radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="expense_total_minor" name="Expense" fill={CHART_COLORS.expense} radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <CardContent className="h-80 min-w-0">
+                <DashboardChartContainer>
+                  {({ width, height }) => (
+                    <BarChart width={width} height={height} data={data.monthly_trend}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+                      <XAxis dataKey="month" />
+                      <YAxis tickFormatter={axisTick} />
+                      <Tooltip
+                        formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)}
+                        cursor={{ fill: "hsl(var(--muted) / 0.35)" }}
+                      />
+                      <Legend />
+                      <Bar dataKey="income_total_minor" name="Income" fill={CHART_COLORS.income} radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="expense_total_minor" name="Expense" fill={CHART_COLORS.expense} radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  )}
+                </DashboardChartContainer>
               </CardContent>
             </Card>
 
@@ -214,18 +267,20 @@ export function DashboardPage() {
               <CardHeader>
                 <CardTitle>Daily vs Non-daily Split</CardTitle>
               </CardHeader>
-              <CardContent className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={dailySpendSplit} dataKey="value" nameKey="name" innerRadius={56} outerRadius={90} paddingAngle={4}>
-                      {dailySpendSplit.map((entry, index) => (
-                        <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+              <CardContent className="h-80 min-w-0">
+                <DashboardChartContainer>
+                  {({ width, height }) => (
+                    <PieChart width={width} height={height}>
+                      <Pie data={dailySpendSplit} dataKey="value" nameKey="name" innerRadius={56} outerRadius={90} paddingAngle={4}>
+                        {dailySpendSplit.map((entry, index) => (
+                          <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
+                      <Legend />
+                    </PieChart>
+                  )}
+                </DashboardChartContainer>
               </CardContent>
             </Card>
           </section>
@@ -293,32 +348,34 @@ export function DashboardPage() {
             <CardHeader>
               <CardTitle>Daily Spending (Selected Month)</CardTitle>
             </CardHeader>
-            <CardContent className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.daily_spending}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                  <XAxis dataKey="date" />
-                  <YAxis tickFormatter={axisTick} />
-                  <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
-                  <Legend />
-                  <Area
-                    type="monotone"
-                    dataKey="daily_expense_minor"
-                    name="Daily-tagged"
-                    stroke={CHART_COLORS.daily}
-                    fill="hsl(var(--success) / 0.2)"
-                    strokeWidth={2}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="non_daily_expense_minor"
-                    name="Non-daily"
-                    stroke={CHART_COLORS.nonDaily}
-                    fill="hsl(var(--destructive) / 0.16)"
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <CardContent className="h-80 min-w-0">
+              <DashboardChartContainer>
+                {({ width, height }) => (
+                  <AreaChart width={width} height={height} data={data.daily_spending}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+                    <XAxis dataKey="date" />
+                    <YAxis tickFormatter={axisTick} />
+                    <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
+                    <Legend />
+                    <Area
+                      type="monotone"
+                      dataKey="daily_expense_minor"
+                      name="Daily-tagged"
+                      stroke={CHART_COLORS.daily}
+                      fill="hsl(var(--success) / 0.2)"
+                      strokeWidth={2}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="non_daily_expense_minor"
+                      name="Non-daily"
+                      stroke={CHART_COLORS.nonDaily}
+                      fill="hsl(var(--destructive) / 0.16)"
+                      strokeWidth={2}
+                    />
+                  </AreaChart>
+                )}
+              </DashboardChartContainer>
             </CardContent>
           </Card>
 
@@ -326,18 +383,20 @@ export function DashboardPage() {
             <CardHeader>
               <CardTitle>Monthly Daily Spend Trend</CardTitle>
             </CardHeader>
-            <CardContent className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.monthly_trend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                  <XAxis dataKey="month" />
-                  <YAxis tickFormatter={axisTick} />
-                  <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
-                  <Legend />
-                  <Bar dataKey="daily_expense_minor" name="Daily-tagged" fill={CHART_COLORS.daily} radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="non_daily_expense_minor" name="Non-daily" fill={CHART_COLORS.nonDaily} radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <CardContent className="h-80 min-w-0">
+              <DashboardChartContainer>
+                {({ width, height }) => (
+                  <BarChart width={width} height={height} data={data.monthly_trend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+                    <XAxis dataKey="month" />
+                    <YAxis tickFormatter={axisTick} />
+                    <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
+                    <Legend />
+                    <Bar dataKey="daily_expense_minor" name="Daily-tagged" fill={CHART_COLORS.daily} radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="non_daily_expense_minor" name="Non-daily" fill={CHART_COLORS.nonDaily} radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                )}
+              </DashboardChartContainer>
             </CardContent>
           </Card>
         </section>
@@ -349,21 +408,23 @@ export function DashboardPage() {
             <CardHeader>
               <CardTitle>Spending by Tags</CardTitle>
             </CardHeader>
-            <CardContent className="h-80">
+            <CardContent className="h-80 min-w-0">
               {data.spending_by_tag.length === 0 ? (
                 <p className="muted">No expense-tag data for this month.</p>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={data.spending_by_tag} dataKey="total_minor" nameKey="label" outerRadius={95}>
-                      {data.spending_by_tag.map((item, index) => (
-                        <Cell key={item.label} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+                <DashboardChartContainer>
+                  {({ width, height }) => (
+                    <PieChart width={width} height={height}>
+                      <Pie data={data.spending_by_tag} dataKey="total_minor" nameKey="label" outerRadius={95}>
+                        {data.spending_by_tag.map((item, index) => (
+                          <Cell key={item.label} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
+                      <Legend />
+                    </PieChart>
+                  )}
+                </DashboardChartContainer>
               )}
             </CardContent>
           </Card>
@@ -372,19 +433,21 @@ export function DashboardPage() {
             <CardHeader>
               <CardTitle>Spending by Destination (`to`)</CardTitle>
             </CardHeader>
-            <CardContent className="h-80">
+            <CardContent className="h-80 min-w-0">
               {data.spending_by_to.length === 0 ? (
                 <p className="muted">No destination breakdown yet.</p>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.spending_by_to} layout="vertical" margin={{ left: 24 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                    <XAxis type="number" tickFormatter={axisTick} />
-                    <YAxis dataKey="label" type="category" width={140} />
-                    <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
-                    <Bar dataKey="total_minor" name="Total" fill={CHART_COLORS.expense} radius={[0, 6, 6, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <DashboardChartContainer>
+                  {({ width, height }) => (
+                    <BarChart width={width} height={height} data={data.spending_by_to} layout="vertical" margin={{ left: 24 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+                      <XAxis type="number" tickFormatter={axisTick} />
+                      <YAxis dataKey="label" type="category" width={140} />
+                      <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
+                      <Bar dataKey="total_minor" name="Total" fill={CHART_COLORS.expense} radius={[0, 6, 6, 0]} />
+                    </BarChart>
+                  )}
+                </DashboardChartContainer>
               )}
             </CardContent>
           </Card>
@@ -393,19 +456,21 @@ export function DashboardPage() {
             <CardHeader>
               <CardTitle>Spending by Source (`from`)</CardTitle>
             </CardHeader>
-            <CardContent className="h-72">
+            <CardContent className="h-72 min-w-0">
               {data.spending_by_from.length === 0 ? (
                 <p className="muted">No source breakdown yet.</p>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.spending_by_from}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                    <XAxis dataKey="label" />
-                    <YAxis tickFormatter={axisTick} />
-                    <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
-                    <Bar dataKey="total_minor" name="Total" fill={CHART_COLORS.net} radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <DashboardChartContainer>
+                  {({ width, height }) => (
+                    <BarChart width={width} height={height} data={data.spending_by_from}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+                      <XAxis dataKey="label" />
+                      <YAxis tickFormatter={axisTick} />
+                      <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
+                      <Bar dataKey="total_minor" name="Total" fill={CHART_COLORS.net} radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  )}
+                </DashboardChartContainer>
               )}
             </CardContent>
           </Card>
@@ -419,16 +484,18 @@ export function DashboardPage() {
               <CardHeader>
                 <CardTitle>Spending by Weekday</CardTitle>
               </CardHeader>
-              <CardContent className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.weekday_spending}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                    <XAxis dataKey="weekday" />
-                    <YAxis tickFormatter={axisTick} />
-                    <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
-                    <Bar dataKey="total_minor" name="Total" fill={CHART_COLORS.expense} radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <CardContent className="h-80 min-w-0">
+                <DashboardChartContainer>
+                  {({ width, height }) => (
+                    <BarChart width={width} height={height} data={data.weekday_spending}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+                      <XAxis dataKey="weekday" />
+                      <YAxis tickFormatter={axisTick} />
+                      <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
+                      <Bar dataKey="total_minor" name="Total" fill={CHART_COLORS.expense} radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  )}
+                </DashboardChartContainer>
               </CardContent>
             </Card>
 

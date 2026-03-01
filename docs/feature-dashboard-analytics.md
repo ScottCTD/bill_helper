@@ -59,6 +59,7 @@ Classification logic lives in `backend/services/finance.py`.
   - reconciliation table
 
 Interactive charting is powered by Recharts.
+`frontend/src/pages/DashboardPage.tsx` measures each chart card before mounting the chart itself, which avoids the dev-time `-1 x -1` container warnings that Recharts emits when a panel has not completed layout yet.
 
 ## Tests
 
@@ -68,3 +69,4 @@ Interactive charting is powered by Recharts.
 
 - Projection fields are null for non-current months.
 - Frontend amount display is code-prefixed (`CAD 8.13`) via `frontend/src/lib/format.ts`.
+- Dashboard charts stay blank until the first card measurement completes; after that, chart resizing is driven by the measured card container.

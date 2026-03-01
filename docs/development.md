@@ -20,11 +20,12 @@ Current `.gitignore` behavior:
 
 - ignores standard Python build/cache/test artifacts (for example `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`, `.mypy_cache/`, `build/`, `dist/`, `*.egg-info/`)
 - ignores local environment and secret files (for example `.env`, `.envrc`, `.venv`, `venv/`)
-- ignores project runtime/frontend artifacts (`/path/to/bill_helper/frontend/node_modules/`, `/path/to/bill_helper/frontend/dist/`, `/path/to/bill_helper/.data/`, `/path/to/bill_helper/logs/`)
+- ignores project runtime/frontend artifacts (`/path/to/bill_helper/frontend/node_modules/`, `/path/to/bill_helper/frontend/dist/`, `/path/to/bill_helper/.data/`, `/path/to/bill_helper/logs/`, `/path/to/bill_helper/.playwright-cli/`, `/path/to/bill_helper/output/playwright/`)
 
 Operational impact:
 
 - local cache/build/runtime files stay out of commits by default
+- local Playwright snapshots, console/network logs, and captured browser artifacts stay out of commits by default
 - `uv.lock` remains tracked unless manually ignored, matching current repository policy
 
 ## Environment Variables
