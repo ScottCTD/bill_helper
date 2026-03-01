@@ -430,6 +430,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         return {
           ...current,
           runId: current.runId || streamEvent.run_id || null,
+          content: "",
           activity: appendPendingReasoningUpdateToActivity(current.activity, String(streamEvent.message || ""))
         };
       });

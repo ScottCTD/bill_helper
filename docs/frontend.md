@@ -307,6 +307,7 @@ Timeline features:
 - run blocks are anchored to assistant-side timeline events (`assistant_message_id`) to keep tool activity in assistant flow
 - active runs without an assistant message render only when there is visible activity payload (tool calls/errors/review summary)
 - running assistant bubbles interleave `send_intermediate_update` reasoning notes with grouped non-update tool-call batches
+- when a tool-calling model turn also streams assistant text, that text is reclassified into the same reasoning-update bubble once the matching `reasoning_update` event arrives, instead of remaining in the pending final-answer body
 - completed runs retain the same interleaved reasoning/tool-batch structure for consistency with in-flight rendering
 - tool-call traces now use two-level disclosure:
   - outer run-level toggle (`N tool calls`)

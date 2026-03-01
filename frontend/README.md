@@ -178,6 +178,7 @@ uv run python scripts/check_docs_sync.py
 - Thread usage bar now includes `Context` (latest run input token size) plus `Cache hit rate`, in addition to raw input/output/cache read counters and total cost.
 - Token counters in the usage bar are compactly formatted as `x.xxK` to reduce horizontal space pressure.
 - Streaming assistant activity now supports interleaved reasoning updates (`reasoning_update`) plus grouped tool-call traces, and the same interleaved trace remains visible after run completion.
+- If a tool-calling model turn streams assistant text before its tool calls finish, the pending bubble text is cleared when the matching `reasoning_update` arrives so that text is shown as a progress bubble instead of being mistaken for the final answer.
 - Optimistic user bubbles are reconciled against persisted timeline messages to avoid temporary duplicate user-message blocks during send.
 - Route pages are lazy-loaded from `App.tsx` to keep initial bundle load bounded as feature count grows.
 - Agent run rendering and activity derivation are split from `AgentPanel.tsx` into dedicated modules to reduce coordinator complexity.

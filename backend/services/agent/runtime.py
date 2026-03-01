@@ -231,6 +231,40 @@ def _extract_reasoning_update_message(tool_call: AgentToolCall) -> str | None:
     return None
 
 
+def _normalize_intermediate_update_message(message: str) -> str | None:
+    normalized = message.strip()
+    return normalized or None
+
+
+def _record_assistant_intermediate_update(
+    db: Session,
+    *,
+    run: AgentRun,
+    message: str,
+) -> AgentToolCall | None:
+    normalized_message = _normalize_intermediate_update_message(message)
+    if normalized_message is None:
+        return None
+
+    tool_row = AgentToolCall(
+        run_id=run.id,
+        tool_name=INTERMEDIATE_UPDATE_TOOL_NAME,
+        input_json={
+            "message": normalized_message,
+            "source": "assistant_content",
+        },
+        output_json={
+            "message": normalized_message,
+            "source": "assistant_content",
+        },
+        output_text=f"OK: {normalized_message}",
+        status=AgentToolCallStatus.OK,
+    )
+    db.add(tool_row)
+    db.flush()
+    return tool_row
+
+
 def _coerce_usage_int(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
@@ -363,6 +397,11 @@ def _execute_agent_run(
                         "content": assistant_content,
                         "tool_calls": tool_calls,
                     }
+                )
+                assistant_update = _record_assistant_intermediate_update(
+                    db,
+                    run=run,
+                    message=assistant_content,
                 )
                 for tool_call in tool_calls:
                     if _run_is_stopped(db, run):
@@ -517,6 +556,19 @@ def _execute_agent_run_stream(
                         "tool_calls": tool_calls,
                     }
                 )
+                assistant_update = _record_assistant_intermediate_update(
+                    db,
+                    run=run,
+                    message=assistant_content,
+                )
+                if assistant_update is not None:
+                    reasoning_update_message = _extract_reasoning_update_message(assistant_update)
+                    if reasoning_update_message is not None:
+                        yield {
+                            "type": "reasoning_update",
+                            "run_id": run.id,
+                            "message": reasoning_update_message,
+                        }
                 for tool_call in tool_calls:
                     if _run_is_stopped(db, run):
                         yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
