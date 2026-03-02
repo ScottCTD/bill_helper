@@ -357,7 +357,8 @@ def test_system_prompt_requires_canonical_name_normalization_examples():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
-    assert "Normalize new tag and entity names to canonical, general forms." in prompt
+    assert "Normalize new entity names to canonical, general forms." in prompt
+    assert "Normalize new tags to canonical, general descriptors" in prompt
     assert "Starbucks (not SBUX)" in prompt
     assert "Apple (not Apple Store #R121)." in prompt
 
