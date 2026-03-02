@@ -14,6 +14,15 @@ def create_account(client, name: str = "Checking") -> dict:
     return response.json()
 
 
+def create_entity(client, name: str, *, category: str | None = None) -> dict:
+    payload = {"name": name}
+    if category is not None:
+        payload["category"] = category
+    response = client.post("/api/v1/entities", json=payload)
+    response.raise_for_status()
+    return response.json()
+
+
 def create_entry(
     client,
     account_id: str,
@@ -106,6 +115,28 @@ def test_dashboard_monthly_aggregations(client):
     )
     create_entry(
         client,
+        account["id"],
+        "EXPENSE",
+        700,
+        "2026-01-04",
+        name="Move to card",
+        tags=["daily", "transfer"],
+        from_entity="Checking",
+        to_entity="Travel Card",
+    )
+    create_entry(
+        client,
+        other_currency_account["id"],
+        "INCOME",
+        700,
+        "2026-01-04",
+        name="Transfer in",
+        tags=["transfer"],
+        from_entity="Checking",
+        to_entity="Travel Card",
+    )
+    create_entry(
+        client,
         other_currency_account["id"],
         "EXPENSE",
         900,
@@ -147,8 +178,34 @@ def test_dashboard_monthly_aggregations(client):
 
     assert any(item["label"] == "Main Checking" and item["total_minor"] == 1700 for item in payload["spending_by_from"])
     assert any(item["label"] == "Coffee Shop" and item["total_minor"] == 1200 for item in payload["spending_by_to"])
+    assert not any(item["label"] == "Travel Card" for item in payload["spending_by_to"])
     assert any(item["label"] == "daily" and item["total_minor"] == 1200 for item in payload["spending_by_tag"])
     assert payload["projection"]["is_current_month"] is False
     assert payload["projection"]["projected_total_minor"] is None
     assert payload["largest_expenses"][0]["name"] == "Coffee"
     assert payload["largest_expenses"][0]["is_daily"] is True
+
+
+def test_dashboard_excludes_account_category_transfers_without_linked_account_ids(client):
+    account = create_account(client)
+    create_entity(client, "Legacy Debit", category="account")
+    create_entity(client, "Legacy Credit", category="account")
+
+    create_entry(
+        client,
+        account["id"],
+        "EXPENSE",
+        500,
+        "2026-01-12",
+        name="Legacy transfer",
+        tags=["transfer"],
+        from_entity="Legacy Debit",
+        to_entity="Legacy Credit",
+    )
+
+    dashboard = client.get("/api/v1/dashboard", params={"month": "2026-01"})
+    dashboard.raise_for_status()
+    payload = dashboard.json()
+
+    assert payload["kpis"]["expense_total_minor"] == 0
+    assert payload["spending_by_to"] == []

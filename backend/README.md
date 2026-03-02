@@ -45,6 +45,10 @@ Touch together:
 - `backend/schemas.py` (`DashboardRead` and nested types)
 - `backend/tests/test_finance.py`
 
+Current behavior:
+
+- dashboard aggregation ignores internal account-to-account transfers when both sides resolve through account-category entities (including linked `Account.entity_id` values), so monthly in/out cards and chart rollups represent external cash flow only
+
 ## 3) Entry Group Graph Read Model Changes
 
 Touch together:
@@ -106,11 +110,15 @@ uv run python scripts/check_docs_sync.py
 - Pending proposals can be edited or removed in-thread via `update_pending_proposal` / `remove_pending_proposal` (pending-only, thread-scoped).
 - Tag deletion proposals are blocked when the tag is still referenced by any non-deleted entries; apply path re-validates this constraint before delete.
 - Agent prompt policy requires duplicate-entry checks to prefer `propose_update_entry` when new input complements an existing entry.
-- Agent prompt policy requires canonical/generalized tag and entity naming (e.g., abbreviations/store-branch variants normalize to base names).
+- Agent prompt policy requires canonical/generalized tag and entity naming.
+  Tags must stay general (for example, `groceries`, `dining`, `online`) instead of colliding with entities/merchants (for example, `credit`, `loblaw`, `heytea`), and tags should omit locations unless the user explicitly requests location-specific tagging.
+  Entity abbreviations/store-branch variants still normalize to base names.
+- Agent prompt policy now separates ordering rules from explicit new-record specifications for entries, tags, and entities.
+  New entry specs require grounding all fields in explicit source facts and avoiding invented missing details.
 - Agent prompt/tool policy requires human-readable `markdown_notes` formatting that preserves input detail; short notes should avoid headings and prefer clear line breaks/lists.
 - Agent prompt policy requires entry retag/update proposals before tag-delete proposals when the tag is still referenced.
 - Agent prompt policy requires parallel tool-call batches whenever requested reads/proposals are independent.
-- Agent system-prompt policy is organized into explicit markdown rule sections (tool discipline, proposal workflows, error handling, execution, final response).
+- Agent system-prompt policy is organized into explicit markdown rule sections (tool discipline, proposal workflows, new proposal specifications, error handling, execution, final response).
 - Agent model/tool execution retries and limits can be overridden at runtime via `/settings`.
 - Streamed model calls retry transient failures using the same retry policy.
 - OpenRouter SSL `sslv3 alert bad record mac` transport failures get a one-shot immediate retry in both streamed and non-streamed model calls, even when `agent_retry_max_attempts=1`.

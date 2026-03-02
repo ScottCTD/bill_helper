@@ -145,6 +145,7 @@ Agent client methods:
 - entry create modal default currency now resolves from runtime settings (`GET /settings`)
 - `Kind` table cell uses symbol-only indicators (`+` for income, `-` for expense)
 - amount cells render compact numeric precision in the entries list (`300.00 -> 300`, `300.20 -> 300.2`, `300.25 -> 300.25`) with a de-emphasized ISO currency label
+- name cells render the primary entry name plus a compact `from -> to` secondary line; long source/destination labels are trimmed per side before display and the full text is preserved in the hover title
 - now uses shared shadcn primitives for card layout, filters, badges, and table actions
 - date column uses a fixed compact width with no-wrap so ISO dates stay single-line; narrow viewports scroll horizontally instead of wrapping
 - filter toolbar now uses shared table-shell classes aligned with `Properties`:
@@ -237,6 +238,7 @@ Agent client methods:
 - uses Recharts for bar/area/pie plots with tooltips and legends
 - charts mount through a measured container wrapper in `frontend/src/pages/DashboardPage.tsx` so Recharts only renders after each card has non-zero dimensions
 - runtime-configured dashboard currency analytics (non-matching currency entries are excluded)
+- dashboard totals and charts also exclude internal transfers when both endpoints resolve to account-category entities, so the surface reflects net external in/out rather than money moved between tracked accounts
 - daily vs non-daily expense segmentation:
   - `daily` tag marks an expense as daily
   - `non-daily` (or `non_daily` / `nondaily`) overrides and marks non-daily
@@ -440,6 +442,7 @@ Includes:
   - `.properties-nav*`
   - `.properties-panel`
 - compact entries table row classes and muted action styling for less visual noise
+- `.entries-name-*` classes add the compact secondary `from -> to` metadata line in the entries list while keeping long labels truncation-friendly
 - entry popup classes now model a vertical, scrollable page layout (properties + seamless markdown editor)
 - entry popup now uses fixed viewport height and popup-level scrolling for long note content
 - entry property layout classes support inline `Label: control` rows and grouped compact controls

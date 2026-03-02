@@ -12,6 +12,7 @@ This doc is the fast path for understanding dashboard metrics, data boundaries, 
 
 - Dashboard analytics currently use `CAD` only.
 - Entries in other currencies are excluded from dashboard calculations.
+- Entries whose `from_entity_id` and `to_entity_id` both resolve to account-category entities (including linked account entities) are treated as internal transfers and excluded from dashboard KPIs, trends, breakdowns, largest-expense ranking, and projection math.
 - Reconciliation panel includes active CAD accounts only.
 
 ## Daily vs Non-daily Classification
@@ -63,10 +64,11 @@ Interactive charting is powered by Recharts.
 
 ## Tests
 
-- `backend/tests/test_finance.py` validates dashboard payload shape and key metrics.
+- `backend/tests/test_finance.py` validates dashboard payload shape, key metrics, and exclusion of internal account-to-account transfers.
 
 ## Operational Notes
 
 - Projection fields are null for non-current months.
 - Frontend amount display is code-prefixed (`CAD 8.13`) via `frontend/src/lib/format.ts`.
 - Dashboard charts stay blank until the first card measurement completes; after that, chart resizing is driven by the measured card container.
+- Internal-transfer detection uses account-category entities plus linked account entities, so legacy rows still filter correctly as long as both endpoints resolve to entities categorized as `account`.

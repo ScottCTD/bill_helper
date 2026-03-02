@@ -65,3 +65,4 @@ This doc is the fast path for understanding how entries are created, edited, lin
 - Agent create-entry proposals can omit `currency_code`; backend defaults to resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
 - Soft-delete removes entry links and triggers group recomputation.
 - Entries list date cells are rendered as no-wrap with a compact fixed width so `YYYY-MM-DD` values stay on one line.
+- Entries list name cells now render a compact secondary `from -> to` line under the primary name; long entity names are trimmed per side in `frontend/src/pages/EntriesPage.tsx` and styled by the `.entries-name-*` classes in `frontend/src/styles.css`.

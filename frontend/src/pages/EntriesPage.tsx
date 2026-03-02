@@ -27,6 +27,8 @@ import { invalidateEntryReadModels } from "../lib/queryInvalidation";
 import { queryKeys } from "../lib/queryKeys";
 
 type EditorState = { mode: "create" } | { mode: "edit"; entryId: string } | null;
+const ENTRY_FLOW_LABEL_MAX_LENGTH = 18;
+const MISSING_ENTITY_LABEL = "(unspecified)";
 
 function kindSymbol(kind: string) {
   return kind === "INCOME" ? "+" : "-";
@@ -39,6 +41,38 @@ function groupLabel(groupId: string) {
 
 function normalizedCurrencyCode(currencyCode: string) {
   return currencyCode.trim().toUpperCase() || "CAD";
+}
+
+function normalizedEntityLabel(value: string | null): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function compactEntityLabel(value: string, maxLength: number = ENTRY_FLOW_LABEL_MAX_LENGTH): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  const ellipsis = "...";
+  const remainingLength = Math.max(maxLength - ellipsis.length, 2);
+  const prefixLength = Math.ceil(remainingLength / 2);
+  const suffixLength = Math.max(remainingLength - prefixLength, 1);
+  return `${value.slice(0, prefixLength)}${ellipsis}${value.slice(-suffixLength)}`;
+}
+
+function entryFlowLabel(fromEntity: string | null, toEntity: string | null): { display: string; full: string } | null {
+  const normalizedFrom = normalizedEntityLabel(fromEntity);
+  const normalizedTo = normalizedEntityLabel(toEntity);
+  if (!normalizedFrom && !normalizedTo) {
+    return null;
+  }
+
+  const fullFrom = normalizedFrom ?? MISSING_ENTITY_LABEL;
+  const fullTo = normalizedTo ?? MISSING_ENTITY_LABEL;
+  return {
+    display: `${compactEntityLabel(fullFrom)} -> ${compactEntityLabel(fullTo)}`,
+    full: `${fullFrom} -> ${fullTo}`
+  };
 }
 
 export function EntriesPage() {
@@ -249,54 +283,71 @@ export function EntriesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredEntries.map((entry) => (
-                    <TableRow key={entry.id} className="entries-table-row" onDoubleClick={() => setEditorState({ mode: "edit", entryId: entry.id })}>
-                      <TableCell className="entries-date-column">{entry.occurred_at}</TableCell>
-                      <TableCell className="font-medium">{entry.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={entry.kind === "INCOME" ? "kind-indicator kind-indicator-income" : "kind-indicator kind-indicator-expense"}>
-                          {kindSymbol(entry.kind)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className="entries-amount-cell">
-                          <span className="entries-amount-value">{formatMinorCompact(entry.amount_minor)}</span>
-                          <span className="entries-amount-currency">{normalizedCurrencyCode(entry.currency_code)}</span>
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {entry.tags.length > 0 ? (
-                          <div className="entries-tag-list">
-                            {entry.tags.map((tag) => (
-                              <Badge key={tag.id} variant="secondary" className="entries-tag-pill">
-                                {tag.name}
-                              </Badge>
-                            ))}
+                  {filteredEntries.map((entry) => {
+                    const flowLabel = entryFlowLabel(entry.from_entity, entry.to_entity);
+
+                    return (
+                      <TableRow
+                        key={entry.id}
+                        className="entries-table-row"
+                        onDoubleClick={() => setEditorState({ mode: "edit", entryId: entry.id })}
+                      >
+                        <TableCell className="entries-date-column">{entry.occurred_at}</TableCell>
+                        <TableCell className="entries-name-cell">
+                          <div className="entries-name-stack">
+                            <span className="entries-name-title">{entry.name}</span>
+                            {flowLabel ? (
+                              <span className="entries-name-flow" title={flowLabel.full}>
+                                {flowLabel.display}
+                              </span>
+                            ) : null}
                           </div>
-                        ) : (
-                          <span className="entries-tag-empty">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>{groupLabel(entry.group_id)}</TableCell>
-                      <TableCell>
-                        <div className="table-actions">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="entry-delete-button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              deleteEntryMutation.mutate(entry.id);
-                            }}
-                            onDoubleClick={(event) => event.stopPropagation()}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={entry.kind === "INCOME" ? "kind-indicator kind-indicator-income" : "kind-indicator kind-indicator-expense"}>
+                            {kindSymbol(entry.kind)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="entries-amount-cell">
+                            <span className="entries-amount-value">{formatMinorCompact(entry.amount_minor)}</span>
+                            <span className="entries-amount-currency">{normalizedCurrencyCode(entry.currency_code)}</span>
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {entry.tags.length > 0 ? (
+                            <div className="entries-tag-list">
+                              {entry.tags.map((tag) => (
+                                <Badge key={tag.id} variant="secondary" className="entries-tag-pill">
+                                  {tag.name}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="entries-tag-empty">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{groupLabel(entry.group_id)}</TableCell>
+                        <TableCell>
+                          <div className="table-actions">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="entry-delete-button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                deleteEntryMutation.mutate(entry.id);
+                              }}
+                              onDoubleClick={(event) => event.stopPropagation()}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             ) : null}

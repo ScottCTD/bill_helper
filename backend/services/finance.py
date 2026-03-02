@@ -8,7 +8,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.enums import EntryKind
-from backend.models import Account, AccountSnapshot, Entry, EntryTag, Tag
+from backend.models import Account, AccountSnapshot, Entity, Entry, EntryTag, Tag
 from backend.schemas import (
     DailyExpensePoint,
     DashboardBreakdownItem,
@@ -103,6 +103,29 @@ def _entry_has_daily_tag(entry: Entry) -> bool:
     return DASHBOARD_DAILY_TAG_NAME in normalized_names
 
 
+def _account_entity_ids(db: Session) -> set[str]:
+    linked_account_entity_ids = {
+        entity_id
+        for entity_id in db.scalars(select(Account.entity_id)).all()
+        if entity_id
+    }
+    categorized_account_entity_ids = {
+        entity_id
+        for entity_id in db.scalars(select(Entity.id).where(Entity.category == "account")).all()
+        if entity_id
+    }
+    return linked_account_entity_ids | categorized_account_entity_ids
+
+
+def _is_internal_account_transfer(entry: Entry, account_entity_ids: set[str]) -> bool:
+    return (
+        entry.from_entity_id is not None
+        and entry.to_entity_id is not None
+        and entry.from_entity_id in account_entity_ids
+        and entry.to_entity_id in account_entity_ids
+    )
+
+
 def _list_entries_for_window(db: Session, start: date, end: date, currency_code: str) -> list[Entry]:
     return list(
         db.scalars(
@@ -145,7 +168,12 @@ def build_dashboard_analytics(
     today: date | None = None,
 ) -> dict[str, object]:
     normalized_currency = currency_code.upper()
-    month_entries = _list_entries_for_window(db, start, end, normalized_currency)
+    account_entity_ids = _account_entity_ids(db)
+    month_entries = [
+        entry
+        for entry in _list_entries_for_window(db, start, end, normalized_currency)
+        if not _is_internal_account_transfer(entry, account_entity_ids)
+    ]
     expense_entries = [entry for entry in month_entries if entry.kind == EntryKind.EXPENSE]
 
     expense_totals_by_date: dict[date, int] = defaultdict(int)
@@ -227,7 +255,11 @@ def build_dashboard_analytics(
         cursor += timedelta(days=1)
 
     trend_start = _shift_month(start, -(max(trend_months, 1) - 1))
-    trend_entries = _list_entries_for_window(db, trend_start, end, normalized_currency)
+    trend_entries = [
+        entry
+        for entry in _list_entries_for_window(db, trend_start, end, normalized_currency)
+        if not _is_internal_account_transfer(entry, account_entity_ids)
+    ]
     trend_month_keys = [_shift_month(start, -offset).strftime("%Y-%m") for offset in range(max(trend_months, 1) - 1, -1, -1)]
     monthly_rollup = {
         month_key: {

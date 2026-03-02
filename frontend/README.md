@@ -189,7 +189,8 @@ uv run python scripts/check_docs_sync.py
 - Accounts no longer expose `institution`/`type` fields in table rows or create/edit dialogs.
 - Properties create/edit flows are modal-driven for editable sections (`users`, `entities`, `tags`, and taxonomy terms); inline table-row create/edit forms are removed.
 - Frontend tests are now first-class (`vitest` + Testing Library) with coverage over agent activity helpers, run block rendering, review diff generation, and accounts/properties page integration flows.
-- Dashboard visualizations use Recharts, consume the backend-configured dashboard currency payload, and wait for measured card dimensions in `frontend/src/pages/DashboardPage.tsx` before mounting charts so route loads and tab switches avoid dev-time `-1 x -1` Recharts warnings.
+- Dashboard visualizations use Recharts, consume the backend-configured dashboard currency payload, exclude account-to-account transfer rows (account-category entities on both sides) from the displayed in/out analytics, and wait for measured card dimensions in `frontend/src/pages/DashboardPage.tsx` before mounting charts so route loads and tab switches avoid dev-time `-1 x -1` Recharts warnings.
+- `frontend/src/pages/EntriesPage.tsx` now renders a compact `from -> to` subtitle under each entry name, with matching `.entries-name-*` styles in `frontend/src/styles.css` to keep long source/destination labels readable in the dense table.
 
 ## Related Docs
 

@@ -365,6 +365,7 @@ Current baseline for `backend/tests/test_agent.py`: `52 passed`.
 - `/api/v1/groups` omits single-entry components so the read model focuses on linked groups
 - group topology mutations remain link-driven (`POST /entries/{entry_id}/links`, `DELETE /links/{link_id}`); no first-class group CRUD endpoints
 - dashboard API serves runtime-configured currency analytics payloads; entries in other currencies are excluded from that dashboard response
+- dashboard analytics also exclude internal transfers when both `from_entity_id` and `to_entity_id` map to account-category entities (including linked account entities), so KPI totals reflect external cash in/out only
 - new agent module boundaries reduce coupling and make it safer to add new model providers/change types
 - taxonomy defaults (`entity_category`, `tag_category`) are auto-provisioned by service logic when missing
 - tags now support optional `category` assignment via taxonomy terms while keeping existing tag APIs intact
