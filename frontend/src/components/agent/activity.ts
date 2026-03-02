@@ -10,10 +10,13 @@ interface RunActivityToolBatch {
   toolCalls: RunToolCall[];
 }
 
+export type ReasoningUpdateSource = "model_reasoning" | "assistant_content" | "tool_call";
+
 interface RunActivityReasoningUpdate {
   type: "reasoning_update";
   key: string;
   message: string;
+  source: ReasoningUpdateSource;
   createdAt: string;
 }
 
@@ -29,6 +32,7 @@ interface PendingAssistantReasoningUpdateActivity {
   type: "reasoning_update";
   key: string;
   message: string;
+  source: ReasoningUpdateSource;
 }
 
 export type PendingAssistantActivityItem = PendingAssistantToolBatchActivity | PendingAssistantReasoningUpdateActivity;
@@ -124,22 +128,35 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function extractIntermediateUpdateMessageFromToolCall(toolCall: RunToolCall): string | null {
+function extractIntermediateUpdateFromToolCall(toolCall: RunToolCall): { message: string; source: ReasoningUpdateSource } | null {
   if (toolCall.tool_name !== INTERMEDIATE_UPDATE_TOOL_NAME) {
     return null;
   }
   const outputJson = asRecord(toolCall.output_json);
+  const inputJson = asRecord(toolCall.input_json);
+
+  let message: string | null = null;
   const outputMessage = outputJson?.message;
   if (typeof outputMessage === "string" && outputMessage.trim()) {
-    return outputMessage.trim();
+    message = outputMessage.trim();
+  }
+  if (!message) {
+    const inputMessage = inputJson?.message;
+    if (typeof inputMessage === "string" && inputMessage.trim()) {
+      message = inputMessage.trim();
+    }
+  }
+  if (!message) {
+    return null;
   }
 
-  const inputJson = asRecord(toolCall.input_json);
-  const inputMessage = inputJson?.message;
-  if (typeof inputMessage === "string" && inputMessage.trim()) {
-    return inputMessage.trim();
-  }
-  return null;
+  const rawSource = (outputJson?.source ?? inputJson?.source) as string | undefined;
+  const source: ReasoningUpdateSource =
+    rawSource === "model_reasoning" || rawSource === "assistant_content" || rawSource === "tool_call"
+      ? rawSource
+      : "tool_call";
+
+  return { message, source };
 }
 
 function sortToolCallsByCreatedAt(toolCalls: RunToolCall[]): RunToolCall[] {
@@ -166,8 +183,8 @@ export function buildRunActivityTimeline(toolCalls: RunToolCall[]): RunActivityI
   };
 
   sortedCalls.forEach((toolCall) => {
-    const reasoningUpdate = extractIntermediateUpdateMessageFromToolCall(toolCall);
-    if (!reasoningUpdate) {
+    const update = extractIntermediateUpdateFromToolCall(toolCall);
+    if (!update) {
       pendingBatch.push(toolCall);
       return;
     }
@@ -175,7 +192,8 @@ export function buildRunActivityTimeline(toolCalls: RunToolCall[]): RunActivityI
     timeline.push({
       type: "reasoning_update",
       key: toolCall.id,
-      message: reasoningUpdate,
+      message: update.message,
+      source: update.source,
       createdAt: toolCall.created_at
     });
   });
@@ -211,7 +229,8 @@ export function appendPendingToolCallToActivity(
 
 export function appendPendingReasoningUpdateToActivity(
   activity: PendingAssistantActivityItem[],
-  message: string
+  message: string,
+  source: ReasoningUpdateSource = "tool_call"
 ): PendingAssistantActivityItem[] {
   const normalized = message.trim();
   if (!normalized) {
@@ -222,7 +241,51 @@ export function appendPendingReasoningUpdateToActivity(
     {
       type: "reasoning_update",
       key: `reasoning-update-${activity.length + 1}-${Date.now()}`,
-      message: normalized
+      message: normalized,
+      source
     }
   ];
+}
+
+export function summarizeActivityTimeline(items: RunActivityItem[]): string {
+  let toolCount = 0;
+  let updateCount = 0;
+  items.forEach((item) => {
+    if (item.type === "tool_batch") {
+      toolCount += item.toolCalls.length;
+    } else {
+      updateCount += 1;
+    }
+  });
+  const parts: string[] = [];
+  if (toolCount > 0) {
+    parts.push(`${toolCount} tool call${toolCount === 1 ? "" : "s"}`);
+  }
+  if (updateCount > 0) {
+    parts.push(`${updateCount} update${updateCount === 1 ? "" : "s"}`);
+  }
+  return parts.join(", ") || "Activity";
+}
+
+function firstLinePreview(text: string, maxLength: number = 80): string {
+  const firstLine = text.split("\n")[0].replace(/^#+\s*/, "").trim();
+  if (firstLine.length <= maxLength) {
+    return firstLine;
+  }
+  return `${firstLine.slice(0, maxLength)}…`;
+}
+
+export function reasoningUpdatePreview(message: string): string {
+  return firstLinePreview(message);
+}
+
+export function reasoningSourceLabel(source: ReasoningUpdateSource): string {
+  switch (source) {
+    case "model_reasoning":
+      return "Reasoning";
+    case "assistant_content":
+      return "Assistant";
+    case "tool_call":
+      return "Update";
+  }
 }

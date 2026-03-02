@@ -38,7 +38,7 @@ describe("AgentRunBlock", () => {
 
     render(<AgentRunBlock run={run} isMutating={false} onReviewRun={() => undefined} mode="activity" />);
 
-    expect(screen.getByText("Validating candidate entries")).toBeInTheDocument();
+    expect(screen.getAllByText("Validating candidate entries").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("1 tool call")).toBeInTheDocument();
   });
 
@@ -58,7 +58,10 @@ describe("AgentRunBlock", () => {
 
     render(<AgentRunBlock run={run} isMutating={false} onReviewRun={() => undefined} mode="activity" />);
 
-    await userEvent.click(screen.getByText("1 tool call"));
+    // Open root-level activity collapsible, then tool batch, then individual tool call
+    const toolCallLabels = screen.getAllByText("1 tool call");
+    await userEvent.click(toolCallLabels[0]);
+    await userEvent.click(toolCallLabels[1]);
     await userEvent.click(screen.getByText("list_entries"));
 
     expect(screen.getByText("Model-visible tool result")).toBeInTheDocument();

@@ -1009,8 +1009,16 @@
     @apply w-full px-6 py-4;
   }
 
+  .agent-timeline-scroll-wrapper {
+    @apply relative flex min-h-0 flex-1 flex-col;
+  }
+
   .agent-timeline-scroll {
     @apply flex min-h-0 flex-col gap-3 overflow-y-auto pr-1;
+  }
+
+  .agent-scroll-to-bottom {
+    @apply absolute bottom-2 left-1/2 z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md transition-colors hover:bg-muted hover:text-foreground;
   }
 
   .agent-message {
@@ -1176,8 +1184,70 @@
     @apply grid gap-2;
   }
 
+  .agent-run-root-activity {
+    @apply rounded-md border border-border/75 bg-muted/20;
+  }
+
+  .agent-run-root-activity > summary {
+    @apply flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-muted/60;
+    list-style: none;
+  }
+
+  .agent-run-root-activity > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .agent-run-root-activity[open] > summary .agent-tool-call-chevron {
+    transform: rotate(90deg);
+  }
+
+  .agent-run-root-activity-static {
+    @apply overflow-hidden;
+  }
+
+  .agent-run-root-activity > .agent-run-activity-timeline {
+    @apply px-2 pb-2;
+  }
+
+  .agent-reasoning-update-collapsible {
+    @apply rounded-md border border-border/75 bg-muted/25;
+  }
+
+  .agent-reasoning-update-collapsible > summary {
+    @apply flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs leading-5 text-muted-foreground transition-colors hover:bg-muted/40;
+    list-style: none;
+  }
+
+  .agent-reasoning-update-collapsible > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .agent-reasoning-update-collapsible[open] > summary .agent-tool-call-chevron {
+    transform: rotate(90deg);
+  }
+
+  .agent-reasoning-update-collapsible[open] > summary .agent-reasoning-update-preview {
+    display: none;
+  }
+
+  .agent-reasoning-update-label {
+    @apply font-medium text-muted-foreground/80 select-none;
+  }
+
+  .agent-reasoning-update-preview {
+    @apply truncate;
+  }
+
+  .agent-reasoning-update-collapsible > .agent-run-reasoning-update {
+    @apply mx-2.5 mb-2 mt-0 rounded-md border-0 bg-transparent px-0 py-0;
+  }
+
   .agent-run-reasoning-update {
     @apply m-0 rounded-md border border-border/75 bg-muted/25 px-2.5 py-1.5 text-xs leading-5 text-muted-foreground;
+  }
+
+  .agent-run-reasoning-update.agent-markdown {
+    @apply gap-1 text-xs leading-5 text-muted-foreground;
   }
 
   .agent-tool-call-group {

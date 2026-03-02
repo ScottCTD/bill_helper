@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { FileText } from "lucide-react";
+import { ArrowDown, FileText } from "lucide-react";
 
 import { withApiBase } from "../../../lib/api";
 import type { AgentMessage, AgentRun } from "../../../lib/types";
@@ -24,6 +24,8 @@ interface AgentTimelineProps {
   isMutating: boolean;
   pendingOptimisticActivityCount: number;
   onReviewRun: (runId: string | null) => void;
+  isAtBottom: boolean;
+  scrollToBottom: () => void;
 }
 
 export function AgentTimeline(props: AgentTimelineProps) {
@@ -41,7 +43,9 @@ export function AgentTimeline(props: AgentTimelineProps) {
     pendingRunAttachedToOptimisticMessage,
     isMutating,
     pendingOptimisticActivityCount,
-    onReviewRun
+    onReviewRun,
+    isAtBottom,
+    scrollToBottom
   } = props;
 
   function isImageMimeType(mimeType: string): boolean {
@@ -56,7 +60,8 @@ export function AgentTimeline(props: AgentTimelineProps) {
       {errorMessage ? <p className="error">{errorMessage}</p> : null}
 
       {selectedThreadId ? (
-        <div className="agent-timeline-scroll" ref={timelineScrollRef}>
+        <div className="agent-timeline-scroll-wrapper">
+          <div className="agent-timeline-scroll" ref={timelineScrollRef}>
           {(messages ?? []).map((message) => {
             const isAssistant = message.role === "assistant";
             const isUser = message.role === "user";
@@ -194,6 +199,17 @@ export function AgentTimeline(props: AgentTimelineProps) {
               </article>
             );
           })}
+          </div>
+          {!isAtBottom ? (
+            <button
+              type="button"
+              className="agent-scroll-to-bottom"
+              onClick={scrollToBottom}
+              aria-label="Scroll to bottom"
+            >
+              <ArrowDown className="h-4 w-4" />
+            </button>
+          ) : null}
         </div>
       ) : null}
     </>

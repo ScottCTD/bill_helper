@@ -61,12 +61,22 @@ class EmptyArgs(BaseModel):
 
 
 class SendIntermediateUpdateArgs(BaseModel):
-    message: str = Field(min_length=1, max_length=400)
+    message: str = Field(
+        min_length=1,
+        max_length=400,
+        description=(
+            "A short, user-visible progress note. Use plain text or inline markdown "
+            "(e.g. **bold**, `code`, *italic*) for emphasis when helpful."
+        ),
+    )
 
     @field_validator("message")
     @classmethod
     def normalize_message(cls, value: str) -> str:
-        return _normalize_required_text(value)
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("value cannot be empty")
+        return normalized
 
 
 def _normalize_loose_text(value: str | None) -> str | None:
@@ -1392,7 +1402,8 @@ TOOLS: dict[str, AgentToolDefinition] = {
     INTERMEDIATE_UPDATE_TOOL_NAME: AgentToolDefinition(
         name=INTERMEDIATE_UPDATE_TOOL_NAME,
         description=(
-            "Share a brief, user-visible progress update. If a task needs tool calls, call this first "
+            "Share a brief, user-visible progress update (supports markdown). "
+            "If a task needs tool calls, call this first "
             "to describe what you are about to do before other tools. Then use sparingly for meaningful "
             "transitions between distinct tool-call batches; do not call this on every step."
         ),

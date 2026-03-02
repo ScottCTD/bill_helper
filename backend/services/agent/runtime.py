@@ -231,6 +231,18 @@ def _extract_reasoning_update_message(tool_call: AgentToolCall) -> str | None:
     return None
 
 
+def _extract_reasoning_update_source(tool_call: AgentToolCall) -> str:
+    output_json = tool_call.output_json if isinstance(tool_call.output_json, dict) else {}
+    source = output_json.get("source")
+    if isinstance(source, str) and source:
+        return source
+    input_json = tool_call.input_json if isinstance(tool_call.input_json, dict) else {}
+    source = input_json.get("source")
+    if isinstance(source, str) and source:
+        return source
+    return "tool_call"
+
+
 def _normalize_intermediate_update_message(message: str) -> str | None:
     normalized = message.strip()
     return normalized or None
@@ -241,6 +253,7 @@ def _record_assistant_intermediate_update(
     *,
     run: AgentRun,
     message: str,
+    source: str = "assistant_content",
 ) -> AgentToolCall | None:
     normalized_message = _normalize_intermediate_update_message(message)
     if normalized_message is None:
@@ -251,11 +264,11 @@ def _record_assistant_intermediate_update(
         tool_name=INTERMEDIATE_UPDATE_TOOL_NAME,
         input_json={
             "message": normalized_message,
-            "source": "assistant_content",
+            "source": source,
         },
         output_json={
             "message": normalized_message,
-            "source": "assistant_content",
+            "source": source,
         },
         output_text=f"OK: {normalized_message}",
         status=AgentToolCallStatus.OK,
@@ -389,6 +402,15 @@ def _execute_agent_run(
 
             tool_calls = assistant_message.get("tool_calls") or []
             assistant_content = assistant_message.get("content") or ""
+            model_reasoning = (assistant_message.get("reasoning") or "").strip()
+
+            if model_reasoning:
+                _record_assistant_intermediate_update(
+                    db,
+                    run=run,
+                    message=model_reasoning,
+                    source="model_reasoning",
+                )
 
             if tool_calls:
                 llm_messages.append(
@@ -547,6 +569,24 @@ def _execute_agent_run_stream(
 
             tool_calls = assistant_message.get("tool_calls") or []
             assistant_content = assistant_message.get("content") or ""
+            model_reasoning = (assistant_message.get("reasoning") or "").strip()
+
+            if model_reasoning:
+                reasoning_row = _record_assistant_intermediate_update(
+                    db,
+                    run=run,
+                    message=model_reasoning,
+                    source="model_reasoning",
+                )
+                if reasoning_row is not None:
+                    reasoning_msg = _extract_reasoning_update_message(reasoning_row)
+                    if reasoning_msg is not None:
+                        yield {
+                            "type": "reasoning_update",
+                            "run_id": run.id,
+                            "message": reasoning_msg,
+                            "source": "model_reasoning",
+                        }
 
             if tool_calls:
                 llm_messages.append(
@@ -568,6 +608,7 @@ def _execute_agent_run_stream(
                             "type": "reasoning_update",
                             "run_id": run.id,
                             "message": reasoning_update_message,
+                            "source": "assistant_content",
                         }
                 for tool_call in tool_calls:
                     if _run_is_stopped(db, run):
@@ -589,6 +630,7 @@ def _execute_agent_run_stream(
                             "type": "reasoning_update",
                             "run_id": run.id,
                             "message": reasoning_update_message,
+                            "source": _extract_reasoning_update_source(recorded_tool_call.persisted_row),
                         }
                     else:
                         yield {

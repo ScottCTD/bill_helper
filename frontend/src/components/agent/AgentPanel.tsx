@@ -36,6 +36,7 @@ import { AgentAttachmentPreviewDialog } from "./panel/AgentAttachmentPreviewDial
 import { AgentThreadList } from "./panel/AgentThreadList";
 import { AgentThreadUsageBar } from "./panel/AgentThreadUsageBar";
 import { AgentTimeline } from "./panel/AgentTimeline";
+import { useStickToBottom } from "./panel/useStickToBottom";
 import { useAgentDraftAttachments } from "./panel/useAgentDraftAttachments";
 import {
   COMPOSER_TEXTAREA_MAX_HEIGHT_PX,
@@ -62,6 +63,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [reviewRunId, setReviewRunId] = useState<string | null>(null);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+  const { isAtBottom, scrollToBottom, snapToBottom } = useStickToBottom(timelineScrollRef);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
   const attachmentState = useAgentDraftAttachments({ setActionError });
@@ -128,13 +130,19 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   }, [isOpen, selectedThreadId, threadsQuery.data]);
 
   const threadMessages = threadQuery.data?.messages;
+  const lastSnappedThreadRef = useRef("");
+
+  // Snap to bottom when messages first arrive for a new thread
   useEffect(() => {
-    const timeline = timelineScrollRef.current;
-    if (!timeline) {
+    if (!selectedThreadId || !threadMessages) {
       return;
     }
-    timeline.scrollTop = timeline.scrollHeight;
-  }, [selectedThreadId, threadMessages]);
+    if (lastSnappedThreadRef.current === selectedThreadId) {
+      return;
+    }
+    lastSnappedThreadRef.current = selectedThreadId;
+    requestAnimationFrame(() => snapToBottom());
+  }, [selectedThreadId, threadMessages, snapToBottom]);
 
   useEffect(() => {
     autoSizeComposerTextarea();
@@ -422,7 +430,12 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       });
       return;
     }
-    if (eventType === "reasoning_update") {
+    if (eventType === "reasoning_update" || eventType === "reasoning") {
+      const source = (streamEvent as Record<string, unknown>).source as string | undefined;
+      const normalizedSource =
+        source === "model_reasoning" || source === "assistant_content" || source === "tool_call"
+          ? source
+          : "tool_call";
       setPendingAssistantMessage((current) => {
         if (!current || current.threadId !== threadId) {
           return current;
@@ -431,7 +444,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
           ...current,
           runId: current.runId || streamEvent.run_id || null,
           content: "",
-          activity: appendPendingReasoningUpdateToActivity(current.activity, String(streamEvent.message || ""))
+          activity: appendPendingReasoningUpdateToActivity(current.activity, String(streamEvent.message || ""), normalizedSource)
         };
       });
       return;
@@ -507,6 +520,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       setDraftMessage("");
       setDraftFiles([]);
       setPreviewAttachmentId(null);
+      snapToBottom();
 
       await streamAgentMessage({
         threadId,
@@ -688,6 +702,8 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               isMutating={isMutating}
               pendingOptimisticActivityCount={pendingOptimisticActivity.length}
               onReviewRun={setReviewRunId}
+              isAtBottom={isAtBottom}
+              scrollToBottom={scrollToBottom}
             />
 
             <AgentThreadUsageBar selectedThreadId={selectedThreadId} totals={threadUsageTotals} />

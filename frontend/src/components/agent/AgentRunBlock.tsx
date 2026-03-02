@@ -5,11 +5,16 @@ import type { AgentRun } from "../../lib/types";
 import { cn } from "../../lib/utils";
 import {
   buildRunActivityTimeline,
+  reasoningSourceLabel,
+  reasoningUpdatePreview,
+  summarizeActivityTimeline,
   summarizeRunChangeTypes,
   type PendingAssistantActivityItem,
+  type ReasoningUpdateSource,
   type RunToolCall
 } from "./activity";
 import { Button } from "../ui/button";
+import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 
 interface AgentRunBlockProps {
   run: AgentRun;
@@ -89,19 +94,48 @@ function ToolCallBatchGroup({
   );
 }
 
+function CollapsibleReasoningUpdate({ message, source, defaultOpen }: { message: string; source: ReasoningUpdateSource; defaultOpen?: boolean }) {
+  const label = reasoningSourceLabel(source);
+  return (
+    <details className="agent-reasoning-update-collapsible" open={defaultOpen}>
+      <summary>
+        <ChevronRight className="agent-tool-call-chevron" />
+        <span className="agent-reasoning-update-label">{label}</span>
+        <span className="agent-reasoning-update-preview">{reasoningUpdatePreview(message)}</span>
+      </summary>
+      <MarkdownRenderer markdown={message} className="agent-run-reasoning-update" />
+    </details>
+  );
+}
+
 export function PendingAssistantActivityBlock({ activity }: { activity: PendingAssistantActivityItem[] }) {
   if (activity.length === 0) {
     return null;
   }
+  const toolCount = activity.reduce((sum, item) => sum + (item.type === "tool_batch" ? item.toolNames.length : 0), 0);
+  const updateCount = activity.filter((item) => item.type === "reasoning_update").length;
+  const summaryParts: string[] = [];
+  if (toolCount > 0) {
+    summaryParts.push(`${toolCount} tool call${toolCount === 1 ? "" : "s"}`);
+  }
+  if (updateCount > 0) {
+    summaryParts.push(`${updateCount} update${updateCount === 1 ? "" : "s"}`);
+  }
+  const summaryLabel = summaryParts.join(", ") || "Working…";
+
   return (
-    <div className="agent-run-tools">
+    <details className="agent-run-root-activity agent-run-root-activity-static" open>
+      <summary>
+        <ChevronRight className="agent-tool-call-chevron" />
+        <span className="agent-tool-call-group-label">{summaryLabel}</span>
+        <span className="agent-tool-call-status">live</span>
+      </summary>
       <div className="agent-run-activity-timeline">
-        {activity.map((item) => {
+        {activity.map((item, index) => {
+          const isLast = index === activity.length - 1;
           if (item.type === "reasoning_update") {
             return (
-              <p key={item.key} className="agent-run-reasoning-update">
-                {item.message}
-              </p>
+              <CollapsibleReasoningUpdate key={item.key} message={item.message} source={item.source} defaultOpen={isLast} />
             );
           }
           return (
@@ -113,8 +147,8 @@ export function PendingAssistantActivityBlock({ activity }: { activity: PendingA
                 </span>
               </summary>
               <ul className="agent-tool-call-list">
-                {item.toolNames.map((toolName, index) => (
-                  <li key={`${item.key}-${toolName}-${index}`}>
+                {item.toolNames.map((toolName, toolIndex) => (
+                  <li key={`${item.key}-${toolName}-${toolIndex}`}>
                     <details className="agent-tool-call agent-tool-call-static" open>
                       <summary>
                         <ChevronRight className="agent-tool-call-chevron" />
@@ -133,7 +167,7 @@ export function PendingAssistantActivityBlock({ activity }: { activity: PendingA
           );
         })}
       </div>
-    </div>
+    </details>
   );
 }
 
@@ -146,7 +180,7 @@ export function AgentRunBlock({ run, isMutating, onReviewRun, mode = "all" }: Ag
   const failedCount = run.change_items.filter((item) => item.status === "APPLY_FAILED").length;
   const typeSummary = summarizeRunChangeTypes(run.change_items);
   const activityTimeline = useMemo(() => buildRunActivityTimeline(run.tool_calls), [run.tool_calls]);
-  const showInterleavedTimeline = activityTimeline.some((item) => item.type === "reasoning_update");
+  const activitySummaryLabel = useMemo(() => summarizeActivityTimeline(activityTimeline), [activityTimeline]);
   const isRunning = run.status === "running";
 
   if (!hasActivityContent && !hasSummaryChanges) {
@@ -160,26 +194,25 @@ export function AgentRunBlock({ run, isMutating, onReviewRun, mode = "all" }: Ag
           {run.error_text ? <p className="error">{run.error_text}</p> : null}
 
           {run.tool_calls.length > 0 ? (
-            <div className="agent-run-tools">
-              {showInterleavedTimeline ? (
-                <div className="agent-run-activity-timeline">
-                  {activityTimeline.map((item) => {
-                    if (item.type === "reasoning_update") {
-                      return (
-                        <p key={item.key} className="agent-run-reasoning-update">
-                          {item.message}
-                        </p>
-                      );
-                    }
+            <details className={cn("agent-run-root-activity", isRunning && "agent-run-root-activity-static")} open={isRunning}>
+              <summary>
+                <ChevronRight className="agent-tool-call-chevron" />
+                <span className="agent-tool-call-group-label">{activitySummaryLabel}</span>
+                {isRunning ? <span className="agent-tool-call-status">live</span> : null}
+              </summary>
+              <div className="agent-run-activity-timeline">
+                {activityTimeline.map((item) => {
+                  if (item.type === "reasoning_update") {
                     return (
-                      <ToolCallBatchGroup key={item.key} toolCalls={item.toolCalls} isRunning={isRunning} />
+                      <CollapsibleReasoningUpdate key={item.key} message={item.message} source={item.source} />
                     );
-                  })}
-                </div>
-              ) : (
-                <ToolCallBatchGroup toolCalls={run.tool_calls} isRunning={isRunning} />
-              )}
-            </div>
+                  }
+                  return (
+                    <ToolCallBatchGroup key={item.key} toolCalls={item.toolCalls} isRunning={isRunning} />
+                  );
+                })}
+              </div>
+            </details>
           ) : null}
         </>
       ) : null}

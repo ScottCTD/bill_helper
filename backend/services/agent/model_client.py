@@ -340,7 +340,6 @@ class LiteLLMModelClient:
             "messages": messages,
             "tools": self._tools,
             "tool_choice": "auto",
-            "temperature": 0.1,
         }
         if _supports_prompt_caching(self._model_name):
             injection_points = _cache_injection_points_for_messages(messages)
@@ -465,6 +464,7 @@ class LiteLLMModelClient:
 
         emitted_content = ""
         final_content = ""
+        reasoning_content = ""
         usage_totals: dict[str, int | None] = {
             "input_tokens": None,
             "output_tokens": None,
@@ -514,6 +514,12 @@ class LiteLLMModelClient:
                                 continue
 
                             content_delta = _coerce_text(_read_attr(delta, "content"))
+                            reasoning_delta = (
+                                _coerce_text(_read_attr(delta, "reasoning_content"))
+                                or _coerce_text(_read_attr(delta, "reasoning"))
+                            )
+                            if reasoning_delta is not None:
+                                reasoning_content = f"{reasoning_content}{reasoning_delta}"
                             if content_delta is not None:
                                 attempt_content = f"{attempt_content}{content_delta}"
                                 if attempt_content.startswith(emitted_content):
@@ -583,5 +589,6 @@ class LiteLLMModelClient:
                 "content": final_content,
                 "tool_calls": tool_calls,
                 "usage": usage_totals,
+                "reasoning": reasoning_content,
             },
         }
