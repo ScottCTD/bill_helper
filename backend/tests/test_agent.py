@@ -1590,6 +1590,70 @@ def test_update_entry_selector_ambiguity_is_reported_to_agent(client, monkeypatc
     assert "ambiguous selector" in tool_output["summary"]
 
 
+def test_update_entry_accepts_stringified_selector_and_patch(client, monkeypatch):
+    create_response = client.post(
+        "/api/v1/entries",
+        json={
+            "kind": "EXPENSE",
+            "occurred_at": "2025-12-26",
+            "name": "Uniqlo Canada",
+            "amount_minor": 5900,
+            "currency_code": "CAD",
+            "from_entity": "Main Checking",
+            "to_entity": "Uniqlo Canada",
+            "tags": ["shopping"],
+        },
+    )
+    create_response.raise_for_status()
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Update proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_update_entry_stringified",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_entry",
+                        "arguments": json.dumps(
+                            {
+                                "selector": json.dumps(
+                                    {
+                                        "date": "2025-12-26",
+                                        "amount_minor": 5900,
+                                        "from_entity": "Main Checking",
+                                        "to_entity": "Uniqlo Canada",
+                                        "name": "Uniqlo Canada",
+                                    }
+                                ),
+                                "patch": json.dumps(
+                                    {
+                                        "name": "Uniqlo",
+                                    }
+                                ),
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Normalize the Uniqlo entry name")
+
+    assert run["status"] == "completed"
+    assert len(run["change_items"]) == 1
+    assert run["change_items"][0]["change_type"] == "update_entry"
+    assert run["change_items"][0]["status"] == "PENDING_REVIEW"
+    assert run["change_items"][0]["payload_json"]["selector"]["name"] == "Uniqlo Canada"
+    assert run["change_items"][0]["payload_json"]["patch"]["name"] == "Uniqlo"
+    assert run["tool_calls"][0]["output_json"]["status"] == "OK"
+
+
 def test_reviewed_items_are_injected_into_followup_turn(client, monkeypatch):
     def first_model(messages):
         if messages[-1]["role"] == "tool":

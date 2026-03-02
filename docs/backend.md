@@ -179,6 +179,7 @@ Agent services:
   - read tools: `list_entries`, `list_tags`, `list_entities`, `get_dashboard_summary`
   - progress tool: `send_intermediate_update` (brief user-visible intermediate reasoning/progress note; first tool call when tool work is needed)
   - entry proposal tools include explicit `markdown_notes` style guidance for human-readable, information-complete markdown
+  - entry update/delete arg validation tolerates nested JSON-object strings for selector/patch and normalizes them before schema validation
   - `list_entries` is the single entry query tool (date/name/from/to/tags/kind; exact-first then fuzzy ranking)
   - `list_tags` / `list_entities` support name+category query and include category in outputs
   - proposal tools cover CRUD:

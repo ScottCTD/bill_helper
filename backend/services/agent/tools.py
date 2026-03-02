@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date as DateValue
+import json
 from typing import Any, Callable
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
@@ -91,6 +92,19 @@ def _normalize_required_text(value: str) -> str:
     if normalized is None:
         raise ValueError("value cannot be empty")
     return normalized
+
+
+def _normalize_object_json_string(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    candidate = value.strip()
+    if not candidate or not (candidate.startswith("{") and candidate.endswith("}")):
+        return value
+    try:
+        decoded = json.loads(candidate)
+    except (TypeError, ValueError):
+        return value
+    return decoded if isinstance(decoded, dict) else value
 
 
 def _normalize_optional_category(value: str | None) -> str | None:
@@ -388,9 +402,28 @@ class ProposeUpdateEntryArgs(BaseModel):
     selector: EntrySelectorArgs
     patch: EntryPatchArgs
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_nested_object_args(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        normalized["selector"] = _normalize_object_json_string(normalized.get("selector"))
+        normalized["patch"] = _normalize_object_json_string(normalized.get("patch"))
+        return normalized
+
 
 class ProposeDeleteEntryArgs(BaseModel):
     selector: EntrySelectorArgs
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_nested_object_args(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        normalized["selector"] = _normalize_object_json_string(normalized.get("selector"))
+        return normalized
 
 
 class UpdatePendingProposalArgs(BaseModel):

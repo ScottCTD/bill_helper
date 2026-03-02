@@ -104,6 +104,7 @@ uv run python scripts/check_docs_sync.py
 - Entry groups are derived from entry-link connected components; `/groups` is read-model only (no group create/update/delete endpoints).
 - `GET /api/v1/groups` omits singleton components (`entry_count < 2`) to focus on linked groups.
 - Agent tool contracts are name/selector-based (no domain IDs in model-facing arguments/outputs).
+- Entry selector/patch tool args are resilient to accidental nested JSON-object string encoding and normalize to objects before validation.
 - Agent emits progress notes via `send_intermediate_update`; when a run needs tool calls, prompt policy requires it as the first tool call, and runtime streams successful calls as `reasoning_update` SSE events.
 - Entry create proposals can omit currency and fall back to the resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
 - Proposal tool outputs include `proposal_id` + `proposal_short_id` for follow-up reference in later turns.

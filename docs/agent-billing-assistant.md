@@ -401,14 +401,14 @@ Proposal tools create `AgentChangeItem` rows with status `PENDING_REVIEW`. They 
 
 #### `propose_update_entry`
 
-**Description:** Create a review-gated proposal to update an existing entry selected by date/amount/name/from/to. If selector matches multiple entries, the tool reports ambiguity so the user can clarify. When `patch.markdown_notes` is provided, keep it human-readable markdown that preserves all relevant input details; for short notes, avoid headings and prefer clear line breaks plus ordered/unordered lists.
+**Description:** Create a review-gated proposal to update an existing entry selected by date/amount/name/from/to. If selector matches multiple entries, the tool reports ambiguity so the user can clarify. For robustness, the tool also accepts `selector`/`patch` when they arrive as JSON-object strings and normalizes them before validation. When `patch.markdown_notes` is provided, keep it human-readable markdown that preserves all relevant input details; for short notes, avoid headings and prefer clear line breaks plus ordered/unordered lists.
 
 **Arguments:**
 
 | Parameter | Type | Required | Constraints |
 |-----------|------|----------|-------------|
-| `selector` | object | yes | Exactly one match required |
-| `patch` | object | yes | At least one field |
+| `selector` | object | yes | Exactly one match required (`{"..."}` JSON-object string is also normalized) |
+| `patch` | object | yes | At least one field (`{"..."}` JSON-object string is also normalized) |
 
 **Selector fields:** `date` (string, ISO), `amount_minor` (integer, > 0), `from_entity` (string), `to_entity` (string), `name` (string).
 
