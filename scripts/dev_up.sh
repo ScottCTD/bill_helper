@@ -54,8 +54,13 @@ uv run alembic upgrade head
 
 echo "Checking whether demo seed is needed..."
 if uv run python -c "from backend.database import SessionLocal; from backend.services.bootstrap import should_seed_demo_data; db = SessionLocal(); should_seed = should_seed_demo_data(db); db.close(); raise SystemExit(0 if should_seed else 1)"; then
-  echo "No accounts found. Seeding demo data..."
-  uv run python scripts/seed_demo.py
+  if [[ -n "${BILL_HELPER_SEED_CREDIT_CSV:-}" ]]; then
+    echo "No accounts found. Seeding demo data from $BILL_HELPER_SEED_CREDIT_CSV..."
+    uv run python scripts/seed_demo.py "$BILL_HELPER_SEED_CREDIT_CSV"
+  else
+    echo "No accounts found but BILL_HELPER_SEED_CREDIT_CSV is not set. Skipping demo seed."
+    echo "To seed demo data, set BILL_HELPER_SEED_CREDIT_CSV to a credit-card CSV path and restart."
+  fi
 else
   echo "Existing accounts found. Skipping demo seed."
 fi

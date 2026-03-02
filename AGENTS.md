@@ -113,7 +113,7 @@ When asked to write a commit message for the current changes, use this format:
 
 ### Available skills
 
-- notion-grade-ui: Enforces a calm, content-first, Notion-like frontend system with tokenized styling, primitives-first implementation, subtle interactions, and accessibility checks. Use for any UI/page/component/layout/control changes in `frontend`. (file: `/path/to/bill_helper/skills/notion-grade-ui/SKILL.md`)
+- notion-grade-ui: Enforces a calm, content-first, Notion-like frontend system with tokenized styling, primitives-first implementation, subtle interactions, and accessibility checks. Use for any UI/page/component/layout/control changes in `frontend`. (file: `skills/notion-grade-ui/SKILL.md`)
 
 ### How to use skills
 

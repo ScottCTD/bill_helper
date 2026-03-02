@@ -26,7 +26,7 @@ Core app settings:
 - `API_PREFIX` (default `/api/v1`)
 - `DATABASE_URL` (default `sqlite:///./.data/bill_helper.db`)
 - `CORS_ORIGINS` (default `http://localhost:5173`)
-- `CURRENT_USER_NAME` (default `scott`)
+- `CURRENT_USER_NAME` (default `admin`)
 - `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` (default `America/Toronto`)
 - `DEFAULT_CURRENCY_CODE` (default `CAD`)
 - `DASHBOARD_CURRENCY_CODE` (default `CAD`)

@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     database_url: str = "sqlite:///./.data/bill_helper.db"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
-    current_user_name: str = "scott"
+    current_user_name: str = "admin"
     current_user_timezone: str = Field(
         default="America/Toronto",
         validation_alias=AliasChoices("CURRENT_USER_TIMEZONE", "BILL_HELPER_CURRENT_USER_TIMEZONE"),

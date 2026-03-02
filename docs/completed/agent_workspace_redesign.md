@@ -119,20 +119,20 @@ Backend additions (planned, nullable for backward compatibility):
 
 Frontend:
 
-- `/path/to/bill_helper/frontend/src/components/agent/AgentPanel.tsx`
-- `/path/to/bill_helper/frontend/src/styles.css`
-- `/path/to/bill_helper/frontend/src/lib/types.ts`
-- `/path/to/bill_helper/frontend/src/lib/api.ts` (if response parsing/type guards need updates)
-- optional markdown rendering helper under `/path/to/bill_helper/frontend/src/components/ui/` or existing markdown component reuse
+- `frontend/src/components/agent/AgentPanel.tsx`
+- `frontend/src/styles.css`
+- `frontend/src/lib/types.ts`
+- `frontend/src/lib/api.ts` (if response parsing/type guards need updates)
+- optional markdown rendering helper under `frontend/src/components/ui/` or existing markdown component reuse
 
 Backend (only for usage footnote support):
 
-- `/path/to/bill_helper/backend/models.py`
-- `/path/to/bill_helper/backend/schemas.py`
-- `/path/to/bill_helper/backend/services/agent/model_client.py`
-- `/path/to/bill_helper/backend/services/agent/runtime.py`
-- `/path/to/bill_helper/backend/services/agent/serializers.py`
-- migration file under `/path/to/bill_helper/backend/alembic/versions/` if schema columns are introduced
+- `backend/models.py`
+- `backend/schemas.py`
+- `backend/services/agent/model_client.py`
+- `backend/services/agent/runtime.py`
+- `backend/services/agent/serializers.py`
+- migration file under `backend/alembic/versions/` if schema columns are introduced
 
 ## Operational Impact
 

@@ -174,7 +174,7 @@ def test_entry_defaults_owner_to_current_user(client):
     account_id = create_account(client)
     entry = create_entry(client, account_id, "Default owner")
 
-    assert entry["owner"] == "scott"
+    assert entry["owner"] == "admin"
     assert entry["owner_user_id"] is not None
 
     users_response = client.get("/api/v1/users")
@@ -183,7 +183,7 @@ def test_entry_defaults_owner_to_current_user(client):
 
     current_users = [user for user in users if user["is_current_user"]]
     assert len(current_users) == 1
-    assert current_users[0]["name"] == "scott"
+    assert current_users[0]["name"] == "admin"
 
 
 def test_entry_accepts_entity_ids_and_owner_user_id(client):
@@ -217,7 +217,7 @@ def test_entry_accepts_entity_ids_and_owner_user_id(client):
     assert payload["owner_user_id"] == owner_user["id"]
     assert payload["from_entity"] == "Main Checking"
     assert payload["to_entity"] == "Coffee Shop"
-    assert payload["owner"] == "scott"
+    assert payload["owner"] == "admin"
 
     tags_response = client.get("/api/v1/tags")
     tags_response.raise_for_status()

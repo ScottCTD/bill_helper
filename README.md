@@ -216,12 +216,11 @@ uv run python scripts/seed_demo.py
 
 Seed behavior:
 
-- `scripts/seed_demo.py` resets the local database and reseeds it for user `scott`.
+- `scripts/seed_demo.py` resets the local database and reseeds it with an `admin` user profile.
 - after table recreation, it stamps Alembic revision metadata to `head` so subsequent `alembic upgrade head` runs stay idempotent
-- Creates two accounts: `Demo Debit` and `Demo Credit`.
+- Creates two demo accounts: `Demo Debit` and `Demo Credit`.
 - Uses `CAD` as the entry currency default and configures supported defaults as `CAD`, `USD`, `CNY`.
-- Imports credit-card entries from `BILL_HELPER_SEED_CREDIT_CSV`, defaulting to:
-  - `path/to/your/credit_card_export.csv`
+- Imports credit-card entries from a CSV path passed as a CLI argument (or `BILL_HELPER_SEED_CREDIT_CSV` env var).
 - Derives entry counterparties (`entities`) from CSV transaction descriptions.
 - Derives clean tag names from CSV fields and writes semantic tag categories via taxonomy (`tag_category`), including `transaction_type`, `merchant`, `channel`, `location`, and `payment`.
 

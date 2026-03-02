@@ -229,3 +229,6 @@ logs/
 
 # OS files
 .DS_Store
+
+# project specific
+notebooks/

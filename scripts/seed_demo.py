@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import csv
 import os
 import re
+import sys
 from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
@@ -20,8 +22,6 @@ from backend.services.entries import normalize_tag_name, set_entry_tags
 from backend.services.groups import assign_initial_group
 from backend.services.taxonomy import assign_single_term_by_name
 from backend.services.users import get_or_create_user
-
-DEFAULT_CREDIT_CSV_PATH = "path/to/your/credit_card_export.csv"
 SUPPORTED_CURRENCIES = ("CAD", "USD", "CNY")
 DEFAULT_ENTRY_CURRENCY = "CAD"
 TAG_CATEGORY_TAXONOMY_KEY = "tag_category"
@@ -134,15 +134,15 @@ def _stamp_alembic_head() -> None:
     command.stamp(cfg, "head")
 
 
-def seed() -> None:
+def seed(csv_path: str) -> None:
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     _stamp_alembic_head()
 
-    csv_path = os.getenv("BILL_HELPER_SEED_CREDIT_CSV", DEFAULT_CREDIT_CSV_PATH)
     if not os.path.exists(csv_path):
         raise FileNotFoundError(
-            f"Credit CSV not found at {csv_path}. Set BILL_HELPER_SEED_CREDIT_CSV to a valid file path."
+            f"Credit CSV not found at {csv_path}. "
+            "Pass the CSV path as a positional argument or set BILL_HELPER_SEED_CREDIT_CSV."
         )
     credit_rows = _iter_credit_rows(csv_path)
 
@@ -152,20 +152,20 @@ def seed() -> None:
         if existing_accounts:
             raise RuntimeError("Database reset failed: accounts still present after drop/create.")
 
-        scott_user = get_or_create_user(db, "scott")
+        default_user = get_or_create_user(db, "admin")
 
         debit_entity = get_or_create_entity(db, "Demo Debit", category="account")
         credit_entity = get_or_create_entity(db, "Demo Credit", category="account")
 
         debit_account = Account(
-            owner_user_id=scott_user.id,
+            owner_user_id=default_user.id,
             entity_id=debit_entity.id,
             name=debit_entity.name,
             currency_code=DEFAULT_ENTRY_CURRENCY,
             is_active=True,
         )
         credit_account = Account(
-            owner_user_id=scott_user.id,
+            owner_user_id=default_user.id,
             entity_id=credit_entity.id,
             name=credit_entity.name,
             currency_code=DEFAULT_ENTRY_CURRENCY,
@@ -201,10 +201,10 @@ def seed() -> None:
                 currency_code=DEFAULT_ENTRY_CURRENCY,
                 from_entity_id=from_entity.id,
                 to_entity_id=to_entity.id,
-                owner_user_id=scott_user.id,
+                owner_user_id=default_user.id,
                 from_entity=from_entity.name,
                 to_entity=to_entity.name,
-                owner=scott_user.name,
+                owner=default_user.name,
                 markdown_body=(
                     f"Imported from statement CSV. "
                     f"Sub-description: {sub_description or '(none)'}; "
@@ -237,7 +237,7 @@ def seed() -> None:
 
         db.commit()
         print(
-            "Database reseeded for scott. "
+            "Database reseeded. "
             f"Accounts: {debit_account.name}, {credit_account.name}. "
             f"Currencies configured: {', '.join(SUPPORTED_CURRENCIES)}. "
             f"Imported {len(credit_rows)} entries from {csv_path}."
@@ -246,5 +246,21 @@ def seed() -> None:
         db.close()
 
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Reseed demo database from a credit-card CSV export.")
+    parser.add_argument(
+        "csv_path",
+        nargs="?",
+        default=os.getenv("BILL_HELPER_SEED_CREDIT_CSV"),
+        help="Path to the credit-card CSV file (or set BILL_HELPER_SEED_CREDIT_CSV).",
+    )
+    args = parser.parse_args()
+    if not args.csv_path:
+        parser.error(
+            "CSV path is required. Pass it as a positional argument or set BILL_HELPER_SEED_CREDIT_CSV."
+        )
+    seed(args.csv_path)
+
+
 if __name__ == "__main__":
-    seed()
+    main()

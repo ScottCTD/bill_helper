@@ -106,7 +106,7 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
 
     current_user_name = (
         _normalize_optional_text(override.current_user_name) if override is not None else None
-    ) or _normalize_optional_text(defaults.current_user_name) or "scott"
+    ) or _normalize_optional_text(defaults.current_user_name) or "admin"
     user_memory = _normalize_optional_multiline_text(override.user_memory) if override is not None else None
     default_currency_code = (
         _normalize_optional_currency(override.default_currency_code) if override is not None else None

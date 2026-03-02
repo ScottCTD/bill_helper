@@ -110,7 +110,7 @@ def upgrade() -> None:
         if normalized_owner:
             ensure_user_id(normalized_owner)
 
-    current_user_name = "scott"
+    current_user_name = "admin"
     current_user_id = ensure_user_id(current_user_name)
 
     entry_rows = bind.execute(

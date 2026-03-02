@@ -324,7 +324,7 @@ def test_complete_includes_langfuse_metadata(monkeypatch):
     response = client.complete(
         [{"role": "user", "content": "hello"}],
         observability={
-            "user": "scott",
+            "user": "admin",
             "session_id": "thread-1",
             "trace": {
                 "trace_id": "run-1",
@@ -338,7 +338,7 @@ def test_complete_includes_langfuse_metadata(monkeypatch):
 
     metadata = captured_request.get("metadata")
     assert isinstance(metadata, dict)
-    assert metadata["trace_user_id"] == "scott"
+    assert metadata["trace_user_id"] == "admin"
     assert metadata["session_id"] == "thread-1"
     assert metadata["trace_id"] == "run-1"
     assert metadata["generation_name"] == "agent_turn"

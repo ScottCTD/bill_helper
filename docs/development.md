@@ -92,10 +92,10 @@ uv run python scripts/seed_demo.py
 
 Seed behavior:
 
-- Drops and recreates tables, then reseeds with a `scott` profile.
+- Drops and recreates tables, then reseeds with an `admin` profile.
 - Stamps Alembic revision metadata to `head` after table recreation so future `alembic upgrade head` runs stay idempotent.
-- Creates accounts `Demo Debit` and `Demo Credit`.
-- Imports demo credit transactions from CSV path `BILL_HELPER_SEED_CREDIT_CSV` (default `path/to/your/credit_card_export.csv`).
+- Creates demo accounts `Demo Debit` and `Demo Credit`.
+- Imports credit transactions from a CSV path passed as a CLI argument or `BILL_HELPER_SEED_CREDIT_CSV` env var.
 - Seeded entries default to `CAD`; currency defaults are `CAD`, `USD`, and `CNY`.
 - Entities are derived from CSV transaction descriptions.
 - Tag names are derived from CSV data, and tag `category` is assigned via taxonomy (`tag_category`) with values such as `transaction_type`, `merchant`, `channel`, `location`, and `payment`.
