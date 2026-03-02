@@ -19,24 +19,25 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | Runtime | `backend/services/agent/runtime.py` | Run lifecycle, bounded tool loop, persistence of tool calls and final assistant message |
 | Model client | `backend/services/agent/model_client.py` | LiteLLM adapter, tool wiring, retry-enabled model completion, explicit prompt-cache breakpoint injection (system + latest user anchors via negative index) for cache-capable models |
 | Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks (including duplicate enrichment via `propose_update_entry`), proposal ordering, explicit new entry/tag/entity specifications, canonical tag/entity normalization (including general tag examples and non-location/default anti-collision rules), error recovery, and current-user context section |
-| Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; parses PDF attachments to text via PyMuPDF (line-trimmed and internal-whitespace-normalized); when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` excerpts with truncation safeguards); prepends review outcomes before current user feedback in the latest user message |
+| Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; parses PDF attachments to text via PyMuPDF (line-trimmed and internal-whitespace-normalized); when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` from `markdown_body` with truncation safeguards); prepends review outcomes and interruption prefix before current user feedback in the latest user message |
 | Tools | `backend/services/agent/tools.py` | Read/progress/proposal tool schemas, pending-proposal mutation tool, validation, execution, tool-level retry |
 | Review/apply | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py` | Approval/rejection, apply handlers for proposed CRUD changes |
 | API router | `backend/routers/agent.py` | Threads/runs/send/review/attachment endpoints |
 
 ## Runtime Flow
 
-1. User sends message to `POST /api/v1/agent/threads/{thread_id}/messages`.
+1. User sends message to `POST /api/v1/agent/threads/{thread_id}/messages` (non-streaming) or `POST /api/v1/agent/threads/{thread_id}/messages/stream` (SSE streaming).
 2. Backend persists user message/attachments and creates run (`running`).
 3. Runtime builds model messages:
-   - system prompt (including current-user account context)
-   - current-user account context includes account markdown notes (`notes_markdown`) when present
+   - system prompt (including current-user account context; optional `## User Memory` when `user_memory` is set)
+   - current-user account context includes account markdown notes (`notes_markdown` from `markdown_body`) when present
    - thread message history
    - PDF attachments converted to normalized text via PyMuPDF (always)
    - PDF page images appended to multimodal payloads when model vision is supported
-   - for the latest user turn only, review outcomes (if any) prepended before that user feedback text
+   - for the latest user turn only: review outcomes (if any) and interruption prefix (if the previous run was interrupted) prepended before that user feedback text
 4. Runtime loops: model call → optional tool calls (including sparse `send_intermediate_update` progress notes) → tool results appended → repeat (bounded by `agent_max_steps`).
 5. Runtime persists final assistant message and marks run `completed` or `failed`.
+6. For streaming: SSE emits `reasoning_update` when `send_intermediate_update` is called or when the model emits assistant text in the same turn as tool calls. On client disconnect mid-stream, the run continues in the background.
 
 ## Thread Lifecycle Endpoints
 
@@ -47,6 +48,11 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
   - cascades DB removal of thread messages/runs/change items/review actions
   - removes persisted upload directories under `.data/agent_uploads/<message_id>/...`
 - `GET /api/v1/agent/threads/{thread_id}`: fetch full thread detail
+- `POST /api/v1/agent/threads/{thread_id}/messages`: send message and run agent (non-streaming)
+- `POST /api/v1/agent/threads/{thread_id}/messages/stream`: send message and run agent (SSE streaming)
+- `GET /api/v1/agent/runs/{run_id}`: fetch run detail
+- `POST /api/v1/agent/runs/{run_id}/interrupt`: interrupt a running agent
+- `GET /api/v1/agent/attachments/{attachment_id}`: fetch attachment file
 
 ## Configuration
 
@@ -79,7 +85,8 @@ The agent receives a markdown-structured system prompt at the start of each run.
 
 - `## Current Date (User Timezone: <IANA timezone>)` (runtime-generated; defaults to `America/Toronto`)
 - `## Rules` (sectioned policy groups)
-- `## Current User Context` (runtime-generated account summaries + optional account `notes_markdown` excerpts)
+- `## Current User Context` (runtime-generated account summaries + optional account `notes_markdown` from `markdown_body`)
+- `## User Memory` (optional; when `user_memory` is set via runtime settings—persistent user-provided background and preferences)
 
 ```markdown
 ## Identity
@@ -112,14 +119,19 @@ You are an expert in personal finance and accounting. You always call the right 
 ### New Proposal Specifications
 #### New Entry Specification
 - Ground all proposed fields in explicit source facts. Do not invent missing dates, amounts, counterparties, tags, or locations.
+- When assigning an entry name, do not simply copy the original source title. Instead, normalize the name to ensure it is readable, descriptive, and consistent with similar entries.
+  - MB-Bill payment - Toronto Hydro-Electric System -> Toronto Hydro Bill Payment
+  - FANTUAN DELIVERY BURNABY BC -> Fantuan Delivery
+  - OPENAI *CHATGPT SUBSCR -> OpenAI ChatGPT Subscription
+  - FARM BOY #29 TORONTO ON -> Farm Boy
 - For tools that include a markdown_notes field, write human-readable markdown notes that preserve all relevant
   details from the input. If the content is short, avoid headings. Keep notes clear with line breaks and
   ordered/unordered lists when they improve readability.
 
 #### New Tag Specification
 - Normalize new tags to canonical, general descriptors rather than specific names.
-- Prefer tags such as groceries, dining, transit, online, recurring, reimbursement, or daily.
-- Avoid tags that collide with entity names or merchant labels such as credit, loblaw, or heytea.
+- Common tags include grocery, dining, shopping, transportation, reimbursement, income, etc.
+- Avoid tags that collide with entities such as credit, loblaw, or heytea.
 - Do not include locations in tags unless the user explicitly asks for location-specific tagging.
 
 #### New Entity Specification
@@ -167,81 +179,41 @@ You are an expert in personal finance and accounting. You always call the right 
 
 All tools are defined in `backend/services/agent/tools.py` and exposed as OpenAI function schemas. Each tool returns plain-text `content` to the model.
 
-### Read Tools
+Proposal tools (`propose_*`, `update_pending_proposal`, `remove_pending_proposal`) create `AgentChangeItem` rows with status `PENDING_REVIEW`. They do not mutate domain data; changes apply only after human approval via approve/reject endpoints.
 
-#### `list_entries`
+### Entries
 
-**Description:** List/query entries by date, date range, name, from_entity, to_entity, tags, and kind. When name/from/to filters are present, exact matches are ranked higher than fuzzy matches. This tool is read-only and never mutates data.
+#### `list_entries` (read)
+
+**Description:** List/query entries by date, date range, name, from_entity, to_entity, tags, and kind. When name/from/to filters are present, exact matches are ranked higher than substring matches. This tool is read-only and never mutates data.
 
 **Arguments:**
 
 | Parameter | Type | Required | Default | Constraints |
 |-----------|------|----------|---------|-------------|
-| `date` | string (date) \| null | no | null | ISO date |
-| `start_date` | string (date) \| null | no | null | ISO date |
-| `end_date` | string (date) \| null | no | null | ISO date; must be ≥ start_date when both set |
+| `date` | string (date) \| null | no | null | ISO date, e.g. `"2026-03-02"` |
+| `start_date` | string (date) \| null | no | null | ISO date, e.g. `"2026-03-01"` |
+| `end_date` | string (date) \| null | no | null | ISO date, e.g. `"2026-03-31"`; must be ≥ start_date when both set |
 | `name` | string \| null | no | null | substring filter |
 | `from_entity` | string \| null | no | null | substring filter |
 | `to_entity` | string \| null | no | null | substring filter |
 | `tags` | array of string | no | [] | entries must have all tags |
 | `kind` | string \| null | no | null | `EXPENSE` or `INCOME` |
-| `limit` | integer | no | 50 | 1–200 |
+| `limit` | integer | no | 50 | ≥1; no upper bound; be cautious with very large values |
 
 **Expected output (text):**
 
 ```
 OK
-summary: found N entries
+summary: returned N of M matching entries
 entries: YYYY-MM-DD name amount_minor CURRENCY from=from_entity to=to_entity tags=[...]; ...
 ```
 
----
-
-#### `list_tags`
-
-**Description:** List/query tags by name and category. Exact matches are ranked higher than fuzzy matches. This tool is read-only and includes tag categories.
-
-**Arguments:**
-
-| Parameter | Type | Required | Default | Constraints |
-|-----------|------|----------|---------|-------------|
-| `name` | string \| null | no | null | substring filter |
-| `category` | string \| null | no | null | substring filter |
-| `limit` | integer | no | 200 | 1–500 |
-
-**Expected output (text):**
-
-```
-OK
-summary: found N tags
-tags: name (category or uncategorized), ...
-```
+`N` = count returned (limited by `limit`); `M` = total matching. When N < M, more items exist; increase `limit` or narrow filters to see more.
 
 ---
 
-#### `list_entities`
-
-**Description:** List/query entities by name and category. Exact matches are ranked higher than fuzzy matches. Use category='account' when looking for account entities. This tool is read-only.
-
-**Arguments:**
-
-| Parameter | Type | Required | Default | Constraints |
-|-----------|------|----------|---------|-------------|
-| `name` | string \| null | no | null | substring filter |
-| `category` | string \| null | no | null | substring filter |
-| `limit` | integer | no | 200 | 1–500 |
-
-**Expected output (text):**
-
-```
-OK
-summary: found N entities
-entities: name (category or uncategorized); ...
-```
-
----
-
-#### `get_dashboard_summary`
+#### `get_dashboard_summary` (read)
 
 **Description:** Get a compact dashboard snapshot for the current month. Use this for high-level Q&A context. This tool is read-only.
 
@@ -259,7 +231,208 @@ top_tags: tag:USD:1000; ...
 
 ---
 
-### Progress Tool
+#### `propose_create_entry` (proposal)
+
+**Description:** Create a review-gated proposal to add a new entry. This does not mutate entries immediately; it creates a pending review item only. When `markdown_notes` is provided, keep it human-readable markdown that preserves all relevant input details; for short notes, avoid headings and prefer clear line breaks plus ordered/unordered lists.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `kind` | string | yes | `EXPENSE` or `INCOME` |
+| `date` | string (date) | yes | ISO date, e.g. `"2026-03-02"` |
+| `name` | string | yes | 1–255 chars |
+| `amount_minor` | integer | yes | > 0 |
+| `from_entity` | string | yes | 1–255 chars |
+| `to_entity` | string | yes | 1–255 chars |
+| `currency_code` | string \| null | no | null; 3 chars; falls back to `default_currency_code` |
+| `tags` | array of string | no | [] |
+| `markdown_notes` | string \| null | no | null |
+
+**Expected output:** `OK` with status and preview.
+
+---
+
+#### `propose_update_entry` (proposal)
+
+**Description:** Create a review-gated proposal to update an existing entry selected by date/amount/name/from/to. If selector matches multiple entries, the tool reports ambiguity so the user can clarify. For robustness, the tool also accepts `selector`/`patch` when they arrive as JSON-object strings and normalizes them before validation. When `patch.markdown_notes` is provided, keep it human-readable markdown that preserves all relevant input details; for short notes, avoid headings and prefer clear line breaks plus ordered/unordered lists.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `selector` | object | yes | Exactly one match required (`{"..."}` JSON-object string is also normalized) |
+| `patch` | object | yes | At least one field (`{"..."}` JSON-object string is also normalized) |
+
+**Selector fields:** `date` (string, ISO date e.g. `"2026-03-02"`), `amount_minor` (integer, > 0), `from_entity` (string), `to_entity` (string), `name` (string).
+
+**Patch fields:** `kind`, `date` (ISO date e.g. `"2026-03-02"`), `name`, `amount_minor`, `currency_code`, `from_entity`, `to_entity`, `tags`, `markdown_notes` (all optional).
+
+**Expected output:** `OK` with status and preview. Returns `ERROR` if no match or ambiguous selector.
+
+---
+
+#### `propose_delete_entry` (proposal)
+
+**Description:** Create a review-gated proposal to delete an existing entry selected by date/amount/name/from/to. If selector matches multiple entries, the tool reports ambiguity so the user can clarify.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `selector` | object | yes | Exactly one match required |
+
+**Selector fields:** `date` (string, ISO date e.g. `"2026-03-02"`), `amount_minor` (integer, > 0), `from_entity` (string), `to_entity` (string), `name` (string).
+
+**Expected output:** `OK` with status and preview. Returns `ERROR` if no match or ambiguous selector.
+
+---
+
+### Tags
+
+#### `list_tags` (read)
+
+**Description:** List/query tags by name and category. Exact matches are ranked higher than substring matches. This tool is read-only and includes tag categories.
+
+**Arguments:**
+
+| Parameter | Type | Required | Default | Constraints |
+|-----------|------|----------|---------|-------------|
+| `name` | string \| null | no | null | substring filter |
+| `category` | string \| null | no | null | substring filter |
+| `limit` | integer | no | 50 | ≥1; no upper bound; be cautious with very large values |
+
+**Expected output (text):**
+
+```
+OK
+summary: returned N of M matching tags
+tags: name (category or uncategorized), ...
+```
+
+`N` = count returned (limited by `limit`); `M` = total matching.
+
+---
+
+#### `propose_create_tag` (proposal)
+
+**Description:** Create a review-gated proposal to add a new tag. This does not mutate tags immediately; it creates a pending review item only.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `name` | string | yes | 1–64 chars, normalized |
+| `category` | string | yes | 1–100 chars, normalized |
+
+**Expected output:** `OK` with status and preview. Returns `ERROR` if tag already exists.
+
+---
+
+#### `propose_update_tag` (proposal)
+
+**Description:** Create a review-gated proposal to rename a tag and/or update its category. This does not mutate tags immediately; it creates a pending review item only.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `name` | string | yes | 1–64 chars, existing tag name |
+| `patch` | object | yes | At least one of `name`, `category` |
+
+**Patch fields:** `name` (string \| null), `category` (string \| null).
+
+**Expected output:** `OK` with status and preview. Returns `ERROR` if tag not found or target name already exists.
+
+---
+
+#### `propose_delete_tag` (proposal)
+
+**Description:** Create a review-gated proposal to delete a tag only when the tag has no active entry references.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `name` | string | yes | 1–64 chars, existing tag name |
+
+**Expected output:** `OK` with status and preview when the tag is unreferenced. Returns `ERROR` if tag not found or still referenced by entries.
+
+---
+
+### Entities
+
+#### `list_entities` (read)
+
+**Description:** List/query entities by name and category. Exact matches are ranked higher than substring matches. Use category='account' when looking for account entities. This tool is read-only.
+
+**Arguments:**
+
+| Parameter | Type | Required | Default | Constraints |
+|-----------|------|----------|---------|-------------|
+| `name` | string \| null | no | null | substring filter |
+| `category` | string \| null | no | null | substring filter |
+| `limit` | integer | no | 200 | ≥1; no upper bound; be cautious with very large values |
+
+**Expected output (text):**
+
+```
+OK
+summary: returned N of M matching entities
+entities: name (category or uncategorized); ...
+```
+
+`N` = count returned (limited by `limit`); `M` = total matching.
+
+---
+
+#### `propose_create_entity` (proposal)
+
+**Description:** Create a review-gated proposal to add a new entity. This does not mutate entities immediately; it creates a pending review item only.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `name` | string | yes | 1–255 chars, normalized |
+| `category` | string | yes | 1–100 chars, normalized |
+
+**Expected output:** `OK` with status and preview. Returns `ERROR` if entity already exists.
+
+---
+
+#### `propose_update_entity` (proposal)
+
+**Description:** Create a review-gated proposal to rename an entity and/or update its category. This does not mutate entities immediately; it creates a pending review item only.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `name` | string | yes | 1–255 chars, existing entity name |
+| `patch` | object | yes | At least one of `name`, `category` |
+
+**Patch fields:** `name` (string \| null), `category` (string \| null).
+
+**Expected output:** `OK` with status and preview. Returns `ERROR` if entity not found or target name already exists.
+
+---
+
+#### `propose_delete_entity` (proposal)
+
+**Description:** Create a review-gated proposal to delete an entity. Delete behavior detaches nullable references from entries/accounts; it does not delete entries/accounts.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+|-----------|------|----------|-------------|
+| `name` | string | yes | 1–255 chars, existing entity name |
+
+**Expected output:** `OK` with status and preview (impacted entries/accounts). Returns `ERROR` if entity not found.
+
+---
+
+### Progress & Proposal Lifecycle
 
 #### `send_intermediate_update`
 
@@ -278,159 +451,6 @@ OK
 summary: intermediate update shared
 message: <update text>
 ```
-
----
-
-### Proposal Tools (Review-Gated)
-
-Proposal tools create `AgentChangeItem` rows with status `PENDING_REVIEW`. They do not mutate domain data; changes apply only after human approval via approve/reject endpoints.
-
-#### `propose_create_tag`
-
-**Description:** Create a review-gated proposal to add a new tag. This does not mutate tags immediately; it creates a pending review item only.
-
-**Arguments:**
-
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `name` | string | yes | 1–64 chars, normalized |
-| `category` | string | yes | 1–100 chars, normalized |
-
-**Expected output:** `OK` with status and preview. Returns `ERROR` if tag already exists.
-
----
-
-#### `propose_update_tag`
-
-**Description:** Create a review-gated proposal to rename a tag and/or update its category. This does not mutate tags immediately; it creates a pending review item only.
-
-**Arguments:**
-
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `name` | string | yes | 1–64 chars, existing tag name |
-| `patch` | object | yes | At least one of `name`, `category` |
-
-**Patch fields:** `name` (string \| null), `category` (string \| null).
-
-**Expected output:** `OK` with status and preview. Returns `ERROR` if tag not found or target name already exists.
-
----
-
-#### `propose_delete_tag`
-
-**Description:** Create a review-gated proposal to delete a tag only when the tag has no active entry references.
-
-**Arguments:**
-
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `name` | string | yes | 1–64 chars, existing tag name |
-
-**Expected output:** `OK` with status and preview when the tag is unreferenced. Returns `ERROR` if tag not found or still referenced by entries.
-
----
-
-#### `propose_create_entity`
-
-**Description:** Create a review-gated proposal to add a new entity. This does not mutate entities immediately; it creates a pending review item only.
-
-**Arguments:**
-
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `name` | string | yes | 1–255 chars, normalized |
-| `category` | string | yes | 1–100 chars, normalized |
-
-**Expected output:** `OK` with status and preview. Returns `ERROR` if entity already exists.
-
----
-
-#### `propose_update_entity`
-
-**Description:** Create a review-gated proposal to rename an entity and/or update its category. This does not mutate entities immediately; it creates a pending review item only.
-
-**Arguments:**
-
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `name` | string | yes | 1–255 chars, existing entity name |
-| `patch` | object | yes | At least one of `name`, `category` |
-
-**Patch fields:** `name` (string \| null), `category` (string \| null).
-
-**Expected output:** `OK` with status and preview. Returns `ERROR` if entity not found or target name already exists.
-
----
-
-#### `propose_delete_entity`
-
-**Description:** Create a review-gated proposal to delete an entity. Delete behavior detaches nullable references from entries/accounts; it does not delete entries/accounts.
-
-**Arguments:**
-
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `name` | string | yes | 1–255 chars, existing entity name |
-
-**Expected output:** `OK` with status and preview (impacted entries/accounts). Returns `ERROR` if entity not found.
-
----
-
-#### `propose_create_entry`
-
-**Description:** Create a review-gated proposal to add a new entry. This does not mutate entries immediately; it creates a pending review item only. When `markdown_notes` is provided, keep it human-readable markdown that preserves all relevant input details; for short notes, avoid headings and prefer clear line breaks plus ordered/unordered lists.
-
-**Arguments:**
-
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `kind` | string | yes | `EXPENSE` or `INCOME` |
-| `date` | string (date) | yes | ISO date |
-| `name` | string | yes | 1–255 chars |
-| `amount_minor` | integer | yes | > 0 |
-| `from_entity` | string | yes | 1–255 chars |
-| `to_entity` | string | yes | 1–255 chars |
-| `currency_code` | string \| null | no | null; 3 chars; falls back to `default_currency_code` |
-| `tags` | array of string | no | [] |
-| `markdown_notes` | string \| null | no | null |
-
-**Expected output:** `OK` with status and preview.
-
----
-
-#### `propose_update_entry`
-
-**Description:** Create a review-gated proposal to update an existing entry selected by date/amount/name/from/to. If selector matches multiple entries, the tool reports ambiguity so the user can clarify. For robustness, the tool also accepts `selector`/`patch` when they arrive as JSON-object strings and normalizes them before validation. When `patch.markdown_notes` is provided, keep it human-readable markdown that preserves all relevant input details; for short notes, avoid headings and prefer clear line breaks plus ordered/unordered lists.
-
-**Arguments:**
-
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `selector` | object | yes | Exactly one match required (`{"..."}` JSON-object string is also normalized) |
-| `patch` | object | yes | At least one field (`{"..."}` JSON-object string is also normalized) |
-
-**Selector fields:** `date` (string, ISO), `amount_minor` (integer, > 0), `from_entity` (string), `to_entity` (string), `name` (string).
-
-**Patch fields:** `kind`, `date`, `name`, `amount_minor`, `currency_code`, `from_entity`, `to_entity`, `tags`, `markdown_notes` (all optional).
-
-**Expected output:** `OK` with status and preview. Returns `ERROR` if no match or ambiguous selector.
-
----
-
-#### `propose_delete_entry`
-
-**Description:** Create a review-gated proposal to delete an existing entry selected by date/amount/name/from/to. If selector matches multiple entries, the tool reports ambiguity so the user can clarify.
-
-**Arguments:**
-
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `selector` | object | yes | Exactly one match required |
-
-**Selector fields:** `date` (string, ISO), `amount_minor` (integer, > 0), `from_entity` (string), `to_entity` (string), `name` (string).
-
-**Expected output:** `OK` with status and preview. Returns `ERROR` if no match or ambiguous selector.
 
 ---
 
@@ -487,7 +507,18 @@ Pending proposals can be revised or removed by id in later turns without forcing
 
 `payload_override` is supported for `create_entry` and `update_entry`. On apply failure, item transitions to `APPLY_FAILED` with failure detail in review note.
 
-**Continuation context:** For follow-up turns, `message_history.py` prepends reviewed item outcomes (tool name + args summary, status, notes, review action) before the latest user feedback message text. Review context remains outside dynamic system-injected review text; account context is intentionally included in system prompt.
+**Continuation context:** For follow-up turns, `message_history.py` prepends before the latest user feedback message text: (1) a compact review block per item: `tool_name proposal_id=... proposal_short_id=... review_action=... review_item_status=... review_note=...`, and (2) when the previous run was interrupted, an interruption note describing the interrupted request. Review context remains outside dynamic system-injected text; account context is intentionally included in system prompt.
+
+**Example review block the agent sees:**
+
+```
+Review results from your previous proposals:
+1. propose_update_entry proposal_id=ed279837-1911-448b-bdf8-221b55a80a8b proposal_short_id=ed279837 review_action=approve review_item_status=APPLIED review_note=(none)
+2. propose_create_tag proposal_id=a1b2c3d4-5678-90ab-cdef-1234567890ab proposal_short_id=a1b2c3d4 review_action=reject review_item_status=REJECTED review_note=Use category recurring instead
+
+User feedback:
+Try again with the right category
+```
 
 ## Apply Semantics (Human Approved)
 

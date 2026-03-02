@@ -50,8 +50,8 @@ describe("AgentRunBlock", () => {
         buildToolCall({
           id: "tool-1",
           tool_name: "list_entries",
-          output_text: "OK\nsummary: found 2 entries",
-          output_json: { status: "OK", summary: "found 2 entries" }
+          output_text: "OK\nsummary: returned 2 of 2 matching entries",
+          output_json: { status: "OK", summary: "returned 2 of 2 matching entries" }
         })
       ]
     });
@@ -65,7 +65,7 @@ describe("AgentRunBlock", () => {
     await userEvent.click(screen.getByText("list_entries"));
 
     expect(screen.getByText("Model-visible tool result")).toBeInTheDocument();
-    expect(screen.getByText(/OK\s+summary: found 2 entries/i)).toBeInTheDocument();
+    expect(screen.getByText(/OK\s+summary: returned 2 of 2 matching entries/i)).toBeInTheDocument();
     expect(screen.getByText("Structured output (debug)")).toBeInTheDocument();
   });
 });

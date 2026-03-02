@@ -111,16 +111,23 @@ def _normalize_optional_category(value: str | None) -> str | None:
     return normalize_entity_category(value)
 
 
+_DATE_DESC = "ISO date YYYY-MM-DD, e.g. '2026-03-02'"
+
+
 class ListEntriesArgs(BaseModel):
-    date: DateValue | None = None
-    start_date: DateValue | None = None
-    end_date: DateValue | None = None
+    date: DateValue | None = Field(default=None, description=_DATE_DESC)
+    start_date: DateValue | None = Field(default=None, description=f"{_DATE_DESC}. When both start_date and end_date are set, end_date must be >= start_date.")
+    end_date: DateValue | None = Field(default=None, description=_DATE_DESC)
     name: str | None = None
     from_entity: str | None = None
     to_entity: str | None = None
     tags: list[str] = Field(default_factory=list)
     kind: str | None = Field(default=None, pattern="^(EXPENSE|INCOME)$")
-    limit: int = Field(default=50, ge=1, le=200)
+    limit: int = Field(
+        default=50,
+        ge=1,
+        description="Max entries to return. No upper bound; be cautious with very large values.",
+    )
 
     @field_validator("name", "from_entity", "to_entity")
     @classmethod
@@ -142,7 +149,11 @@ class ListEntriesArgs(BaseModel):
 class ListTagsArgs(BaseModel):
     name: str | None = None
     category: str | None = None
-    limit: int = Field(default=200, ge=1, le=500)
+    limit: int = Field(
+        default=50,
+        ge=1,
+        description="Max tags to return. No upper bound; be cautious with very large values.",
+    )
 
     @field_validator("name")
     @classmethod
@@ -159,7 +170,11 @@ class ListTagsArgs(BaseModel):
 class ListEntitiesArgs(BaseModel):
     name: str | None = None
     category: str | None = None
-    limit: int = Field(default=200, ge=1, le=500)
+    limit: int = Field(
+        default=200,
+        ge=1,
+        description="Max entities to return. No upper bound; be cautious with very large values.",
+    )
 
     @field_validator("name")
     @classmethod
@@ -319,7 +334,7 @@ class ProposeDeleteEntityArgs(BaseModel):
 
 class ProposeCreateEntryArgs(BaseModel):
     kind: str = Field(pattern="^(EXPENSE|INCOME)$")
-    date: DateValue
+    date: DateValue = Field(description=_DATE_DESC)
     name: str = Field(min_length=1, max_length=255)
     amount_minor: int = Field(gt=0)
     currency_code: str | None = Field(default=None, min_length=3, max_length=3)
@@ -347,7 +362,7 @@ class ProposeCreateEntryArgs(BaseModel):
 
 
 class EntrySelectorArgs(BaseModel):
-    date: DateValue
+    date: DateValue = Field(description=_DATE_DESC)
     amount_minor: int = Field(gt=0)
     from_entity: str = Field(min_length=1, max_length=255)
     to_entity: str = Field(min_length=1, max_length=255)
@@ -361,7 +376,7 @@ class EntrySelectorArgs(BaseModel):
 
 class EntryPatchArgs(BaseModel):
     kind: str | None = Field(default=None, pattern="^(EXPENSE|INCOME)$")
-    date: DateValue | None = None
+    date: DateValue | None = Field(default=None, description=_DATE_DESC)
     name: str | None = Field(default=None, min_length=1, max_length=255)
     amount_minor: int | None = Field(default=None, gt=0)
     currency_code: str | None = Field(default=None, min_length=3, max_length=3)
@@ -847,20 +862,23 @@ def _list_entries(context: ToolContext, args: ListEntriesArgs) -> ToolExecutionR
         )
 
     ranked.sort(key=lambda pair: pair[0])
+    total_available = len(ranked)
     rows = [entry for _, entry in ranked[: args.limit]]
     records = [_entry_to_public_record(entry) for entry in rows]
     entries_text = "; ".join(_format_entry_record(record) for record in records) if records else "(none)"
 
     output_json = {
         "status": "OK",
-        "summary": f"found {len(records)} entries",
+        "summary": f"returned {len(records)} of {total_available} matching entries",
+        "returned_count": len(records),
+        "total_available": total_available,
         "entries": records,
     }
     return ToolExecutionResult(
         output_text=_format_lines(
             [
                 "OK",
-                f"summary: found {len(records)} entries",
+                f"summary: returned {len(records)} of {total_available} matching entries",
                 f"entries: {entries_text}",
             ]
         ),
@@ -889,18 +907,21 @@ def _list_tags(context: ToolContext, args: ListTagsArgs) -> ToolExecutionResult:
         ranked.append(((name_rank, category_rank, tag.name.lower()), record))
 
     ranked.sort(key=lambda pair: pair[0])
+    total_available = len(ranked)
     records = [record for _, record in ranked[: args.limit]]
     tags_text = ", ".join(f"{tag['name']} ({tag['category'] or 'uncategorized'})" for tag in records) if records else "(none)"
     output_json = {
         "status": "OK",
-        "summary": f"found {len(records)} tags",
+        "summary": f"returned {len(records)} of {total_available} matching tags",
+        "returned_count": len(records),
+        "total_available": total_available,
         "tags": records,
     }
     return ToolExecutionResult(
         output_text=_format_lines(
             [
                 "OK",
-                f"summary: found {len(records)} tags",
+                f"summary: returned {len(records)} of {total_available} matching tags",
                 f"tags: {tags_text}",
             ]
         ),
@@ -929,20 +950,23 @@ def _list_entities(context: ToolContext, args: ListEntitiesArgs) -> ToolExecutio
         ranked.append(((name_rank, category_rank, entity.name.lower()), record))
 
     ranked.sort(key=lambda pair: pair[0])
+    total_available = len(ranked)
     records = [record for _, record in ranked[: args.limit]]
     entities_text = "; ".join(
         f"{entity['name']} ({entity['category'] or 'uncategorized'})" for entity in records
     ) if records else "(none)"
     output_json = {
         "status": "OK",
-        "summary": f"found {len(records)} entities",
+        "summary": f"returned {len(records)} of {total_available} matching entities",
+        "returned_count": len(records),
+        "total_available": total_available,
         "entities": records,
     }
     return ToolExecutionResult(
         output_text=_format_lines(
             [
                 "OK",
-                f"summary: found {len(records)} entities",
+                f"summary: returned {len(records)} of {total_available} matching entities",
                 f"entities: {entities_text}",
             ]
         ),
@@ -1399,7 +1423,7 @@ TOOLS: dict[str, AgentToolDefinition] = {
         name="list_entries",
         description=(
             "List/query entries by date, date range, name, from_entity, to_entity, tags, and kind. "
-            "When name/from/to filters are present, exact matches are ranked higher than fuzzy matches. "
+            "When name/from/to filters are present, exact matches are ranked higher than substring matches. "
             "This tool is read-only and never mutates data."
         ),
         args_model=ListEntriesArgs,
@@ -1408,7 +1432,7 @@ TOOLS: dict[str, AgentToolDefinition] = {
     "list_tags": AgentToolDefinition(
         name="list_tags",
         description=(
-            "List/query tags by name and category. Exact matches are ranked higher than fuzzy matches. "
+            "List/query tags by name and category. Exact matches are ranked higher than substring matches. "
             "This tool is read-only and includes tag categories."
         ),
         args_model=ListTagsArgs,
@@ -1417,7 +1441,7 @@ TOOLS: dict[str, AgentToolDefinition] = {
     "list_entities": AgentToolDefinition(
         name="list_entities",
         description=(
-            "List/query entities by name and category. Exact matches are ranked higher than fuzzy matches. "
+            "List/query entities by name and category. Exact matches are ranked higher than substring matches. "
             "Use category='account' when looking for account entities. This tool is read-only."
         ),
         args_model=ListEntitiesArgs,
@@ -1464,8 +1488,8 @@ TOOLS: dict[str, AgentToolDefinition] = {
     "propose_delete_tag": AgentToolDefinition(
         name="propose_delete_tag",
         description=(
-            "Create a review-gated proposal to delete a tag. "
-            "Delete behavior detaches tag references from entries; it does not delete entries."
+            "Create a review-gated proposal to delete a tag only when the tag has no active entry references. "
+            "This does not mutate tags immediately; it creates a pending review item only."
         ),
         args_model=ProposeDeleteTagArgs,
         handler=_propose_delete_tag,

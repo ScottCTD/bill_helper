@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -247,16 +246,6 @@ def build_user_content(
     return content_text or "User sent attachments."
 
 
-def _compact_json(value: Any, *, max_len: int = 600) -> str:
-    try:
-        text = json.dumps(value, ensure_ascii=True, sort_keys=True)
-    except TypeError:
-        text = str(value)
-    if len(text) <= max_len:
-        return text
-    return f"{text[: max_len - 3]}..."
-
-
 def _review_window_actions(
     db: Session,
     *,
@@ -398,39 +387,25 @@ def _build_review_results_prefix_for_current_turn(
         item = action.change_item
         if item is None:
             continue
-        source_tool_name = _proposal_tool_name_for_change_type(item.change_type.value)
         source_call = _pick_source_tool_call(
             item=item,
-            tool_name=source_tool_name,
+            tool_name=_proposal_tool_name_for_change_type(item.change_type.value),
             candidates=calls_by_key,
             used_call_ids=used_call_ids,
-        )
-        source_arguments = (
-            source_call.input_json
-            if source_call is not None and isinstance(source_call.input_json, dict)
-            else item.payload_json
         )
         source_output_json = (
             source_call.output_json
             if source_call is not None and isinstance(source_call.output_json, dict)
-            else {"status": "OK", "summary": "proposal created"}
+            else {}
         )
+        proposal_id = source_output_json.get("proposal_id") or item.id
+        short_id = proposal_id[:8]
+        note = item.review_note or action.note
+        tool_name = _proposal_tool_name_for_change_type(item.change_type.value)
         lines.append(
-            f"{ordinal}. {source_tool_name} args={_compact_json(source_arguments, max_len=220)}"
-        )
-        summary = source_output_json.get("summary")
-        if summary is not None:
-            lines.append(f"   proposal_summary: {summary}")
-        proposal_id = source_output_json.get("proposal_id") if isinstance(source_output_json, dict) else None
-        lines.append(f"   proposal_id: {proposal_id or item.id}")
-        lines.append(f"   proposal_short_id: {(proposal_id or item.id)[:8]}")
-        lines.extend(
-            [
-                f"   review_action: {action.action.value}",
-                f"   review_item_status: {item.status.value}",
-                f"   review_note: {item.review_note or '(none)'}",
-                f"   action_note: {action.note or '(none)'}",
-            ]
+            f"{ordinal}. {tool_name} proposal_id={proposal_id} proposal_short_id={short_id} "
+            f"review_action={action.action.value} review_item_status={item.status.value} "
+            f"review_note={note or '(none)'}"
         )
         ordinal += 1
 

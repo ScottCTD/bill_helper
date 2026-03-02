@@ -1708,7 +1708,7 @@ def test_reviewed_items_are_injected_into_followup_turn(client, monkeypatch):
     assert isinstance(followup_content, str)
     assert "Review results from your previous proposals:" in followup_content
     assert "propose_create_tag" in followup_content
-    assert "review_action: reject" in followup_content.lower()
+    assert "review_action=reject" in followup_content
     assert "Use category recurring instead" in followup_content
     assert followup_content.index("Review results from your previous proposals:") < followup_content.index("User feedback:")
     assert followup_content.index("User feedback:") < followup_content.index("Try again")
