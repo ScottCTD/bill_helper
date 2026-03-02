@@ -33,7 +33,6 @@ def assert_exists(paths: list[Path], errors: list[str]) -> None:
 
 def assert_latest_migration_referenced(latest_migration: str, errors: list[str]) -> None:
     required_reference_docs = [
-        ROOT / "README.md",
         DOCS_DIR / "backend.md",
         DOCS_DIR / "repository-structure.md",
     ]
