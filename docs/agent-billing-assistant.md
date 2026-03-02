@@ -1,6 +1,28 @@
 # Billing Assistant Agent
 
-This document describes the architecture, prompts, and tools of the Bill Helper billing assistant agent.
+This document describes the architecture, prompts, tools, and usage workflow of the Bill Helper billing assistant agent.
+
+## Agent UX Quick Path
+
+1. Open the app and navigate to the **Home** route — this is the AI-native chat workspace.
+2. Use **Settings** to configure runtime defaults (currency, model, step limits) before running agent-heavy workflows if needed.
+3. Create or select a conversation thread.
+4. Send text and optional attachments (images or PDFs) via the composer.
+5. Review the timeline as the agent works:
+   - User/assistant messages render inline; assistant messages support markdown.
+   - In-flight tool-call progress and reasoning updates appear while the run is active.
+   - Run/tool context is shown alongside the assistant message.
+   - Removable attachment chips (image thumbnails + PDF file chips) appear above the composer before send.
+   - Paste (`Cmd/Ctrl+V`) and drag-drop ingestion for image/PDF attachments.
+   - Composer shortcut: `Cmd+Enter` (or `Ctrl+Enter`) sends the message.
+   - Cumulative thread usage bar above the composer: `Context`, `Input`, `Output`, `Cache read`, `Cache hit rate`, `Total cost`.
+   - Run-level proposal summary cards with pending counts.
+6. Open the run review modal and process proposals:
+   - Entry proposals support JSON edit-before-approve with unified payload diff.
+   - Review diff rows use friendly field labels/order and human-readable amount values.
+   - Use `Approve & Next` for focused step-through review.
+   - Use `Approve All` for deterministic sequential batch apply (with partial-failure summary and jump links).
+   - Use `Reject` or `Reject All` to discard proposals.
 
 ## Overview
 

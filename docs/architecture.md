@@ -138,3 +138,10 @@ Cross-page consistency:
 - bank sync / CSV ingestion
 - autonomous background agent runs
 - non-LiteLLM model client implementations
+
+## Deferred / Roadmap
+
+- Live bank sync and generalized multi-bank CSV ingestion workflows
+- Multi-user authentication and permissions (RBAC)
+- FX conversion to a configurable base currency
+- Autonomous background agent runs (scheduled or event-driven)

@@ -30,36 +30,70 @@ Operational impact:
 
 ## Environment Variables
 
-Supported variables (prefix `BILL_HELPER_`):
+All backend variables use the `BILL_HELPER_` prefix and are defined in `backend/config.py`. Runtime settings from `/api/v1/settings` take priority over env defaults where applicable.
 
-Core:
+### Core
 
-- `APP_NAME`
-- `API_PREFIX`
-- `DATABASE_URL`
-- `CORS_ORIGINS`
-- `CURRENT_USER_NAME`
-- `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` (default `America/Toronto`)
-- `DASHBOARD_CURRENCY_CODE`
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BILL_HELPER_APP_NAME` | `Bill Helper` | Application display name |
+| `BILL_HELPER_API_PREFIX` | `/api/v1` | API route prefix |
+| `BILL_HELPER_DATABASE_URL` | `sqlite:///./.data/bill_helper.db` | SQLAlchemy database URL |
+| `BILL_HELPER_CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed CORS origins |
+| `BILL_HELPER_CURRENT_USER_NAME` | `admin` | Default current user name |
+| `CURRENT_USER_TIMEZONE` | `America/Toronto` | User timezone for agent date context |
+| `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `CAD` | Default currency for new entries |
+| `BILL_HELPER_DASHBOARD_CURRENCY_CODE` | `CAD` | Currency used in dashboard analytics |
 
-Agent:
+### Agent
 
-- `AGENT_MODEL`
-- `AGENT_MAX_STEPS` (default `100`)
-- `DEFAULT_CURRENCY_CODE` / `BILL_HELPER_DEFAULT_CURRENCY_CODE` (default `CAD`)
-- `DASHBOARD_CURRENCY_CODE` / `BILL_HELPER_DASHBOARD_CURRENCY_CODE` (default `CAD`)
-- `AGENT_RETRY_MAX_ATTEMPTS` (default `3`)
-- `AGENT_RETRY_INITIAL_WAIT_SECONDS` (default `0.25`)
-- `AGENT_RETRY_MAX_WAIT_SECONDS` (default `4.0`)
-- `AGENT_RETRY_BACKOFF_MULTIPLIER` (default `2.0`)
-- `AGENT_MAX_IMAGE_SIZE_BYTES`
-- `AGENT_MAX_IMAGES_PER_MESSAGE`
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BILL_HELPER_AGENT_MODEL` | `openrouter/moonshotai/kimi-k2.5` | LiteLLM model identifier |
+| `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool-call steps per agent run |
+| `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS` | `3` | Model call retry attempts |
+| `BILL_HELPER_AGENT_RETRY_INITIAL_WAIT_SECONDS` | `0.25` | Initial retry backoff delay |
+| `BILL_HELPER_AGENT_RETRY_MAX_WAIT_SECONDS` | `4.0` | Max retry backoff delay |
+| `BILL_HELPER_AGENT_RETRY_BACKOFF_MULTIPLIER` | `2.0` | Retry backoff multiplier |
+| `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` | `5242880` | Per-attachment size limit (5 MB) |
+| `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE` | `4` | Max image/PDF uploads per message |
 
-Notes:
+### Observability
 
-- backend boots when provider credentials are missing
-- runtime behavior resolves settings from `/api/v1/settings` overrides first, then env defaults
-- agent message execution endpoints return `503` when provider credentials required by `BILL_HELPER_AGENT_MODEL` are missing
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LANGFUSE_PUBLIC_KEY` | _(none)_ | Enables LiteLLM Langfuse callbacks (requires secret key) |
+| `LANGFUSE_SECRET_KEY` | _(none)_ | Enables LiteLLM Langfuse callbacks (requires public key) |
+| `LANGFUSE_HOST` | _(Langfuse cloud)_ | Custom Langfuse host URL |
+
+### Provider Credentials
+
+LiteLLM resolves provider credentials from standard environment variables based on `BILL_HELPER_AGENT_MODEL`:
+
+| Variable | Used when |
+|----------|-----------|
+| `OPENROUTER_API_KEY` | Model starts with `openrouter/` (default) |
+| `OPENAI_API_KEY` | Model starts with `openai/` |
+| `ANTHROPIC_API_KEY` | Model starts with `anthropic/` |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Model starts with `gemini/` |
+
+### Seed / Scripts
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BILL_HELPER_SEED_CREDIT_CSV` | _(none)_ | CSV path for `scripts/seed_demo.py` (alternative to CLI arg) |
+
+### Frontend
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_BASE_URL` | `http://localhost:8000/api/v1` | Backend API base URL for Vite dev server |
+
+### Notes
+
+- Backend boots normally when provider credentials are missing
+- Agent message execution endpoints return `503` when the configured model's provider credentials are missing
+- Runtime settings from the database (`/api/v1/settings`) override env defaults for: current user name, default currency, dashboard currency, agent model, agent max steps, and retry parameters
 
 ## Database Setup
 
@@ -83,11 +117,16 @@ Current revisions:
 - `0009_remove_entry_status`
 - `0010_runtime_settings_overrides`
 - `0011_remove_openrouter_runtime_settings_fields`
+- `0012_remove_related_link_type`
+- `0013_add_account_markdown_body`
+- `0014_remove_account_institution_type`
+- `0015_add_agent_tool_call_output_text`
+- `0016_add_user_memory_to_runtime_settings`
 
 Optional seed:
 
 ```bash
-uv run python scripts/seed_demo.py
+uv run python scripts/seed_demo.py /path/to/credit_card_export.csv
 ```
 
 Seed behavior:
