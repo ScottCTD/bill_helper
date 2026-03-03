@@ -1210,6 +1210,17 @@ def _propose_delete_entity(context: ToolContext, args: ProposeDeleteEntityArgs) 
 
 
 def _propose_create_entry(context: ToolContext, args: ProposeCreateEntryArgs) -> ToolExecutionResult:
+    from_entity_obj = find_entity_by_name(context.db, args.from_entity)
+    if from_entity_obj is None:
+        return _error_result(
+            f"entity not found: '{args.from_entity}'. Use propose_create_entity first to create it.",
+        )
+    to_entity_obj = find_entity_by_name(context.db, args.to_entity)
+    if to_entity_obj is None:
+        return _error_result(
+            f"entity not found: '{args.to_entity}'. Use propose_create_entity first to create it.",
+        )
+
     payload = _proposal_payload_from_create_entry_args(context, args)
     item = _create_change_item(
         context,

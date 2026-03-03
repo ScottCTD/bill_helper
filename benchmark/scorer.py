@@ -335,6 +335,68 @@ def score_case(case_id: str, run_id: str) -> CaseScore:
     )
 
 
+_ENTRY_FIELDS = ("kind", "amount_minor", "date", "name", "from_entity", "to_entity", "tags")
+
+
+def _mismatch_reasons(
+    gt: dict[str, Any], pred: dict[str, Any], scores: FieldScores,
+) -> list[dict[str, Any]]:
+    """Build a list of per-field mismatch details for a matched entry pair."""
+    reasons: list[dict[str, Any]] = []
+    field_scores = scores.as_dict()
+    for field in _ENTRY_FIELDS:
+        score = field_scores[field]
+        if score >= 1.0:
+            continue
+        reason: dict[str, Any] = {
+            "field": field,
+            "score": round(score, 4),
+            "expected": gt.get(field),
+            "actual": pred.get(field),
+        }
+        reasons.append(reason)
+    return reasons
+
+
+def _entry_summary(entry: dict[str, Any]) -> dict[str, Any]:
+    return {f: entry.get(f) for f in _ENTRY_FIELDS}
+
+
+def _build_entry_details(
+    cs: CaseScore,
+    gt_entries: list[dict[str, Any]],
+    pred_entries: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build detailed match/mismatch info for the score.json output."""
+    mismatched = []
+    for m in cs.matches:
+        reasons = _mismatch_reasons(gt_entries[m.gt_index], pred_entries[m.pred_index], m.scores)
+        if not reasons:
+            continue
+        mismatched.append({
+            "gt_index": m.gt_index,
+            "pred_index": m.pred_index,
+            "gt": _entry_summary(gt_entries[m.gt_index]),
+            "pred": _entry_summary(pred_entries[m.pred_index]),
+            "mismatches": reasons,
+        })
+
+    unmatched_gt = [
+        {"gt_index": i, **_entry_summary(gt_entries[i])}
+        for i in cs.unmatched_gt
+    ]
+    unmatched_pred = [
+        {"pred_index": i, **_entry_summary(pred_entries[i])}
+        for i in cs.unmatched_pred
+    ]
+
+    return {
+        "mismatched": mismatched,
+        "unmatched_gt": unmatched_gt,
+        "unmatched_pred": unmatched_pred,
+    }
+
+
 def score_run(run_id: str) -> dict[str, Any]:
     run_dir = RESULTS_DIR / run_id
     meta_path = run_dir / "run_meta.json"
@@ -351,6 +413,13 @@ def score_run(run_id: str) -> dict[str, Any]:
             cs = score_case(cid, run_id)
             case_scores.append(cs)
 
+            gt_data = json.loads((CASES_DIR / cid / "ground_truth.json").read_text())
+            results_data = json.loads((RESULTS_DIR / run_id / "cases" / cid / "results.json").read_text())
+            gt_entries = gt_data.get("entries", [])
+            pred_entries = results_data.get("entries", [])
+
+            entry_details = _build_entry_details(cs, gt_entries, pred_entries)
+
             score_out = {
                 "case_id": cs.case_id,
                 "tags": cs.tag_score.as_dict(),
@@ -362,8 +431,9 @@ def score_run(run_id: str) -> dict[str, Any]:
                     "precision": round(cs.precision, 4),
                     "recall": round(cs.recall, 4),
                     "field_scores": {k: round(v, 4) for k, v in cs.field_scores.as_dict().items()},
-                    "unmatched_gt_indices": cs.unmatched_gt,
-                    "unmatched_pred_indices": cs.unmatched_pred,
+                    "mismatched": entry_details["mismatched"],
+                    "unmatched_gt": entry_details["unmatched_gt"],
+                    "unmatched_pred": entry_details["unmatched_pred"],
                 },
                 "overall_score": round(cs.overall_score(), 4),
             }

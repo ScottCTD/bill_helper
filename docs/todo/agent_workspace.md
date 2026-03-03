@@ -12,10 +12,10 @@ This makes the agent's work transparent, auditable, and resumable. The user can 
 
 | Type | Purpose | Lifecycle | Count |
 |------|---------|-----------|-------|
-| **App containers** | FastAPI backend, frontend, Postgres | Always running (Compose) | Fixed (3-4) |
-| **Sandbox containers** | Per-user workspace with filesystem + Python + tools | On-demand, idle-timeout | 0 to N |
+| **App container** | The full application (FastAPI backend serving API + static frontend + Postgres) | Always running (Compose) | 1 |
+| **Sandbox containers** | Per-user workspace with filesystem + Python + tools + internet | On-demand, idle-timeout | 0 to N |
 
-App containers are managed by Docker Compose. Sandbox containers are spawned dynamically by the backend via `docker-py`.
+The app container is managed by Docker Compose. Sandbox containers are spawned dynamically by the backend via `docker-py`.
 
 ### Sandbox Container Spec
 
@@ -24,7 +24,7 @@ Each sandbox container provides:
 - A persistent workspace directory mounted from host (`/workspaces/{user_id}/` → `/workspace` inside container)
 - Python interpreter (with common data/finance libraries pre-installed)
 - Basic shell utilities (cat, grep, head, tail, wc, jq, etc.)
-- No network access (`network_mode: none`) for security
+- Full internet access — the agent can install any packages it needs
 - Resource limits: ~256MB RAM, 0.5 CPU
 - Idle timeout: killed after ~15 min inactivity, workspace volume persists
 
@@ -35,9 +35,11 @@ Each sandbox container provides:
 ├── conversations/          # conversation history as files
 │   ├── {thread_id}/
 │   │   ├── metadata.json   # thread title, created_at, updated_at
-│   │   └── messages.jsonl   # each line is a message (role, content, tool_calls, timestamp)
+│   │   ├── messages.jsonl   # each line is a message (role, content, tool_calls, timestamp)
+│   │   └── uploads/         # files uploaded within this thread
+│   │       └── ...
 │   └── ...
-├── uploads/                # user-uploaded files (images, CSVs, bank statements)
+├── uploads/                # user-uploaded files not tied to a thread (general workspace files)
 │   └── ...
 ├── scripts/                # agent-written scripts
 │   └── ...
@@ -47,56 +49,38 @@ Each sandbox container provides:
     └── ...
 ```
 
-All conversation history is written to `conversations/` as the thread progresses. The agent can read any past conversation to recall context across sessions.
+Each thread has its own `uploads/` subdirectory. When a user uploads a file in a conversation, the backend copies it into `/workspace/conversations/{thread_id}/uploads/`. The agent sees it as a local file and can reference it via the terminal. Files uploaded outside of a specific thread go to the top-level `uploads/` directory.
 
-## New Agent Tools
+## New Agent Tool
 
-### 1. `terminal` — Run Shell Commands
+### `terminal` — Run Shell Commands
 
-Execute arbitrary shell commands inside the sandbox container.
+A single general-purpose tool. The agent does everything through the terminal: read files, write files, edit files, run Python, install packages, list directories — just like a developer in a shell.
 
 - **Input**: `command` (string), optional `timeout` (int, seconds, default 30)
 - **Output**: `stdout`, `stderr`, `exit_code`
-- The agent is free to install packages (`pip install`, `apt-get`), run scripts, pipe commands — anything a terminal can do.
 - Long-running commands are killed after the timeout.
 
 Example uses:
 - `python analyze.py` — run a script the agent wrote
-- `pip install pandas && python -c "import pandas; print(pandas.__version__)"` — install and verify
-- `ls -la /workspace/uploads/` — inspect uploaded files
-- `head -50 /workspace/uploads/statement.csv` — preview data
+- `pip install pandas && python -c "import pandas; print(pandas.__version__)"` — install and use
+- `cat /workspace/conversations/abc123/uploads/statement.csv | head -50` — preview an uploaded file
+- `echo '...' > /workspace/scripts/analyze.py` — write a file
+- `sed -i 's/old/new/' /workspace/scripts/analyze.py` — edit a file
+- `ls -la /workspace/uploads/` — list files
+- `apt-get install -y jq && cat data.json | jq '.expenses[]'` — install tools as needed
 
-### 2. `file_write` — Write/Create Files
+The agent is free to install anything and do anything inside the container.
 
-Write content to a file in the workspace.
+## Command Approval & YOLO Mode
 
-- **Input**: `path` (string, relative to `/workspace`), `content` (string)
-- **Output**: confirmation with bytes written
-- Creates parent directories as needed.
-- Overwrites existing file if present.
+By default, every `terminal` command the agent wants to run is shown to the user for approval before execution. This is the safe default — the user sees exactly what the agent intends to do and can approve or reject it.
 
-### 3. `file_read` — Read Files
+**YOLO mode**: An opt-in setting (per user or per thread) that skips approval and lets the agent execute commands freely without confirmation. Useful for power users who trust the agent and want faster iteration.
 
-Read content from a file in the workspace.
-
-- **Input**: `path` (string, relative to `/workspace`), optional `offset` (int), optional `limit` (int, lines)
-- **Output**: file content (string), total line count
-- Supports pagination for large files.
-
-### 4. `file_edit` — Surgical File Edits
-
-Replace a specific string occurrence in a file (find-and-replace).
-
-- **Input**: `path`, `old_str`, `new_str`
-- **Output**: confirmation or error if `old_str` not found / not unique
-- For precise modifications without rewriting entire files.
-
-### 5. `list_files` — List Directory Contents
-
-List files and directories in the workspace.
-
-- **Input**: `path` (string, relative to `/workspace`, default `/workspace`), optional `recursive` (bool)
-- **Output**: list of file/directory entries with names, sizes, modified times
+- YOLO mode is off by default.
+- The user can toggle it from the UI (thread-level or account-level setting).
+- Even in YOLO mode, the full command history is logged and visible in the conversation.
 
 ## Conversation History as Files
 
@@ -115,19 +99,20 @@ This means:
 
 ## Security Constraints
 
-- `network_mode: none` — sandbox has no internet access.
 - Resource limits enforced (memory, CPU).
 - Workspace is scoped to one user — no cross-user access.
 - The sandbox cannot reach the host database or backend API directly.
 - The backend communicates with the sandbox only via `docker exec` (command execution) and volume mounts (file I/O).
+- Command approval by default; YOLO mode opt-in.
 
 ## Implementation Approach
 
 1. **Sandbox image**: Create a `Dockerfile.sandbox` with Python 3.12, common libraries (pandas, openpyxl, matplotlib, etc.), and basic shell tools.
 2. **Sandbox manager**: Backend service that starts/stops/reuses containers per user via `docker-py`. Tracks container state in the database.
-3. **Tool handlers**: Implement the 5 new tools as `AgentToolDefinition` entries. Each handler calls `docker exec` on the user's sandbox container.
-4. **Conversation sync**: After each agent message exchange, the backend appends to the conversation JSONL file in the workspace volume.
-5. **Docker Compose update**: Add app-level services (backend, frontend, db) to `docker-compose.yml`. Sandbox containers remain dynamically managed.
+3. **Tool handler**: Implement the `terminal` tool as an `AgentToolDefinition`. The handler calls `docker exec` on the user's sandbox container. Commands require user approval unless YOLO mode is enabled.
+4. **File upload flow**: When a user uploads a file in a thread, the backend writes it to the workspace volume at `/workspaces/{user_id}/conversations/{thread_id}/uploads/`.
+5. **Conversation sync**: After each agent message exchange, the backend appends to the conversation JSONL file in the workspace volume.
+6. **Docker Compose update**: Add the app service (backend + frontend + db) to `docker-compose.yml`. Sandbox containers remain dynamically managed.
 
 ## Dependencies
 
