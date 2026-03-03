@@ -122,7 +122,7 @@ class ListEntriesArgs(BaseModel):
     from_entity: str | None = None
     to_entity: str | None = None
     tags: list[str] = Field(default_factory=list)
-    kind: str | None = Field(default=None, pattern="^(EXPENSE|INCOME)$")
+    kind: str | None = Field(default=None, pattern="^(EXPENSE|INCOME|TRANSFER)$")
     limit: int = Field(
         default=50,
         ge=1,
@@ -333,7 +333,7 @@ class ProposeDeleteEntityArgs(BaseModel):
 
 
 class ProposeCreateEntryArgs(BaseModel):
-    kind: str = Field(pattern="^(EXPENSE|INCOME)$")
+    kind: str = Field(pattern="^(EXPENSE|INCOME|TRANSFER)$")
     date: DateValue = Field(description=_DATE_DESC)
     name: str = Field(min_length=1, max_length=255)
     amount_minor: int = Field(gt=0)
@@ -375,7 +375,7 @@ class EntrySelectorArgs(BaseModel):
 
 
 class EntryPatchArgs(BaseModel):
-    kind: str | None = Field(default=None, pattern="^(EXPENSE|INCOME)$")
+    kind: str | None = Field(default=None, pattern="^(EXPENSE|INCOME|TRANSFER)$")
     date: DateValue | None = Field(default=None, description=_DATE_DESC)
     name: str | None = Field(default=None, min_length=1, max_length=255)
     amount_minor: int | None = Field(default=None, gt=0)

@@ -32,7 +32,9 @@ function groupRangeLabel(summary: GroupSummary): string {
 }
 
 function kindSymbol(kind: string): string {
-  return kind === "INCOME" ? "+" : "-";
+  if (kind === "INCOME") return "+";
+  if (kind === "TRANSFER") return "~";
+  return "-";
 }
 
 function nodeLabel(nodeId: string, nodeById: Map<string, GroupNode>): string {
@@ -331,7 +333,7 @@ export function GroupsPage() {
                           <TableCell>
                             <Badge
                               variant="outline"
-                              className={node.kind === "INCOME" ? "kind-indicator kind-indicator-income" : "kind-indicator kind-indicator-expense"}
+                              className={`kind-indicator ${node.kind === "INCOME" ? "kind-indicator-income" : node.kind === "TRANSFER" ? "kind-indicator-transfer" : "kind-indicator-expense"}`}
                             >
                               {kindSymbol(node.kind)}
                             </Badge>

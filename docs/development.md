@@ -309,8 +309,11 @@ The `benchmark/` directory contains a framework for evaluating LLMs on bank-stat
 Quick reference:
 
 ```bash
-# Create a snapshot of the current DB
-uv run python -m benchmark.snapshot create --name default
+# Reset local DB and seed default tags + entity categories
+uv run python scripts/seed_defaults.py
+
+# Create default benchmark snapshot (accounts, tags, entity categories)
+uv run python -m benchmark.create_empty_snapshot
 
 # Generate draft ground truth for a case
 uv run python -m benchmark.generate_ground_truth --case my_case --model "openrouter/anthropic/claude-sonnet-4"

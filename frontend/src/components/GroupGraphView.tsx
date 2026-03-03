@@ -69,13 +69,13 @@ export function GroupGraphView({ graph }: GroupGraphViewProps) {
         targetPosition: Position.Left,
         draggable: false,
         selectable: false,
-        className: node.kind === "INCOME" ? "group-flow-node group-flow-node-income" : "group-flow-node group-flow-node-expense",
+        className: `group-flow-node ${node.kind === "INCOME" ? "group-flow-node-income" : node.kind === "TRANSFER" ? "group-flow-node-transfer" : "group-flow-node-expense"}`,
         data: {
           label: (
             <div className="group-flow-node-content">
               <p className="group-flow-node-name">{node.name}</p>
               <p className="group-flow-node-meta">
-                {node.occurred_at} | {node.kind === "INCOME" ? "+" : "-"}
+                {node.occurred_at} | {node.kind === "INCOME" ? "+" : node.kind === "TRANSFER" ? "~" : "-"}
               </p>
             </div>
           )

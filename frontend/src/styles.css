@@ -506,6 +506,10 @@
     @apply border border-warning/40 bg-warning/15 text-warning-foreground;
   }
 
+  .kind-indicator-transfer {
+    @apply border border-muted-foreground/30 bg-muted/40 text-muted-foreground;
+  }
+
   .tag-color-cell {
     @apply inline-flex items-center gap-2;
   }
@@ -704,6 +708,11 @@
   .group-flow-node-expense {
     border-color: hsl(var(--destructive) / 0.5);
     box-shadow: inset 0 0 0 1px hsl(var(--destructive) / 0.15);
+  }
+
+  .group-flow-node-transfer {
+    border-color: hsl(var(--muted-foreground) / 0.4);
+    box-shadow: inset 0 0 0 1px hsl(var(--muted-foreground) / 0.15);
   }
 
   .group-flow-node-content {

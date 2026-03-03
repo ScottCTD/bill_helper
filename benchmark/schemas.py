@@ -23,14 +23,14 @@ class CaseInput(BaseModel):
 
 class GroundTruthTag(BaseModel):
     name: str
-    category: str | None = None
+    type: str | None = None
 
 class GroundTruthEntity(BaseModel):
     name: str
     category: str | None = None
 
 class GroundTruthEntry(BaseModel):
-    kind: str = Field(pattern="^(EXPENSE|INCOME)$")
+    kind: str = Field(pattern="^(EXPENSE|INCOME|TRANSFER)$")
     date: str = Field(description="ISO date YYYY-MM-DD")
     name: str
     amount_minor: int = Field(gt=0)
@@ -52,7 +52,7 @@ class GroundTruth(BaseModel):
 
 class PredictedTag(BaseModel):
     name: str | None = None
-    category: str | None = None
+    type: str | None = None
 
 class PredictedEntity(BaseModel):
     name: str | None = None

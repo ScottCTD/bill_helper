@@ -56,7 +56,8 @@ interface EntryEditorModalProps {
 
 const KIND_OPTIONS: Array<{ value: EntryKind; label: string }> = [
   { value: "INCOME", label: "+ Income" },
-  { value: "EXPENSE", label: "- Expense" }
+  { value: "EXPENSE", label: "- Expense" },
+  { value: "TRANSFER", label: "~ Transfer" }
 ];
 
 function todayDateInputValue() {

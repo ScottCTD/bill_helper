@@ -370,7 +370,7 @@ def run_single_case(
             if tc.tool_name == "propose_create_tag":
                 predicted_tags.append(PredictedTag(
                     name=inp.get("name"),
-                    category=inp.get("category"),
+                    type=inp.get("type"),
                 ))
             elif tc.tool_name == "propose_create_entity":
                 predicted_entities.append(PredictedEntity(

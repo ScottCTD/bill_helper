@@ -273,7 +273,7 @@ Settings router:
 - `0016_add_user_memory_to_runtime_settings`
 - `0017_rename_tag_category_taxonomy`
 - `0018_add_tag_description`
-- `0017_rename_tag_category_taxonomy`
+- `0019_add_transfer_entry_kind`
 
 Commands:
 

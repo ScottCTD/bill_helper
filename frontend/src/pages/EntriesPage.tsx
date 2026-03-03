@@ -31,7 +31,9 @@ const ENTRY_FLOW_LABEL_MAX_LENGTH = 18;
 const MISSING_ENTITY_LABEL = "(unspecified)";
 
 function kindSymbol(kind: string) {
-  return kind === "INCOME" ? "+" : "-";
+  if (kind === "INCOME") return "+";
+  if (kind === "TRANSFER") return "~";
+  return "-";
 }
 
 function groupLabel(groupId: string) {
@@ -229,6 +231,7 @@ export function EntriesPage() {
                   <option value="">All</option>
                   <option value="EXPENSE">- Expense</option>
                   <option value="INCOME">+ Income</option>
+                  <option value="TRANSFER">~ Transfer</option>
                 </NativeSelect>
               </label>
               <label className="field min-w-[180px]">
@@ -304,7 +307,7 @@ export function EntriesPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={entry.kind === "INCOME" ? "kind-indicator kind-indicator-income" : "kind-indicator kind-indicator-expense"}>
+                          <Badge variant="outline" className={`kind-indicator ${entry.kind === "INCOME" ? "kind-indicator-income" : entry.kind === "TRANSFER" ? "kind-indicator-transfer" : "kind-indicator-expense"}`}>
                             {kindSymbol(entry.kind)}
                           </Badge>
                         </TableCell>

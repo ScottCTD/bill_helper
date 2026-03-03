@@ -26,11 +26,15 @@ import { invalidateEntryLinkReadModels, invalidateEntryReadModels } from "../lib
 import { queryKeys } from "../lib/queryKeys";
 
 function kindLabel(kind: string) {
-  return kind === "INCOME" ? "Income" : "Expense";
+  if (kind === "INCOME") return "Income";
+  if (kind === "TRANSFER") return "Transfer";
+  return "Expense";
 }
 
 function kindSymbol(kind: string) {
-  return kind === "INCOME" ? "+" : "-";
+  if (kind === "INCOME") return "+";
+  if (kind === "TRANSFER") return "~";
+  return "-";
 }
 
 const ENTRY_LINK_PICKER_FILTERS = {

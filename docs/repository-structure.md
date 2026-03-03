@@ -34,6 +34,7 @@
 - `versions/0016_add_user_memory_to_runtime_settings.py`: adds optional persistent agent memory text to runtime settings (`runtime_settings.user_memory`).
 - `versions/0017_rename_tag_category_taxonomy.py`: migrates tag taxonomy key/display naming from category to type (`tag_category` -> `tag_type`).
 - `versions/0018_add_tag_description.py`: adds optional free-text tag description (`tags.description`).
+- `versions/0019_add_transfer_entry_kind.py`: documents addition of `TRANSFER` to `EntryKind` enum (no DDL change for SQLite).
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
@@ -159,6 +160,7 @@
   - `feature-account-reconciliation.md`: account workspace + snapshot/reconciliation flow map.
   - `/adr`: architecture decision records.
 - `/skills/notion-grade-ui/SKILL.md`: project-local frontend UI quality skill for calm, tokenized, primitives-first design implementation.
+- `/scripts/seed_defaults.py`: reset local DB and seed default tags, entity categories, and accounts.
 - `/scripts/seed_demo.py`: local seed dataset generation.
 - `/scripts/check_docs_sync.py`: docs consistency checks (migration refs + stale term detection + index links).
 - `/.data` (runtime): SQLite DB (ignored in git).
@@ -168,6 +170,7 @@
 Agent import benchmark framework for evaluating LLMs on bank-statement-to-entry extraction.
 
 - `snapshot.py`: create/restore/list DB snapshots.
+- `create_empty_snapshot.py`: create default snapshot with accounts, tags, entity categories.
 - `runner.py`: run benchmark cases against a model (parallel via `ProcessPoolExecutor`).
 - `scorer.py`: match predicted entries to ground truth, compute field-level and aggregate scores, compare models.
 - `generate_ground_truth.py`: run a capable model to produce draft ground truth for manual editing.

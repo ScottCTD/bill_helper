@@ -44,7 +44,7 @@ def generate_ground_truth(case_id: str, model_name: str) -> None:
     results = json.loads(results_path.read_text())
 
     gt_tags = [
-        GroundTruthTag(name=t.get("name", ""), category=t.get("category"))
+        GroundTruthTag(name=t.get("name", ""), type=t.get("type"))
         for t in results.get("tags", [])
     ]
     gt_entities = [

@@ -149,8 +149,14 @@ class CaseScore:
 def score_named_set(
     gt_items: list[dict[str, Any]],
     pred_items: list[dict[str, Any]],
+    *,
+    classify_field: str = "category",
 ) -> SetScore:
-    """Score a set of named items (tags or entities) by name matching + category accuracy."""
+    """Score a set of named items (tags or entities) by name matching + classification accuracy.
+
+    classify_field: the dict key used for the secondary classification check
+    (e.g. "category" for entities, "type" for tags).
+    """
     gt_by_name: dict[str, dict[str, Any]] = {}
     for item in gt_items:
         name = _normalize_text(item.get("name"))
@@ -177,8 +183,8 @@ def score_named_set(
     cat_correct = 0
     cat_total = 0
     for name in matched_names:
-        gt_cat = _normalize_text(gt_by_name[name].get("category"))
-        pred_cat = _normalize_text(pred_by_name[name].get("category"))
+        gt_cat = _normalize_text(gt_by_name[name].get(classify_field))
+        pred_cat = _normalize_text(pred_by_name[name].get(classify_field))
         if gt_cat:
             cat_total += 1
             if gt_cat == pred_cat:
@@ -279,10 +285,12 @@ def score_case(case_id: str, run_id: str) -> CaseScore:
     tag_score = score_named_set(
         gt_data.get("tags", []),
         results_data.get("tags", []),
+        classify_field="type",
     )
     entity_score = score_named_set(
         gt_data.get("entities", []),
         results_data.get("entities", []),
+        classify_field="category",
     )
 
     # Entries (ordered matching)

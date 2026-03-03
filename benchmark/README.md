@@ -11,7 +11,11 @@ The benchmark measures how accurately a model can extract financial data from un
 ### 1. Create a DB snapshot
 
 ```bash
-uv run python -m benchmark.snapshot create --name default
+# Default snapshot with accounts, default tags, entity categories, and user memory
+uv run python -m benchmark.create_empty_snapshot
+
+# Or create a snapshot from an existing DB
+uv run python -m benchmark.snapshot create --name custom
 ```
 
 ### 2. Set up a benchmark case
@@ -38,10 +42,7 @@ benchmark/fixtures/cases/my_case/
 `ground_truth.json`:
 ```json
 {
-  "tags": [
-    {"name": "grocery", "category": "food & drink"},
-    {"name": "dining", "category": "food & drink"}
-  ],
+  "tags": [],
   "entities": [
     {"name": "Loblaws", "category": "merchant"},
     {"name": "Starbucks", "category": "merchant"}
@@ -60,6 +61,8 @@ benchmark/fixtures/cases/my_case/
   ]
 }
 ```
+
+The `tags` array lists only tags the agent must **create** (via `propose_create_tag`). With the default snapshot, tags are pre-seeded so this is typically empty. The `entities` array lists entities the agent must create. Entry-level `tags` reference existing tag names.
 
 ### 3. Generate draft ground truth
 
@@ -119,6 +122,7 @@ benchmark/
   scorer.py                    # score results and compare models
   generate_ground_truth.py     # generate draft ground truth
   snapshot.py                  # manage DB snapshots
+  create_empty_snapshot.py     # create default snapshot with seeded data
   schemas.py                   # Pydantic schemas for case/result data
 ```
 
