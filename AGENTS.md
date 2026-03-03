@@ -101,6 +101,14 @@ When the user requests a feature from `docs/todo`, after implementing the featur
 - Data model: `/docs/data-model.md`
 - Dev workflow: `/docs/development.md`
 
+## Before Committing
+
+Before committing anything, check `git diff` and ensure there is no sensitive or private information in the changes.
+
+- Review all staged and unstaged changes.
+- Remove or redact API keys, secrets, tokens, credentials, PII, local paths (e.g. paths containing usernames), banking or financial data, and other confidential data.
+- Do not proceed with the commit until the diff is clean.
+
 ## Commit Messages
 
 When asked to write a commit message for the current changes, use this format:

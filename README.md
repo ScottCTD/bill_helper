@@ -2,6 +2,10 @@
 
 A local-first personal finance ledger with an AI-powered chat assistant that can read, create, update, and delete your financial records through a human-in-the-loop review workflow.
 
+## Motivation
+
+The goal is an all-in-one place to view and analyze personal finances — a central tool to manage all bank accounts across currencies, with balances kept up-to-date with what your bank apps show. The MVP focuses on managing daily expenses and incomes; richer financial management features follow later.
+
 ## Features
 
 **AI Chat Assistant**
