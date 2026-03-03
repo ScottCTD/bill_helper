@@ -21,10 +21,10 @@ DEFAULT_TAXONOMY_SPECS: dict[str, TaxonomySpec] = {
         cardinality="single",
         display_name="Entity Categories",
     ),
-    "tag_category": TaxonomySpec(
+    "tag_type": TaxonomySpec(
         applies_to="tag",
         cardinality="single",
-        display_name="Tag Categories",
+        display_name="Tag Types",
     ),
 }
 

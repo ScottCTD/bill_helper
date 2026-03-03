@@ -18,7 +18,7 @@ import {
   invalidateUserReadModels
 } from "../../lib/queryInvalidation";
 import type { Entity, Tag, TaxonomyTerm, User } from "../../lib/types";
-import { ENTITY_CATEGORY_TAXONOMY_KEY, TAG_CATEGORY_TAXONOMY_KEY } from "./types";
+import { ENTITY_CATEGORY_TAXONOMY_KEY, TAG_TYPE_TAXONOMY_KEY } from "./types";
 import { usePropertiesFilteredData } from "./usePropertiesFilteredData";
 import { usePropertiesFormState } from "./usePropertiesFormState";
 import { usePropertiesQueries } from "./usePropertiesQueries";
@@ -31,7 +31,7 @@ export function usePropertiesPageModel() {
   const forms = usePropertiesFormState();
 
   const { queries, options } = queryState;
-  const { entityCategoriesLabel, tagCategoriesLabel } = queryState.labels;
+  const { entityCategoriesLabel, tagTypesLabel } = queryState.labels;
 
   const filtered = usePropertiesFilteredData({
     sectionSearch: sectionState.sectionSearch,
@@ -40,7 +40,7 @@ export function usePropertiesPageModel() {
     tags: queries.tagsQuery.data,
     currencies: queries.currenciesQuery.data,
     entityCategoryTerms: queries.entityCategoryTermsQuery.data,
-    tagCategoryTerms: queries.tagCategoryTermsQuery.data
+    tagTypeTerms: queries.tagTypeTermsQuery.data
   });
 
   const createEntityMutation = useMutation({
@@ -68,21 +68,34 @@ export function usePropertiesPageModel() {
     mutationFn: createTag,
     onSuccess: () => {
       forms.setNewTagName("");
-      forms.setNewTagCategory("");
+      forms.setNewTagType("");
       forms.setNewTagColor("");
+      forms.setNewTagDescription("");
       sectionState.actions.closeCreatePanel("tags");
       invalidateTagReadModels(queryClient);
     }
   });
 
   const updateTagMutation = useMutation({
-    mutationFn: ({ tagId, name, color, category }: { tagId: number; name: string; color: string; category: string }) =>
-      updateTag(tagId, { name, color: color || null, category: category || null }),
+    mutationFn: ({
+      tagId,
+      name,
+      color,
+      description,
+      type
+    }: {
+      tagId: number;
+      name: string;
+      color: string;
+      description: string;
+      type: string;
+    }) => updateTag(tagId, { name, color: color || null, description: description || null, type: type || null }),
     onSuccess: () => {
       forms.setEditingTagId(null);
       forms.setEditingTagName("");
-      forms.setEditingTagCategory("");
+      forms.setEditingTagType("");
       forms.setEditingTagColor("");
+      forms.setEditingTagDescription("");
       invalidateTagReadModels(queryClient);
     }
   });
@@ -106,39 +119,46 @@ export function usePropertiesPageModel() {
   });
 
   const createEntityCategoryTermMutation = useMutation({
-    mutationFn: ({ name }: { name: string }) => createTaxonomyTerm(ENTITY_CATEGORY_TAXONOMY_KEY, { name }),
+    mutationFn: ({ name, description }: { name: string; description?: string }) =>
+      createTaxonomyTerm(ENTITY_CATEGORY_TAXONOMY_KEY, { name, description }),
     onSuccess: () => {
       forms.setNewEntityCategoryTermName("");
+      forms.setNewEntityCategoryTermDescription("");
       sectionState.actions.closeCreatePanel("entityCategories");
       invalidateTaxonomyReadModels(queryClient, ENTITY_CATEGORY_TAXONOMY_KEY);
     }
   });
 
   const updateEntityCategoryTermMutation = useMutation({
-    mutationFn: ({ termId, name }: { termId: string; name: string }) =>
-      updateTaxonomyTerm(ENTITY_CATEGORY_TAXONOMY_KEY, termId, { name }),
+    mutationFn: ({ termId, name, description }: { termId: string; name: string; description?: string | null }) =>
+      updateTaxonomyTerm(ENTITY_CATEGORY_TAXONOMY_KEY, termId, { name, description }),
     onSuccess: () => {
       forms.setEditingEntityCategoryTermId("");
       forms.setEditingEntityCategoryTermName("");
+      forms.setEditingEntityCategoryTermDescription("");
       invalidateTaxonomyReadModels(queryClient, ENTITY_CATEGORY_TAXONOMY_KEY);
     }
   });
 
-  const createTagCategoryTermMutation = useMutation({
-    mutationFn: ({ name }: { name: string }) => createTaxonomyTerm(TAG_CATEGORY_TAXONOMY_KEY, { name }),
+  const createTagTypeTermMutation = useMutation({
+    mutationFn: ({ name, description }: { name: string; description?: string }) =>
+      createTaxonomyTerm(TAG_TYPE_TAXONOMY_KEY, { name, description }),
     onSuccess: () => {
-      forms.setNewTagCategoryTermName("");
+      forms.setNewTagTypeTermName("");
+      forms.setNewTagTypeTermDescription("");
       sectionState.actions.closeCreatePanel("tagCategories");
-      invalidateTaxonomyReadModels(queryClient, TAG_CATEGORY_TAXONOMY_KEY);
+      invalidateTaxonomyReadModels(queryClient, TAG_TYPE_TAXONOMY_KEY);
     }
   });
 
-  const updateTagCategoryTermMutation = useMutation({
-    mutationFn: ({ termId, name }: { termId: string; name: string }) => updateTaxonomyTerm(TAG_CATEGORY_TAXONOMY_KEY, termId, { name }),
+  const updateTagTypeTermMutation = useMutation({
+    mutationFn: ({ termId, name, description }: { termId: string; name: string; description?: string | null }) =>
+      updateTaxonomyTerm(TAG_TYPE_TAXONOMY_KEY, termId, { name, description }),
     onSuccess: () => {
-      forms.setEditingTagCategoryTermId("");
-      forms.setEditingTagCategoryTermName("");
-      invalidateTaxonomyReadModels(queryClient, TAG_CATEGORY_TAXONOMY_KEY);
+      forms.setEditingTagTypeTermId("");
+      forms.setEditingTagTypeTermName("");
+      forms.setEditingTagTypeTermDescription("");
+      invalidateTaxonomyReadModels(queryClient, TAG_TYPE_TAXONOMY_KEY);
     }
   });
 
@@ -159,8 +179,9 @@ export function usePropertiesPageModel() {
     }
     createTagMutation.mutate({
       name,
-      category: forms.newTagCategory.trim() || undefined,
-      color: forms.newTagColor.trim() || undefined
+      type: forms.newTagType.trim() || undefined,
+      color: forms.newTagColor.trim() || undefined,
+      description: forms.newTagDescription.trim() || undefined
     });
   }
 
@@ -179,16 +200,22 @@ export function usePropertiesPageModel() {
     if (!name) {
       return;
     }
-    createEntityCategoryTermMutation.mutate({ name });
+    createEntityCategoryTermMutation.mutate({
+      name,
+      description: forms.newEntityCategoryTermDescription.trim() || undefined
+    });
   }
 
-  function onCreateTagCategoryTerm(event: FormEvent<HTMLFormElement>) {
+  function onCreateTagTypeTerm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const name = forms.newTagCategoryTermName.trim();
+    const name = forms.newTagTypeTermName.trim();
     if (!name) {
       return;
     }
-    createTagCategoryTermMutation.mutate({ name });
+    createTagTypeTermMutation.mutate({
+      name,
+      description: forms.newTagTypeTermDescription.trim() || undefined
+    });
   }
 
   function saveUser(userId: string) {
@@ -242,22 +269,25 @@ export function usePropertiesPageModel() {
       tagId,
       name,
       color: forms.editingTagColor.trim(),
-      category: forms.editingTagCategory.trim()
+      description: forms.editingTagDescription.trim(),
+      type: forms.editingTagType.trim()
     });
   }
 
   function startEditTag(tag: Tag) {
     forms.setEditingTagId(tag.id);
     forms.setEditingTagName(tag.name);
-    forms.setEditingTagCategory(tag.category ?? "");
+    forms.setEditingTagType(tag.type ?? "");
     forms.setEditingTagColor(tag.color ?? "");
+    forms.setEditingTagDescription(tag.description ?? "");
   }
 
   function cancelEditTag() {
     forms.setEditingTagId(null);
     forms.setEditingTagName("");
-    forms.setEditingTagCategory("");
+    forms.setEditingTagType("");
     forms.setEditingTagColor("");
+    forms.setEditingTagDescription("");
   }
 
   function saveEntityCategoryTerm(termId: string) {
@@ -265,35 +295,47 @@ export function usePropertiesPageModel() {
     if (!name) {
       return;
     }
-    updateEntityCategoryTermMutation.mutate({ termId, name });
+    updateEntityCategoryTermMutation.mutate({
+      termId,
+      name,
+      description: forms.editingEntityCategoryTermDescription.trim() || null
+    });
   }
 
   function startEditEntityCategoryTerm(term: TaxonomyTerm) {
     forms.setEditingEntityCategoryTermId(term.id);
     forms.setEditingEntityCategoryTermName(term.name);
+    forms.setEditingEntityCategoryTermDescription(term.description ?? "");
   }
 
   function cancelEditEntityCategoryTerm() {
     forms.setEditingEntityCategoryTermId("");
     forms.setEditingEntityCategoryTermName("");
+    forms.setEditingEntityCategoryTermDescription("");
   }
 
-  function saveTagCategoryTerm(termId: string) {
-    const name = forms.editingTagCategoryTermName.trim();
+  function saveTagTypeTerm(termId: string) {
+    const name = forms.editingTagTypeTermName.trim();
     if (!name) {
       return;
     }
-    updateTagCategoryTermMutation.mutate({ termId, name });
+    updateTagTypeTermMutation.mutate({
+      termId,
+      name,
+      description: forms.editingTagTypeTermDescription.trim() || null
+    });
   }
 
-  function startEditTagCategoryTerm(term: TaxonomyTerm) {
-    forms.setEditingTagCategoryTermId(term.id);
-    forms.setEditingTagCategoryTermName(term.name);
+  function startEditTagTypeTerm(term: TaxonomyTerm) {
+    forms.setEditingTagTypeTermId(term.id);
+    forms.setEditingTagTypeTermName(term.name);
+    forms.setEditingTagTypeTermDescription(term.description ?? "");
   }
 
-  function cancelEditTagCategoryTerm() {
-    forms.setEditingTagCategoryTermId("");
-    forms.setEditingTagCategoryTermName("");
+  function cancelEditTagTypeTerm() {
+    forms.setEditingTagTypeTermId("");
+    forms.setEditingTagTypeTermName("");
+    forms.setEditingTagTypeTermDescription("");
   }
 
   const coreSections = [
@@ -305,7 +347,7 @@ export function usePropertiesPageModel() {
 
   const taxonomySections = [
     { id: "entityCategories" as const, label: entityCategoriesLabel },
-    { id: "tagCategories" as const, label: tagCategoriesLabel }
+    { id: "tagCategories" as const, label: tagTypesLabel }
   ];
 
   return {
@@ -316,7 +358,7 @@ export function usePropertiesPageModel() {
     coreSections,
     taxonomySections,
     entityCategoriesLabel,
-    tagCategoriesLabel,
+    tagTypesLabel,
     queries,
     filtered,
     options,
@@ -332,17 +374,21 @@ export function usePropertiesPageModel() {
       setEditingEntityCategory: forms.setEditingEntityCategory,
       newTagName: forms.newTagName,
       setNewTagName: forms.setNewTagName,
-      newTagCategory: forms.newTagCategory,
-      setNewTagCategory: forms.setNewTagCategory,
+      newTagType: forms.newTagType,
+      setNewTagType: forms.setNewTagType,
       newTagColor: forms.newTagColor,
       setNewTagColor: forms.setNewTagColor,
+      newTagDescription: forms.newTagDescription,
+      setNewTagDescription: forms.setNewTagDescription,
       editingTagId: forms.editingTagId,
       editingTagName: forms.editingTagName,
       setEditingTagName: forms.setEditingTagName,
-      editingTagCategory: forms.editingTagCategory,
-      setEditingTagCategory: forms.setEditingTagCategory,
+      editingTagType: forms.editingTagType,
+      setEditingTagType: forms.setEditingTagType,
       editingTagColor: forms.editingTagColor,
       setEditingTagColor: forms.setEditingTagColor,
+      editingTagDescription: forms.editingTagDescription,
+      setEditingTagDescription: forms.setEditingTagDescription,
       newUserName: forms.newUserName,
       setNewUserName: forms.setNewUserName,
       editingUserId: forms.editingUserId,
@@ -350,14 +396,22 @@ export function usePropertiesPageModel() {
       setEditingUserName: forms.setEditingUserName,
       newEntityCategoryTermName: forms.newEntityCategoryTermName,
       setNewEntityCategoryTermName: forms.setNewEntityCategoryTermName,
+      newEntityCategoryTermDescription: forms.newEntityCategoryTermDescription,
+      setNewEntityCategoryTermDescription: forms.setNewEntityCategoryTermDescription,
       editingEntityCategoryTermId: forms.editingEntityCategoryTermId,
       editingEntityCategoryTermName: forms.editingEntityCategoryTermName,
       setEditingEntityCategoryTermName: forms.setEditingEntityCategoryTermName,
-      newTagCategoryTermName: forms.newTagCategoryTermName,
-      setNewTagCategoryTermName: forms.setNewTagCategoryTermName,
-      editingTagCategoryTermId: forms.editingTagCategoryTermId,
-      editingTagCategoryTermName: forms.editingTagCategoryTermName,
-      setEditingTagCategoryTermName: forms.setEditingTagCategoryTermName
+      editingEntityCategoryTermDescription: forms.editingEntityCategoryTermDescription,
+      setEditingEntityCategoryTermDescription: forms.setEditingEntityCategoryTermDescription,
+      newTagTypeTermName: forms.newTagTypeTermName,
+      setNewTagTypeTermName: forms.setNewTagTypeTermName,
+      newTagTypeTermDescription: forms.newTagTypeTermDescription,
+      setNewTagTypeTermDescription: forms.setNewTagTypeTermDescription,
+      editingTagTypeTermId: forms.editingTagTypeTermId,
+      editingTagTypeTermName: forms.editingTagTypeTermName,
+      setEditingTagTypeTermName: forms.setEditingTagTypeTermName,
+      editingTagTypeTermDescription: forms.editingTagTypeTermDescription,
+      setEditingTagTypeTermDescription: forms.setEditingTagTypeTermDescription
     },
     actions: {
       setSectionSearchValue: sectionState.actions.setSectionSearchValue,
@@ -367,7 +421,7 @@ export function usePropertiesPageModel() {
       onCreateTag,
       onCreateUser,
       onCreateEntityCategoryTerm,
-      onCreateTagCategoryTerm,
+      onCreateTagTypeTerm,
       saveUser,
       startEditUser,
       cancelEditUser,
@@ -380,9 +434,9 @@ export function usePropertiesPageModel() {
       saveEntityCategoryTerm,
       startEditEntityCategoryTerm,
       cancelEditEntityCategoryTerm,
-      saveTagCategoryTerm,
-      startEditTagCategoryTerm,
-      cancelEditTagCategoryTerm
+      saveTagTypeTerm,
+      startEditTagTypeTerm,
+      cancelEditTagTypeTerm
     },
     mutations: {
       createEntityMutation,
@@ -393,8 +447,8 @@ export function usePropertiesPageModel() {
       updateUserMutation,
       createEntityCategoryTermMutation,
       updateEntityCategoryTermMutation,
-      createTagCategoryTermMutation,
-      updateTagCategoryTermMutation
+      createTagTypeTermMutation,
+      updateTagTypeTermMutation
     }
   };
 }

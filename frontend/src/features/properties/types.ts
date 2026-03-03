@@ -1,5 +1,5 @@
 export const ENTITY_CATEGORY_TAXONOMY_KEY = "entity_category";
-export const TAG_CATEGORY_TAXONOMY_KEY = "tag_category";
+export const TAG_TYPE_TAXONOMY_KEY = "tag_type";
 
 export type PropertiesSectionId = "users" | "entities" | "tags" | "currencies" | "entityCategories" | "tagCategories";
 

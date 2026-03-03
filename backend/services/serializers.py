@@ -5,7 +5,7 @@ from backend.schemas import EntryDetailRead, EntryRead, LinkRead, TagRead
 
 
 def tag_to_schema(tag: Tag) -> TagRead:
-    return TagRead(id=tag.id, name=tag.name, color=tag.color)
+    return TagRead(id=tag.id, name=tag.name, color=tag.color, description=tag.description)
 
 
 def link_to_schema(link: EntryLink) -> LinkRead:

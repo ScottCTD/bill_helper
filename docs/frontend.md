@@ -215,21 +215,22 @@ Agent client methods:
   - `TaxonomyTermsSection.tsx`
 - two-level information architecture:
   - `Core`: Users, Entities, Tags, Currencies
-  - `Taxonomies`: Entity Categories, Tag Categories
+  - `Taxonomies`: Entity Categories, Tag Types
 - left rail section switching (stacks into wrapped segmented groups on smaller screens)
 - one active table surface at a time instead of one long vertical section wall
 - shared table shell per section:
   - title/subtitle row
   - unified filter toolbar
   - compact right-aligned `+` add action for editable sections
-- create and edit interactions are modal-driven across editable sections (`users`, `entities`, `tags`, `entity categories`, `tag categories`):
+- create and edit interactions are modal-driven across editable sections (`users`, `entities`, `tags`, `entity categories`, `tag types`):
   - `+` opens create dialog
   - row `Edit`/`Rename` opens edit dialog
   - no inline row edit/create panels in the table body
 - taxonomy term CRUD tables:
-  - `Entity Categories`: name, usage count, rename
-  - `Tag Categories`: name, usage count, rename
-- entities/tags category fields now use taxonomy-sourced creatable pickers
+  - `Entity Categories`: name, description, rename
+  - `Tag Types`: name, description, rename
+- entities category fields and tag type fields use taxonomy-sourced creatable pickers
+- tags support optional description in create/edit dialogs and table listings
 - currencies remain read-only in this iteration
 
 ## `DashboardPage.tsx`
@@ -501,7 +502,7 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
 - properties page now issues taxonomy reads in addition to users/entities/tags/currencies:
   - `GET /taxonomies`
   - `GET /taxonomies/entity_category/terms`
-  - `GET /taxonomies/tag_category/terms`
+  - `GET /taxonomies/tag_type/terms`
 - accounts workspace now uses table-row selection with dialog-based create/edit:
   - create action is the icon `+` button in the table toolbar
   - edits are per-row and open from `Edit` action buttons
@@ -510,7 +511,7 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
   - `+` triggers section create dialogs
   - row `Edit`/`Rename` triggers section edit dialogs
   - inline table-row form editing is removed
-- taxonomy term create/rename and entity/tag category assignment changes now invalidate taxonomy-term usage caches
+- taxonomy term create/rename and entity category/tag type assignment changes now invalidate taxonomy-term usage caches
 - entry popup save flow is now close-driven:
   - clicking outside/closing attempts to auto-save when there are changes
   - clean/no-change close exits immediately without write calls

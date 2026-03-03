@@ -1154,7 +1154,7 @@ def test_proposal_creation_for_each_create_change_type(client, monkeypatch):
                             "arguments": json.dumps(
                                 {
                                     "name": "groceries",
-                                    "category": "daily",
+                                    "type": "daily",
                                 }
                             ),
                         },
@@ -1243,7 +1243,7 @@ def test_approve_and_reapprove_conflict(client, monkeypatch):
                         "arguments": json.dumps(
                             {
                                 "name": "subscriptions",
-                                "category": "recurring",
+                                "type": "recurring",
                             }
                         ),
                     },
@@ -1356,7 +1356,7 @@ def test_propose_delete_tag_is_blocked_when_tag_is_referenced(client, monkeypatc
 
 
 def test_delete_tag_apply_fails_if_tag_becomes_referenced_before_approval(client, monkeypatch):
-    create_tag_response = client.post("/api/v1/tags", json={"name": "stale-tag", "category": "misc"})
+    create_tag_response = client.post("/api/v1/tags", json={"name": "stale-tag", "type": "misc"})
     create_tag_response.raise_for_status()
 
     def fake_model(messages):
@@ -1671,7 +1671,7 @@ def test_reviewed_items_are_injected_into_followup_turn(client, monkeypatch):
                         "arguments": json.dumps(
                             {
                                 "name": "tmp-tag",
-                                "category": "tmp",
+                                "type": "tmp",
                             }
                         ),
                     },
@@ -1686,7 +1686,7 @@ def test_reviewed_items_are_injected_into_followup_turn(client, monkeypatch):
 
     reject_response = client.post(
         f"/api/v1/agent/change-items/{item_id}/reject",
-        json={"note": "Use category recurring instead"},
+        json={"note": "Use type recurring instead"},
     )
     reject_response.raise_for_status()
 
@@ -1710,7 +1710,7 @@ def test_reviewed_items_are_injected_into_followup_turn(client, monkeypatch):
     assert "Review results from your previous proposals:" in followup_content
     assert "propose_create_tag" in followup_content
     assert "review_action=reject" in followup_content
-    assert "Use category recurring instead" in followup_content
+    assert "Use type recurring instead" in followup_content
     assert followup_content.index("Review results from your previous proposals:") < followup_content.index("User feedback:")
     assert followup_content.index("User feedback:") < followup_content.index("Try again")
 
@@ -1729,7 +1729,7 @@ def test_propose_tools_allowed_when_pending_reviews_exist(client, monkeypatch):
                     "type": "function",
                     "function": {
                         "name": "propose_create_tag",
-                        "arguments": json.dumps({"name": "pending-tag", "category": "misc"}),
+                        "arguments": json.dumps({"name": "pending-tag", "type": "misc"}),
                     },
                 }
             ],
@@ -1871,7 +1871,7 @@ def test_remove_pending_proposal_tool_removes_existing_item(client, monkeypatch)
                         "type": "function",
                         "function": {
                             "name": "propose_create_tag",
-                            "arguments": json.dumps({"name": "Temporary Tag", "category": "expense"}),
+                            "arguments": json.dumps({"name": "Temporary Tag", "type": "expense"}),
                         },
                     }
                 ],

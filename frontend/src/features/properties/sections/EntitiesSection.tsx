@@ -114,7 +114,6 @@ export function EntitiesSection(props: EntitiesSectionProps) {
                 <TableHead>From</TableHead>
                 <TableHead>To</TableHead>
                 <TableHead>Accounts</TableHead>
-                <TableHead>Entries</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -126,7 +125,6 @@ export function EntitiesSection(props: EntitiesSectionProps) {
                   <TableCell>{entity.from_count ?? 0}</TableCell>
                   <TableCell>{entity.to_count ?? 0}</TableCell>
                   <TableCell>{entity.account_count ?? 0}</TableCell>
-                  <TableCell>{entity.entry_count ?? 0}</TableCell>
                   <TableCell>
                     <Button type="button" size="sm" variant="outline" onClick={() => onStartEditEntity(entity)}>
                       Edit

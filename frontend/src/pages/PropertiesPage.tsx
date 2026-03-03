@@ -89,24 +89,28 @@ export function PropertiesPage() {
         onCloseCreatePanel={() => model.actions.closeCreatePanel("tags")}
         newTagName={model.forms.newTagName}
         onNewTagNameChange={model.forms.setNewTagName}
-        newTagCategory={model.forms.newTagCategory}
-        onNewTagCategoryChange={model.forms.setNewTagCategory}
+        newTagType={model.forms.newTagType}
+        onNewTagTypeChange={model.forms.setNewTagType}
         newTagColor={model.forms.newTagColor}
         onNewTagColorChange={model.forms.setNewTagColor}
+        newTagDescription={model.forms.newTagDescription}
+        onNewTagDescriptionChange={model.forms.setNewTagDescription}
         editingTagId={model.forms.editingTagId}
         editingTagName={model.forms.editingTagName}
         onEditingTagNameChange={model.forms.setEditingTagName}
-        editingTagCategory={model.forms.editingTagCategory}
-        onEditingTagCategoryChange={model.forms.setEditingTagCategory}
+        editingTagType={model.forms.editingTagType}
+        onEditingTagTypeChange={model.forms.setEditingTagType}
         editingTagColor={model.forms.editingTagColor}
         onEditingTagColorChange={model.forms.setEditingTagColor}
+        editingTagDescription={model.forms.editingTagDescription}
+        onEditingTagDescriptionChange={model.forms.setEditingTagDescription}
         onStartEditTag={model.actions.startEditTag}
         onCancelEditTag={model.actions.cancelEditTag}
         onSaveTag={model.actions.saveTag}
         onCreateTagSubmit={model.actions.onCreateTag}
         tags={model.filtered.tags}
         hasAnyTags={(model.queries.tagsQuery.data ?? []).length > 0}
-        tagCategoryOptions={model.options.tagCategoryOptions}
+        tagTypeOptions={model.options.tagTypeOptions}
         isLoading={model.queries.tagsQuery.isLoading}
         isError={model.queries.tagsQuery.isError}
         queryErrorMessage={model.queries.tagsQuery.isError ? (model.queries.tagsQuery.error as Error).message : null}
@@ -143,9 +147,13 @@ export function PropertiesPage() {
         onCloseCreatePanel={() => model.actions.closeCreatePanel("entityCategories")}
         newTermName={model.forms.newEntityCategoryTermName}
         onNewTermNameChange={model.forms.setNewEntityCategoryTermName}
+        newTermDescription={model.forms.newEntityCategoryTermDescription}
+        onNewTermDescriptionChange={model.forms.setNewEntityCategoryTermDescription}
         editingTermId={model.forms.editingEntityCategoryTermId}
         editingTermName={model.forms.editingEntityCategoryTermName}
         onEditingTermNameChange={model.forms.setEditingEntityCategoryTermName}
+        editingTermDescription={model.forms.editingEntityCategoryTermDescription}
+        onEditingTermDescriptionChange={model.forms.setEditingEntityCategoryTermDescription}
         onStartEditTerm={model.actions.startEditEntityCategoryTerm}
         onCancelEditTerm={model.actions.cancelEditEntityCategoryTerm}
         onSaveTerm={model.actions.saveEntityCategoryTerm}
@@ -176,38 +184,42 @@ export function PropertiesPage() {
   if (model.activeSection === "tagCategories") {
     activeSectionContent = (
       <TaxonomyTermsSection
-        label={model.tagCategoriesLabel}
+        label={model.tagTypesLabel}
         search={model.sectionSearch.tagCategories}
         onSearchChange={(value) => model.actions.setSectionSearchValue("tagCategories", value)}
         createPanelOpen={model.createPanelOpen.tagCategories}
         onToggleCreatePanel={() => model.actions.toggleCreatePanel("tagCategories")}
         onCloseCreatePanel={() => model.actions.closeCreatePanel("tagCategories")}
-        newTermName={model.forms.newTagCategoryTermName}
-        onNewTermNameChange={model.forms.setNewTagCategoryTermName}
-        editingTermId={model.forms.editingTagCategoryTermId}
-        editingTermName={model.forms.editingTagCategoryTermName}
-        onEditingTermNameChange={model.forms.setEditingTagCategoryTermName}
-        onStartEditTerm={model.actions.startEditTagCategoryTerm}
-        onCancelEditTerm={model.actions.cancelEditTagCategoryTerm}
-        onSaveTerm={model.actions.saveTagCategoryTerm}
-        onCreateTermSubmit={model.actions.onCreateTagCategoryTerm}
-        terms={model.filtered.tagCategoryTerms}
-        hasAnyTerms={(model.queries.tagCategoryTermsQuery.data ?? []).length > 0}
-        isLoading={model.queries.tagCategoryTermsQuery.isLoading}
-        isError={model.queries.tagCategoryTermsQuery.isError}
-        queryErrorMessage={model.queries.tagCategoryTermsQuery.isError ? (model.queries.tagCategoryTermsQuery.error as Error).message : null}
+        newTermName={model.forms.newTagTypeTermName}
+        onNewTermNameChange={model.forms.setNewTagTypeTermName}
+        newTermDescription={model.forms.newTagTypeTermDescription}
+        onNewTermDescriptionChange={model.forms.setNewTagTypeTermDescription}
+        editingTermId={model.forms.editingTagTypeTermId}
+        editingTermName={model.forms.editingTagTypeTermName}
+        onEditingTermNameChange={model.forms.setEditingTagTypeTermName}
+        editingTermDescription={model.forms.editingTagTypeTermDescription}
+        onEditingTermDescriptionChange={model.forms.setEditingTagTypeTermDescription}
+        onStartEditTerm={model.actions.startEditTagTypeTerm}
+        onCancelEditTerm={model.actions.cancelEditTagTypeTerm}
+        onSaveTerm={model.actions.saveTagTypeTerm}
+        onCreateTermSubmit={model.actions.onCreateTagTypeTerm}
+        terms={model.filtered.tagTypeTerms}
+        hasAnyTerms={(model.queries.tagTypeTermsQuery.data ?? []).length > 0}
+        isLoading={model.queries.tagTypeTermsQuery.isLoading}
+        isError={model.queries.tagTypeTermsQuery.isError}
+        queryErrorMessage={model.queries.tagTypeTermsQuery.isError ? (model.queries.tagTypeTermsQuery.error as Error).message : null}
         createErrorMessage={
-          model.mutations.createTagCategoryTermMutation.error
-            ? (model.mutations.createTagCategoryTermMutation.error as Error).message
+          model.mutations.createTagTypeTermMutation.error
+            ? (model.mutations.createTagTypeTermMutation.error as Error).message
             : null
         }
         updateErrorMessage={
-          model.mutations.updateTagCategoryTermMutation.error
-            ? (model.mutations.updateTagCategoryTermMutation.error as Error).message
+          model.mutations.updateTagTypeTermMutation.error
+            ? (model.mutations.updateTagTypeTermMutation.error as Error).message
             : null
         }
-        isCreating={model.mutations.createTagCategoryTermMutation.isPending}
-        isUpdating={model.mutations.updateTagCategoryTermMutation.isPending}
+        isCreating={model.mutations.createTagTypeTermMutation.isPending}
+        isUpdating={model.mutations.updateTagTypeTermMutation.isPending}
       />
     );
   }
@@ -219,8 +231,8 @@ export function PropertiesPage() {
           <div className="space-y-1.5">
             <h2 className="text-xl font-semibold">Property Databases</h2>
             <p className="muted">
-              Manage core catalogs and taxonomy terms from one workspace. Category pickers for entities and tags are driven by
-              taxonomy terms.
+              Manage core catalogs and taxonomy terms from one workspace. Category pickers for entities and type pickers for tags
+              are driven by taxonomy terms.
             </p>
             {model.queries.taxonomiesQuery.isError ? <p className="error">{(model.queries.taxonomiesQuery.error as Error).message}</p> : null}
           </div>

@@ -18,6 +18,27 @@ from backend.services.taxonomy import (
 router = APIRouter(prefix="/taxonomies", tags=["taxonomies"])
 
 
+def _get_term_description(term: TaxonomyTerm) -> str | None:
+    metadata = term.metadata_json
+    if not isinstance(metadata, dict):
+        return None
+    value = metadata.get("description")
+    if isinstance(value, str):
+        normalized = " ".join(value.split()).strip()
+        return normalized or None
+    return None
+
+
+def _set_term_description(term: TaxonomyTerm, description: str | None) -> None:
+    normalized = " ".join(description.split()).strip() if description is not None else ""
+    metadata = dict(term.metadata_json) if isinstance(term.metadata_json, dict) else {}
+    if normalized:
+        metadata["description"] = normalized
+    else:
+        metadata.pop("description", None)
+    term.metadata_json = metadata or None
+
+
 def _get_taxonomy_or_404(db: Session, taxonomy_key: str) -> Taxonomy:
     taxonomy = get_taxonomy_by_key(db, taxonomy_key)
     if taxonomy is None:
@@ -38,6 +59,7 @@ def _term_to_schema(db: Session, term: TaxonomyTerm) -> TaxonomyTermRead:
         name=term.name,
         normalized_name=term.normalized_name,
         parent_term_id=term.parent_term_id,
+        description=_get_term_description(term),
         usage_count=usage_count,
     )
 
@@ -61,6 +83,7 @@ def list_taxonomy_terms(taxonomy_key: str, db: Session = Depends(get_db)) -> lis
             name=term.name,
             normalized_name=term.normalized_name,
             parent_term_id=term.parent_term_id,
+            description=_get_term_description(term),
             usage_count=usage_count,
         )
         for term, usage_count in rows
@@ -82,6 +105,9 @@ def create_taxonomy_term(
             name=payload.name,
             parent_term_id=payload.parent_term_id,
         )
+        if payload.description is not None:
+            _set_term_description(term, payload.description)
+            db.add(term)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -115,6 +141,9 @@ def update_taxonomy_term(
             if "already exists" in message:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+    if "description" in payload.model_dump(exclude_unset=True):
+        _set_term_description(term, payload.description)
+        db.add(term)
 
     db.commit()
     db.refresh(term)

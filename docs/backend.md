@@ -181,7 +181,7 @@ Agent services:
   - entry proposal tools include explicit `markdown_notes` style guidance for human-readable, information-complete markdown
   - entry update/delete arg validation tolerates nested JSON-object strings for selector/patch and normalizes them before schema validation
   - `list_entries` is the single entry query tool (date/name/from/to/tags/kind; exact-first then fuzzy ranking)
-  - `list_tags` / `list_entities` support name+category query and include category in outputs
+  - `list_tags` supports name+type query and includes type in outputs; `list_entities` supports name+category and includes category in outputs
   - proposal tools cover CRUD:
     - entries: `propose_create_entry`, `propose_update_entry`, `propose_delete_entry`
     - tags: `propose_create_tag`, `propose_update_tag`, `propose_delete_tag`
@@ -271,6 +271,9 @@ Settings router:
 - `0014_remove_account_institution_type`
 - `0015_add_agent_tool_call_output_text`
 - `0016_add_user_memory_to_runtime_settings`
+- `0017_rename_tag_category_taxonomy`
+- `0018_add_tag_description`
+- `0017_rename_tag_category_taxonomy`
 
 Commands:
 
@@ -368,9 +371,10 @@ Current baseline for `backend/tests/test_agent.py`: `52 passed`.
 - dashboard API serves runtime-configured currency analytics payloads; entries in other currencies are excluded from that dashboard response
 - dashboard analytics also exclude internal transfers when both `from_entity_id` and `to_entity_id` map to account-category entities (including linked account entities), so KPI totals reflect external cash in/out only
 - new agent module boundaries reduce coupling and make it safer to add new model providers/change types
-- taxonomy defaults (`entity_category`, `tag_category`) are auto-provisioned by service logic when missing
-- tags now support optional `category` assignment via taxonomy terms while keeping existing tag APIs intact
+- taxonomy defaults (`entity_category`, `tag_type`) are auto-provisioned by service logic when missing
+- tags now support optional `type` assignment via taxonomy terms and optional free-text `description`
 - entity categories are sourced from taxonomy assignments; `entities.category` column is still synchronized for compatibility
+- taxonomy terms support optional descriptions via `taxonomy_terms.metadata_json.description` (used by entity category and tag type terms)
 - `PATCH /entities/{entity_id}` now refreshes category from taxonomy assignments in the response path, improving UI consistency after term renames
 
 ## Constraints / Known Limitations

@@ -24,9 +24,13 @@ interface TaxonomyTermsSectionProps {
   onCloseCreatePanel: () => void;
   newTermName: string;
   onNewTermNameChange: (value: string) => void;
+  newTermDescription: string;
+  onNewTermDescriptionChange: (value: string) => void;
   editingTermId: string;
   editingTermName: string;
   onEditingTermNameChange: (value: string) => void;
+  editingTermDescription: string;
+  onEditingTermDescriptionChange: (value: string) => void;
   onStartEditTerm: (term: TaxonomyTerm) => void;
   onCancelEditTerm: () => void;
   onSaveTerm: (termId: string) => void;
@@ -52,9 +56,13 @@ export function TaxonomyTermsSection(props: TaxonomyTermsSectionProps) {
     onCloseCreatePanel,
     newTermName,
     onNewTermNameChange,
+    newTermDescription,
+    onNewTermDescriptionChange,
     editingTermId,
     editingTermName,
     onEditingTermNameChange,
+    editingTermDescription,
+    onEditingTermDescriptionChange,
     onStartEditTerm,
     onCancelEditTerm,
     onSaveTerm,
@@ -75,24 +83,24 @@ export function TaxonomyTermsSection(props: TaxonomyTermsSectionProps) {
       <div className="table-shell-header">
         <div>
           <h3 className="table-shell-title">{label}</h3>
-          <p className="table-shell-subtitle">Flat taxonomy terms used by this catalog. Usage equals assigned records.</p>
+          <p className="table-shell-subtitle">Flat taxonomy terms used by this catalog.</p>
         </div>
       </div>
       <div className="table-toolbar">
         <div className="table-toolbar-filters">
           <label className="field min-w-[220px] grow">
             <span>Search</span>
-            <Input placeholder="Filter categories" value={search} onChange={(event) => onSearchChange(event.target.value)} />
+            <Input placeholder="Filter terms" value={search} onChange={(event) => onSearchChange(event.target.value)} />
           </label>
         </div>
         <div className="table-toolbar-action">
-          <Button type="button" size="icon" variant="outline" aria-label="Add category" onClick={onToggleCreatePanel}>
+          <Button type="button" size="icon" variant="outline" aria-label="Add term" onClick={onToggleCreatePanel}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {isLoading ? <p>Loading categories...</p> : null}
+      {isLoading ? <p>Loading terms...</p> : null}
       {isError ? <p className="error">{queryErrorMessage}</p> : null}
 
       {terms ? (
@@ -101,7 +109,7 @@ export function TaxonomyTermsSection(props: TaxonomyTermsSectionProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Usage</TableHead>
+                <TableHead>Description</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -109,7 +117,7 @@ export function TaxonomyTermsSection(props: TaxonomyTermsSectionProps) {
               {terms.map((term) => (
                 <TableRow key={term.id}>
                   <TableCell>{term.name}</TableCell>
-                  <TableCell>{term.usage_count}</TableCell>
+                  <TableCell>{term.description || "(none)"}</TableCell>
                   <TableCell>
                     <Button type="button" size="sm" variant="outline" onClick={() => onStartEditTerm(term)}>
                       Rename
@@ -120,7 +128,7 @@ export function TaxonomyTermsSection(props: TaxonomyTermsSectionProps) {
             </TableBody>
           </Table>
         ) : (
-          <p className="muted">{hasAnyTerms ? "No categories match the current search." : "No categories yet."}</p>
+          <p className="muted">{hasAnyTerms ? "No terms match the current search." : "No terms yet."}</p>
         )
       ) : null}
 
@@ -134,12 +142,19 @@ export function TaxonomyTermsSection(props: TaxonomyTermsSectionProps) {
       >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Create Category</DialogTitle>
-            <DialogDescription>Add a taxonomy term to this category set.</DialogDescription>
+            <DialogTitle>Create Term</DialogTitle>
+            <DialogDescription>Add a taxonomy term to this taxonomy set.</DialogDescription>
           </DialogHeader>
           <form className="grid gap-4" onSubmit={onCreateTermSubmit}>
             <FormField label="Name">
               <Input placeholder="e.g. food" value={newTermName} onChange={(event) => onNewTermNameChange(event.target.value)} />
+            </FormField>
+            <FormField label="Description">
+              <Input
+                placeholder="e.g. Groceries, restaurants, and food delivery"
+                value={newTermDescription}
+                onChange={(event) => onNewTermDescriptionChange(event.target.value)}
+              />
             </FormField>
             {createErrorMessage ? <p className="error">{createErrorMessage}</p> : null}
             <DialogFooter>
@@ -164,7 +179,7 @@ export function TaxonomyTermsSection(props: TaxonomyTermsSectionProps) {
       >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Rename Category</DialogTitle>
+            <DialogTitle>Rename Term</DialogTitle>
             <DialogDescription>Update the taxonomy term label used in selectors.</DialogDescription>
           </DialogHeader>
           <form
@@ -182,6 +197,13 @@ export function TaxonomyTermsSection(props: TaxonomyTermsSectionProps) {
                 placeholder="e.g. food"
                 value={editingTermName}
                 onChange={(event) => onEditingTermNameChange(event.target.value)}
+              />
+            </FormField>
+            <FormField label="Description">
+              <Input
+                placeholder="e.g. Groceries, restaurants, and food delivery"
+                value={editingTermDescription}
+                onChange={(event) => onEditingTermDescriptionChange(event.target.value)}
               />
             </FormField>
             {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}

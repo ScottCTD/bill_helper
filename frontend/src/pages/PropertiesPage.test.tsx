@@ -49,7 +49,7 @@ afterEach(() => {
 function mockBasePropertiesApi() {
   vi.mocked(listEntities).mockResolvedValue([{ id: "entity-1", name: "Grocer", category: "Food" }]);
   vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true }]);
-  vi.mocked(listTags).mockResolvedValue([{ id: 1, name: "groceries", color: "#22aa66", category: "Food" }]);
+  vi.mocked(listTags).mockResolvedValue([{ id: 1, name: "groceries", color: "#22aa66", type: "Food" }]);
   vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 3, is_placeholder: false }]);
   vi.mocked(listTaxonomies).mockResolvedValue([
     {
@@ -61,10 +61,10 @@ function mockBasePropertiesApi() {
     },
     {
       id: "taxonomy-tag",
-      key: "tag_category",
+      key: "tag_type",
       applies_to: "tag",
       cardinality: "single",
-      display_name: "Tag Categories"
+      display_name: "Tag Types"
     }
   ]);
   vi.mocked(listTaxonomyTerms).mockImplementation(async (taxonomyKey: string) => {
@@ -75,8 +75,8 @@ function mockBasePropertiesApi() {
   });
   vi.mocked(createEntity).mockResolvedValue({ id: "entity-2", name: "Landlord", category: "Housing" });
   vi.mocked(updateEntity).mockResolvedValue({ id: "entity-1", name: "Grocer", category: "Food" });
-  vi.mocked(createTag).mockResolvedValue({ id: 2, name: "rent", color: null, category: "Housing" });
-  vi.mocked(updateTag).mockResolvedValue({ id: 1, name: "groceries", color: "#22aa66", category: "Food" });
+  vi.mocked(createTag).mockResolvedValue({ id: 2, name: "rent", color: null, type: "Housing" });
+  vi.mocked(updateTag).mockResolvedValue({ id: 1, name: "groceries", color: "#22aa66", type: "Food" });
   vi.mocked(createUser).mockResolvedValue({ id: "user-2", name: "Bob", is_current_user: false });
   vi.mocked(updateUser).mockResolvedValue({ id: "user-1", name: "Alice", is_current_user: true });
   vi.mocked(createTaxonomyTerm).mockImplementation(async (_taxonomyKey, payload) => ({
@@ -123,8 +123,8 @@ describe("PropertiesPage", () => {
     renderWithQueryClient(<PropertiesPage />);
 
     await screen.findByText("Property Databases");
-    await userEvent.click(screen.getByRole("button", { name: "Tag Categories" }));
-    await userEvent.click(screen.getByRole("button", { name: "Add category" }));
+    await userEvent.click(screen.getByRole("button", { name: "Tag Types" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add term" }));
 
     const termNameInput = screen.getByPlaceholderText("e.g. food");
     await userEvent.type(termNameInput, "Household");
@@ -133,7 +133,7 @@ describe("PropertiesPage", () => {
     await waitFor(() => {
       expect(createTaxonomyTerm).toHaveBeenCalled();
     });
-    expect(vi.mocked(createTaxonomyTerm).mock.calls[0]?.[0]).toBe("tag_category");
+    expect(vi.mocked(createTaxonomyTerm).mock.calls[0]?.[0]).toBe("tag_type");
     expect(vi.mocked(createTaxonomyTerm).mock.calls[0]?.[1]).toEqual({ name: "Household" });
   });
 });

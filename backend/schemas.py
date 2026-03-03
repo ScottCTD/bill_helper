@@ -21,7 +21,8 @@ class TagRead(BaseModel):
     id: int
     name: str
     color: str | None = None
-    category: str | None = None
+    description: str | None = None
+    type: str | None = None
     entry_count: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -30,13 +31,15 @@ class TagRead(BaseModel):
 class TagCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     color: str | None = Field(default=None, max_length=20)
-    category: str | None = Field(default=None, max_length=100)
+    description: str | None = Field(default=None, max_length=2000)
+    type: str | None = Field(default=None, max_length=100)
 
 
 class TagUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=64)
     color: str | None = Field(default=None, max_length=20)
-    category: str | None = Field(default=None, max_length=100)
+    description: str | None = Field(default=None, max_length=2000)
+    type: str | None = Field(default=None, max_length=100)
 
 
 class EntityRead(BaseModel):
@@ -99,10 +102,12 @@ class TaxonomyRead(BaseModel):
 class TaxonomyTermCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     parent_term_id: str | None = None
+    description: str | None = Field(default=None, max_length=2000)
 
 
 class TaxonomyTermUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=2000)
 
 
 class TaxonomyTermRead(BaseModel):
@@ -111,6 +116,7 @@ class TaxonomyTermRead(BaseModel):
     name: str
     normalized_name: str
     parent_term_id: str | None = None
+    description: str | None = None
     usage_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)

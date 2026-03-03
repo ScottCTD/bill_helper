@@ -13,8 +13,8 @@ from backend.services.taxonomy import assign_single_term_by_name, get_single_ter
 
 router = APIRouter(prefix="/tags", tags=["tags"])
 
-TAG_CATEGORY_TAXONOMY_KEY = "tag_category"
-TAG_CATEGORY_SUBJECT_TYPE = "tag"
+TAG_TYPE_TAXONOMY_KEY = "tag_type"
+TAG_TYPE_SUBJECT_TYPE = "tag"
 
 
 @router.get("", response_model=list[TagRead])
@@ -35,10 +35,10 @@ def list_tags(db: Session = Depends(get_db)) -> list[TagRead]:
             entry_count_subquery.label("entry_count"),
         ).order_by(Tag.name.asc())
     ).all()
-    category_by_tag_id = get_single_term_name_map(
+    type_by_tag_id = get_single_term_name_map(
         db,
-        taxonomy_key=TAG_CATEGORY_TAXONOMY_KEY,
-        subject_type=TAG_CATEGORY_SUBJECT_TYPE,
+        taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
+        subject_type=TAG_TYPE_SUBJECT_TYPE,
         subject_ids=[tag.id for tag, _ in rows],
     )
     return [
@@ -46,7 +46,8 @@ def list_tags(db: Session = Depends(get_db)) -> list[TagRead]:
             id=tag.id,
             name=tag.name,
             color=tag.color,
-            category=category_by_tag_id.get(str(tag.id)),
+            description=tag.description,
+            type=type_by_tag_id.get(str(tag.id)),
             entry_count=int(entry_count or 0),
         )
         for tag, entry_count in rows
@@ -63,15 +64,19 @@ def create_tag(payload: TagCreate, db: Session = Depends(get_db)) -> TagRead:
     if existing is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tag already exists")
 
-    tag = Tag(name=normalized_name, color=resolve_tag_color(payload.color))
+    tag = Tag(
+        name=normalized_name,
+        color=resolve_tag_color(payload.color),
+        description=payload.description,
+    )
     db.add(tag)
     db.flush()
     assign_single_term_by_name(
         db,
-        taxonomy_key=TAG_CATEGORY_TAXONOMY_KEY,
-        subject_type=TAG_CATEGORY_SUBJECT_TYPE,
+        taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
+        subject_type=TAG_TYPE_SUBJECT_TYPE,
         subject_id=tag.id,
-        term_name=payload.category,
+        term_name=payload.type,
     )
     db.commit()
     db.refresh(tag)
@@ -79,10 +84,11 @@ def create_tag(payload: TagCreate, db: Session = Depends(get_db)) -> TagRead:
         id=tag.id,
         name=tag.name,
         color=tag.color,
-        category=get_single_term_name(
+        description=tag.description,
+        type=get_single_term_name(
             db,
-            taxonomy_key=TAG_CATEGORY_TAXONOMY_KEY,
-            subject_type=TAG_CATEGORY_SUBJECT_TYPE,
+            taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
+            subject_type=TAG_TYPE_SUBJECT_TYPE,
             subject_id=tag.id,
         ),
         entry_count=0,
@@ -108,13 +114,15 @@ def update_tag(tag_id: int, payload: TagUpdate, db: Session = Depends(get_db)) -
         tag.name = normalized_name
     if "color" in update_data:
         tag.color = update_data["color"]
-    if "category" in update_data:
+    if "description" in update_data:
+        tag.description = update_data["description"]
+    if "type" in update_data:
         assign_single_term_by_name(
             db,
-            taxonomy_key=TAG_CATEGORY_TAXONOMY_KEY,
-            subject_type=TAG_CATEGORY_SUBJECT_TYPE,
+            taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
+            subject_type=TAG_TYPE_SUBJECT_TYPE,
             subject_id=tag.id,
-            term_name=update_data["category"],
+            term_name=update_data["type"],
         )
 
     db.add(tag)
@@ -136,10 +144,11 @@ def update_tag(tag_id: int, payload: TagUpdate, db: Session = Depends(get_db)) -
         id=tag.id,
         name=tag.name,
         color=tag.color,
-        category=get_single_term_name(
+        description=tag.description,
+        type=get_single_term_name(
             db,
-            taxonomy_key=TAG_CATEGORY_TAXONOMY_KEY,
-            subject_type=TAG_CATEGORY_SUBJECT_TYPE,
+            taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
+            subject_type=TAG_TYPE_SUBJECT_TYPE,
             subject_id=tag.id,
         ),
         entry_count=entry_count,

@@ -11,7 +11,7 @@ import {
 } from "../../lib/api";
 import { queryKeys } from "../../lib/queryKeys";
 import { taxonomyTermNames, uniqueOptionValues } from "./helpers";
-import { ENTITY_CATEGORY_TAXONOMY_KEY, TAG_CATEGORY_TAXONOMY_KEY } from "./types";
+import { ENTITY_CATEGORY_TAXONOMY_KEY, TAG_TYPE_TAXONOMY_KEY } from "./types";
 
 export function usePropertiesQueries() {
   const entitiesQuery = useQuery({ queryKey: queryKeys.properties.entities, queryFn: listEntities });
@@ -23,9 +23,9 @@ export function usePropertiesQueries() {
     queryKey: queryKeys.properties.taxonomyTerms(ENTITY_CATEGORY_TAXONOMY_KEY),
     queryFn: () => listTaxonomyTerms(ENTITY_CATEGORY_TAXONOMY_KEY)
   });
-  const tagCategoryTermsQuery = useQuery({
-    queryKey: queryKeys.properties.taxonomyTerms(TAG_CATEGORY_TAXONOMY_KEY),
-    queryFn: () => listTaxonomyTerms(TAG_CATEGORY_TAXONOMY_KEY)
+  const tagTypeTermsQuery = useQuery({
+    queryKey: queryKeys.properties.taxonomyTerms(TAG_TYPE_TAXONOMY_KEY),
+    queryFn: () => listTaxonomyTerms(TAG_TYPE_TAXONOMY_KEY)
   });
 
   const entityCategoryOptions = useMemo(
@@ -37,13 +37,13 @@ export function usePropertiesQueries() {
     [entitiesQuery.data, entityCategoryTermsQuery.data]
   );
 
-  const tagCategoryOptions = useMemo(
+  const tagTypeOptions = useMemo(
     () =>
       uniqueOptionValues([
-        ...taxonomyTermNames(tagCategoryTermsQuery.data),
-        ...(tagsQuery.data ?? []).map((tag) => tag.category)
+        ...taxonomyTermNames(tagTypeTermsQuery.data),
+        ...(tagsQuery.data ?? []).map((tag) => tag.type)
       ]),
-    [tagCategoryTermsQuery.data, tagsQuery.data]
+    [tagTypeTermsQuery.data, tagsQuery.data]
   );
 
   const taxonomyDisplayNames = useMemo(() => {
@@ -53,7 +53,7 @@ export function usePropertiesQueries() {
   }, [taxonomiesQuery.data]);
 
   const entityCategoriesLabel = taxonomyDisplayNames.get(ENTITY_CATEGORY_TAXONOMY_KEY) ?? "Entity Categories";
-  const tagCategoriesLabel = taxonomyDisplayNames.get(TAG_CATEGORY_TAXONOMY_KEY) ?? "Tag Categories";
+  const tagTypesLabel = taxonomyDisplayNames.get(TAG_TYPE_TAXONOMY_KEY) ?? "Tag Types";
 
   return {
     queries: {
@@ -63,15 +63,15 @@ export function usePropertiesQueries() {
       tagsQuery,
       currenciesQuery,
       entityCategoryTermsQuery,
-      tagCategoryTermsQuery
+      tagTypeTermsQuery
     },
     options: {
       entityCategoryOptions,
-      tagCategoryOptions
+      tagTypeOptions
     },
     labels: {
       entityCategoriesLabel,
-      tagCategoriesLabel
+      tagTypesLabel
     }
   };
 }

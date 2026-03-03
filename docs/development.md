@@ -122,6 +122,8 @@ Current revisions:
 - `0014_remove_account_institution_type`
 - `0015_add_agent_tool_call_output_text`
 - `0016_add_user_memory_to_runtime_settings`
+- `0017_rename_tag_category_taxonomy`
+- `0018_add_tag_description`
 
 Optional seed:
 
@@ -137,7 +139,7 @@ Seed behavior:
 - Imports credit transactions from a CSV path passed as a CLI argument or `BILL_HELPER_SEED_CREDIT_CSV` env var.
 - Seeded entries default to `CAD`; currency defaults are `CAD`, `USD`, and `CNY`.
 - Entities are derived from CSV transaction descriptions.
-- Tag names are derived from CSV data, and tag `category` is assigned via taxonomy (`tag_category`) with values such as `transaction_type`, `merchant`, `channel`, `location`, and `payment`.
+- Tag names are derived from CSV data, and tag `type` is assigned via taxonomy (`tag_type`) with values such as `transaction_type`, `merchant`, `channel`, `location`, and `payment`.
 
 ## Run Backend + Frontend Together
 

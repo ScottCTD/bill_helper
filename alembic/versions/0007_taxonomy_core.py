@@ -89,7 +89,7 @@ def upgrade() -> None:
     now = datetime.now(timezone.utc)
 
     entity_category_taxonomy_id = str(uuid4())
-    tag_category_taxonomy_id = str(uuid4())
+    tag_type_taxonomy_id = str(uuid4())
 
     bind.execute(
         sa.text(
@@ -116,11 +116,11 @@ def upgrade() -> None:
             """
         ),
         {
-            "id": tag_category_taxonomy_id,
-            "key": "tag_category",
+            "id": tag_type_taxonomy_id,
+            "key": "tag_type",
             "applies_to": "tag",
             "cardinality": "single",
-            "display_name": "Tag Categories",
+            "display_name": "Tag Types",
             "created_at": now,
             "updated_at": now,
         },

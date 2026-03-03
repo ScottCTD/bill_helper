@@ -24,8 +24,8 @@ from backend.services.taxonomy import assign_single_term_by_name
 from backend.services.users import get_or_create_user
 SUPPORTED_CURRENCIES = ("CAD", "USD", "CNY")
 DEFAULT_ENTRY_CURRENCY = "CAD"
-TAG_CATEGORY_TAXONOMY_KEY = "tag_category"
-TAG_CATEGORY_SUBJECT_TYPE = "tag"
+TAG_TYPE_TAXONOMY_KEY = "tag_type"
+TAG_TYPE_SUBJECT_TYPE = "tag"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI_PATH = REPO_ROOT / "alembic.ini"
 
@@ -213,7 +213,7 @@ def seed(csv_path: str) -> None:
             )
             db.add(entry)
             assign_initial_group(db, entry)
-            tag_categories = _derive_tags(
+            tag_types = _derive_tags(
                 description=description,
                 sub_description=sub_description,
                 transaction_type=row.get("Type of Transaction", ""),
@@ -221,18 +221,18 @@ def seed(csv_path: str) -> None:
             set_entry_tags(
                 db,
                 entry,
-                list(tag_categories.keys()),
+                list(tag_types.keys()),
             )
             for tag in entry.tags:
-                category = tag_categories.get(normalize_tag_name(tag.name))
-                if not category:
+                tag_type = tag_types.get(normalize_tag_name(tag.name))
+                if not tag_type:
                     continue
                 assign_single_term_by_name(
                     db,
-                    taxonomy_key=TAG_CATEGORY_TAXONOMY_KEY,
-                    subject_type=TAG_CATEGORY_SUBJECT_TYPE,
+                    taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
+                    subject_type=TAG_TYPE_SUBJECT_TYPE,
                     subject_id=tag.id,
-                    term_name=category,
+                    term_name=tag_type,
                 )
 
         db.commit()

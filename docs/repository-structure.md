@@ -32,6 +32,8 @@
 - `versions/0014_remove_account_institution_type.py`: drops legacy account columns (`accounts.institution`, `accounts.account_type`).
 - `versions/0015_add_agent_tool_call_output_text.py`: adds persisted model-visible tool output text (`agent_tool_calls.output_text`).
 - `versions/0016_add_user_memory_to_runtime_settings.py`: adds optional persistent agent memory text to runtime settings (`runtime_settings.user_memory`).
+- `versions/0017_rename_tag_category_taxonomy.py`: migrates tag taxonomy key/display naming from category to type (`tag_category` -> `tag_type`).
+- `versions/0018_add_tag_description.py`: adds optional free-text tag description (`tags.description`).
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)

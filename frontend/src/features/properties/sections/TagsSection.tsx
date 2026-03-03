@@ -24,24 +24,28 @@ interface TagsSectionProps {
   onCloseCreatePanel: () => void;
   newTagName: string;
   onNewTagNameChange: (value: string) => void;
-  newTagCategory: string;
-  onNewTagCategoryChange: (value: string) => void;
+  newTagType: string;
+  onNewTagTypeChange: (value: string) => void;
   newTagColor: string;
   onNewTagColorChange: (value: string) => void;
+  newTagDescription: string;
+  onNewTagDescriptionChange: (value: string) => void;
   editingTagId: number | null;
   editingTagName: string;
   onEditingTagNameChange: (value: string) => void;
-  editingTagCategory: string;
-  onEditingTagCategoryChange: (value: string) => void;
+  editingTagType: string;
+  onEditingTagTypeChange: (value: string) => void;
   editingTagColor: string;
   onEditingTagColorChange: (value: string) => void;
+  editingTagDescription: string;
+  onEditingTagDescriptionChange: (value: string) => void;
   onStartEditTag: (tag: Tag) => void;
   onCancelEditTag: () => void;
   onSaveTag: (tagId: number) => void;
   onCreateTagSubmit: (event: FormEvent<HTMLFormElement>) => void;
   tags: Tag[] | undefined;
   hasAnyTags: boolean;
-  tagCategoryOptions: string[];
+  tagTypeOptions: string[];
   isLoading: boolean;
   isError: boolean;
   queryErrorMessage: string | null;
@@ -60,24 +64,28 @@ export function TagsSection(props: TagsSectionProps) {
     onCloseCreatePanel,
     newTagName,
     onNewTagNameChange,
-    newTagCategory,
-    onNewTagCategoryChange,
+    newTagType,
+    onNewTagTypeChange,
     newTagColor,
     onNewTagColorChange,
+    newTagDescription,
+    onNewTagDescriptionChange,
     editingTagId,
     editingTagName,
     onEditingTagNameChange,
-    editingTagCategory,
-    onEditingTagCategoryChange,
+    editingTagType,
+    onEditingTagTypeChange,
     editingTagColor,
     onEditingTagColorChange,
+    editingTagDescription,
+    onEditingTagDescriptionChange,
     onStartEditTag,
     onCancelEditTag,
     onSaveTag,
     onCreateTagSubmit,
     tags,
     hasAnyTags,
-    tagCategoryOptions,
+    tagTypeOptions,
     isLoading,
     isError,
     queryErrorMessage,
@@ -92,7 +100,7 @@ export function TagsSection(props: TagsSectionProps) {
       <div className="table-shell-header">
         <div>
           <h3 className="table-shell-title">Tags</h3>
-          <p className="table-shell-subtitle">Manage tags, colors, and taxonomy-backed categories.</p>
+          <p className="table-shell-subtitle">Manage tags, colors, and taxonomy-backed types.</p>
         </div>
       </div>
       <div className="table-toolbar">
@@ -100,7 +108,7 @@ export function TagsSection(props: TagsSectionProps) {
           <label className="field min-w-[220px] grow">
             <span>Search</span>
             <Input
-              placeholder="Filter by tag, category, or color"
+              placeholder="Filter by tag, type, or description"
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
             />
@@ -122,24 +130,22 @@ export function TagsSection(props: TagsSectionProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Color</TableHead>
-                <TableHead>Entries</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Description</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {tags.map((tag) => (
                 <TableRow key={tag.id}>
-                  <TableCell>{tag.name}</TableCell>
-                  <TableCell>{tag.category || "(none)"}</TableCell>
                   <TableCell>
                     <span className="tag-color-cell">
                       <span className="tag-color-dot" style={{ backgroundColor: tag.color || "hsl(var(--muted))" }} />
-                      {tag.color || "(none)"}
+                      {tag.name}
                     </span>
                   </TableCell>
-                  <TableCell>{tag.entry_count ?? 0}</TableCell>
+                  <TableCell>{tag.type || "(none)"}</TableCell>
+                  <TableCell>{tag.description || "(none)"}</TableCell>
                   <TableCell>
                     <Button type="button" size="sm" variant="outline" onClick={() => onStartEditTag(tag)}>
                       Edit
@@ -163,25 +169,32 @@ export function TagsSection(props: TagsSectionProps) {
         }}
       >
         <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Create Tag</DialogTitle>
-            <DialogDescription>Add a tag with optional taxonomy category and color token.</DialogDescription>
-          </DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Create Tag</DialogTitle>
+            <DialogDescription>Add a tag with optional taxonomy type and color token.</DialogDescription>
+            </DialogHeader>
           <form className="grid gap-4" onSubmit={onCreateTagSubmit}>
             <FormField label="Name">
               <Input placeholder="e.g. groceries" value={newTagName} onChange={(event) => onNewTagNameChange(event.target.value)} />
             </FormField>
-            <FormField label="Category">
+            <FormField label="Type">
               <CreatableSingleSelect
-                value={newTagCategory}
-                options={tagCategoryOptions}
-                ariaLabel="Tag category"
-                placeholder="Select or create category..."
-                onChange={onNewTagCategoryChange}
+                value={newTagType}
+                options={tagTypeOptions}
+                ariaLabel="Tag type"
+                placeholder="Select or create type..."
+                onChange={onNewTagTypeChange}
               />
             </FormField>
             <FormField label="Color">
               <Input placeholder="e.g. #7fb069" value={newTagColor} onChange={(event) => onNewTagColorChange(event.target.value)} />
+            </FormField>
+            <FormField label="Description">
+              <Input
+                placeholder="e.g. Regular household grocery expenses"
+                value={newTagDescription}
+                onChange={(event) => onNewTagDescriptionChange(event.target.value)}
+              />
             </FormField>
             {createErrorMessage ? <p className="error">{createErrorMessage}</p> : null}
             <DialogFooter>
@@ -207,7 +220,7 @@ export function TagsSection(props: TagsSectionProps) {
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Edit Tag</DialogTitle>
-            <DialogDescription>Update tag naming, category, and display color.</DialogDescription>
+            <DialogDescription>Update tag naming, type, and display color.</DialogDescription>
           </DialogHeader>
           <form
             className="grid gap-4"
@@ -226,17 +239,24 @@ export function TagsSection(props: TagsSectionProps) {
                 onChange={(event) => onEditingTagNameChange(event.target.value)}
               />
             </FormField>
-            <FormField label="Category">
+            <FormField label="Type">
               <CreatableSingleSelect
-                value={editingTagCategory}
-                options={tagCategoryOptions}
-                ariaLabel="Edit tag category"
-                placeholder="Select or create category..."
-                onChange={onEditingTagCategoryChange}
+                value={editingTagType}
+                options={tagTypeOptions}
+                ariaLabel="Edit tag type"
+                placeholder="Select or create type..."
+                onChange={onEditingTagTypeChange}
               />
             </FormField>
             <FormField label="Color">
               <Input placeholder="e.g. #7fb069" value={editingTagColor} onChange={(event) => onEditingTagColorChange(event.target.value)} />
+            </FormField>
+            <FormField label="Description">
+              <Input
+                placeholder="e.g. Regular household grocery expenses"
+                value={editingTagDescription}
+                onChange={(event) => onEditingTagDescriptionChange(event.target.value)}
+              />
             </FormField>
             {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
             <DialogFooter>

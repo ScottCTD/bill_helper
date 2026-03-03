@@ -308,12 +308,13 @@ def test_tag_management_and_currency_catalog(client):
 
     new_tag_response = client.post(
         "/api/v1/tags",
-        json={"name": "bonus", "color": "#4a90e2"},
+        json={"name": "bonus", "color": "#4a90e2", "description": "year-end bonus payouts"},
     )
     new_tag_response.raise_for_status()
     new_tag = new_tag_response.json()
     assert new_tag["name"] == "bonus"
     assert new_tag["color"] == "#4a90e2"
+    assert new_tag["description"] == "year-end bonus payouts"
     assert new_tag["entry_count"] == 0
 
     auto_color_tag_response = client.post(
@@ -336,12 +337,13 @@ def test_tag_management_and_currency_catalog(client):
 
     update_tag_response = client.patch(
         f"/api/v1/tags/{new_tag['id']}",
-        json={"name": "annual-bonus", "color": "#3f72af"},
+        json={"name": "annual-bonus", "color": "#3f72af", "description": "annual bonus income"},
     )
     update_tag_response.raise_for_status()
     updated_tag = update_tag_response.json()
     assert updated_tag["name"] == "annual-bonus"
     assert updated_tag["color"] == "#3f72af"
+    assert updated_tag["description"] == "annual bonus income"
 
     currencies_response = client.get("/api/v1/currencies")
     currencies_response.raise_for_status()

@@ -108,6 +108,7 @@ Unique constraint:
 - `id` (PK int)
 - `name` (unique normalized lowercase)
 - `color`
+- `description` (nullable free-text note)
 - `created_at`
 
 ## Taxonomy Tables (`0007_taxonomy_core`)
@@ -117,7 +118,7 @@ Taxonomies generalize reusable categorical properties without creating a new tab
 ## `taxonomies`
 
 - `id` (PK UUID string)
-- `key` (unique, e.g. `entity_category`, `tag_category`)
+- `key` (unique, e.g. `entity_category`, `tag_type`)
 - `applies_to` (subject domain, e.g. `entity`, `tag`)
 - `cardinality` (`single` in current defaults)
 - `display_name`
@@ -137,6 +138,10 @@ Unique constraint:
 
 - `(taxonomy_id, normalized_name)`
 
+Current metadata usage:
+
+- optional term `description` is stored at `metadata_json.description` (used by entity categories/tag types)
+
 ## `taxonomy_assignments`
 
 - `id` (PK UUID string)
@@ -154,7 +159,7 @@ Unique constraint:
 Current seeded taxonomies:
 
 - `entity_category`
-- `tag_category`
+- `tag_type`
 
 ## `entry_tags`
 

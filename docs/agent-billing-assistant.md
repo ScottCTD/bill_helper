@@ -314,14 +314,14 @@ top_tags: tag:USD:1000; ...
 
 #### `list_tags` (read)
 
-**Description:** List/query tags by name and category. Exact matches are ranked higher than substring matches. This tool is read-only and includes tag categories.
+**Description:** List/query tags by name and type. Exact matches are ranked higher than substring matches. This tool is read-only and includes tag types.
 
 **Arguments:**
 
 | Parameter | Type | Required | Default | Constraints |
 |-----------|------|----------|---------|-------------|
 | `name` | string \| null | no | null | substring filter |
-| `category` | string \| null | no | null | substring filter |
+| `type` | string \| null | no | null | substring filter |
 | `limit` | integer | no | 50 | ≥1; no upper bound; be cautious with very large values |
 
 **Expected output (text):**
@@ -329,7 +329,7 @@ top_tags: tag:USD:1000; ...
 ```
 OK
 summary: returned N of M matching tags
-tags: name (category or uncategorized), ...
+tags: name (type or untyped), ...
 ```
 
 `N` = count returned (limited by `limit`); `M` = total matching.
@@ -345,7 +345,7 @@ tags: name (category or uncategorized), ...
 | Parameter | Type | Required | Constraints |
 |-----------|------|----------|-------------|
 | `name` | string | yes | 1–64 chars, normalized |
-| `category` | string | yes | 1–100 chars, normalized |
+| `type` | string | yes | 1–100 chars, normalized |
 
 **Expected output:** `OK` with status and preview. Returns `ERROR` if tag already exists.
 
@@ -353,16 +353,16 @@ tags: name (category or uncategorized), ...
 
 #### `propose_update_tag` (proposal)
 
-**Description:** Create a review-gated proposal to rename a tag and/or update its category. This does not mutate tags immediately; it creates a pending review item only.
+**Description:** Create a review-gated proposal to rename a tag and/or update its type. This does not mutate tags immediately; it creates a pending review item only.
 
 **Arguments:**
 
 | Parameter | Type | Required | Constraints |
 |-----------|------|----------|-------------|
 | `name` | string | yes | 1–64 chars, existing tag name |
-| `patch` | object | yes | At least one of `name`, `category` |
+| `patch` | object | yes | At least one of `name`, `type` |
 
-**Patch fields:** `name` (string \| null), `category` (string \| null).
+**Patch fields:** `name` (string \| null), `type` (string \| null).
 
 **Expected output:** `OK` with status and preview. Returns `ERROR` if tag not found or target name already exists.
 
@@ -536,10 +536,10 @@ Pending proposals can be revised or removed by id in later turns without forcing
 ```
 Review results from your previous proposals:
 1. propose_update_entry proposal_id=ed279837-1911-448b-bdf8-221b55a80a8b proposal_short_id=ed279837 review_action=approve review_item_status=APPLIED review_note=(none)
-2. propose_create_tag proposal_id=a1b2c3d4-5678-90ab-cdef-1234567890ab proposal_short_id=a1b2c3d4 review_action=reject review_item_status=REJECTED review_note=Use category recurring instead
+2. propose_create_tag proposal_id=a1b2c3d4-5678-90ab-cdef-1234567890ab proposal_short_id=a1b2c3d4 review_action=reject review_item_status=REJECTED review_note=Use type recurring instead
 
 User feedback:
-Try again with the right category
+Try again with the right type
 ```
 
 ## Apply Semantics (Human Approved)
@@ -549,8 +549,8 @@ In `change_apply.py`:
 - `create_entry`: create entry directly
 - `update_entry`: update uniquely-selected entry by selector
 - `delete_entry`: soft-delete uniquely-selected entry
-- `create_tag`: create/reuse normalized tag + assign category
-- `update_tag`: rename and/or update category
+- `create_tag`: create/reuse normalized tag + assign type
+- `update_tag`: rename and/or update type
 - `delete_tag`: delete only if unreferenced by non-deleted entries; otherwise apply fails with validation error
 - `create_entity`: create/reuse normalized entity + category
 - `update_entity`: rename and/or update category (sync denormalized entry labels)

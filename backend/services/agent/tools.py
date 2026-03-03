@@ -148,7 +148,7 @@ class ListEntriesArgs(BaseModel):
 
 class ListTagsArgs(BaseModel):
     name: str | None = None
-    category: str | None = None
+    type: str | None = None
     limit: int = Field(
         default=50,
         ge=1,
@@ -161,9 +161,9 @@ class ListTagsArgs(BaseModel):
         normalized = _normalize_loose_text(value)
         return normalize_tag_name(normalized) if normalized is not None else None
 
-    @field_validator("category")
+    @field_validator("type")
     @classmethod
-    def normalize_category(cls, value: str | None) -> str | None:
+    def normalize_type(cls, value: str | None) -> str | None:
         return _normalize_optional_category(value)
 
 
@@ -190,7 +190,7 @@ class ListEntitiesArgs(BaseModel):
 
 class ProposeCreateTagArgs(BaseModel):
     name: str = Field(min_length=1, max_length=64)
-    category: str = Field(min_length=1, max_length=100)
+    type: str = Field(min_length=1, max_length=100)
 
     @field_validator("name")
     @classmethod
@@ -200,18 +200,18 @@ class ProposeCreateTagArgs(BaseModel):
             raise ValueError("name cannot be empty")
         return normalized
 
-    @field_validator("category")
+    @field_validator("type")
     @classmethod
-    def normalize_category(cls, value: str) -> str:
+    def normalize_type(cls, value: str) -> str:
         normalized = _normalize_optional_category(value)
         if normalized is None:
-            raise ValueError("category cannot be empty")
+            raise ValueError("type cannot be empty")
         return normalized
 
 
 class TagPatchArgs(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=64)
-    category: str | None = Field(default=None, max_length=100)
+    type: str | None = Field(default=None, max_length=100)
 
     @field_validator("name")
     @classmethod
@@ -223,9 +223,9 @@ class TagPatchArgs(BaseModel):
             raise ValueError("name cannot be empty")
         return normalized
 
-    @field_validator("category")
+    @field_validator("type")
     @classmethod
-    def normalize_category(cls, value: str | None) -> str | None:
+    def normalize_type(cls, value: str | None) -> str | None:
         return _normalize_optional_category(value)
 
     @model_validator(mode="after")
@@ -604,7 +604,7 @@ def _entry_ambiguity_details(entries: list[Entry]) -> dict[str, Any]:
 
 
 PROPOSAL_MUTABLE_ROOTS: dict[AgentChangeType, set[str]] = {
-    AgentChangeType.CREATE_TAG: {"name", "category"},
+    AgentChangeType.CREATE_TAG: {"name", "type"},
     AgentChangeType.UPDATE_TAG: {"name", "patch"},
     AgentChangeType.DELETE_TAG: {"name"},
     AgentChangeType.CREATE_ENTITY: {"name", "category"},
@@ -889,27 +889,27 @@ def _list_entries(context: ToolContext, args: ListEntriesArgs) -> ToolExecutionR
 
 def _list_tags(context: ToolContext, args: ListTagsArgs) -> ToolExecutionResult:
     tags = list(context.db.scalars(select(Tag).order_by(Tag.name.asc())))
-    category_by_tag_id = get_single_term_name_map(
+    type_by_tag_id = get_single_term_name_map(
         context.db,
-        taxonomy_key="tag_category",
+        taxonomy_key="tag_type",
         subject_type="tag",
         subject_ids=[tag.id for tag in tags],
     )
 
     ranked: list[tuple[tuple[int, int, str], dict[str, Any]]] = []
     for tag in tags:
-        category = category_by_tag_id.get(str(tag.id))
+        tag_type = type_by_tag_id.get(str(tag.id))
         name_rank, name_ok = _string_match_rank(tag.name, args.name)
-        category_rank, category_ok = _string_match_rank(category, args.category)
-        if not (name_ok and category_ok):
+        type_rank, type_ok = _string_match_rank(tag_type, args.type)
+        if not (name_ok and type_ok):
             continue
-        record = {"name": tag.name, "category": category}
-        ranked.append(((name_rank, category_rank, tag.name.lower()), record))
+        record = {"name": tag.name, "type": tag_type}
+        ranked.append(((name_rank, type_rank, tag.name.lower()), record))
 
     ranked.sort(key=lambda pair: pair[0])
     total_available = len(ranked)
     records = [record for _, record in ranked[: args.limit]]
-    tags_text = ", ".join(f"{tag['name']} ({tag['category'] or 'uncategorized'})" for tag in records) if records else "(none)"
+    tags_text = ", ".join(f"{tag['name']} ({tag['type'] or 'untyped'})" for tag in records) if records else "(none)"
     output_json = {
         "status": "OK",
         "summary": f"returned {len(records)} of {total_available} matching tags",
@@ -1030,7 +1030,7 @@ def _propose_create_tag(context: ToolContext, args: ProposeCreateTagArgs) -> Too
     if existing is not None:
         return _error_result("tag already exists", details={"name": args.name})
 
-    payload = {"name": args.name, "category": args.category}
+    payload = {"name": args.name, "type": args.type}
     item = _create_change_item(
         context,
         change_type=AgentChangeType.CREATE_TAG,
@@ -1052,9 +1052,9 @@ def _propose_update_tag(context: ToolContext, args: ProposeUpdateTagArgs) -> Too
         if duplicate is not None and duplicate.id != existing.id:
             return _error_result("target tag name already exists", details={"name": target_name})
 
-    category_by_tag_id = get_single_term_name_map(
+    type_by_tag_id = get_single_term_name_map(
         context.db,
-        taxonomy_key="tag_category",
+        taxonomy_key="tag_type",
         subject_type="tag",
         subject_ids=[existing.id],
     )
@@ -1063,7 +1063,7 @@ def _propose_update_tag(context: ToolContext, args: ProposeUpdateTagArgs) -> Too
         "patch": patch,
         "current": {
             "name": existing.name,
-            "category": category_by_tag_id.get(str(existing.id)),
+            "type": type_by_tag_id.get(str(existing.id)),
         },
     }
     item = _create_change_item(
@@ -1432,8 +1432,8 @@ TOOLS: dict[str, AgentToolDefinition] = {
     "list_tags": AgentToolDefinition(
         name="list_tags",
         description=(
-            "List/query tags by name and category. Exact matches are ranked higher than substring matches. "
-            "This tool is read-only and includes tag categories."
+            "List/query tags by name and type. Exact matches are ranked higher than substring matches. "
+            "This tool is read-only and includes tag types."
         ),
         args_model=ListTagsArgs,
         handler=_list_tags,
@@ -1479,7 +1479,7 @@ TOOLS: dict[str, AgentToolDefinition] = {
     "propose_update_tag": AgentToolDefinition(
         name="propose_update_tag",
         description=(
-            "Create a review-gated proposal to rename a tag and/or update its category. "
+            "Create a review-gated proposal to rename a tag and/or update its type. "
             "This does not mutate tags immediately; it creates a pending review item only."
         ),
         args_model=ProposeUpdateTagArgs,

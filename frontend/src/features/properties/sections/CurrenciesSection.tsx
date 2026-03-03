@@ -42,7 +42,6 @@ export function CurrenciesSection(props: CurrenciesSectionProps) {
               <TableRow>
                 <TableHead>Code</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Entries</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -51,7 +50,6 @@ export function CurrenciesSection(props: CurrenciesSectionProps) {
                 <TableRow key={currency.code}>
                   <TableCell>{currency.code}</TableCell>
                   <TableCell>{currency.name}</TableCell>
-                  <TableCell>{currency.entry_count}</TableCell>
                   <TableCell>{currency.is_placeholder ? "Placeholder" : "Built-in"}</TableCell>
                 </TableRow>
               ))}

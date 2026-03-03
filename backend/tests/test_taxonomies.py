@@ -4,11 +4,11 @@ from __future__ import annotations
 def test_taxonomy_category_assignment_for_tags_and_entities(client):
     tag_response = client.post(
         "/api/v1/tags",
-        json={"name": "groceries", "category": "food"},
+        json={"name": "groceries", "type": "food"},
     )
     tag_response.raise_for_status()
     tag = tag_response.json()
-    assert tag["category"] == "food"
+    assert tag["type"] == "food"
 
     entity_response = client.post(
         "/api/v1/entities",
@@ -21,7 +21,7 @@ def test_taxonomy_category_assignment_for_tags_and_entities(client):
     list_tags = client.get("/api/v1/tags")
     list_tags.raise_for_status()
     payload_tags = list_tags.json()
-    assert payload_tags[0]["category"] == "food"
+    assert payload_tags[0]["type"] == "food"
 
     list_entities = client.get("/api/v1/entities")
     list_entities.raise_for_status()
@@ -30,17 +30,17 @@ def test_taxonomy_category_assignment_for_tags_and_entities(client):
 
 
 def test_taxonomy_endpoints_expose_terms_with_usage_counts(client):
-    client.post("/api/v1/tags", json={"name": "groceries", "category": "food"}).raise_for_status()
-    client.post("/api/v1/tags", json={"name": "restaurant", "category": "food"}).raise_for_status()
+    client.post("/api/v1/tags", json={"name": "groceries", "type": "food"}).raise_for_status()
+    client.post("/api/v1/tags", json={"name": "restaurant", "type": "food"}).raise_for_status()
     client.post("/api/v1/entities", json={"name": "Costco", "category": "merchant"}).raise_for_status()
 
     taxonomies = client.get("/api/v1/taxonomies")
     taxonomies.raise_for_status()
     taxonomy_keys = {row["key"] for row in taxonomies.json()}
-    assert "tag_category" in taxonomy_keys
+    assert "tag_type" in taxonomy_keys
     assert "entity_category" in taxonomy_keys
 
-    tag_terms_response = client.get("/api/v1/taxonomies/tag_category/terms")
+    tag_terms_response = client.get("/api/v1/taxonomies/tag_type/terms")
     tag_terms_response.raise_for_status()
     tag_terms = tag_terms_response.json()
     food = next(term for term in tag_terms if term["name"] == "food")
@@ -55,7 +55,7 @@ def test_taxonomy_endpoints_expose_terms_with_usage_counts(client):
 
 def test_taxonomy_term_create_and_rename(client):
     create_term = client.post(
-        "/api/v1/taxonomies/tag_category/terms",
+        "/api/v1/taxonomies/tag_type/terms",
         json={"name": "Utilities"},
     )
     create_term.raise_for_status()
@@ -63,14 +63,14 @@ def test_taxonomy_term_create_and_rename(client):
     assert term["name"] == "utilities"
 
     rename_term = client.patch(
-        f"/api/v1/taxonomies/tag_category/terms/{term['id']}",
+        f"/api/v1/taxonomies/tag_type/terms/{term['id']}",
         json={"name": "Recurring Bills"},
     )
     rename_term.raise_for_status()
     renamed = rename_term.json()
     assert renamed["name"] == "recurring bills"
 
-    terms = client.get("/api/v1/taxonomies/tag_category/terms")
+    terms = client.get("/api/v1/taxonomies/tag_type/terms")
     terms.raise_for_status()
     payload = terms.json()
     assert any(item["name"] == "recurring bills" for item in payload)
@@ -104,3 +104,22 @@ def test_entity_update_response_reads_taxonomy_category_after_term_rename(client
     updated = update_response.json()
     assert updated["name"] == "Costco Warehouse"
     assert updated["category"] == "service provider"
+
+
+def test_entity_category_terms_support_description(client):
+    create_term = client.post(
+        "/api/v1/taxonomies/entity_category/terms",
+        json={"name": "Service", "description": "Service providers and contractors"},
+    )
+    create_term.raise_for_status()
+    term = create_term.json()
+    assert term["name"] == "service"
+    assert term["description"] == "Service providers and contractors"
+
+    rename_term = client.patch(
+        f"/api/v1/taxonomies/entity_category/terms/{term['id']}",
+        json={"description": "Service providers and recurring vendors"},
+    )
+    rename_term.raise_for_status()
+    renamed = rename_term.json()
+    assert renamed["description"] == "Service providers and recurring vendors"

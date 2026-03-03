@@ -138,7 +138,8 @@ Body:
 
 - `name`
 - `color` (optional)
-- `category` (optional)
+- `description` (optional)
+- `type` (optional)
 
 Response: `TagRead`
 
@@ -146,7 +147,7 @@ Errors: `400` empty name, `409` duplicate.
 
 ## `PATCH /tags/{tag_id}`
 
-Update tag name/color/category.
+Update tag name/color/description/type.
 
 Response: `TagRead`
 
@@ -161,7 +162,7 @@ Response: `TaxonomyRead[]`
 Current defaults include:
 
 - `entity_category`
-- `tag_category`
+- `tag_type`
 
 ## `GET /taxonomies/{taxonomy_key}/terms`
 
@@ -177,6 +178,7 @@ Body:
 
 - `name`
 - `parent_term_id` (optional)
+- `description` (optional)
 
 Response: `TaxonomyTermRead`
 
@@ -187,6 +189,7 @@ Rename one taxonomy term.
 Body:
 
 - `name` (optional)
+- `description` (optional)
 
 Response: `TaxonomyTermRead`
 
@@ -623,8 +626,8 @@ Apply behavior:
 - `create_entry`: creates entry directly (no entry-level status field)
 - `update_entry`: updates one uniquely-selected entry by selector
 - `delete_entry`: soft-deletes one uniquely-selected entry by selector
-- `create_tag`: creates/reuses normalized tag with category
-- `update_tag`: renames tag and/or updates tag category
+- `create_tag`: creates/reuses normalized tag with type and optional description
+- `update_tag`: renames tag and/or updates tag type/description
 - `delete_tag`: detaches tag from entries, then deletes tag
 - `create_entity`: creates/reuses normalized entity with category
 - `update_entity`: renames entity and/or updates entity category

@@ -11,7 +11,7 @@ interface PropertiesFilteredDataArgs {
   tags: Tag[] | undefined;
   currencies: Currency[] | undefined;
   entityCategoryTerms: TaxonomyTerm[] | undefined;
-  tagCategoryTerms: TaxonomyTerm[] | undefined;
+  tagTypeTerms: TaxonomyTerm[] | undefined;
 }
 
 export function usePropertiesFilteredData(args: PropertiesFilteredDataArgs) {
@@ -22,7 +22,7 @@ export function usePropertiesFilteredData(args: PropertiesFilteredDataArgs) {
     tags,
     currencies,
     entityCategoryTerms,
-    tagCategoryTerms
+    tagTypeTerms
   } = args;
 
   const filteredUsers = useMemo(() => {
@@ -39,8 +39,9 @@ export function usePropertiesFilteredData(args: PropertiesFilteredDataArgs) {
     return (tags ?? []).filter(
       (tag) =>
         includesFilter(tag.name, sectionSearch.tags) ||
-        includesFilter(tag.category, sectionSearch.tags) ||
-        includesFilter(tag.color, sectionSearch.tags)
+        includesFilter(tag.type, sectionSearch.tags) ||
+        includesFilter(tag.color, sectionSearch.tags) ||
+        includesFilter(tag.description, sectionSearch.tags)
     );
   }, [sectionSearch.tags, tags]);
 
@@ -55,9 +56,9 @@ export function usePropertiesFilteredData(args: PropertiesFilteredDataArgs) {
     return (entityCategoryTerms ?? []).filter((term) => includesFilter(term.name, sectionSearch.entityCategories));
   }, [entityCategoryTerms, sectionSearch.entityCategories]);
 
-  const filteredTagCategoryTerms = useMemo(() => {
-    return (tagCategoryTerms ?? []).filter((term) => includesFilter(term.name, sectionSearch.tagCategories));
-  }, [sectionSearch.tagCategories, tagCategoryTerms]);
+  const filteredTagTypeTerms = useMemo(() => {
+    return (tagTypeTerms ?? []).filter((term) => includesFilter(term.name, sectionSearch.tagCategories));
+  }, [sectionSearch.tagCategories, tagTypeTerms]);
 
   return {
     users: filteredUsers,
@@ -65,6 +66,6 @@ export function usePropertiesFilteredData(args: PropertiesFilteredDataArgs) {
     tags: filteredTags,
     currencies: filteredCurrencies,
     entityCategoryTerms: filteredEntityCategoryTerms,
-    tagCategoryTerms: filteredTagCategoryTerms
+    tagTypeTerms: filteredTagTypeTerms
   };
 }

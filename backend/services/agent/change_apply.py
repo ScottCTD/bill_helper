@@ -34,8 +34,8 @@ class AppliedResource:
 ChangeApplyHandler = Callable[[Session, dict[str, Any]], AppliedResource]
 
 
-TAG_CATEGORY_TAXONOMY_KEY = "tag_category"
-TAG_CATEGORY_SUBJECT_TYPE = "tag"
+TAG_TYPE_TAXONOMY_KEY = "tag_type"
+TAG_TYPE_SUBJECT_TYPE = "tag"
 ENTITY_CATEGORY_TAXONOMY_KEY = "entity_category"
 ENTITY_CATEGORY_SUBJECT_TYPE = "entity"
 
@@ -49,7 +49,7 @@ def _normalize_text(value: str | None) -> str | None:
 
 class CreateTagPayload(BaseModel):
     name: str = Field(min_length=1, max_length=64)
-    category: str = Field(min_length=1, max_length=100)
+    type: str = Field(min_length=1, max_length=100)
 
     @field_validator("name")
     @classmethod
@@ -59,18 +59,18 @@ class CreateTagPayload(BaseModel):
             raise ValueError("Tag name cannot be empty")
         return normalized
 
-    @field_validator("category")
+    @field_validator("type")
     @classmethod
-    def normalize_category(cls, value: str) -> str:
+    def normalize_type(cls, value: str) -> str:
         normalized = normalize_entity_category(value)
         if normalized is None:
-            raise ValueError("Tag category cannot be empty")
+            raise ValueError("Tag type cannot be empty")
         return normalized
 
 
 class UpdateTagPatchPayload(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=64)
-    category: str | None = Field(default=None, max_length=100)
+    type: str | None = Field(default=None, max_length=100)
 
     @field_validator("name")
     @classmethod
@@ -82,9 +82,9 @@ class UpdateTagPatchPayload(BaseModel):
             raise ValueError("Tag name cannot be empty")
         return normalized
 
-    @field_validator("category")
+    @field_validator("type")
     @classmethod
-    def normalize_category(cls, value: str | None) -> str | None:
+    def normalize_type(cls, value: str | None) -> str | None:
         return normalize_entity_category(value)
 
     @model_validator(mode="after")
@@ -339,10 +339,10 @@ def apply_create_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
     db.flush()
     assign_single_term_by_name(
         db,
-        taxonomy_key=TAG_CATEGORY_TAXONOMY_KEY,
-        subject_type=TAG_CATEGORY_SUBJECT_TYPE,
+        taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
+        subject_type=TAG_TYPE_SUBJECT_TYPE,
         subject_id=tag.id,
-        term_name=parsed.category,
+        term_name=parsed.type,
     )
     return AppliedResource(resource_type="tag", resource_id=str(tag.id))
 
@@ -363,13 +363,13 @@ def apply_update_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
             raise ValueError("Tag already exists")
         tag.name = parsed.patch.name
 
-    if "category" in parsed.patch.model_fields_set:
+    if "type" in parsed.patch.model_fields_set:
         assign_single_term_by_name(
             db,
-            taxonomy_key=TAG_CATEGORY_TAXONOMY_KEY,
-            subject_type=TAG_CATEGORY_SUBJECT_TYPE,
+            taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
+            subject_type=TAG_TYPE_SUBJECT_TYPE,
             subject_id=tag.id,
-            term_name=parsed.patch.category,
+            term_name=parsed.patch.type,
         )
 
     db.add(tag)
@@ -401,8 +401,8 @@ def apply_delete_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
 
     assign_single_term_by_name(
         db,
-        taxonomy_key=TAG_CATEGORY_TAXONOMY_KEY,
-        subject_type=TAG_CATEGORY_SUBJECT_TYPE,
+        taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
+        subject_type=TAG_TYPE_SUBJECT_TYPE,
         subject_id=tag.id,
         term_name=None,
     )
