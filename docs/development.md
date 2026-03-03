@@ -300,6 +300,29 @@ Constraints:
 
 - If existing frontend structure differs from recommended paths in the skill, adapt while preserving the same token/primitives/accessibility rules.
 
+## Agent Import Benchmark
+
+The `benchmark/` directory contains a framework for evaluating LLMs on bank-statement-to-entry extraction. See `benchmark/README.md` for full usage.
+
+Quick reference:
+
+```bash
+# Create a snapshot of the current DB
+uv run python -m benchmark.snapshot create --name default
+
+# Generate draft ground truth for a case
+uv run python -m benchmark.generate_ground_truth --case my_case --model "openrouter/anthropic/claude-sonnet-4"
+
+# Run benchmark
+uv run python -m benchmark.runner --model "openrouter/google/gemini-2.5-pro" --all-cases --workers 4
+
+# Score and compare
+uv run python -m benchmark.scorer run RUN_ID
+uv run python -m benchmark.scorer compare RUN_ID_1 RUN_ID_2 --save-report comparison
+```
+
+Private data (`benchmark/fixtures/`, `benchmark/results/`) is gitignored. Only `benchmark/reports/` (aggregate metrics) is tracked.
+
 ## Common Issues
 
 ## Missing provider credentials

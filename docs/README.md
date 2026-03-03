@@ -18,6 +18,7 @@ This folder contains the source-of-truth documentation for the current MVP imple
 - `feature-dashboard-analytics.md`: focused dashboard analytics flow map.
 - `feature-account-reconciliation.md`: account table workflow, snapshot checkpointing, and reconciliation semantics.
 - `adr/README.md`: architecture decision record process and index.
+- `../benchmark/README.md`: agent import benchmark framework for evaluating LLMs on statement-to-entry extraction.
 
 Historical implementation docs:
 

@@ -78,13 +78,6 @@ The app boots fine without any credentials — the agent chat simply returns a c
 uv run alembic upgrade head
 ```
 
-Optionally seed demo data from a credit-card CSV export:
-
-```bash
-uv run python scripts/seed_demo.py /path/to/your/credit_card_export.csv
-# or: BILL_HELPER_SEED_CREDIT_CSV=/path/to/csv ./scripts/dev_up.sh
-```
-
 ### 4. Run
 
 ```bash
@@ -101,7 +94,7 @@ Press `Ctrl+C` to stop both services.
 
 ## How the Agent Works
 
-1. Open the **Home** page — this is the AI chat workspace.
+1. Open the **Agent** page — this is the AI chat workspace.
 2. Create or select a conversation thread.
 3. Send a message (text, images, or PDFs).
 4. The agent reads your data, reasons about it, and proposes changes.

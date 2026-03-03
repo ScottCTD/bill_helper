@@ -232,3 +232,7 @@ logs/
 
 # project specific
 notebooks/
+
+# Benchmark -- private data (real financial docs, traces, raw results)
+benchmark/fixtures/
+benchmark/results/

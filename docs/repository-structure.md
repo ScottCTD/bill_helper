@@ -160,3 +160,17 @@
 - `/scripts/seed_demo.py`: local seed dataset generation.
 - `/scripts/check_docs_sync.py`: docs consistency checks (migration refs + stale term detection + index links).
 - `/.data` (runtime): SQLite DB (ignored in git).
+
+## Benchmark (`/benchmark`)
+
+Agent import benchmark framework for evaluating LLMs on bank-statement-to-entry extraction.
+
+- `snapshot.py`: create/restore/list DB snapshots.
+- `runner.py`: run benchmark cases against a model (parallel via `ProcessPoolExecutor`).
+- `scorer.py`: match predicted entries to ground truth, compute field-level and aggregate scores, compare models.
+- `generate_ground_truth.py`: run a capable model to produce draft ground truth for manual editing.
+- `schemas.py`: Pydantic schemas for case input, ground truth, and result data.
+- `README.md`: benchmark usage guide.
+- `fixtures/` (gitignored): DB snapshots and benchmark cases (private data).
+- `results/` (gitignored): run outputs, interaction traces, per-case scores (private).
+- `reports/` (tracked): aggregate metrics and comparison reports (public).
