@@ -49,7 +49,7 @@ All backend variables use the `BILL_HELPER_` prefix and are defined in `backend/
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BILL_HELPER_AGENT_MODEL` | `openrouter/moonshotai/kimi-k2.5` | LiteLLM model identifier |
+| `BILL_HELPER_AGENT_MODEL` | `openrouter/qwen/qwen3.5-27b` | LiteLLM model identifier |
 | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool-call steps per agent run |
 | `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS` | `3` | Model call retry attempts |
 | `BILL_HELPER_AGENT_RETRY_INITIAL_WAIT_SECONDS` | `0.25` | Initial retry backoff delay |

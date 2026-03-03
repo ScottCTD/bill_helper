@@ -36,7 +36,7 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("LANGFUSE_HOST", "BILL_HELPER_LANGFUSE_HOST"),
     )
-    agent_model: str = "openrouter/moonshotai/kimi-k2.5"
+    agent_model: str = "openrouter/qwen/qwen3.5-27b"
     agent_max_steps: int = 100
     agent_retry_max_attempts: int = Field(default=3, ge=1, le=10)
     agent_retry_initial_wait_seconds: float = Field(default=0.25, ge=0.0, le=30.0)

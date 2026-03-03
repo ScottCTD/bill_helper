@@ -36,7 +36,7 @@ Agent settings:
 - `LANGFUSE_PUBLIC_KEY` / `BILL_HELPER_LANGFUSE_PUBLIC_KEY` (optional; enables LiteLLM Langfuse callbacks when both keys are set)
 - `LANGFUSE_SECRET_KEY` / `BILL_HELPER_LANGFUSE_SECRET_KEY` (optional; enables LiteLLM Langfuse callbacks when both keys are set)
 - `LANGFUSE_HOST` / `BILL_HELPER_LANGFUSE_HOST` (optional; defaults to Langfuse cloud host if unset)
-- `AGENT_MODEL` (default `openrouter/moonshotai/kimi-k2.5`)
+- `AGENT_MODEL` (default `openrouter/qwen/qwen3.5-27b`)
 - `AGENT_MAX_STEPS` (default `100`)
 - `AGENT_MAX_IMAGE_SIZE_BYTES` (default `5MB`; per-attachment size limit for image/PDF agent uploads)
 - `AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`; max image/PDF uploads per message)

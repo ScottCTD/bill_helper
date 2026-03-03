@@ -218,10 +218,10 @@ def test_delete_thread_removes_uploaded_attachment_files(client, monkeypatch):
     assert all(not path.exists() for path in attachment_paths)
 
 
-def test_default_agent_model_is_openrouter_moonshotai_kimi_k2_5():
+def test_default_agent_model_is_openrouter_qwen_qwen3_5_27b():
     from backend.config import get_settings
 
-    assert get_settings().agent_model == "openrouter/moonshotai/kimi-k2.5"
+    assert get_settings().agent_model == "openrouter/qwen/qwen3.5-27b"
 
 
 def test_pdf_line_normalization_collapses_internal_whitespace_and_trims_edges():

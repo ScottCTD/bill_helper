@@ -83,7 +83,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | `langfuse_public_key` | `LANGFUSE_PUBLIC_KEY` / `BILL_HELPER_LANGFUSE_PUBLIC_KEY` | `None` | Enables LiteLLM Langfuse callbacks when paired with `langfuse_secret_key` |
 | `langfuse_secret_key` | `LANGFUSE_SECRET_KEY` / `BILL_HELPER_LANGFUSE_SECRET_KEY` | `None` | Enables LiteLLM Langfuse callbacks when paired with `langfuse_public_key` |
 | `langfuse_host` | `LANGFUSE_HOST` / `BILL_HELPER_LANGFUSE_HOST` | `None` | Optional Langfuse host (defaults to Langfuse cloud host if omitted) |
-| `agent_model` | `BILL_HELPER_AGENT_MODEL` | `openrouter/moonshotai/kimi-k2.5` | Model name; runtime override supported via `/api/v1/settings` |
+| `agent_model` | `BILL_HELPER_AGENT_MODEL` | `openrouter/qwen/qwen3.5-27b` | Model name; runtime override supported via `/api/v1/settings` |
 | `agent_max_steps` | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool loop iterations |
 | `current_user_timezone` | `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` | `America/Toronto` | User-local date basis for the system-prompt current-date section |
 | `default_currency_code` | `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `CAD` | Fallback for entry proposals missing currency (`/settings` override first, env fallback second) |

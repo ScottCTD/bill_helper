@@ -92,7 +92,7 @@ def test_settings_model_override_and_clear(client):
     clear_override = client.patch("/api/v1/settings", json={"agent_model": ""})
     clear_override.raise_for_status()
     clear_payload = clear_override.json()
-    assert clear_payload["agent_model"] == "openrouter/moonshotai/kimi-k2.5"
+    assert clear_payload["agent_model"] == "openrouter/qwen/qwen3.5-27b"
     assert clear_payload["overrides"]["agent_model"] is None
 
 

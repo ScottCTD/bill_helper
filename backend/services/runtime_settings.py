@@ -119,7 +119,7 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
     langfuse_host = _normalize_optional_text(defaults.langfuse_host)
     agent_model = (
         _normalize_optional_text(override.agent_model) if override is not None else None
-    ) or _normalize_optional_text(defaults.agent_model) or "openrouter/moonshotai/kimi-k2.5"
+    ) or _normalize_optional_text(defaults.agent_model) or "openrouter/qwen/qwen3.5-27b"
 
     agent_max_steps = _sanitize_int(
         override.agent_max_steps if override and override.agent_max_steps is not None else defaults.agent_max_steps,

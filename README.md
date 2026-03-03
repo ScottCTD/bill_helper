@@ -66,7 +66,7 @@ OPENROUTER_API_KEY=your-key-here          # default model uses OpenRouter
 # OPENAI_API_KEY=your-key-here            # if using openai/* models
 # ANTHROPIC_API_KEY=your-key-here         # if using anthropic/* models
 
-# Optional: change the model (default: openrouter/moonshotai/kimi-k2.5)
+# Optional: change the model (default: openrouter/qwen/qwen3.5-27b)
 # BILL_HELPER_AGENT_MODEL=openai/gpt-4.1-mini
 
 # Optional: Langfuse observability
@@ -112,7 +112,7 @@ All settings use a `BILL_HELPER_` prefix and can be set via `.env` or the in-app
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BILL_HELPER_AGENT_MODEL` | `openrouter/moonshotai/kimi-k2.5` | LiteLLM model identifier |
+| `BILL_HELPER_AGENT_MODEL` | `openrouter/qwen/qwen3.5-27b` | LiteLLM model identifier |
 | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool-call steps per run |
 | `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `CAD` | Default currency for new entries |
 | `BILL_HELPER_DASHBOARD_CURRENCY_CODE` | `CAD` | Currency used in dashboard analytics |
