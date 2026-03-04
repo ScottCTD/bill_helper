@@ -43,6 +43,7 @@ This module hosts the React app, route pages, UI primitives, and API/query clien
 - `frontend/src/components/agent/panel/types.ts`: panel-local draft/optimistic message contracts.
 - `frontend/src/components/agent/panel/format.ts`: date/thread/usage formatting helpers for panel UI.
 - `frontend/src/components/agent/panel/useAgentDraftAttachments.ts`: attachment input/paste/drag-drop/preview state + handlers.
+- `frontend/src/hooks/useResizablePanel.ts`: shared drag-to-resize hook for persistent sidebar and thread-rail widths.
 - `frontend/src/components/agent/review/*`: run review modal and payload diff renderer.
 - `frontend/src/components/agent/*.test.tsx`: agent UI unit tests.
 - `frontend/src/components/agent/panel/AgentThreadList.test.tsx`: thread-list selection/delete interaction coverage.
@@ -194,8 +195,12 @@ uv run python scripts/check_docs_sync.py
 - Expanded tool-call arguments and model-visible tool output now line-wrap instead of forcing horizontal scrolling on long single-line payloads.
 - Optimistic user bubbles are reconciled against persisted timeline messages to avoid temporary duplicate user-message blocks during send.
 - Route pages are lazy-loaded from `App.tsx` to keep initial bundle load bounded as feature count grows.
+- The left app sidebar is collapsible and desktop-resizable via a shared drag handle; the expanded width persists to localStorage, while small-screen behavior stays fixed-width and slide-based.
 - Agent run rendering and activity derivation are split from `AgentPanel.tsx` into dedicated modules to reduce coordinator complexity.
 - Agent panel layout surfaces are further split into panel modules (`agent/panel/*`) to keep rendering concerns separate from orchestration logic.
+- Agent home now uses a two-row header: title/actions on the first row and a single compact horizontal usage line on the second row.
+- The right thread rail collapse now animates its width closed/open instead of disappearing instantly, and the composer sits slightly above the viewport edge instead of flush against the bottom.
+- Thread-list rows use flex-centered labels and a tighter right-side delete affordance so the title text sits optically centered within each button.
 - Accounts and properties pages now follow a feature-module split (page orchestrator + domain hook + section components) rather than single-file implementations.
 - Properties model logic is decomposed into dedicated query/section-state/form/filter hooks for maintainable ownership boundaries.
 - Accounts create/edit dialogs include optional markdown notes (`markdown_body`) using the shared markdown editor.

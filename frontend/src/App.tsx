@@ -2,6 +2,7 @@ import { Suspense, lazy, useState } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 
 import { Sidebar } from "./components/Sidebar";
+import { useResizablePanel } from "./hooks/useResizablePanel";
 import { cn } from "./lib/utils";
 
 const HomePage = lazy(async () => {
@@ -46,6 +47,13 @@ const SettingsPage = lazy(async () => {
 
 export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { panelWidth: sidebarWidth, handleMouseDown: handleSidebarResizeMouseDown } = useResizablePanel({
+    storageKey: "app-sidebar-width",
+    defaultWidth: 224,
+    minWidth: 200,
+    maxWidth: 320,
+    edge: "left"
+  });
   const location = useLocation();
   const isAgentPage = location.pathname === "/";
 
@@ -53,8 +61,18 @@ export function App() {
     <div className="app-shell">
       <Sidebar
         collapsed={sidebarCollapsed}
+        width={sidebarWidth}
         onToggle={() => setSidebarCollapsed((c) => !c)}
       />
+      {!sidebarCollapsed ? (
+        <div
+          className="panel-resize-handle app-sidebar-resize-handle"
+          onMouseDown={handleSidebarResizeMouseDown}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+        />
+      ) : null}
 
       <main className={cn("app-main", !isAgentPage && "app-main-padded")}>
         <div className={cn(!isAgentPage && "app-content")}>

@@ -1,6 +1,9 @@
+import type { CSSProperties } from "react";
 import { NavLink } from "react-router-dom";
 import { Bot, CreditCard, FolderKanban, Home, Layers3, Network, Settings2, PanelLeftClose, PanelLeft } from "lucide-react";
+
 import { cn } from "../lib/utils";
+import { Button } from "./ui/button";
 
 const navItems = [
   { to: "/", label: "Agent", icon: Bot },
@@ -14,22 +17,29 @@ const navItems = [
 
 interface SidebarProps {
   collapsed: boolean;
+  width: number;
   onToggle: () => void;
 }
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed, width, onToggle }: SidebarProps) {
+  const sidebarStyle = (!collapsed ? { "--sidebar-width": `${width}px` } : undefined) as CSSProperties | undefined;
+
   return (
     <aside
       className={cn(
         "sidebar",
         collapsed && "sidebar-collapsed"
       )}
+      style={sidebarStyle}
     >
       <div className="sidebar-header">
         {!collapsed && (
           <span className="sidebar-title">Bill Helper</span>
         )}
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
           onClick={onToggle}
           className="sidebar-toggle"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -39,7 +49,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           ) : (
             <PanelLeftClose className="h-4 w-4" />
           )}
-        </button>
+        </Button>
       </div>
 
       <nav className="sidebar-nav">

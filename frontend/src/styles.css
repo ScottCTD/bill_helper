@@ -199,7 +199,8 @@
   }
 
   .sidebar {
-    @apply sticky top-0 flex h-screen w-56 flex-shrink-0 flex-col border-r border-border/80 bg-card;
+    @apply sticky top-0 flex h-screen flex-shrink-0 flex-col border-r border-border/80 bg-card;
+    width: var(--sidebar-width, 14rem);
     transition: width 0.2s ease;
   }
 
@@ -256,6 +257,27 @@
     @apply m-0 text-xs leading-relaxed text-muted-foreground;
   }
 
+  .panel-resize-handle {
+    @apply relative z-10 flex shrink-0 cursor-col-resize items-center justify-center bg-transparent transition-colors;
+    width: 9px;
+  }
+
+  .panel-resize-handle::after {
+    content: "";
+    @apply absolute inset-y-0 left-1/2 -translate-x-1/2 rounded-full bg-border/50 transition-all duration-150;
+    width: 1px;
+  }
+
+  .panel-resize-handle:hover::after,
+  .panel-resize-handle:active::after {
+    width: 3px;
+    @apply bg-primary/40;
+  }
+
+  .app-sidebar-resize-handle {
+    @apply self-stretch;
+  }
+
   .app-main {
     @apply flex-1 overflow-x-hidden;
   }
@@ -284,6 +306,10 @@
 
     .app-content {
       @apply px-4 py-5;
+    }
+
+    .app-sidebar-resize-handle {
+      @apply hidden;
     }
   }
 
@@ -918,12 +944,15 @@
   }
 
   .agent-panel-page {
-    @apply relative h-screen min-h-[640px] overflow-hidden rounded-none border-0 shadow-none bg-background;
-    --agent-panel-header-height: 44px;
+    @apply relative h-screen min-h-[640px] overflow-hidden rounded-none border-0 bg-background shadow-none;
   }
 
   .agent-panel-header {
-    @apply flex items-center gap-4 border-b border-border/50 px-5 py-2;
+    @apply grid gap-2 border-b border-border/50 px-5 py-3;
+  }
+
+  .agent-panel-header-top {
+    @apply flex items-center gap-4;
   }
 
   .agent-panel-header h2 {
@@ -943,7 +972,7 @@
   }
 
   .agent-panel-body-page {
-    @apply relative h-[calc(100vh-var(--agent-panel-header-height))] grid-rows-1 gap-0 p-0;
+    @apply relative min-h-0 grid-rows-1 gap-0 p-0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
   }
@@ -971,7 +1000,7 @@
   }
 
   .agent-thread-row {
-    @apply relative h-9 shrink-0 overflow-hidden rounded-lg border border-transparent bg-transparent transition-all duration-150;
+    @apply relative flex h-9 shrink-0 items-stretch overflow-hidden rounded-lg border border-transparent bg-transparent transition-all duration-150;
   }
 
   .agent-thread-row:hover {
@@ -983,15 +1012,15 @@
   }
 
   .agent-thread-button {
-    @apply h-full w-full justify-start rounded-md border-none bg-transparent px-2.5 pr-10 text-left text-sm font-medium shadow-none hover:bg-transparent;
+    @apply flex h-full min-w-0 flex-1 items-center justify-start rounded-md border-none bg-transparent px-2.5 py-0 pr-10 text-left text-sm font-medium leading-5 shadow-none hover:bg-transparent;
   }
 
   .agent-thread-label {
-    @apply block w-full truncate;
+    @apply block min-w-0 flex-1 truncate leading-5;
   }
 
   .agent-thread-delete-button {
-    @apply absolute right-2 top-1/2 h-6 w-6 -translate-y-1/2 rounded-sm border-none bg-transparent p-0 text-muted-foreground opacity-0 pointer-events-none shadow-none transition-opacity focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0;
+    @apply absolute right-1.5 top-1/2 h-6 w-6 -translate-y-1/2 rounded-md border-none bg-transparent p-0 text-muted-foreground opacity-0 pointer-events-none shadow-none transition-opacity focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0;
   }
 
   .agent-thread-row:hover .agent-thread-delete-button,
@@ -1017,7 +1046,7 @@
   }
 
   .agent-thread-main {
-    @apply mx-auto w-full max-w-4xl px-8 pb-0 pt-5;
+    @apply mx-auto w-full max-w-4xl px-8 pb-3 pt-5;
   }
 
   .agent-timeline-scroll-wrapper {
@@ -1605,15 +1634,27 @@
   }
 
   .agent-thread-usage {
-    @apply flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground/70;
+    @apply flex min-w-0 items-center gap-3 overflow-x-auto whitespace-nowrap pb-0.5;
   }
 
-  .agent-thread-usage-total {
-    @apply font-semibold text-foreground/70;
+  .agent-thread-usage-item {
+    @apply inline-flex shrink-0 items-baseline gap-1 text-[11px] text-muted-foreground/80;
+  }
+
+  .agent-thread-usage-item-emphasis {
+    @apply text-foreground/85;
+  }
+
+  .agent-thread-usage-label {
+    @apply shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/65;
+  }
+
+  .agent-thread-usage-value {
+    @apply font-medium text-foreground/80;
   }
 
   .agent-composer {
-    @apply grid gap-2 pb-3 pt-3;
+    @apply grid gap-2 pb-0 pt-3;
   }
 
   .agent-composer-drop-active {
@@ -1694,27 +1735,18 @@
     @apply h-[75vh] w-full rounded-md border border-border bg-background;
   }
 
-  /* ── Resize handle ── */
   .agent-resize-handle {
-    @apply relative z-10 flex shrink-0 cursor-col-resize items-center justify-center bg-transparent transition-colors;
-    width: 9px;
-  }
-
-  .agent-resize-handle::after {
-    content: "";
-    @apply absolute inset-y-0 left-1/2 -translate-x-1/2 bg-border/50 transition-all duration-150;
-    width: 1px;
-  }
-
-  .agent-resize-handle:hover::after,
-  .agent-resize-handle:active::after {
-    width: 3px;
-    @apply bg-primary/40 rounded-full;
+    @apply h-full;
   }
 
   /* ── Thread panel slot ── */
   .agent-thread-panel-slot {
     @apply flex h-full min-h-0 flex-col overflow-hidden;
+    transition: width 0.2s ease;
+  }
+
+  .agent-thread-panel-slot-collapsed {
+    width: 0;
   }
 
   /* ── Thread panel wrapper ── */
@@ -1742,7 +1774,7 @@
   }
 
   .agent-panel-body-page {
-    @apply h-[calc(100vh-var(--agent-panel-header-height))];
+    @apply h-full min-h-0;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
   }

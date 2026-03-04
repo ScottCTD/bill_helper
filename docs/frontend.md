@@ -28,12 +28,13 @@ Current shell behavior:
 
 - collapsible left sidebar (`Sidebar.tsx`) with vertical navigation links (`Agent`, `Dashboard`, `Entries`, `Groups`, `Accounts`, `Properties`, `Settings`)
 - sidebar shows app title, icon+label nav links, and a footer tagline; collapses to icon-only mode via toggle button
+- on desktop, the expanded sidebar is horizontally resizable (200-320px range) and persists its width in localStorage
 - content canvas is route-driven (no global right-side agent occupancy on non-home pages)
 - home route is AI-native and renders the agent experience as full-height primary page content (bypasses app-content padding to fill the viewport)
 - route pages are lazy-loaded via `React.lazy` + `Suspense` so non-home routes are not eagerly loaded into the initial JS payload
 - page sections are visually separated; readable container width tuned for full-page content
 - responsive behavior:
-  - on small screens (≤768px) the sidebar starts collapsed to icon-only and can slide open
+  - on small screens (≤768px) the sidebar starts collapsed to icon-only, keeps the fixed compact width, and can slide open
 
 Pages:
 
@@ -287,7 +288,7 @@ This file now acts as the stateful coordinator. Run activity rendering and deriv
   - `frontend/src/components/agent/panel/AgentThreadUsageBar.tsx`
   - `frontend/src/components/agent/panel/AgentAttachmentPreviewDialog.tsx`
   - `frontend/src/components/agent/panel/useAgentDraftAttachments.ts`
-  - `frontend/src/components/agent/panel/useResizablePanel.ts` — horizontal drag-to-resize with localStorage persistence
+  - `frontend/src/hooks/useResizablePanel.ts` — shared horizontal drag-to-resize with localStorage persistence
   - `frontend/src/components/agent/panel/types.ts`
   - `frontend/src/components/agent/panel/format.ts`
 
@@ -295,9 +296,11 @@ Timeline features:
 
 - right-side thread panel (previously left) with compact one-line thread buttons
 - thread panel is collapsible via a collapse button; re-opened via the panel icon in the header
+- thread panel collapse now animates the rail width closed/open instead of appearing/disappearing instantly
 - resizable separator between conversation and thread panel (drag to resize, 200–600px range, width persisted to localStorage)
 - thread label uses the first 20 characters of the thread title (thread titles are seeded from the first user message)
 - thread list uses plain list-row styling for non-selected items; only the active thread is boxed/highlighted
+- thread-row labels are flex-centered with explicit single-line leading so titles sit optically centered in the row height
 - thread rows expose a right-side delete icon button inside the same row box on hover/focus (always visible on touch devices)
 - thread delete action confirms intent in the panel, then calls `DELETE /api/v1/agent/threads/{thread_id}`
 - when delete is disabled during active execution, delete controls are hidden entirely
@@ -305,6 +308,7 @@ Timeline features:
 - click-to-open conversation behavior from history rail
 - creating a new thread via `New Thread` focuses the composer textarea for immediate typing
 - header title includes active model context (`Agent (<model>)`) based on the most recent run in the selected thread
+- header uses two rows: title/actions first, then a single compact horizontal usage line
 - main chat timeline fills remaining space with centered max-width (max 896px / `max-w-4xl`)
 - conversation and composer occupy the left/main area; thread panel occupies the right
 - timeline scroll behavior is a dedicated scroll surface with scrollbar at panel edge
@@ -378,6 +382,7 @@ Composer:
 
 - card-style input box: borderless textarea inside a rounded container with a bottom toolbar row
 - composer bar is pinned at the bottom of the right pane while timeline content scrolls
+- composer now keeps a small visual gap above the viewport bottom instead of sitting flush against the edge
 - textarea defaults to a single line and auto-grows with content up to a bounded max height, then becomes internally scrollable
 - toolbar contains an "Add Attachments" button (paperclip icon, triggers hidden file input) and a run-aware primary action:
   - idle: `Send`
@@ -474,7 +479,8 @@ Includes:
   - markdown typography for assistant/system output (including list marker rendering)
   - lightweight bullet-list tool-call display with chevron expand/collapse
   - draft attachment chip + preview dialog styling
-  - cumulative thread usage/cost bar styling above composer
+  - compact two-row agent header with a single-line usage-metric strip
+  - cumulative thread usage/cost bar styling inside that header strip
 - button baseline behavior is scoped to unclassed legacy buttons so `shadcn/ui` variant buttons are not overridden
 - spacing scale was relaxed (`app-content`, `stack`, `grid`, form gaps) to reduce crowded coupling between sections
 - accounts page now uses shared table + dialog primitives instead of bespoke chip-picker controls

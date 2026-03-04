@@ -18,8 +18,10 @@ describe("AgentThreadUsageBar", () => {
       />
     );
 
-    expect(screen.getByText("Context: 87.65K")).toBeInTheDocument();
-    expect(screen.getByText("Total input: 12.35K")).toBeInTheDocument();
-    expect(screen.queryByText("Input: 12.35K")).not.toBeInTheDocument();
+    expect(screen.getByText("Context")).toBeInTheDocument();
+    expect(screen.getByText("87.65K")).toBeInTheDocument();
+    expect(screen.getByText("Total input")).toBeInTheDocument();
+    expect(screen.getByText("12.35K")).toBeInTheDocument();
+    expect(screen.queryByText("Input")).not.toBeInTheDocument();
   });
 });

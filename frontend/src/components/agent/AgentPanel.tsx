@@ -47,7 +47,6 @@ import { AgentThreadPanel } from "./panel/AgentThreadPanel";
 import { AgentThreadUsageBar } from "./panel/AgentThreadUsageBar";
 import { AgentTimeline } from "./panel/AgentTimeline";
 import { useStickToBottom } from "./panel/useStickToBottom";
-import { useResizablePanel } from "./panel/useResizablePanel";
 import { useAgentDraftAttachments } from "./panel/useAgentDraftAttachments";
 import {
   COMPOSER_TEXTAREA_MAX_HEIGHT_PX,
@@ -56,6 +55,7 @@ import {
   type PendingUserMessage
 } from "./panel/types";
 import { AgentRunReviewModal } from "./review/AgentRunReviewModal";
+import { useResizablePanel } from "../../hooks/useResizablePanel";
 import { Button } from "../ui/button";
 
 interface AgentPanelProps {
@@ -85,7 +85,13 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const optimisticToolCallsRef = useRef<Record<string, AgentToolCall[]>>({});
   const hydratingToolCallRunsRef = useRef<Set<string>>(new Set());
   const [isThreadPanelOpen, setIsThreadPanelOpen] = useState(true);
-  const { panelWidth, handleMouseDown: handleResizeMouseDown } = useResizablePanel();
+  const { panelWidth, handleMouseDown: handleResizeMouseDown } = useResizablePanel({
+    storageKey: "agent-thread-panel-width",
+    defaultWidth: 300,
+    minWidth: 200,
+    maxWidth: 600,
+    edge: "right"
+  });
   const toggleThreadPanel = useCallback(() => setIsThreadPanelOpen((v) => !v), []);
   const attachmentState = useAgentDraftAttachments({ setActionError });
   const {
@@ -734,30 +740,32 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     <>
       <aside className="agent-panel agent-panel-page" aria-label="Agent panel">
         <header className="agent-panel-header">
-          <h2>{`Agent (${activeModelName})`}</h2>
-          <AgentThreadUsageBar selectedThreadId={selectedThreadId} totals={threadUsageTotals} />
-          <div className="agent-panel-header-actions">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                void handleCreateThread();
-              }}
-              disabled={isMutating}
-            >
-              New Thread
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={toggleThreadPanel}
-              title={isThreadPanelOpen ? "Collapse threads" : "Expand threads"}
-            >
-              {isThreadPanelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
-            </Button>
+          <div className="agent-panel-header-top">
+            <h2>{`Agent (${activeModelName})`}</h2>
+            <div className="agent-panel-header-actions">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  void handleCreateThread();
+                }}
+                disabled={isMutating}
+              >
+                New Thread
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={toggleThreadPanel}
+                title={isThreadPanelOpen ? "Collapse threads" : "Expand threads"}
+              >
+                {isThreadPanelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
+          <AgentThreadUsageBar selectedThreadId={selectedThreadId} totals={threadUsageTotals} />
         </header>
 
         <div className="agent-panel-body agent-panel-body-page">
@@ -817,7 +825,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
 
           {isThreadPanelOpen ? (
             <div
-              className="agent-resize-handle"
+              className="panel-resize-handle agent-resize-handle"
               onMouseDown={handleResizeMouseDown}
               role="separator"
               aria-orientation="vertical"
@@ -826,7 +834,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
           ) : null}
 
           <div
-            className="agent-thread-panel-slot"
+            className={isThreadPanelOpen ? "agent-thread-panel-slot" : "agent-thread-panel-slot agent-thread-panel-slot-collapsed"}
             style={isThreadPanelOpen ? { width: panelWidth } : undefined}
           >
             <AgentThreadPanel
