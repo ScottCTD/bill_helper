@@ -127,7 +127,7 @@ uv run python scripts/check_docs_sync.py
 - Agent model calls are routed through LiteLLM using the configured model string (`agent_model`), and credentials are resolved from provider environment variables.
 - For models that support prompt caching, LiteLLM requests include explicit `cache_control_injection_points` anchored to system context and latest user turn (negative message index) so tool-loop steps can reuse cached prompt prefixes.
 - Agent message uploads accept image and PDF attachments; PDF files are parsed to normalized text via PyMuPDF before model calls.
-- When the configured model supports vision (via LiteLLM capability checks), each uploaded PDF page is also rendered and sent as an image input.
+- When the configured model supports vision (via LiteLLM capability checks plus local overrides for known OpenRouter gaps such as `openrouter/qwen/qwen3.5-27b`), each uploaded PDF page is also rendered and sent as an image input.
 - Agent runs can be interrupted via `POST /api/v1/agent/runs/{run_id}/interrupt`; interrupted runs transition to `failed`.
 - Thread deletion is available via `DELETE /api/v1/agent/threads/{thread_id}` and is blocked (`409`) while that thread has a running run.
 - Thread deletion also removes that thread's persisted upload directories under `.data/agent_uploads/<message_id>/...`.
