@@ -429,6 +429,7 @@ class AgentMessageAttachment(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     message_id: Mapped[str] = mapped_column(ForeignKey("agent_messages.id", ondelete="CASCADE"), nullable=False, index=True)
     mime_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    original_filename: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 

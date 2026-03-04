@@ -134,7 +134,13 @@ npm install
 npm run dev
 npm run test
 npm run build
+npm audit
 ```
+
+Operational impact:
+
+- `npm audit` is the frontend dependency-health check for transitive advisories in the lockfile.
+- The current lockfile resolves the recent `rollup` and `markdown-it` advisories with patched transitive versions.
 
 If backend/API contract changed, also run:
 

@@ -740,11 +740,17 @@ def _normalize_payload_for_change_type(
         return normalized_payload
     if change_type == AgentChangeType.CREATE_ENTRY:
         parsed = ProposeCreateEntryArgs.model_validate(payload)
+        _validate_create_entry_entity_references(
+            context,
+            from_entity=parsed.from_entity,
+            to_entity=parsed.to_entity,
+        )
         return _proposal_payload_from_create_entry_args(context, parsed)
     if change_type == AgentChangeType.UPDATE_ENTRY:
         parsed = ProposeUpdateEntryArgs.model_validate(
             {"selector": payload.get("selector"), "patch": payload.get("patch")}
         )
+        _validate_update_entry_entity_patch(context, parsed.patch)
         normalized_payload = {
             "selector": _entry_selector_to_json(parsed.selector),
             "patch": _normalize_update_entry_patch_for_payload(parsed.patch),
@@ -778,6 +784,69 @@ def _pending_proposals_for_thread(context: ToolContext) -> list[AgentChangeItem]
             .order_by(AgentChangeItem.created_at.asc())
         )
     )
+
+
+def _normalized_pending_create_entity_names(
+    context: ToolContext,
+    *,
+    exclude_item_id: str | None = None,
+) -> set[str]:
+    names: set[str] = set()
+    for item in _pending_proposals_for_thread(context):
+        if exclude_item_id is not None and item.id == exclude_item_id:
+            continue
+        if item.change_type != AgentChangeType.CREATE_ENTITY:
+            continue
+        raw_name = item.payload_json.get("name")
+        if not isinstance(raw_name, str):
+            continue
+        normalized = normalize_entity_name(raw_name)
+        if normalized:
+            names.add(normalized.lower())
+    return names
+
+
+def _has_pending_create_entity_proposal(
+    context: ToolContext,
+    entity_name: str,
+    *,
+    exclude_item_id: str | None = None,
+) -> bool:
+    normalized = normalize_entity_name(entity_name)
+    if not normalized:
+        return False
+    return normalized.lower() in _normalized_pending_create_entity_names(
+        context,
+        exclude_item_id=exclude_item_id,
+    )
+
+
+def _validate_proposed_entity_reference(context: ToolContext, entity_name: str) -> None:
+    if find_entity_by_name(context.db, entity_name) is not None:
+        return
+    if _has_pending_create_entity_proposal(context, entity_name):
+        return
+    raise ValueError(
+        f"entity not found: '{entity_name}'. Use an existing entity or propose_create_entity "
+        "for it in the current thread first."
+    )
+
+
+def _validate_create_entry_entity_references(
+    context: ToolContext,
+    *,
+    from_entity: str,
+    to_entity: str,
+) -> None:
+    _validate_proposed_entity_reference(context, from_entity)
+    _validate_proposed_entity_reference(context, to_entity)
+
+
+def _validate_update_entry_entity_patch(context: ToolContext, patch: EntryPatchArgs) -> None:
+    if "from_entity" in patch.model_fields_set and patch.from_entity is not None:
+        _validate_proposed_entity_reference(context, patch.from_entity)
+    if "to_entity" in patch.model_fields_set and patch.to_entity is not None:
+        _validate_proposed_entity_reference(context, patch.to_entity)
 
 
 def _resolve_pending_proposal_by_id(context: ToolContext, proposal_id: str) -> AgentChangeItem | None:
@@ -903,13 +972,17 @@ def _list_tags(context: ToolContext, args: ListTagsArgs) -> ToolExecutionResult:
         type_rank, type_ok = _string_match_rank(tag_type, args.type)
         if not (name_ok and type_ok):
             continue
-        record = {"name": tag.name, "type": tag_type}
+        record = {"name": tag.name, "type": tag_type, "description": tag.description}
         ranked.append(((name_rank, type_rank, tag.name.lower()), record))
 
     ranked.sort(key=lambda pair: pair[0])
     total_available = len(ranked)
     records = [record for _, record in ranked[: args.limit]]
-    tags_text = ", ".join(f"{tag['name']} ({tag['type'] or 'untyped'})" for tag in records) if records else "(none)"
+    tags_text = ", ".join(
+        f"{tag['name']} ({tag['type'] or 'untyped'}"
+        f"{'; description: ' + tag['description'] if tag.get('description') else ''})"
+        for tag in records
+    ) if records else "(none)"
     output_json = {
         "status": "OK",
         "summary": f"returned {len(records)} of {total_available} matching tags",
@@ -1124,6 +1197,11 @@ def _propose_create_entity(context: ToolContext, args: ProposeCreateEntityArgs) 
     existing = find_entity_by_name(context.db, args.name)
     if existing is not None:
         return _error_result("entity already exists", details={"name": args.name})
+    if _has_pending_create_entity_proposal(context, args.name):
+        return _error_result(
+            "entity already has a pending creation proposal in this thread",
+            details={"name": args.name},
+        )
 
     payload = {"name": args.name, "category": args.category}
     item = _create_change_item(
@@ -1210,16 +1288,14 @@ def _propose_delete_entity(context: ToolContext, args: ProposeDeleteEntityArgs) 
 
 
 def _propose_create_entry(context: ToolContext, args: ProposeCreateEntryArgs) -> ToolExecutionResult:
-    from_entity_obj = find_entity_by_name(context.db, args.from_entity)
-    if from_entity_obj is None:
-        return _error_result(
-            f"entity not found: '{args.from_entity}'. Use propose_create_entity first to create it.",
+    try:
+        _validate_create_entry_entity_references(
+            context,
+            from_entity=args.from_entity,
+            to_entity=args.to_entity,
         )
-    to_entity_obj = find_entity_by_name(context.db, args.to_entity)
-    if to_entity_obj is None:
-        return _error_result(
-            f"entity not found: '{args.to_entity}'. Use propose_create_entity first to create it.",
-        )
+    except ValueError as exc:
+        return _error_result(str(exc))
 
     payload = _proposal_payload_from_create_entry_args(context, args)
     item = _create_change_item(
@@ -1256,6 +1332,11 @@ def _propose_update_entry(context: ToolContext, args: ProposeUpdateEntryArgs) ->
                 **_entry_ambiguity_details(matches),
             },
         )
+
+    try:
+        _validate_update_entry_entity_patch(context, args.patch)
+    except ValueError as exc:
+        return _error_result(str(exc))
 
     patch = args.patch.model_dump(exclude_unset=True)
     if "date" in patch and patch["date"] is not None:
@@ -1444,7 +1525,7 @@ TOOLS: dict[str, AgentToolDefinition] = {
         name="list_tags",
         description=(
             "List/query tags by name and type. Exact matches are ranked higher than substring matches. "
-            "This tool is read-only and includes tag types."
+            "This tool is read-only and includes tag types plus tag descriptions."
         ),
         args_model=ListTagsArgs,
         handler=_list_tags,
@@ -1537,6 +1618,8 @@ TOOLS: dict[str, AgentToolDefinition] = {
         description=(
             "Create a review-gated proposal to add a new entry. "
             "This does not mutate entries immediately; it creates a pending review item only. "
+            "from_entity/to_entity may reference existing entities or pending create_entity proposals "
+            "already in the current thread. "
             "When markdown_notes is provided, keep it human-readable markdown that preserves all relevant "
             "input details. For short notes, avoid headings; prefer clear line breaks and ordered/unordered lists."
         ),

@@ -36,6 +36,7 @@
 - `versions/0017_rename_tag_category_taxonomy.py`: migrates tag taxonomy key/display naming from category to type (`tag_category` -> `tag_type`).
 - `versions/0018_add_tag_description.py`: adds optional free-text tag description (`tags.description`).
 - `versions/0019_add_transfer_entry_kind.py`: documents addition of `TRANSFER` to `EntryKind` enum (no DDL change for SQLite).
+- `versions/0020_add_agent_message_attachment_original_filename.py`: adds optional upload-name storage for agent attachments (`agent_message_attachments.original_filename`) and safely no-ops if the column already exists in a drifted local DB.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)

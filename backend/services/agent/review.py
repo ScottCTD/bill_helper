@@ -7,8 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.enums import AgentChangeStatus, AgentChangeType, AgentReviewActionType
-from backend.models import AgentChangeItem, AgentReviewAction
+from backend.models import AgentChangeItem, AgentReviewAction, AgentRun
 from backend.services.agent.change_apply import apply_change_item_payload
+from backend.services.entities import find_entity_by_name, normalize_entity_name
 
 
 def utc_now() -> datetime:
@@ -48,6 +49,129 @@ def _combine_notes(note: str | None, extra: str | None) -> str | None:
     return None
 
 
+def _thread_id_for_change_item(db: Session, item: AgentChangeItem) -> str | None:
+    return db.scalar(select(AgentRun.thread_id).where(AgentRun.id == item.run_id))
+
+
+def _pending_change_items_for_thread(
+    db: Session,
+    *,
+    thread_id: str,
+    exclude_item_ids: set[str] | None = None,
+) -> list[AgentChangeItem]:
+    excluded = exclude_item_ids or set()
+    items = list(
+        db.scalars(
+            select(AgentChangeItem)
+            .join(AgentRun, AgentRun.id == AgentChangeItem.run_id)
+            .where(
+                AgentRun.thread_id == thread_id,
+                AgentChangeItem.status == AgentChangeStatus.PENDING_REVIEW,
+            )
+            .order_by(AgentChangeItem.created_at.asc())
+        )
+    )
+    if not excluded:
+        return items
+    return [item for item in items if item.id not in excluded]
+
+
+def _normalized_entity_reference(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = normalize_entity_name(value)
+    if not normalized:
+        return None
+    return normalized.lower()
+
+
+def _entry_entity_labels_for_payload(
+    *,
+    change_type: AgentChangeType,
+    payload: dict[str, Any],
+) -> dict[str, str]:
+    raw_refs: list[Any] = []
+    if change_type == AgentChangeType.CREATE_ENTRY:
+        raw_refs = [payload.get("from_entity"), payload.get("to_entity")]
+    elif change_type == AgentChangeType.UPDATE_ENTRY:
+        patch = payload.get("patch")
+        if isinstance(patch, dict):
+            raw_refs = [patch.get("from_entity"), patch.get("to_entity")]
+
+    labels: dict[str, str] = {}
+    for raw_ref in raw_refs:
+        normalized = _normalized_entity_reference(raw_ref)
+        if normalized is None:
+            continue
+        labels.setdefault(normalized, normalize_entity_name(str(raw_ref)))
+    return labels
+
+
+def _pending_create_entity_names(
+    pending_items: list[AgentChangeItem],
+    *,
+    exclude_item_ids: set[str] | None = None,
+) -> set[str]:
+    excluded = exclude_item_ids or set()
+    names: set[str] = set()
+    for item in pending_items:
+        if item.id in excluded or item.change_type != AgentChangeType.CREATE_ENTITY:
+            continue
+        raw_name = item.payload_json.get("name")
+        normalized = _normalized_entity_reference(raw_name)
+        if normalized is not None:
+            names.add(normalized)
+    return names
+
+
+def _validate_entry_dependencies_ready_for_approval(
+    db: Session,
+    *,
+    item: AgentChangeItem,
+    payload: dict[str, Any],
+) -> None:
+    if item.change_type not in {AgentChangeType.CREATE_ENTRY, AgentChangeType.UPDATE_ENTRY}:
+        return
+
+    entity_labels = _entry_entity_labels_for_payload(change_type=item.change_type, payload=payload)
+    if not entity_labels:
+        return
+
+    thread_id = _thread_id_for_change_item(db, item)
+    if thread_id is None:
+        return
+
+    pending_items = _pending_change_items_for_thread(
+        db,
+        thread_id=thread_id,
+        exclude_item_ids={item.id},
+    )
+    pending_entity_names = _pending_create_entity_names(pending_items)
+
+    pending_blockers: list[str] = []
+    missing_entities: list[str] = []
+    for normalized_name, display_name in sorted(entity_labels.items()):
+        if find_entity_by_name(db, display_name) is not None:
+            continue
+        if normalized_name in pending_entity_names:
+            pending_blockers.append(display_name)
+            continue
+        missing_entities.append(display_name)
+
+    if pending_blockers:
+        quoted = ", ".join(f"'{name}'" for name in pending_blockers)
+        noun = "entity proposal" if len(pending_blockers) == 1 else "entity proposals"
+        raise ValueError(
+            f"Entry depends on pending {noun} for {quoted}. Approve or reject those entity proposals first."
+        )
+    if missing_entities:
+        quoted = ", ".join(f"'{name}'" for name in missing_entities)
+        noun = "entity" if len(missing_entities) == 1 else "entities"
+        raise ValueError(
+            f"Entry references missing {noun} {quoted}. Propose and approve create_entity first."
+        )
+
+
 def approve_change_item(
     db: Session,
     *,
@@ -75,6 +199,7 @@ def approve_change_item(
         if diff_summary:
             override_note = f"payload_override_diff: {diff_summary}"
     combined_note = _combine_notes(note, override_note)
+    _validate_entry_dependencies_ready_for_approval(db, item=item, payload=payload)
 
     approval_action = AgentReviewAction(
         change_item_id=item.id,

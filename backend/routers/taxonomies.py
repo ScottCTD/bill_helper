@@ -9,6 +9,7 @@ from backend.models import Taxonomy, TaxonomyAssignment, TaxonomyTerm
 from backend.schemas import TaxonomyRead, TaxonomyTermCreate, TaxonomyTermRead, TaxonomyTermUpdate
 from backend.services.taxonomy import (
     ensure_default_taxonomies,
+    get_term_description,
     get_or_create_term,
     get_taxonomy_by_key,
     list_terms_with_usage,
@@ -16,19 +17,6 @@ from backend.services.taxonomy import (
 )
 
 router = APIRouter(prefix="/taxonomies", tags=["taxonomies"])
-
-
-def _get_term_description(term: TaxonomyTerm) -> str | None:
-    metadata = term.metadata_json
-    if not isinstance(metadata, dict):
-        return None
-    value = metadata.get("description")
-    if isinstance(value, str):
-        normalized = " ".join(value.split()).strip()
-        return normalized or None
-    return None
-
-
 def _set_term_description(term: TaxonomyTerm, description: str | None) -> None:
     normalized = " ".join(description.split()).strip() if description is not None else ""
     metadata = dict(term.metadata_json) if isinstance(term.metadata_json, dict) else {}
@@ -59,7 +47,7 @@ def _term_to_schema(db: Session, term: TaxonomyTerm) -> TaxonomyTermRead:
         name=term.name,
         normalized_name=term.normalized_name,
         parent_term_id=term.parent_term_id,
-        description=_get_term_description(term),
+        description=get_term_description(term),
         usage_count=usage_count,
     )
 
@@ -83,7 +71,7 @@ def list_taxonomy_terms(taxonomy_key: str, db: Session = Depends(get_db)) -> lis
             name=term.name,
             normalized_name=term.normalized_name,
             parent_term_id=term.parent_term_id,
-            description=_get_term_description(term),
+            description=get_term_description(term),
             usage_count=usage_count,
         )
         for term, usage_count in rows

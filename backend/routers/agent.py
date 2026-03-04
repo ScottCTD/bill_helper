@@ -224,6 +224,7 @@ async def _create_user_message_and_start_run(
             AgentMessageAttachment(
                 message_id=user_message.id,
                 mime_type=mime_type,
+                original_filename=upload.filename,
                 file_path=path,
             )
         )

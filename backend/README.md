@@ -110,6 +110,8 @@ uv run python scripts/check_docs_sync.py
 - Proposal tool outputs include `proposal_id` + `proposal_short_id` for follow-up reference in later turns.
 - Pending proposals can be edited or removed in-thread via `update_pending_proposal` / `remove_pending_proposal` (pending-only, thread-scoped).
 - Tag deletion proposals are blocked when the tag is still referenced by any non-deleted entries; apply path re-validates this constraint before delete.
+- Entry proposals can reference entities that already exist or that are already pending as `create_entity` proposals in the same thread.
+  Approving those entry/update proposals is blocked until the entity dependency is resolved. If the related entity proposal is rejected or removed, the dependent entry proposals remain pending and must be updated before they can be approved.
 - Agent prompt policy requires duplicate-entry checks to prefer `propose_update_entry` when new input complements an existing entry.
 - Agent prompt policy requires canonical/generalized tag and entity naming.
   Tags must stay general (for example, `groceries`, `dining`, `online`) instead of colliding with entities/merchants (for example, `credit`, `loblaw`, `heytea`), and tags should omit locations unless the user explicitly requests location-specific tagging.
@@ -118,16 +120,21 @@ uv run python scripts/check_docs_sync.py
   New entry specs require grounding all fields in explicit source facts and avoiding invented missing details.
 - Agent prompt/tool policy requires human-readable `markdown_notes` formatting that preserves input detail; short notes should avoid headings and prefer clear line breaks/lists.
 - Agent prompt policy requires entry retag/update proposals before tag-delete proposals when the tag is still referenced.
-- Agent prompt policy requires parallel tool-call batches whenever requested reads/proposals are independent.
+- Agent prompt policy requires parallel tool-call batches for independent read-only work, but proposal workflows should start with one representative `propose_*` call before scaling out to later batches.
 - Agent system-prompt policy is organized into explicit markdown rule sections (tool discipline, proposal workflows, new proposal specifications, error handling, execution, final response).
+- Agent system prompt renders `Current User Context` as fixed `Account Context`, `User Memory`, and `Entity Category Reference` subsections, with content-only inserts and `(none)` placeholders when a section has no content.
 - Agent model/tool execution retries and limits can be overridden at runtime via `/settings`.
 - Streamed model calls retry transient failures using the same retry policy.
 - OpenRouter SSL `sslv3 alert bad record mac` transport failures get a one-shot immediate retry in both streamed and non-streamed model calls, even when `agent_retry_max_attempts=1`.
 - Stream retries after partial output are de-duplicated so already-emitted prefixes are not re-sent to the SSE client.
+- Tesseract OCR fallback depends on a local `tesseract` executable; if it is unavailable or OCR fails, PDF prompt text falls back to a no-content note while vision-capable models can still receive rendered page images.
 - Agent model calls are routed through LiteLLM using the configured model string (`agent_model`), and credentials are resolved from provider environment variables.
 - For models that support prompt caching, LiteLLM requests include explicit `cache_control_injection_points` anchored to system context and latest user turn (negative message index) so tool-loop steps can reuse cached prompt prefixes.
-- Agent message uploads accept image and PDF attachments; PDF files are parsed to normalized text via PyMuPDF before model calls.
-- When the configured model supports vision (via LiteLLM capability checks plus local overrides for known OpenRouter gaps such as `openrouter/qwen/qwen3.5-27b`), each uploaded PDF page is also rendered and sent as an image input.
+- Agent message uploads accept image and PDF attachments; each attachment now contributes its own model-visible text block (labeled with the uploaded filename when available), and the user's typed message is appended as the final text block after all attachment parts.
+- PDF files first attempt normalized PyMuPDF text extraction, then fall back to local Tesseract OCR only when native extraction returns no usable text.
+- When the configured model supports vision (via LiteLLM capability checks plus local overrides for known OpenRouter gaps such as `openrouter/qwen/qwen3.5-27b`), each uploaded PDF page is rendered and appended as image inputs immediately after that PDF's text block; non-PDF image uploads are also labeled and appended in attachment order before the trailing user prompt.
+- Agent system prompts now embed the current `entity_category` taxonomy terms plus their descriptions (when present) as a reference section for entity normalization decisions.
+- `list_tags` tool results now include both tag `type` and tag `description` in the model-visible tool output so tag semantics are available without a separate API read.
 - Agent runs can be interrupted via `POST /api/v1/agent/runs/{run_id}/interrupt`; interrupted runs transition to `failed`.
 - Thread deletion is available via `DELETE /api/v1/agent/threads/{thread_id}` and is blocked (`409`) while that thread has a running run.
 - Thread deletion also removes that thread's persisted upload directories under `.data/agent_uploads/<message_id>/...`.

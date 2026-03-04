@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import base64
 import re
+import shutil
+import subprocess
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -25,6 +28,7 @@ from backend.models import (
 from backend.config import get_settings
 from backend.services.agent.prompts import system_prompt
 from backend.services.runtime_settings import resolve_runtime_settings
+from backend.services.taxonomy import list_term_name_description_pairs
 
 MAX_ACCOUNT_MARKDOWN_CONTEXT_CHARS = 1_500
 MAX_ACCOUNT_MARKDOWN_CONTEXT_LINES = 40
@@ -36,6 +40,10 @@ FORCED_VISION_MODEL_ALIASES = frozenset(
         "qwen/qwen3.5-27b",
     }
 )
+PDF_OCR_RENDER_DPI = 300
+PDF_OCR_TESSERACT_PSM = 4
+PDF_OCR_TESSERACT_OEM = 3
+PDF_OCR_TESSERACT_LANG = "eng"
 
 
 def attachment_to_data_url(file_path: str, mime_type: str) -> str | None:
@@ -98,6 +106,60 @@ def _extract_pdf_text(file_path: str) -> str | None:
         return None
     extracted = "\n\n".join(text for text in page_texts if text)
     return extracted or None
+
+
+def _extract_pdf_text_with_tesseract(file_path: str) -> str | None:
+    path = Path(file_path)
+    if not path.exists() or shutil.which("tesseract") is None:
+        return None
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            with pymupdf.open(path) as document:
+                page_texts: list[str] = []
+                for page_index, page in enumerate(document, start=1):
+                    image_path = temp_dir / f"page_{page_index:04d}.png"
+                    pixmap = page.get_pixmap(dpi=PDF_OCR_RENDER_DPI, alpha=False)
+                    pixmap.save(image_path)
+                    result = subprocess.run(
+                        [
+                            "tesseract",
+                            str(image_path),
+                            "stdout",
+                            "--psm",
+                            str(PDF_OCR_TESSERACT_PSM),
+                            "--oem",
+                            str(PDF_OCR_TESSERACT_OEM),
+                            "-l",
+                            PDF_OCR_TESSERACT_LANG,
+                        ],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    page_texts.append(_normalize_pdf_text_lines(result.stdout))
+    except Exception:
+        return None
+    extracted = "\n\n".join(text for text in page_texts if text)
+    return extracted or None
+
+
+def _extract_pdf_text_for_model(file_path: str) -> tuple[str | None, str | None]:
+    native_text = _extract_pdf_text(file_path)
+    if native_text:
+        return native_text, "parsed with PyMuPDF text extraction"
+    ocr_text = _extract_pdf_text_with_tesseract(file_path)
+    if ocr_text:
+        return ocr_text, "parsed with Tesseract OCR; expect imperfect text"
+    return None, None
+
+
+def _attachment_display_name(attachment: AgentMessageAttachment) -> str:
+    original_name = " ".join((attachment.original_filename or "").split()).strip()
+    if original_name:
+        return Path(original_name).name or original_name
+    fallback_name = Path(attachment.file_path).name
+    return fallback_name or "attachment"
 
 
 def _pdf_page_image_data_urls(file_path: str) -> list[str]:
@@ -187,7 +249,7 @@ def _build_current_user_context(db: Session) -> str:
     for index, account in enumerate(accounts[:max_accounts], start=1):
         status = "active" if account.is_active else "inactive"
         lines.append(
-            f"- {index}. name={account.name}; currency={account.currency_code}; status={status}; "
+            f"{index}. name={account.name}; currency={account.currency_code}; status={status}; "
             f"entity={account.entity.name if account.entity is not None else '-'}"
         )
         notes_markdown = _normalize_account_markdown_for_context(account.markdown_body)
@@ -198,6 +260,20 @@ def _build_current_user_context(db: Session) -> str:
             lines.append("  notes_markdown: (none)")
     if len(accounts) > max_accounts:
         lines.append(f"- ... (+{len(accounts) - max_accounts} more)")
+    return "\n".join(lines)
+
+
+def _build_entity_category_context(db: Session) -> str | None:
+    records = list_term_name_description_pairs(db, taxonomy_key="entity_category")
+    if not records:
+        return None
+
+    lines: list[str] = []
+    for name, description in records:
+        if description:
+            lines.append(f"- {name}: {description}")
+        else:
+            lines.append(f"- {name}")
     return "\n".join(lines)
 
 
@@ -216,41 +292,47 @@ def build_user_content(
     if not message.attachments:
         return content_text
 
-    text_sections: list[str] = []
-    if content_text.strip():
-        text_sections.append(content_text)
-    image_parts: list[dict[str, Any]] = []
+    parts: list[dict[str, Any]] = []
 
-    for attachment_index, attachment in enumerate(message.attachments, start=1):
+    for attachment in message.attachments:
+        attachment_name = _attachment_display_name(attachment)
         if _is_pdf_attachment(attachment):
-            pdf_text = _extract_pdf_text(attachment.file_path)
+            pdf_text, pdf_source = _extract_pdf_text_for_model(attachment.file_path)
             if pdf_text:
-                text_sections.append(
-                    f"PDF attachment {attachment_index} (parsed with PyMuPDF text extraction):\n{pdf_text}"
+                parts.append(
+                    {
+                        "type": "text",
+                        "text": f"PDF file {attachment_name} ({pdf_source}):\n{pdf_text}",
+                    }
                 )
             else:
-                text_sections.append(
-                    f"PDF attachment {attachment_index} was provided, but text extraction returned no content."
+                parts.append(
+                    {
+                        "type": "text",
+                        "text": f"PDF file {attachment_name} was provided, but parsing returned no content.",
+                    }
                 )
             if include_pdf_page_images:
                 for data_url in _pdf_page_image_data_urls(attachment.file_path):
-                    image_parts.append({"type": "image_url", "image_url": {"url": data_url}})
+                    parts.append({"type": "image_url", "image_url": {"url": data_url}})
             continue
 
         data_url = attachment_to_data_url(attachment.file_path, attachment.mime_type)
         if data_url is None:
+            parts.append(
+                {
+                    "type": "text",
+                    "text": f"Image file {attachment_name} was provided, but the file could not be loaded.",
+                }
+            )
             continue
-        image_parts.append({"type": "image_url", "image_url": {"url": data_url}})
+        parts.append({"type": "text", "text": f"Image file {attachment_name}:"})
+        parts.append({"type": "image_url", "image_url": {"url": data_url}})
 
-    text_block = "\n\n".join(section for section in text_sections if section.strip())
-    if image_parts:
-        parts: list[dict[str, Any]] = []
-        if text_block:
-            parts.append({"type": "text", "text": text_block})
-        parts.extend(image_parts)
+    if content_text.strip():
+        parts.append({"type": "text", "text": content_text})
+    if parts:
         return parts
-    if text_block:
-        return text_block
     return content_text or "User sent attachments."
 
 
@@ -528,6 +610,7 @@ def build_llm_messages(
             "role": "system",
             "content": system_prompt(
                 current_user_context=_build_current_user_context(db),
+                entity_category_context=_build_entity_category_context(db),
                 user_memory=settings.user_memory,
                 current_timezone=get_settings().current_user_timezone,
             ),

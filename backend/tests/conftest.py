@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,6 +19,21 @@ get_settings.cache_clear()
 
 from backend.database import Base, engine  # noqa: E402
 from backend.main import app  # noqa: E402
+from backend.routers import agent as agent_router  # noqa: E402
+
+
+def _wait_for_background_agent_threads(timeout_seconds: float = 2.0) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        background_threads = [
+            thread
+            for thread in threading.enumerate()
+            if thread.is_alive() and getattr(thread, "_target", None) is agent_router._run_agent_in_background
+        ]
+        if not background_threads:
+            return
+        for thread in background_threads:
+            thread.join(timeout=0.05)
 
 
 @pytest.fixture(autouse=True)
@@ -24,6 +41,7 @@ def reset_db() -> None:
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield
+    _wait_for_background_agent_threads()
     Base.metadata.drop_all(bind=engine)
 
 

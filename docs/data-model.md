@@ -166,7 +166,7 @@ Current seeded taxonomies:
 - `entry_id` (PK/FK -> `entries.id`)
 - `tag_id` (PK/FK -> `tags.id`)
 
-## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`)
+## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`, `0020_add_agent_message_attachment_original_filename`)
 
 ## `agent_threads`
 
@@ -192,13 +192,14 @@ Fields:
 
 ## `agent_message_attachments`
 
-Purpose: uploaded image references tied to user messages.
+Purpose: uploaded image/PDF references tied to user messages.
 
 Fields:
 
 - `id` (PK UUID string)
 - `message_id` (FK -> `agent_messages.id`)
 - `mime_type`
+- `original_filename` (nullable upload filename used for model-visible attachment labels on new uploads)
 - `file_path`
 - `created_at`
 

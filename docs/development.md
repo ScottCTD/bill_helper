@@ -4,6 +4,7 @@
 
 - `uv` for Python environment/dependencies
 - `node` + `npm` for frontend
+- `tesseract` (optional, but required if you want OCR fallback for image-only/redacted PDF uploads in the agent)
 
 ## First-Time Setup
 
@@ -250,6 +251,7 @@ Frontend build:
 ```bash
 cd /path/to/bill_helper/frontend
 npm run build
+npm audit
 ```
 
 Frontend tests:

@@ -62,6 +62,41 @@ def build_pdf_bytes(page_texts: list[str]) -> bytes:
     return pdf_bytes
 
 
+def create_entity(client, name: str, category: str | None = None) -> dict:
+    payload = {"name": name}
+    if category is not None:
+        payload["category"] = category
+    response = client.post("/api/v1/entities", json=payload)
+    response.raise_for_status()
+    return response.json()
+
+
+def create_tag(
+    client,
+    name: str,
+    *,
+    type_name: str | None = None,
+    description: str | None = None,
+) -> dict:
+    payload: dict[str, str] = {"name": name}
+    if type_name is not None:
+        payload["type"] = type_name
+    if description is not None:
+        payload["description"] = description
+    response = client.post("/api/v1/tags", json=payload)
+    response.raise_for_status()
+    return response.json()
+
+
+def flatten_user_content(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        text_parts = [part.get("text", "") for part in content if isinstance(part, dict) and part.get("type") == "text"]
+        return "\n\n".join(part for part in text_parts if part)
+    return ""
+
+
 def patch_model(monkeypatch, handler):
     from backend.services.agent import runtime
 
@@ -279,10 +314,11 @@ def test_pdf_attachment_includes_pymupdf_text_without_pdf_page_images_when_visio
     user_messages = [message for message in captured_messages[-1] if message.get("role") == "user"]
     assert user_messages
     user_content = user_messages[-1].get("content")
-    assert isinstance(user_content, str)
-    assert "Please summarize this attachment." in user_content
-    assert "PDF attachment 1 (parsed with PyMuPDF text extraction):" in user_content
-    assert "Invoice total CAD" in user_content
+    assert isinstance(user_content, list)
+    assert [part.get("type") for part in user_content] == ["text", "text"]
+    assert user_content[0].get("text", "").startswith("PDF file statement.pdf (parsed with PyMuPDF text extraction):")
+    assert "Invoice total CAD" in user_content[0].get("text", "")
+    assert user_content[1].get("text") == "Please summarize this attachment."
 
     detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
     detail_response.raise_for_status()
@@ -326,18 +362,98 @@ def test_pdf_attachment_adds_page_images_when_vision_is_enabled(client, monkeypa
     assert user_messages
     user_content = user_messages[-1].get("content")
     assert isinstance(user_content, list)
-
-    text_parts = [part for part in user_content if part.get("type") == "text"]
-    image_parts = [part for part in user_content if part.get("type") == "image_url"]
-    assert len(text_parts) == 1
-    assert "Read every page." in text_parts[0].get("text", "")
-    assert "Page one invoice line item" in text_parts[0].get("text", "")
-    assert "Page two invoice line item" in text_parts[0].get("text", "")
+    assert [part.get("type") for part in user_content] == ["text", "image_url", "image_url", "text"]
+    assert user_content[0].get("text", "").startswith("PDF file invoice.pdf (parsed with PyMuPDF text extraction):")
+    assert "Page one invoice line item" in user_content[0].get("text", "")
+    assert "Page two invoice line item" in user_content[0].get("text", "")
+    image_parts = user_content[1:3]
     assert len(image_parts) == 2
     assert all(
         str(part.get("image_url", {}).get("url", "")).startswith("data:image/png;base64,")
         for part in image_parts
     )
+    assert user_content[-1].get("text") == "Read every page."
+
+
+def test_pdf_attachment_uses_tesseract_ocr_when_pymupdf_text_is_empty(client, monkeypatch):
+    from backend.services.agent import message_history
+
+    captured_messages: list[list[dict]] = []
+
+    monkeypatch.setattr(message_history, "_model_supports_vision", lambda _model: False)
+    monkeypatch.setattr(message_history, "_extract_pdf_text", lambda _file_path: None)
+    monkeypatch.setattr(
+        message_history,
+        "_extract_pdf_text_with_tesseract",
+        lambda _file_path: "OCR recovered statement total CAD 123.45",
+    )
+
+    def capture_model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "Processed OCR PDF text."}
+
+    patch_model(monkeypatch, capture_model)
+
+    thread = create_thread(client)
+    pdf_bytes = build_pdf_bytes(["Source content is ignored because OCR is mocked."])
+    run = send_message(
+        client,
+        thread["id"],
+        "Please summarize this scan.",
+        files=[("scan.pdf", pdf_bytes, "application/pdf")],
+    )
+
+    assert run["status"] == "completed"
+    assert captured_messages
+
+    user_messages = [message for message in captured_messages[-1] if message.get("role") == "user"]
+    assert user_messages
+    user_content = user_messages[-1].get("content")
+    assert isinstance(user_content, list)
+    assert [part.get("type") for part in user_content] == ["text", "text"]
+    assert user_content[0].get("text", "").startswith("PDF file scan.pdf (parsed with Tesseract OCR; expect imperfect text):")
+    assert "OCR recovered statement total CAD 123.45" in user_content[0].get("text", "")
+    assert user_content[1].get("text") == "Please summarize this scan."
+
+
+def test_attachment_parts_stay_before_user_prompt_for_mixed_uploads(client, monkeypatch):
+    from backend.services.agent import message_history
+
+    captured_messages: list[list[dict]] = []
+
+    monkeypatch.setattr(message_history, "_model_supports_vision", lambda _model: True)
+
+    def capture_model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "Processed mixed attachments."}
+
+    patch_model(monkeypatch, capture_model)
+
+    thread = create_thread(client)
+    pdf_bytes = build_pdf_bytes(["Page one invoice line item"])
+    run = send_message(
+        client,
+        thread["id"],
+        "Compare both files.",
+        files=[
+            ("statement.pdf", pdf_bytes, "application/pdf"),
+            ("receipt.png", b"\x89PNG\r\n\x1a\n", "image/png"),
+        ],
+    )
+
+    assert run["status"] == "completed"
+    assert captured_messages
+
+    user_messages = [message for message in captured_messages[-1] if message.get("role") == "user"]
+    assert user_messages
+    user_content = user_messages[-1].get("content")
+    assert isinstance(user_content, list)
+    assert [part.get("type") for part in user_content] == ["text", "image_url", "text", "image_url", "text"]
+    assert user_content[0].get("text", "").startswith("PDF file statement.pdf (parsed with PyMuPDF text extraction):")
+    assert user_content[2].get("text") == "Image file receipt.png:"
+    assert str(user_content[1].get("image_url", {}).get("url", "")).startswith("data:image/png;base64,")
+    assert str(user_content[3].get("image_url", {}).get("url", "")).startswith("data:image/png;base64,")
+    assert user_content[4].get("text") == "Compare both files."
 
 
 def test_system_prompt_requires_duplicate_then_reconcile_then_propose_entries():
@@ -443,6 +559,15 @@ def test_system_prompt_prefers_parallel_tool_calls_for_independent_work():
     assert "call them in the same tool-call batch instead of one by one." in prompt
 
 
+def test_system_prompt_stages_first_proposal_before_parallel_batches():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    assert "Do not start a proposal workflow with a large parallel propose_* batch." in prompt
+    assert "Start with one representative propose_* call first" in prompt
+    assert "After the first proposal succeeds and the pattern is validated" in prompt
+
+
 def test_system_prompt_includes_current_date_tag():
     from datetime import date
 
@@ -458,7 +583,7 @@ def test_system_prompt_includes_user_memory_when_present():
     memory_text = "Prefers terse answers.\nAlways mention CAD explicitly."
     prompt = system_prompt(user_memory=memory_text)
 
-    assert "## User Memory" in prompt
+    assert "### User Memory" in prompt
     assert memory_text in prompt
     assert "persistent user-provided background and preferences" in prompt
 
@@ -519,6 +644,35 @@ def test_system_prompt_includes_current_user_account_context(client, monkeypatch
     assert "- reconcile every Friday" in system_content
 
 
+def test_system_prompt_includes_entity_category_reference_context(client, monkeypatch):
+    create_term_response = client.post(
+        "/api/v1/taxonomies/entity_category/terms",
+        json={
+            "name": "service_provider",
+            "description": "Recurring vendors and contractors that provide ongoing services.",
+        },
+    )
+    create_term_response.raise_for_status()
+
+    captured_messages: list[list[dict]] = []
+
+    def model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "ok"}
+
+    patch_model(monkeypatch, model)
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "hello")
+    assert run["status"] == "completed"
+    assert captured_messages
+
+    system_message = captured_messages[-1][0]
+    system_content = str(system_message.get("content", ""))
+    assert "### Entity Category Reference" in system_content
+    assert "- service_provider: Recurring vendors and contractors that provide ongoing services." in system_content
+
+
 def test_system_prompt_truncates_account_markdown_image_data_urls(client, monkeypatch):
     huge_data_url = "data:image/png;base64," + ("a" * 300)
     create_account_response = client.post(
@@ -575,7 +729,7 @@ def test_settings_user_memory_is_injected_into_system_prompt(client, monkeypatch
 
     system_message = captured_messages[-1][0]
     system_content = str(system_message.get("content", ""))
-    assert "## User Memory" in system_content
+    assert "### User Memory" in system_content
     assert "Prefers terse answers.\nWorks in CAD." in system_content
 
 
@@ -609,6 +763,17 @@ def test_intermediate_update_tool_description_requires_first_call_for_tool_runs(
     assert "before other tools" in description
 
 
+def test_list_tags_tool_description_mentions_tag_descriptions():
+    from backend.services.agent.tools import build_openai_tool_schemas
+
+    tool_by_name = {
+        tool["function"]["name"]: tool["function"]
+        for tool in build_openai_tool_schemas()
+    }
+    description = str(tool_by_name["list_tags"]["description"])
+    assert "tag descriptions" in description
+
+
 def test_entry_proposal_tool_descriptions_define_markdown_notes_style():
     from backend.services.agent.tools import build_openai_tool_schemas
 
@@ -619,6 +784,7 @@ def test_entry_proposal_tool_descriptions_define_markdown_notes_style():
     create_description = str(tool_by_name["propose_create_entry"]["description"])
     update_description = str(tool_by_name["propose_update_entry"]["description"])
 
+    assert "pending create_entity proposals already in the current thread" in create_description
     assert "When markdown_notes is provided" in create_description
     assert "avoid headings" in create_description
     assert "ordered/unordered lists" in create_description
@@ -663,6 +829,46 @@ def test_run_persists_tool_calls(client, monkeypatch):
     payload = run_detail.json()
     assert payload["assistant_message_id"] == run["assistant_message_id"]
     assert len(payload["tool_calls"]) == 1
+
+
+def test_list_tags_tool_output_includes_tag_descriptions(client, monkeypatch):
+    create_tag(
+        client,
+        "groceries",
+        type_name="expense",
+        description="Food and household staples from grocery stores and supermarkets.",
+    )
+
+    calls = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_list_tags",
+                    "type": "function",
+                    "function": {"name": "list_tags", "arguments": "{}"},
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": "Done.",
+        },
+    ]
+    patch_model(monkeypatch, lambda _messages: calls.pop(0))
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "List current tags.")
+
+    assert run["status"] == "completed"
+    assert len(run["tool_calls"]) == 1
+    output_json = run["tool_calls"][0]["output_json"]
+    assert output_json["status"] == "OK"
+    assert output_json["tags"][0]["name"] == "groceries"
+    assert output_json["tags"][0]["type"] == "expense"
+    assert output_json["tags"][0]["description"] == "Food and household staples from grocery stores and supermarkets."
+    assert "description: Food and household staples from grocery stores and supermarkets." in run["tool_calls"][0]["output_text"]
 
 
 def test_run_persists_assistant_tool_step_text_as_intermediate_update(client, monkeypatch):
@@ -1149,7 +1355,7 @@ def test_proposal_creation_for_each_create_change_type(client, monkeypatch):
         if messages[-1]["role"] == "tool":
             return {"role": "assistant", "content": "Done. Please review pending items."}
         user_message = next(message for message in reversed(messages) if message["role"] == "user")
-        content = user_message["content"] if isinstance(user_message["content"], str) else ""
+        content = flatten_user_content(user_message["content"])
         if "tag" in content:
             return {
                 "role": "assistant",
@@ -1220,6 +1426,9 @@ def test_proposal_creation_for_each_create_change_type(client, monkeypatch):
     thread_tag = create_thread(client)
     thread_entity = create_thread(client)
     thread_entry = create_thread(client)
+    create_tag(client, "food")
+    create_entity(client, "Main Checking", category="account")
+    create_entity(client, "Coffee Shop", category="merchant")
     run_tag = send_message(client, thread_tag["id"], "Please propose a new tag.")
     run_entity = send_message(client, thread_entity["id"], "Please propose a new entity.")
     run_entry = send_message(client, thread_entry["id"], "Please propose a new entry.")
@@ -1234,6 +1443,243 @@ def test_proposal_creation_for_each_create_change_type(client, monkeypatch):
     assert run_entity["tool_calls"][0]["output_json"]["proposal_id"] == run_entity["change_items"][0]["id"]
     assert run_entry["tool_calls"][0]["output_json"]["proposal_id"] == run_entry["change_items"][0]["id"]
     assert "account_id" not in run_entry["change_items"][0]["payload_json"]
+
+
+def test_entry_proposal_can_reference_pending_entity_in_same_turn(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done. Please review pending items."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entity",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entity",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Molly Tea",
+                                "category": "merchant",
+                            }
+                        ),
+                    },
+                },
+                {
+                    "id": "call_propose_entry",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entry",
+                        "arguments": json.dumps(
+                            {
+                                "kind": "EXPENSE",
+                                "date": "2026-01-04",
+                                "name": "Bubble tea",
+                                "amount_minor": 850,
+                                "currency_code": "CAD",
+                                "from_entity": "Main Checking",
+                                "to_entity": "Molly Tea",
+                            }
+                        ),
+                    },
+                },
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    create_entity(client, "Main Checking", category="account")
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Log my bubble tea purchase from Molly Tea")
+
+    assert run["status"] == "completed"
+    assert len(run["tool_calls"]) == 2
+    assert len(run["change_items"]) == 2
+
+    change_items_by_type = {item["change_type"]: item for item in run["change_items"]}
+    assert change_items_by_type["create_entity"]["payload_json"]["name"] == "Molly Tea"
+    assert change_items_by_type["create_entry"]["payload_json"]["to_entity"] == "Molly Tea"
+    assert all(tool_call["output_json"]["status"] == "OK" for tool_call in run["tool_calls"])
+
+
+def test_entry_approval_waits_for_pending_entity_dependency(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done. Please review pending items."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entity",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entity",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Molly Tea",
+                                "category": "merchant",
+                            }
+                        ),
+                    },
+                },
+                {
+                    "id": "call_propose_entry",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entry",
+                        "arguments": json.dumps(
+                            {
+                                "kind": "EXPENSE",
+                                "date": "2026-01-04",
+                                "name": "Bubble tea",
+                                "amount_minor": 850,
+                                "currency_code": "CAD",
+                                "from_entity": "Main Checking",
+                                "to_entity": "Molly Tea",
+                            }
+                        ),
+                    },
+                },
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    create_entity(client, "Main Checking", category="account")
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Log my bubble tea purchase from Molly Tea")
+
+    entity_item = next(item for item in run["change_items"] if item["change_type"] == "create_entity")
+    entry_item = next(item for item in run["change_items"] if item["change_type"] == "create_entry")
+
+    approve_entry_first = client.post(f"/api/v1/agent/change-items/{entry_item['id']}/approve", json={})
+    assert approve_entry_first.status_code == 422
+    assert "Approve or reject those entity proposals first." in approve_entry_first.text
+
+    run_detail = client.get(f"/api/v1/agent/runs/{run['id']}")
+    run_detail.raise_for_status()
+    pending_entry = next(
+        item for item in run_detail.json()["change_items"] if item["id"] == entry_item["id"]
+    )
+    assert pending_entry["status"] == "PENDING_REVIEW"
+    assert pending_entry["review_actions"] == []
+
+    approve_entity = client.post(f"/api/v1/agent/change-items/{entity_item['id']}/approve", json={})
+    approve_entity.raise_for_status()
+    assert approve_entity.json()["status"] == "APPLIED"
+
+    approve_entry_second = client.post(f"/api/v1/agent/change-items/{entry_item['id']}/approve", json={})
+    approve_entry_second.raise_for_status()
+    assert approve_entry_second.json()["status"] == "APPLIED"
+
+
+def test_rejecting_pending_entity_keeps_dependent_entry_pending_until_revised(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done. Please review pending items."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entity",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entity",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Molly Tea",
+                                "category": "merchant",
+                            }
+                        ),
+                    },
+                },
+                {
+                    "id": "call_propose_entry",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entry",
+                        "arguments": json.dumps(
+                            {
+                                "kind": "EXPENSE",
+                                "date": "2026-01-04",
+                                "name": "Bubble tea",
+                                "amount_minor": 850,
+                                "currency_code": "CAD",
+                                "from_entity": "Main Checking",
+                                "to_entity": "Molly Tea",
+                            }
+                        ),
+                    },
+                },
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    create_entity(client, "Main Checking", category="account")
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Log my bubble tea purchase from Molly Tea")
+
+    entity_item = next(item for item in run["change_items"] if item["change_type"] == "create_entity")
+    entry_item = next(item for item in run["change_items"] if item["change_type"] == "create_entry")
+
+    reject_response = client.post(
+        f"/api/v1/agent/change-items/{entity_item['id']}/reject",
+        json={"note": "Wrong merchant"},
+    )
+    reject_response.raise_for_status()
+    assert reject_response.json()["status"] == "REJECTED"
+
+    run_detail = client.get(f"/api/v1/agent/runs/{run['id']}")
+    run_detail.raise_for_status()
+    refreshed_items = {item["id"]: item for item in run_detail.json()["change_items"]}
+    pending_entry = refreshed_items[entry_item["id"]]
+
+    assert pending_entry["status"] == "PENDING_REVIEW"
+    assert pending_entry["review_note"] is None
+    assert pending_entry["review_actions"] == []
+
+    approve_entry = client.post(f"/api/v1/agent/change-items/{entry_item['id']}/approve", json={})
+    assert approve_entry.status_code == 422
+    assert "Entry references missing entity 'Molly Tea'." in approve_entry.text
+
+
+def test_duplicate_pending_entity_creation_is_rejected_in_same_thread(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entity",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entity",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Molly Tea",
+                                "category": "merchant",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+
+    first_run = send_message(client, thread["id"], "Create Molly Tea")
+    assert first_run["change_items"][0]["status"] == "PENDING_REVIEW"
+
+    second_run = send_message(client, thread["id"], "Create Molly Tea again")
+    assert second_run["change_items"] == []
+    assert second_run["tool_calls"][0]["output_json"]["status"] == "ERROR"
+    assert second_run["tool_calls"][0]["output_json"]["summary"] == (
+        "entity already has a pending creation proposal in this thread"
+    )
 
 
 def test_approve_and_reapprove_conflict(client, monkeypatch):
@@ -1448,6 +1894,10 @@ def test_entry_approve_applies_entry_and_allows_override(client, monkeypatch):
         }
 
     patch_model(monkeypatch, fake_model)
+    create_tag(client, "food")
+    create_tag(client, "team")
+    create_entity(client, "Main Checking", category="account")
+    create_entity(client, "Lunch Spot", category="merchant")
     thread = create_thread(client)
     run = send_message(client, thread["id"], "Propose an entry for lunch")
     item_id = run["change_items"][0]["id"]
@@ -1510,6 +1960,8 @@ def test_entry_approve_apply_failure_marks_item_failed(client, monkeypatch):
         }
 
     patch_model(monkeypatch, fake_model)
+    create_entity(client, "Main Checking", category="account")
+    create_entity(client, "Store", category="merchant")
     thread = create_thread(client)
     run = send_message(client, thread["id"], "Propose entry")
     item_id = run["change_items"][0]["id"]
@@ -1786,7 +2238,7 @@ def test_update_pending_proposal_tool_updates_existing_item(client, monkeypatch)
         if messages[-1]["role"] == "tool":
             return {"role": "assistant", "content": "Done."}
         user_message = next(message for message in reversed(messages) if message["role"] == "user")
-        content = user_message["content"] if isinstance(user_message["content"], str) else ""
+        content = flatten_user_content(user_message["content"])
         if "create initial proposal" in content:
             return {
                 "role": "assistant",
@@ -1837,6 +2289,9 @@ def test_update_pending_proposal_tool_updates_existing_item(client, monkeypatch)
         }
 
     patch_model(monkeypatch, fake_model)
+    create_tag(client, "food")
+    create_entity(client, "Main Checking", category="account")
+    create_entity(client, "Lunch Spot", category="merchant")
     thread = create_thread(client)
     first_run = send_message(client, thread["id"], "Please create initial proposal")
     pending_item_id = first_run["change_items"][0]["id"]
@@ -1869,7 +2324,7 @@ def test_remove_pending_proposal_tool_removes_existing_item(client, monkeypatch)
         if messages[-1]["role"] == "tool":
             return {"role": "assistant", "content": "Done."}
         user_message = next(message for message in reversed(messages) if message["role"] == "user")
-        content = user_message["content"] if isinstance(user_message["content"], str) else ""
+        content = flatten_user_content(user_message["content"])
         if "create initial proposal" in content:
             return {
                 "role": "assistant",
@@ -1960,6 +2415,9 @@ def test_create_entry_uses_default_currency_when_omitted(client, monkeypatch):
             }
 
         patch_model(monkeypatch, fake_model)
+        create_tag(client, "transport")
+        create_entity(client, "Main Checking", category="account")
+        create_entity(client, "Transit Agency", category="merchant")
         thread = create_thread(client)
         run = send_message(client, thread["id"], "Propose transit entry")
         item_id = run["change_items"][0]["id"]

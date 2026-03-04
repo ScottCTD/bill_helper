@@ -37,6 +37,17 @@ def normalize_term_name(name: str) -> str:
     return " ".join(name.split()).strip().lower()
 
 
+def get_term_description(term: TaxonomyTerm) -> str | None:
+    metadata = term.metadata_json
+    if not isinstance(metadata, dict):
+        return None
+    value = metadata.get("description")
+    if isinstance(value, str):
+        normalized = " ".join(value.split()).strip()
+        return normalized or None
+    return None
+
+
 def ensure_taxonomy(
     db: Session,
     *,
@@ -242,3 +253,22 @@ def list_terms_with_usage(
         .order_by(func.lower(TaxonomyTerm.name).asc())
     ).all()
     return [(term, int(usage_count or 0)) for term, usage_count in rows]
+
+
+def list_term_name_description_pairs(
+    db: Session,
+    *,
+    taxonomy_key: str,
+) -> list[tuple[str, str | None]]:
+    taxonomy = get_taxonomy_by_key(db, taxonomy_key, create_default=False)
+    if taxonomy is None:
+        return []
+
+    terms = list(
+        db.scalars(
+            select(TaxonomyTerm)
+            .where(TaxonomyTerm.taxonomy_id == taxonomy.id)
+            .order_by(func.lower(TaxonomyTerm.name).asc())
+        )
+    )
+    return [(term.name, get_term_description(term)) for term in terms]

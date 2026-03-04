@@ -9,6 +9,7 @@
 - SQLite (local file)
 - LiteLLM model-provider routing for chat completions
 - PyMuPDF (`pymupdf`) for PDF text extraction (line-trimmed and whitespace-normalized) and per-page rendering in agent message history
+- local Tesseract CLI (`tesseract`) as an OCR fallback for PDFs whose native text extraction returns no usable text
 
 ## Entry Points
 
@@ -149,8 +150,10 @@ Agent services:
 - `backend/services/agent/prompts.py`
   - central system prompt definition
   - organizes policy into sectioned rule groups (tool discipline, proposal workflows, execution, final response)
+  - renders `Current User Context` with stable `Account Context`, `User Memory`, and `Entity Category Reference` subsections; template formatting owns the headings and the injected values are content-only (`(none)` when absent)
   - computes current-date context in user timezone (defaults to `America/Toronto`)
   - enforces entry-ingestion order: duplicate check first, then tag/entity reconciliation, then entry proposals
+  - stages proposal workflows so the first `propose_*` call is done singly before later proposal batches fan out; parallel batching remains preferred for independent read-only lookups and later validated proposal batches
   - when a duplicate exists, prefers enriching the existing entry via `propose_update_entry` over creating a new duplicate entry
   - enforces canonical tag/entity normalization guidance (generalized merchant/location/entity names)
   - requires human-readable markdown note formatting for `markdown_notes` fields (preserve input detail; avoid headings for short notes; use line breaks/lists)
@@ -158,12 +161,14 @@ Agent services:
   - requires `send_intermediate_update` as the first tool call when tools are needed, then sparse usage between meaningful tool-call batches
   - enforces name/selector-based proposals (no domain IDs in tool contracts)
   - includes a lightweight current-user context section (current user + owned accounts) at runtime
+  - appends an entity-category reference section sourced from `entity_category` taxonomy term descriptions so the model can choose canonical entity categories with local definitions in view
   - appends optional persistent `user_memory` from runtime settings to every system prompt
   - on tool errors/selector ambiguity, instructs the model to recover or ask for user clarification
 - `backend/services/agent/message_history.py`
   - converts persisted thread history and attachments into model-ready messages
-  - parses PDF attachments with PyMuPDF, normalizes text per line (trim + collapse internal whitespace), and appends extracted text into the user message content passed to the model
-  - checks LiteLLM model vision capability and, when supported, renders uploaded PDF pages to PNG data URLs (one page per image part)
+  - stores attachment-bearing user turns as ordered content parts: one text block per attachment (using the uploaded filename when available), any attachment images immediately after that attachment's text block, then the user's typed message as the final text block
+  - parses PDF attachments with PyMuPDF first, then runs local Tesseract OCR only when native extraction returns no usable text; both paths normalize text per line (trim + collapse internal whitespace)
+  - checks LiteLLM model vision capability and, when supported, renders uploaded PDF pages to PNG data URLs (one page per image part) in the same attachment order used for text blocks
   - falls back to a local allow-list for known OpenRouter vision-model metadata gaps (currently `openrouter/qwen/qwen3.5-27b`) so PDF page-image inputs still reach multimodal models
   - builds account summaries for current user and injects them into the system prompt context
   - includes account-level markdown notes in current-user context (`notes_markdown`) with truncation safeguards for large notes/data-url images
@@ -188,9 +193,10 @@ Agent services:
   - read tools: `list_entries`, `list_tags`, `list_entities`, `get_dashboard_summary`
   - progress tool: `send_intermediate_update` (brief user-visible intermediate reasoning/progress note; first tool call when tool work is needed)
   - entry proposal tools include explicit `markdown_notes` style guidance for human-readable, information-complete markdown
+  - entry create/update proposals can reference entities that already exist or that are already pending as `create_entity` proposals in the same thread
   - entry update/delete arg validation tolerates nested JSON-object strings for selector/patch and normalizes them before schema validation
   - `list_entries` is the single entry query tool (date/name/from/to/tags/kind; exact-first then fuzzy ranking)
-  - `list_tags` supports name+type query and includes type in outputs; `list_entities` supports name+category and includes category in outputs
+  - `list_tags` supports name+type query and includes both tag type and tag description in outputs; `list_entities` supports name+category and includes category in outputs
   - proposal tools cover CRUD:
     - entries: `propose_create_entry`, `propose_update_entry`, `propose_delete_entry`
     - tags: `propose_create_tag`, `propose_update_tag`, `propose_delete_tag`
@@ -201,6 +207,7 @@ Agent services:
   - all model-facing tool interfaces avoid domain IDs (names/selectors only)
   - proposal tools now return proposal ids (`proposal_id`, `proposal_short_id`) in tool outputs
   - pending proposals from prior runs no longer block new `propose_*` tool calls in the same thread
+  - duplicate pending `propose_create_entity` proposals for the same normalized name are rejected within a thread
   - `propose_delete_tag` returns `ERROR` when the tag is still referenced by non-deleted entries (with count + sample context)
   - proposal tools only create `agent_change_items` (`PENDING_REVIEW`)
 - `backend/services/runtime_settings.py`
@@ -210,6 +217,8 @@ Agent services:
   - used by agent runtime, dashboard currency selection, current-user attribution defaults, and entry-currency fallback
 - `backend/services/agent/review.py`
   - per-item approve/reject workflow and state transitions
+  - entry approvals now preflight entity dependencies, so entry/update proposals that reference a same-thread pending entity proposal stay `PENDING_REVIEW` until that dependency is approved or rejected
+  - rejecting a pending `create_entity` proposal does not mutate dependent pending entry/update proposals; they remain `PENDING_REVIEW` and continue to fail approval until revised or until the missing entity dependency is restored
   - delegates concrete resource application to `backend/services/agent/change_apply.py`
 - `backend/services/agent/change_apply.py`
   - change-type handler registry for full proposal CRUD across entries/tags/entities
@@ -283,6 +292,7 @@ Settings router:
 - `0017_rename_tag_category_taxonomy`
 - `0018_add_tag_description`
 - `0019_add_transfer_entry_kind`
+- `0020_add_agent_message_attachment_original_filename`
 
 Commands:
 
@@ -310,6 +320,8 @@ Test modules:
 - unknown tool handling with persisted error status
 - proposal generation for all change types
 - approve/reject transitions
+- same-turn entity+entry proposals where entry proposals reference a pending `create_entity`
+- dependency-order enforcement for entry approval, including the case where a required entity proposal was rejected and the dependent entry remains pending
 - approve conflict behavior
 - apply failure transition to `APPLY_FAILED`
 - entry apply creates persisted entries without an entry-level status property
@@ -324,7 +336,9 @@ Test modules:
 - prompt contract for entry ingestion ordering (duplicate check -> tag/entity reconciliation -> entry proposal)
 - prompt contract for tag-deletion ordering (retag/update entries first -> then `propose_delete_tag`)
 - prompt contract for parallelization: independent tools should be called in the same tool-call batch when possible
+- prompt contract for proposal staging: start with one representative `propose_*` call before parallelizing later proposal batches
 - prompt contract for sparse intermediate reasoning updates (`send_intermediate_update`) during multi-step tool loops
+- attachment prompt ordering (attachment blocks first, trailing user prompt) and PDF OCR fallback labeling/order
 
 `test_agent_model_client.py` covers:
 
@@ -333,11 +347,12 @@ Test modules:
 - stream divergence guard across retries
 - LiteLLM environment-validation behavior (including indeterminate-validation fallback)
 
-Current baseline for `backend/tests/test_agent.py`: `52 passed`.
+Current baseline for `backend/tests/test_agent.py`: `70 passed`.
 
 ## Operational Impact
 
 - agent image uploads are persisted under `{data_dir}/agent_uploads`
+- agent attachment rows now persist an optional `original_filename` alongside the stored file path so model-visible attachment labels use the upload name instead of the generated UUID filename
 - deleting a thread removes its persisted attachment directories under `{data_dir}/agent_uploads/<message_id>/...`
 - timeline rendering depends on attachment-serving endpoint
 - non-stream sends execute in a background thread; `POST /agent/threads/{thread_id}/messages` returns immediately with `status=running`
@@ -351,6 +366,8 @@ Current baseline for `backend/tests/test_agent.py`: `52 passed`.
 - each run includes persisted tool traces and change-item audit data
 - tool calls are committed incrementally per tool call to support near-real-time polling visibility
 - persisted tool calls now store both structured payload (`output_json`) and exact model-visible text (`output_text`)
+- attachment-bearing user turns now reach the model as ordered content parts instead of one concatenated text blob: attachment-derived text first, then attachment images, then the user prompt
+- when native PyMuPDF extraction fails for a PDF, the backend attempts local Tesseract OCR before falling back to a no-content note
 - each run now includes nullable aggregated usage counters (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`)
 - each run API payload now includes nullable derived USD cost fields from LiteLLM pricing (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
 - cache counters include parsed provider-specific aliases for better cross-provider accuracy (`cache_read_input_tokens`/`cached_tokens` -> `cache_read_tokens`; `cache_creation_input_tokens` -> `cache_write_tokens`)
@@ -367,10 +384,12 @@ Current baseline for `backend/tests/test_agent.py`: `52 passed`.
 - prompt policy now has a dedicated new-proposal specifications section for entries, tags, and entities
 - new entry specs require grounding proposed fields in explicit source facts and avoiding invented missing details
 - prompt policy now requires entry retag/update proposals before tag deletion proposals when references exist
-- prompt policy now requires parallel tool-call batches whenever operations are independent instead of serial one-by-one calls
+- prompt policy now requires parallel tool-call batches for independent read-only work, while proposal workflows start with one representative `propose_*` call before later batches scale out
 - prompt policy now requires `send_intermediate_update` as the first tool call when the run needs tools
 - system prompt rules are grouped into explicit markdown sections for tool discipline, workflow sequencing, new proposal specifications, error handling, and final response behavior
+- system prompts now include `entity_category` taxonomy descriptions as a reference section for entity categorization decisions
 - pending-proposal workflow now supports intra-thread proposal edits/removals via `update_pending_proposal` / `remove_pending_proposal` (id + patch map or id-only, pending-only)
+- entry proposals can be created in the same thread before a new entity is approved, as long as that entity already has a pending `create_entity` proposal in the thread; approval order is still enforced, and rejecting/removing the entity proposal leaves dependent entry proposals pending until they are updated or the dependency is restored
 - entry domain no longer includes `status`; API/model/migration are synchronized on statusless entries
 - group read models now include:
   - `GET /api/v1/groups` derived summaries for frontend group discovery
@@ -381,7 +400,7 @@ Current baseline for `backend/tests/test_agent.py`: `52 passed`.
 - dashboard analytics also exclude internal transfers when both `from_entity_id` and `to_entity_id` map to account-category entities (including linked account entities), so KPI totals reflect external cash in/out only
 - new agent module boundaries reduce coupling and make it safer to add new model providers/change types
 - taxonomy defaults (`entity_category`, `tag_type`) are auto-provisioned by service logic when missing
-- tags now support optional `type` assignment via taxonomy terms and optional free-text `description`
+- tags now support optional `type` assignment via taxonomy terms and optional free-text `description`; `list_tags` surfaces both values in model-visible tool outputs
 - entity categories are sourced from taxonomy assignments; `entities.category` column is still synchronized for compatibility
 - taxonomy terms support optional descriptions via `taxonomy_terms.metadata_json.description` (used by entity category and tag type terms)
 - `PATCH /entities/{entity_id}` now refreshes category from taxonomy assignments in the response path, improving UI consistency after term renames
@@ -391,6 +410,7 @@ Current baseline for `backend/tests/test_agent.py`: `52 passed`.
 - no auth/permissions; actor is current configured user string
 - runtime settings are global to the app instance (no per-authenticated-user isolation yet)
 - model provider routing is LiteLLM-based using provider env credentials
+- OCR fallback requires a local `tesseract` executable; without it, image-only PDFs still rely on rendered page images for vision-capable models and otherwise degrade to a no-content PDF note
 - no websocket transport; streaming uses SSE only
 - polling is still required for full run snapshots/tool payload details outside streamed deltas
 - no autonomous/background agent runs

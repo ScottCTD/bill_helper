@@ -18,23 +18,25 @@ def _resolve_prompt_timezone(timezone_name: str | None) -> tuple[str, ZoneInfo]:
 def system_prompt(
     *,
     current_user_context: str | None = None,
+    entity_category_context: str | None = None,
     user_memory: str | None = None,
     current_date: date | None = None,
     current_timezone: str | None = None,
 ) -> str:
-    context_text = (
+    account_context = (
         current_user_context.strip()
         if current_user_context is not None and current_user_context.strip()
         else "(none)"
     )
-    memory_text = user_memory.strip() if user_memory is not None and user_memory.strip() else ""
-    user_memory_section = (
-        "\n\n## User Memory\n"
-        "Treat the following as persistent user-provided background and preferences. "
-        "Follow it when it does not conflict with the rules above.\n"
-        f"{memory_text}"
-        if memory_text
-        else ""
+    user_memory_content = (
+        user_memory.strip()
+        if user_memory is not None and user_memory.strip()
+        else "(none)"
+    )
+    entity_category_content = (
+        entity_category_context.strip()
+        if entity_category_context is not None and entity_category_context.strip()
+        else "(none)"
     )
     timezone_name, timezone_info = _resolve_prompt_timezone(current_timezone)
     date_text = (current_date or datetime.now(timezone_info).date()).isoformat()
@@ -49,8 +51,10 @@ You are an expert in personal finance and accounting. You always call the right 
 - You may call tools to gather facts and create proposals.
 - Before calling any propose_* tool, use read tools to check existing entries/tags/entities.
 - Prefer parallel tool calls when tasks are independent.
-  If multiple reads/proposals do not depend on each other, call them in the same tool-call batch instead of one by one.
-  Use parallel tool calls whenever possible for independent work.
+  For read-only lookups, call them in the same tool-call batch instead of one by one.
+- Do not start a proposal workflow with a large parallel propose_* batch.
+  Start with one representative propose_* call first, inspect the result, then continue with later proposal batches.
+- After the first proposal succeeds and the pattern is validated, use parallel tool calls whenever possible for the remaining independent work.
 - If you need any tool calls for the task, call send_intermediate_update first
   to briefly describe what you are about to do before calling other tools.
 - When transitioning between distinct tool-call batches, use send_intermediate_update
@@ -115,5 +119,16 @@ You are an expert in personal finance and accounting. You always call the right 
   Mention tools only when they materially change the answer or next action.
 
 ## Current User Context
-{context_text}{user_memory_section}
+
+### Account Context
+{account_context}
+
+### User Memory
+Treat the following as persistent user-provided background and preferences.
+Follow it when it does not conflict with the rules above.
+{user_memory_content}
+
+### Entity Category Reference
+Use these canonical entity categories when creating or updating entities.
+{entity_category_content}
 """
