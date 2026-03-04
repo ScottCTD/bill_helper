@@ -10,7 +10,7 @@ Bill Helper is a local-first, single-user app with a React frontend, FastAPI bac
 flowchart LR
     UI["React SPA (frontend)"] --> API["FastAPI /api/v1 routers"]
     API --> SVC["Domain services (entries, groups, finance, entities, users, agent)"]
-    SVC --> DB["SQLite (.data/bill_helper.db)"]
+    SVC --> DB["SQLite ({data_dir}/bill_helper.db)"]
     API --> UI
 ```
 

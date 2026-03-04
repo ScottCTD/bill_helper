@@ -447,7 +447,7 @@ Delete one thread and its persisted timeline artifacts.
 Behavior:
 
 - deletes the thread row and cascades deletes for messages, runs, tool calls, change items, and review actions
-- removes local uploaded attachment directories under `.data/agent_uploads/<message_id>/...` for that thread
+- removes local uploaded attachment directories under `{data_dir}/agent_uploads/<message_id>/...` for that thread
 - rejects delete when any run in the thread is still `running`
 
 Response: `204 No Content`

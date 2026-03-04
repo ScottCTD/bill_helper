@@ -20,11 +20,19 @@
 
 Settings use prefix `BILL_HELPER_`.
 
+Env files are loaded in cascade order (first file wins for duplicate keys):
+
+1. `.env` in working directory — per-worktree overrides
+2. `~/.config/bill-helper/.env` — shared dev secrets across worktrees
+
+Real environment variables always take highest priority (above any file). See `docs/development.md` for setup instructions.
+
 Core app settings:
 
 - `APP_NAME`
 - `API_PREFIX` (default `/api/v1`)
-- `DATABASE_URL` (default `sqlite:///./.data/bill_helper.db`)
+- `DATA_DIR` (default `~/.local/share/bill-helper`) — shared data directory for SQLite DB
+- `DATABASE_URL` (derived from `DATA_DIR`; override for explicit DB like PostgreSQL)
 - `CORS_ORIGINS` (default `http://localhost:5173`)
 - `CURRENT_USER_NAME` (default `admin`)
 - `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` (default `America/Toronto`)
@@ -328,8 +336,8 @@ Current baseline for `backend/tests/test_agent.py`: `52 passed`.
 
 ## Operational Impact
 
-- agent image uploads are persisted under `.data/agent_uploads`
-- deleting a thread removes its persisted attachment directories under `.data/agent_uploads/<message_id>/...`
+- agent image uploads are persisted under `{data_dir}/agent_uploads`
+- deleting a thread removes its persisted attachment directories under `{data_dir}/agent_uploads/<message_id>/...`
 - timeline rendering depends on attachment-serving endpoint
 - non-stream sends execute in a background thread; `POST /agent/threads/{thread_id}/messages` returns immediately with `status=running`
 - stream sends execute in-request and emit SSE events from `POST /agent/threads/{thread_id}/messages/stream`; disconnect fallback resumes the run in a background thread

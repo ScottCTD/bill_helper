@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +10,7 @@ from backend.routers import accounts, agent, currencies, dashboard, entities, en
 
 def create_app() -> FastAPI:
     app_settings = get_settings()
-    Path(".data").mkdir(exist_ok=True)
+    app_settings.ensure_data_dir()
 
     app = FastAPI(title=app_settings.app_name)
 

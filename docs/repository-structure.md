@@ -3,6 +3,7 @@
 ## Root
 
 - `.gitignore`: ignores venv, build outputs, runtime data, test cache.
+- `.env.example`: env-var template with all supported variables (committed; no secrets).
 - `.python-version`: local Python version hint.
 - `README.md`: top-level guide and quickstart.
 - `AGENTS.md`: project-wide coding-agent rules and doc-update requirements.
@@ -162,8 +163,9 @@
 - `/skills/notion-grade-ui/SKILL.md`: project-local frontend UI quality skill for calm, tokenized, primitives-first design implementation.
 - `/scripts/seed_defaults.py`: reset local DB and seed default tags, entity categories, and accounts.
 - `/scripts/seed_demo.py`: local seed dataset generation.
+- `/scripts/setup_shared_env.sh`: copies `.env` (or `.env.example`) to `~/.config/bill-helper/.env` for cross-worktree secret sharing.
 - `/scripts/check_docs_sync.py`: docs consistency checks (migration refs + stale term detection + index links).
-- `/.data` (runtime): SQLite DB (ignored in git).
+- `/.data` (runtime, legacy): per-worktree SQLite DB override location (ignored in git). Default data location is `~/.local/share/bill-helper/`.
 
 ## Benchmark (`/benchmark`)
 

@@ -1,15 +1,32 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# ── XDG-conventional shared paths ────────────────────────────────────────────
+# Config: ~/.config/bill-helper/.env    (secrets — shared across worktrees)
+# Data:   ~/.local/share/bill-helper/   (SQLite DB, logs — shared across worktrees)
+SHARED_ENV_FILE = Path.home() / ".config" / "bill-helper" / ".env"
+SHARED_DATA_DIR = Path.home() / ".local" / "share" / "bill-helper"
+
+# Layered env-file cascade (first file wins for duplicate keys):
+#   1. Real environment variables        — highest priority (production / CI)
+#   2. .env in CWD                       — per-worktree overrides (gitignored)
+#   3. ~/.config/bill-helper/.env        — shared dev secrets across worktrees
+_env_files: tuple[str, ...] = (
+    ".env",
+    str(SHARED_ENV_FILE),
+)
 
 
 class Settings(BaseSettings):
     app_name: str = "Bill Helper"
     api_prefix: str = "/api/v1"
-    database_url: str = "sqlite:///./.data/bill_helper.db"
+    data_dir: Path = SHARED_DATA_DIR
+    database_url: str = ""
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     current_user_name: str = "admin"
     current_user_timezone: str = Field(
@@ -45,9 +62,21 @@ class Settings(BaseSettings):
     agent_max_image_size_bytes: int = 5 * 1024 * 1024
     agent_max_images_per_message: int = 4
 
+    @model_validator(mode="after")
+    def _derive_database_url(self) -> Settings:
+        """Derive database_url from data_dir when not explicitly provided."""
+        if not self.database_url:
+            self.database_url = f"sqlite:///{self.data_dir}/bill_helper.db"
+        return self
+
+    def ensure_data_dir(self) -> Path:
+        """Create data_dir if it doesn't exist and return it."""
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        return self.data_dir
+
     model_config = SettingsConfigDict(
         env_prefix="BILL_HELPER_",
-        env_file=".env",
+        env_file=_env_files,
         env_file_encoding="utf-8",
         extra="ignore",
     )

@@ -32,13 +32,63 @@ Operational impact:
 
 All backend variables use the `BILL_HELPER_` prefix and are defined in `backend/config.py`. Runtime settings from `/api/v1/settings` take priority over env defaults where applicable.
 
+### Env File Cascade
+
+Configuration is resolved in this order (highest → lowest priority):
+
+| Priority | Source | Purpose |
+|----------|--------|---------|
+| 1 | Real environment variables | Production / CI (platform-injected) |
+| 2 | `.env` in working directory | Per-worktree overrides (gitignored) |
+| 3 | `~/.config/bill-helper/.env` | Shared dev secrets across all worktrees |
+| 4 | Defaults in `backend/config.py` | Sensible fallbacks |
+
+This means secrets like `OPENROUTER_API_KEY` only need to be configured once in the shared location and are available to every worktree automatically. A per-worktree `.env` can selectively override any value (e.g., test a different model).
+
+### Shared Data Directory
+
+Application data (SQLite DB) defaults to `~/.local/share/bill-helper/`, following XDG conventions. This means all worktrees share the same database — no need to re-migrate or re-seed per worktree.
+
+| Priority | Source | Example |
+|----------|--------|---------|
+| 1 | `BILL_HELPER_DATABASE_URL` | Explicit DB URL (e.g., PostgreSQL in prod) |
+| 2 | `BILL_HELPER_DATA_DIR` | Custom data dir → DB path derived automatically |
+| 3 | Default | `~/.local/share/bill-helper/bill_helper.db` |
+
+To use a per-worktree isolated database (e.g., for testing a migration), set in your local `.env`:
+
+```
+BILL_HELPER_DATA_DIR=./.data
+```
+
+#### First-time shared env setup
+
+```bash
+# Option A: copy your existing .env to the shared location
+./scripts/setup_shared_env.sh
+
+# Option B: create a blank template to fill in
+./scripts/setup_shared_env.sh --clean
+```
+
+#### Git worktree workflow
+
+```bash
+git worktree add ../bill_helper-feature feature-branch
+cd ../bill_helper-feature
+uv sync --extra dev
+# Shared secrets from ~/.config/bill-helper/.env are already available.
+# Optionally create a local .env for worktree-specific overrides.
+```
+
 ### Core
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BILL_HELPER_APP_NAME` | `Bill Helper` | Application display name |
 | `BILL_HELPER_API_PREFIX` | `/api/v1` | API route prefix |
-| `BILL_HELPER_DATABASE_URL` | `sqlite:///./.data/bill_helper.db` | SQLAlchemy database URL |
+| `BILL_HELPER_DATA_DIR` | `~/.local/share/bill-helper` | Shared data directory (SQLite DB lives here) |
+| `BILL_HELPER_DATABASE_URL` | _(derived from data_dir)_ | SQLAlchemy database URL; overrides data_dir for DB |
 | `BILL_HELPER_CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed CORS origins |
 | `BILL_HELPER_CURRENT_USER_NAME` | `admin` | Default current user name |
 | `CURRENT_USER_TIMEZONE` | `America/Toronto` | User timezone for agent date context |
@@ -330,7 +380,7 @@ Private data (`benchmark/fixtures/`, `benchmark/results/`) is gitignored. Only `
 
 ## Common Issues
 
-## Missing provider credentials
+### Missing provider credentials
 
 Symptom:
 
@@ -338,9 +388,9 @@ Symptom:
 
 Fix:
 
-- set provider credentials required by `BILL_HELPER_AGENT_MODEL` (for example `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENROUTER_API_KEY`) and restart backend
+- set provider credentials required by `BILL_HELPER_AGENT_MODEL` (for example `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENROUTER_API_KEY`) in `~/.config/bill-helper/.env` and restart backend
 
-## Migration state mismatch
+### Migration state mismatch
 
 Symptom:
 

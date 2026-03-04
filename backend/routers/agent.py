@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from backend.config import get_settings
 from backend.database import SessionLocal, get_db
 from backend.enums import AgentChangeStatus, AgentMessageRole, AgentRunStatus
 from backend.models import (
@@ -109,7 +110,7 @@ def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:
 
 
 def _thread_attachment_directories(thread: AgentThread) -> set[Path]:
-    upload_root = (Path(".data") / "agent_uploads").resolve()
+    upload_root = (get_settings().data_dir / "agent_uploads").resolve()
     directories: set[Path] = set()
     for message in thread.messages:
         for attachment in message.attachments:
@@ -134,7 +135,7 @@ def _store_attachment_bytes(
     original_filename: str | None,
     file_bytes: bytes,
 ) -> str:
-    upload_root = Path(".data") / "agent_uploads" / message_id
+    upload_root = get_settings().data_dir / "agent_uploads" / message_id
     upload_root.mkdir(parents=True, exist_ok=True)
     suffix = Path(original_filename or "").suffix
     if not suffix:

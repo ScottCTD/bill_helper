@@ -15,9 +15,15 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from backend.config import get_settings
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOTS_DIR = REPO_ROOT / "benchmark" / "fixtures" / "snapshots"
-PRODUCTION_DB_PATH = REPO_ROOT / ".data" / "bill_helper.db"
+
+
+def _production_db_path() -> Path:
+    """Resolve production DB path from Settings (supports shared data dir)."""
+    return get_settings().data_dir / "bill_helper.db"
 
 
 def _utc_now_iso() -> str:
@@ -25,7 +31,7 @@ def _utc_now_iso() -> str:
 
 
 def create_snapshot(name: str, *, source_db: Path | None = None) -> Path:
-    source = source_db or PRODUCTION_DB_PATH
+    source = source_db or _production_db_path()
     if not source.exists():
         print(f"Error: source database not found at {source}", file=sys.stderr)
         sys.exit(1)
@@ -87,9 +93,10 @@ def get_snapshot_db_path(name: str) -> Path:
 def restore_snapshot(name: str) -> None:
     """Copy snapshot DB over the production DB path. DESTRUCTIVE to production DB."""
     db_path = get_snapshot_db_path(name)
-    PRODUCTION_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(db_path, PRODUCTION_DB_PATH)
-    print(f"Restored snapshot '{name}' to {PRODUCTION_DB_PATH}")
+    prod_db = _production_db_path()
+    prod_db.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(db_path, prod_db)
+    print(f"Restored snapshot '{name}' to {prod_db}")
     print("WARNING: production DB has been overwritten. Restart the app to use it.")
 
 

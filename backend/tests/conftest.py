@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import tempfile
 
 import pytest
 from fastapi.testclient import TestClient
 
-os.environ["BILL_HELPER_DATABASE_URL"] = "sqlite:///./.data/test_bill_helper.db"
+_test_db_dir = tempfile.mkdtemp(prefix="bill_helper_test_")
+os.environ["BILL_HELPER_DATABASE_URL"] = f"sqlite:///{_test_db_dir}/test_bill_helper.db"
 os.environ["GOOGLE_API_KEY"] = "test-google-key"
 os.environ["GEMINI_API_KEY"] = "test-gemini-key"
 

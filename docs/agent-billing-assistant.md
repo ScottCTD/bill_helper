@@ -68,7 +68,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 - `DELETE /api/v1/agent/threads/{thread_id}`: delete one thread history
   - blocked with `409` while the thread has any `running` run
   - cascades DB removal of thread messages/runs/change items/review actions
-  - removes persisted upload directories under `.data/agent_uploads/<message_id>/...`
+  - removes persisted upload directories under `{data_dir}/agent_uploads/<message_id>/...`
 - `GET /api/v1/agent/threads/{thread_id}`: fetch full thread detail
 - `POST /api/v1/agent/threads/{thread_id}/messages`: send message and run agent (non-streaming)
 - `POST /api/v1/agent/threads/{thread_id}/messages/stream`: send message and run agent (SSE streaming)

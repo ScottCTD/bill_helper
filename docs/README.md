@@ -18,11 +18,13 @@ This folder contains the source-of-truth documentation for the current MVP imple
 - `feature-dashboard-analytics.md`: focused dashboard analytics flow map.
 - `feature-account-reconciliation.md`: account table workflow, snapshot checkpointing, and reconciliation semantics.
 - `adr/README.md`: architecture decision record process and index.
+- `adr/0003-xdg-shared-config-and-data.md`: shared config/data directory design for worktree support.
 - `../benchmark/README.md`: agent import benchmark framework for evaluating LLMs on statement-to-entry extraction.
 
 Historical implementation docs:
 
 - `completed/*.md`: closed implementation plans and migration notes. These are archival and not source-of-truth for current behavior.
+- `completed/xdg_shared_config_and_data.md`: XDG-based shared config/data design — env cascade, data directory, Docker readiness.
 - `todo/*.md`: active/planned proposal notes that are not source-of-truth behavior docs.
 - `todo/account_markdown_notes.md`: proposal for adding account-level markdown notes editing (parity with entries).
 - `todo/agent_review_workflow_frontend_refactor.md`: proposal for pending-proposal editing workflow and review UX/tool-call transparency refactor.

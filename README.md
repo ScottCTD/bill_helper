@@ -58,7 +58,15 @@ cd frontend && npm install && cd ..
 
 ### 2. Configure environment
 
-Create a `.env` file in the project root. At minimum, set the API key for your chosen model provider:
+Create a shared env file so secrets work across all checkouts and [Git worktrees](https://git-scm.com/docs/git-worktree):
+
+```bash
+# Interactive: creates ~/.config/bill-helper/.env from the template
+./scripts/setup_shared_env.sh --clean
+# Then edit ~/.config/bill-helper/.env and add your keys
+```
+
+At minimum, set the API key for your chosen model provider:
 
 ```env
 # Pick one provider credential for the agent model:
@@ -73,6 +81,8 @@ OPENROUTER_API_KEY=your-key-here          # default model uses OpenRouter
 # LANGFUSE_PUBLIC_KEY=pk-lf-...
 # LANGFUSE_SECRET_KEY=sk-lf-...
 ```
+
+See `.env.example` for all available variables. Configuration cascades: real env vars → `.env` in CWD → `~/.config/bill-helper/.env` → defaults. See `docs/adr/0003-xdg-shared-config-and-data.md` for the full design.
 
 The app boots fine without any credentials — the agent chat simply returns a configuration error until a valid provider key is set.
 

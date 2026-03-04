@@ -204,7 +204,7 @@ Fields:
 
 Operational note:
 
-- files are written to `.data/agent_uploads/<message_id>/...`
+- files are written to `{data_dir}/agent_uploads/<message_id>/...`
 
 ## `agent_runs`
 

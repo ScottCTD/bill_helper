@@ -8,8 +8,8 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 
 - Frontend SPA: React + TypeScript + Vite (`http://localhost:5173`)
 - Backend API: FastAPI (`http://localhost:8000`)
-- Database: SQLite (`.data/bill_helper.db`)
-- Agent upload storage: local filesystem under `.data/agent_uploads`
+- Database: SQLite (`{data_dir}/bill_helper.db`, default `~/.local/share/bill-helper/`)
+- Agent upload storage: local filesystem under `{data_dir}/agent_uploads`
 
 ## High-Level Components
 

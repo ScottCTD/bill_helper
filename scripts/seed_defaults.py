@@ -196,7 +196,9 @@ def seed_user_memory(db: Session) -> str | None:
     """Copy user_memory from the production DB into the given session's runtime_settings."""
     from backend.models import RuntimeSettings
 
-    prod_db_path = REPO_ROOT / ".data" / "bill_helper.db"
+    from backend.config import get_settings
+
+    prod_db_path = get_settings().data_dir / "bill_helper.db"
     if not prod_db_path.exists():
         return None
 
@@ -257,8 +259,11 @@ def reset_local_db() -> None:
     import backend.models  # noqa: F401 — ensure all models are registered with Base
     from backend.database import Base
 
-    db_path = REPO_ROOT / ".data" / "bill_helper.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    from backend.config import get_settings
+
+    settings = get_settings()
+    db_path = settings.data_dir / "bill_helper.db"
+    settings.ensure_data_dir()
 
     if db_path.exists():
         db_path.unlink()
