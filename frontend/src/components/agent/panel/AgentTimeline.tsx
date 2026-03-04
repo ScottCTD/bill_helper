@@ -54,8 +54,7 @@ export function AgentTimeline(props: AgentTimelineProps) {
 
   return (
     <>
-      <h3>Timeline</h3>
-      {!selectedThreadId ? <p className="muted">Create or select a thread to begin.</p> : null}
+      {!selectedThreadId ? <p className="muted agent-timeline-empty">Create or select a thread to begin.</p> : null}
       {isLoading ? <p>Loading timeline...</p> : null}
       {errorMessage ? <p className="error">{errorMessage}</p> : null}
 

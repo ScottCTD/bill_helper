@@ -281,17 +281,21 @@ This file now acts as the stateful coordinator. Run activity rendering and deriv
 - `frontend/src/components/agent/activity.ts`
 - panel rendering surfaces were further extracted to:
   - `frontend/src/components/agent/panel/AgentThreadList.tsx`
+  - `frontend/src/components/agent/panel/AgentThreadPanel.tsx` — wrapper with collapse toggle button
   - `frontend/src/components/agent/panel/AgentTimeline.tsx`
   - `frontend/src/components/agent/panel/AgentComposer.tsx`
   - `frontend/src/components/agent/panel/AgentThreadUsageBar.tsx`
   - `frontend/src/components/agent/panel/AgentAttachmentPreviewDialog.tsx`
   - `frontend/src/components/agent/panel/useAgentDraftAttachments.ts`
+  - `frontend/src/components/agent/panel/useResizablePanel.ts` — horizontal drag-to-resize with localStorage persistence
   - `frontend/src/components/agent/panel/types.ts`
   - `frontend/src/components/agent/panel/format.ts`
 
 Timeline features:
 
-- left conversation history rail (thread list) with compact one-line thread buttons
+- right-side thread panel (previously left) with compact one-line thread buttons
+- thread panel is collapsible via a collapse button; re-opened via the panel icon in the header
+- resizable separator between conversation and thread panel (drag to resize, 200–600px range, width persisted to localStorage)
 - thread label uses the first 20 characters of the thread title (thread titles are seeded from the first user message)
 - thread list uses plain list-row styling for non-selected items; only the active thread is boxed/highlighted
 - thread rows expose a right-side delete icon button inside the same row box on hover/focus (always visible on touch devices)
@@ -301,8 +305,9 @@ Timeline features:
 - click-to-open conversation behavior from history rail
 - creating a new thread via `New Thread` focuses the composer textarea for immediate typing
 - header title includes active model context (`Agent (<model>)`) based on the most recent run in the selected thread
-- main chat timeline with user/assistant message bubbles
-- timeline scroll behavior is a dedicated right-pane scroll surface with scrollbar at panel edge
+- main chat timeline fills remaining space with centered max-width (max 896px / `max-w-4xl`)
+- conversation and composer occupy the left/main area; thread panel occupies the right
+- timeline scroll behavior is a dedicated scroll surface with scrollbar at panel edge
 - desktop thread rail is viewport-bounded and keeps its own independent overflow scroll
 - thread-rail rows are fixed-height non-shrinking items so overflow stays scrollable instead of vertically compressing entries
 - assistant/system message bodies render markdown via `react-markdown` + `remark-gfm` (sanitized defaults, GFM tables/task lists/strikethrough)

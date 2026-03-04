@@ -22,7 +22,6 @@ export function AgentThreadList(props: AgentThreadListProps) {
   return (
     <>
       <section className="agent-thread-list agent-thread-list-page">
-        <h3>Threads</h3>
         {isLoading ? <p>Loading threads...</p> : null}
         {errorMessage ? <p className="error">{errorMessage}</p> : null}
         <div className="agent-thread-list-scroll scroll-surface">

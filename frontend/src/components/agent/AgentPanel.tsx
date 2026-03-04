@@ -2,12 +2,14 @@ import {
   type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PanelRight, PanelRightClose } from "lucide-react";
 
 import {
   approveAgentChangeItem,
@@ -33,10 +35,11 @@ import {
 } from "./activity";
 import { AgentComposer } from "./panel/AgentComposer";
 import { AgentAttachmentPreviewDialog } from "./panel/AgentAttachmentPreviewDialog";
-import { AgentThreadList } from "./panel/AgentThreadList";
+import { AgentThreadPanel } from "./panel/AgentThreadPanel";
 import { AgentThreadUsageBar } from "./panel/AgentThreadUsageBar";
 import { AgentTimeline } from "./panel/AgentTimeline";
 import { useStickToBottom } from "./panel/useStickToBottom";
+import { useResizablePanel } from "./panel/useResizablePanel";
 import { useAgentDraftAttachments } from "./panel/useAgentDraftAttachments";
 import {
   COMPOSER_TEXTAREA_MAX_HEIGHT_PX,
@@ -66,6 +69,9 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const { isAtBottom, scrollToBottom, snapToBottom } = useStickToBottom(timelineScrollRef);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
+  const [isThreadPanelOpen, setIsThreadPanelOpen] = useState(true);
+  const { panelWidth, handleMouseDown: handleResizeMouseDown } = useResizablePanel();
+  const toggleThreadPanel = useCallback(() => setIsThreadPanelOpen((v) => !v), []);
   const attachmentState = useAgentDraftAttachments({ setActionError });
   const {
     draftFiles,
@@ -654,9 +660,8 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     <>
       <aside className="agent-panel agent-panel-page" aria-label="Agent panel">
         <header className="agent-panel-header">
-          <div>
-            <h2>{`Agent (${activeModelName})`}</h2>
-          </div>
+          <h2>{`Agent (${activeModelName})`}</h2>
+          <AgentThreadUsageBar selectedThreadId={selectedThreadId} totals={threadUsageTotals} />
           <div className="agent-panel-header-actions">
             <Button
               type="button"
@@ -669,23 +674,19 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
             >
               New Thread
             </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={toggleThreadPanel}
+              title={isThreadPanelOpen ? "Collapse threads" : "Expand threads"}
+            >
+              {isThreadPanelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
+            </Button>
           </div>
         </header>
 
         <div className="agent-panel-body agent-panel-body-page">
-          <AgentThreadList
-            threads={threadsQuery.data}
-            selectedThreadId={selectedThreadId}
-            isLoading={threadsQuery.isLoading}
-            errorMessage={threadsQuery.isError ? (threadsQuery.error as Error).message : null}
-            onSelectThread={setSelectedThreadId}
-            onDeleteThread={(threadId) => {
-              void handleDeleteThread(threadId);
-            }}
-            deletingThreadId={deleteThreadMutation.isPending ? (deleteThreadMutation.variables ?? null) : null}
-            isDeleteDisabled={isMutating || isRunInFlight}
-          />
-
           <section className="agent-thread-timeline agent-thread-main">
             <AgentTimeline
               selectedThreadId={selectedThreadId}
@@ -705,8 +706,6 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               isAtBottom={isAtBottom}
               scrollToBottom={scrollToBottom}
             />
-
-            <AgentThreadUsageBar selectedThreadId={selectedThreadId} totals={threadUsageTotals} />
 
             <AgentComposer
               isComposerDragActive={isComposerDragActive}
@@ -736,6 +735,35 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               }}
             />
           </section>
+
+          {isThreadPanelOpen ? (
+            <div
+              className="agent-resize-handle"
+              onMouseDown={handleResizeMouseDown}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize threads panel"
+            />
+          ) : null}
+
+          <div
+            className="agent-thread-panel-slot"
+            style={isThreadPanelOpen ? { width: panelWidth } : undefined}
+          >
+            <AgentThreadPanel
+              threads={threadsQuery.data}
+              selectedThreadId={selectedThreadId}
+              isLoading={threadsQuery.isLoading}
+              errorMessage={threadsQuery.isError ? (threadsQuery.error as Error).message : null}
+              onSelectThread={setSelectedThreadId}
+              onDeleteThread={(threadId) => {
+                void handleDeleteThread(threadId);
+              }}
+              deletingThreadId={deleteThreadMutation.isPending ? (deleteThreadMutation.variables ?? null) : null}
+              isDeleteDisabled={isMutating || isRunInFlight}
+              isOpen={isThreadPanelOpen}
+            />
+          </div>
         </div>
 
         <AgentRunReviewModal

@@ -918,16 +918,16 @@
   }
 
   .agent-panel-page {
-    @apply relative h-screen min-h-[640px] overflow-hidden rounded-none border-0 shadow-none;
-    --agent-panel-header-height: 88px;
+    @apply relative h-screen min-h-[640px] overflow-hidden rounded-none border-0 shadow-none bg-background;
+    --agent-panel-header-height: 44px;
   }
 
   .agent-panel-header {
-    @apply flex items-start justify-between gap-3 border-b border-border/80 px-5 py-4;
+    @apply flex items-center gap-4 border-b border-border/50 px-5 py-2;
   }
 
   .agent-panel-header h2 {
-    @apply m-0 text-lg;
+    @apply m-0 shrink-0 text-sm font-medium text-foreground/90;
   }
 
   .agent-panel-header p {
@@ -935,7 +935,7 @@
   }
 
   .agent-panel-header-actions {
-    @apply inline-flex items-center gap-2;
+    @apply ml-auto inline-flex shrink-0 items-center gap-2;
   }
 
   .agent-panel-body {
@@ -943,7 +943,9 @@
   }
 
   .agent-panel-body-page {
-    @apply h-[calc(100vh-var(--agent-panel-header-height))] grid-cols-[300px_minmax(0,1fr)] grid-rows-1 gap-0 p-0;
+    @apply relative h-[calc(100vh-var(--agent-panel-header-height))] grid-rows-1 gap-0 p-0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
   .agent-thread-list {
@@ -951,7 +953,7 @@
   }
 
   .agent-thread-list-page {
-    @apply flex h-full min-h-0 flex-col overflow-hidden border-r border-border/80 px-4 py-4;
+    @apply flex h-full min-h-0 flex-col overflow-hidden px-4 py-2;
   }
 
   .agent-thread-list h3,
@@ -969,15 +971,15 @@
   }
 
   .agent-thread-row {
-    @apply relative h-10 shrink-0 overflow-hidden rounded-md border border-transparent bg-transparent transition-colors;
+    @apply relative h-9 shrink-0 overflow-hidden rounded-lg border border-transparent bg-transparent transition-all duration-150;
   }
 
   .agent-thread-row:hover {
-    @apply bg-accent/60;
+    @apply bg-accent/50;
   }
 
   .agent-thread-row.selected {
-    @apply border-primary/45 bg-accent shadow-sm;
+    @apply border-transparent bg-accent/80;
   }
 
   .agent-thread-button {
@@ -1011,15 +1013,19 @@
   }
 
   .agent-thread-timeline {
-    @apply grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-2;
+    @apply grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-0;
   }
 
   .agent-thread-main {
-    @apply w-full px-6 py-4;
+    @apply mx-auto w-full max-w-4xl px-8 pb-0 pt-5;
   }
 
   .agent-timeline-scroll-wrapper {
     @apply relative flex min-h-0 flex-1 flex-col;
+  }
+
+  .agent-timeline-empty {
+    @apply flex flex-1 items-center justify-center text-sm;
   }
 
   .agent-timeline-scroll {
@@ -1027,15 +1033,15 @@
   }
 
   .agent-scroll-to-bottom {
-    @apply absolute bottom-2 left-1/2 z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md transition-colors hover:bg-muted hover:text-foreground;
+    @apply absolute bottom-3 left-1/2 z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full border border-border/50 bg-background/95 text-muted-foreground shadow-lg backdrop-blur-sm transition-all duration-150 hover:bg-background hover:text-foreground hover:shadow-xl;
   }
 
   .agent-message {
-    @apply grid max-w-[min(92%,70ch)] self-start gap-2 rounded-xl border border-border/90 bg-muted/30 p-3;
+    @apply grid max-w-[min(92%,70ch)] self-start gap-2 rounded-2xl border border-border/50 bg-muted/20 px-4 py-3;
   }
 
   .agent-message header {
-    @apply flex items-center justify-between gap-2 text-xs;
+    @apply flex items-center justify-between gap-2 text-xs text-muted-foreground;
   }
 
   .agent-message header > .muted {
@@ -1047,11 +1053,11 @@
   }
 
   .agent-message-assistant {
-    @apply self-start border-border/80 bg-background;
+    @apply self-start border-border/40 bg-background shadow-sm;
   }
 
   .agent-message-user {
-    @apply self-end border-accent bg-accent/65;
+    @apply self-end border-transparent bg-primary/10;
   }
 
   .agent-message-working {
@@ -1592,15 +1598,15 @@
   }
 
   .agent-thread-usage {
-    @apply flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/80 pt-2 text-xs text-muted-foreground;
+    @apply flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground/70;
   }
 
   .agent-thread-usage-total {
-    @apply ml-auto font-semibold text-foreground;
+    @apply font-semibold text-foreground/70;
   }
 
   .agent-composer {
-    @apply grid gap-2 border-t border-border/80 pb-4 pt-3;
+    @apply grid gap-2 pb-3 pt-3;
   }
 
   .agent-composer-drop-active {
@@ -1608,7 +1614,7 @@
   }
 
   .agent-composer-box {
-    @apply grid overflow-hidden rounded-xl border border-border/60 bg-background transition-colors focus-within:border-border;
+    @apply grid overflow-hidden rounded-2xl border border-border/50 bg-background shadow-[0_1px_3px_hsl(222_18%_19%_/_0.04),0_4px_12px_hsl(222_18%_19%_/_0.06)] transition-all duration-150 focus-within:border-border/80 focus-within:shadow-[0_1px_3px_hsl(222_18%_19%_/_0.06),0_8px_20px_hsl(222_18%_19%_/_0.08)];
   }
 
   .agent-composer-textarea {
@@ -1680,6 +1686,46 @@
   .agent-attachment-preview-document {
     @apply h-[75vh] w-full rounded-md border border-border bg-background;
   }
+
+  /* ── Resize handle ── */
+  .agent-resize-handle {
+    @apply relative z-10 flex shrink-0 cursor-col-resize items-center justify-center bg-transparent transition-colors;
+    width: 9px;
+  }
+
+  .agent-resize-handle::after {
+    content: "";
+    @apply absolute inset-y-0 left-1/2 -translate-x-1/2 bg-border/50 transition-all duration-150;
+    width: 1px;
+  }
+
+  .agent-resize-handle:hover::after,
+  .agent-resize-handle:active::after {
+    width: 3px;
+    @apply bg-primary/40 rounded-full;
+  }
+
+  /* ── Thread panel slot ── */
+  .agent-thread-panel-slot {
+    @apply flex h-full min-h-0 flex-col overflow-hidden;
+  }
+
+  /* ── Thread panel wrapper ── */
+  .agent-thread-panel {
+    @apply flex h-full min-h-0 flex-col overflow-hidden bg-muted/30;
+  }
+
+  .agent-thread-panel-header {
+    @apply flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2;
+  }
+
+  .agent-thread-panel-title {
+    @apply text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+
+  .agent-thread-panel-toggle-btn {
+    @apply h-7 w-7 text-muted-foreground hover:text-foreground;
+  }
 }
 
 @media (max-width: 1080px) {
@@ -1689,16 +1735,14 @@
   }
 
   .agent-panel-body-page {
-    @apply h-[calc(100vh-var(--agent-panel-header-height))] grid-cols-1 grid-rows-[220px_minmax(0,1fr)];
+    @apply h-[calc(100vh-var(--agent-panel-header-height))];
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
   }
 
-  .agent-thread-list-page {
-    @apply border-b border-r-0;
-  }
-
-  .agent-thread-list-page .agent-thread-list-scroll {
-    @apply min-h-0 flex-1 max-h-none;
-    height: auto;
+  .agent-resize-handle,
+  .agent-thread-panel-slot {
+    @apply hidden;
   }
 }
 

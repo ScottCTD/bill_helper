@@ -111,7 +111,7 @@
 - `MarkdownBlockEditor.tsx`: BlockNote wrapper for markdown + pasted images.
 - `agent/AgentRunBlock.tsx`: extracted run activity/summary renderer used by `AgentPanel`.
 - `agent/activity.ts`: extracted run/activity derivation helpers for agent timeline state.
-- `agent/panel/*`: agent panel presentation layer (`AgentThreadList`, `AgentTimeline`, `AgentComposer`, `AgentThreadUsageBar`, `AgentAttachmentPreviewDialog`) plus panel-local hooks/type/format helpers.
+- `agent/panel/*`: agent panel presentation layer (`AgentThreadList`, `AgentThreadPanel`, `AgentTimeline`, `AgentComposer`, `AgentThreadUsageBar`, `AgentAttachmentPreviewDialog`) plus panel-local hooks (`useResizablePanel`, `useStickToBottom`, `useAgentDraftAttachments`), type and format helpers.
 
 #### Pages (`/frontend/src/pages`)
 
