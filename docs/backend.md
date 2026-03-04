@@ -58,6 +58,7 @@ Runtime override behavior:
 - `runtime_settings` table stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`, including `user_memory`
 - effective runtime settings are resolved as `override -> env default` where applicable
 - `user_memory` is an optional DB-only text field used for persistent per-user agent context
+- `agent_base_url` overrides are validated to allow only `http`/`https` URLs and block localhost domains plus non-public IP literals (loopback/private/link-local/reserved/multicast/unspecified)
 
 Behavior notes:
 
@@ -426,6 +427,7 @@ Current baseline for `backend/tests/test_agent.py`: `70 passed`.
 
 - no auth/permissions; actor is current configured user string
 - runtime settings are global to the app instance (no per-authenticated-user isolation yet)
+- runtime `agent_api_key` overrides are stored as plaintext in local DB for this prototype; no application-layer encryption-at-rest yet
 - model provider routing is LiteLLM-based using provider env credentials
 - OCR fallback requires a local `tesseract` executable; without it, image-only PDFs still rely on rendered page images for vision-capable models and otherwise degrade to a no-content PDF note
 - no websocket transport; streaming uses SSE only

@@ -345,10 +345,21 @@ export function SettingsPage() {
               />
             </FormField>
 
-            <FormField label="Custom API key" hint={formState.agent_api_key_configured ? "API key is configured. Enter a new value to change it, or leave empty to clear it." : "Optional API key for custom endpoint."}>
+            <FormField
+              label="Custom API key"
+              hint={
+                formState.agent_api_key_configured
+                  ? "A custom API key override is configured. Enter a new value to change it, or leave this empty to remove the stored override (environment settings can still apply)."
+                  : "Optional API key override for the custom endpoint. Leave empty to use environment settings when available."
+              }
+            >
               <Input
                 type="password"
-                placeholder={formState.agent_api_key_configured ? "•••••••• (configured)" : "Leave empty to use environment default"}
+                placeholder={
+                  formState.agent_api_key_configured
+                    ? "•••••••• (stored override; clear to use environment settings)"
+                    : "Leave empty to use environment settings (if configured)"
+                }
                 value={formState.agent_api_key}
                 onChange={(event) => setFormState((state) => (state ? { ...state, agent_api_key: event.target.value, agent_api_key_dirty: true } : state))}
               />

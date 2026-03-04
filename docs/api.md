@@ -241,7 +241,7 @@ Body: any subset of:
 - `agent_retry_backoff_multiplier`
 - `agent_max_image_size_bytes`
 - `agent_max_images_per_message`
-- `agent_base_url` (validated: must use http/https scheme, cannot be localhost/private IPs)
+- `agent_base_url` (validated: must use http/https scheme, cannot target localhost domains or non-public IP literals)
 - `agent_api_key` (cannot be the masked sentinel value "***masked***")
 
 Response: `RuntimeSettingsRead`

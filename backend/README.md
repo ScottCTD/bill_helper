@@ -129,7 +129,9 @@ uv run python scripts/check_docs_sync.py
 - OpenRouter SSL `sslv3 alert bad record mac` transport failures get a one-shot immediate retry in both streamed and non-streamed model calls, even when `agent_retry_max_attempts=1`.
 - Stream retries after partial output are de-duplicated so already-emitted prefixes are not re-sent to the SSE client.
 - Tesseract OCR fallback depends on a local `tesseract` executable; if it is unavailable or OCR fails, PDF prompt text falls back to a no-content note while vision-capable models can still receive rendered page images.
-- Agent model calls are routed through LiteLLM using the configured model string (`agent_model`), and credentials are resolved from provider environment variables.
+- Agent model calls are routed through LiteLLM using the configured model string (`agent_model`), with credentials resolved from provider environment variables by default or optional runtime overrides (`agent_base_url`, `agent_api_key`) from `/settings`.
+- `/settings` validates `agent_base_url` to allow only `http`/`https` URLs and blocks localhost domains plus non-public IP literals.
+- Stored runtime `agent_api_key` overrides are plaintext in the local DB for this prototype; there is no application-layer encryption-at-rest yet.
 - For models that support prompt caching, LiteLLM requests include explicit `cache_control_injection_points` anchored to system context and latest user turn (negative message index) so tool-loop steps can reuse cached prompt prefixes.
 - Agent message uploads accept image and PDF attachments; each attachment now contributes its own model-visible text block (labeled with the uploaded filename when available), and the user's typed message is appended as the final text block after all attachment parts.
 - PDF files first attempt normalized PyMuPDF text extraction, then fall back to local Tesseract OCR only when native extraction returns no usable text.

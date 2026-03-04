@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from ipaddress import ip_address
 from typing import Any
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.enums import (
     AgentChangeStatus,
@@ -480,22 +481,26 @@ class RuntimeSettingsUpdate(BaseModel):
             raise ValueError("agent_base_url must use http or https scheme")
         if not parsed.netloc:
             raise ValueError("agent_base_url must have a valid host")
-        # Block private IP ranges and localhost to prevent SSRF
-        hostname = parsed.hostname or ""
-        blocked_hosts = ("localhost", "127.0.0.1", "::1", "0.0.0.0")
-        if hostname.lower() in blocked_hosts:
-            raise ValueError(
-                "agent_base_url cannot point to localhost or loopback addresses"
-            )
-        # Block private IP ranges
-        if hostname.startswith("10.") or hostname.startswith("192.168."):
-            raise ValueError("agent_base_url cannot point to private IP ranges")
-        if hostname.startswith("172."):
-            parts = hostname.split(".")
-            if len(parts) >= 2 and parts[1].isdigit():
-                octet = int(parts[1])
-                if 16 <= octet <= 31:
-                    raise ValueError("agent_base_url cannot point to private IP ranges")
+        hostname = (parsed.hostname or "").strip().lower()
+        if not hostname:
+            raise ValueError("agent_base_url must have a valid host")
+        if hostname == "localhost" or hostname.endswith(".localhost"):
+            raise ValueError("agent_base_url cannot point to localhost hosts")
+
+        # Block unsafe IP literals to reduce SSRF risk.
+        try:
+            host_ip = ip_address(hostname)
+        except ValueError:
+            return normalized
+        if (
+            host_ip.is_private
+            or host_ip.is_loopback
+            or host_ip.is_link_local
+            or host_ip.is_reserved
+            or host_ip.is_multicast
+            or host_ip.is_unspecified
+        ):
+            raise ValueError("agent_base_url cannot point to non-public IP addresses")
         return normalized
 
     @field_validator("agent_api_key", mode="before")
