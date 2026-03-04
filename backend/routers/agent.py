@@ -42,6 +42,8 @@ from backend.services.agent import (
     run_existing_agent_run_stream,
     start_agent_run,
 )
+from backend.services.agent.context_tokens import count_context_tokens
+from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.serializers import (
     change_item_to_schema,
     message_to_schema,
@@ -49,6 +51,7 @@ from backend.services.agent.serializers import (
     thread_summary_to_schema,
     thread_to_schema,
 )
+from backend.services.agent.tools import build_openai_tool_schemas
 from backend.services.runtime_settings import resolve_runtime_settings
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -76,6 +79,32 @@ def _sanitize_title(content: str) -> str | None:
 
 def _normalize_optional_text(value: str | None) -> str:
     return (value or "").strip()
+
+
+def _current_context_tokens_for_thread(
+    db: Session,
+    *,
+    thread: AgentThread,
+    model_name: str,
+) -> int | None:
+    runs_by_newest = sorted(thread.runs, key=lambda run: run.created_at, reverse=True)
+    for run in runs_by_newest:
+        if run.status == AgentRunStatus.RUNNING and run.context_tokens is not None:
+            return run.context_tokens
+
+    current_messages = build_llm_messages(db, thread.id, current_user_message_id=None)
+    current_context_tokens = count_context_tokens(
+        model_name=model_name,
+        messages=current_messages,
+        tools=build_openai_tool_schemas(),
+    )
+    if current_context_tokens is not None:
+        return current_context_tokens
+
+    for run in runs_by_newest:
+        if run.context_tokens is not None:
+            return run.context_tokens
+    return None
 
 
 def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:
@@ -300,6 +329,11 @@ def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThr
         messages=[message_to_schema(message, api_prefix=settings.api_prefix) for message in thread.messages],
         runs=[run_to_schema(run) for run in thread.runs],
         configured_model_name=settings.agent_model,
+        current_context_tokens=_current_context_tokens_for_thread(
+            db,
+            thread=thread,
+            model_name=settings.agent_model,
+        ),
     )
 
 

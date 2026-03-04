@@ -174,6 +174,12 @@ def test_default_currency_override_applies_to_agent_entry_proposals_and_apply(cl
     update_response.raise_for_status()
     assert update_response.json()["default_currency_code"] == "EUR"
 
+    for entity_name in ("Main Checking", "Cafe"):
+        entity_response = client.post("/api/v1/entities", json={"name": entity_name})
+        entity_response.raise_for_status()
+    tag_response = client.post("/api/v1/tags", json={"name": "food"})
+    tag_response.raise_for_status()
+
     thread = create_thread(client)
     run = send_message(client, thread["id"], "Please add the cafe expense.")
     assert run["status"] == "completed"

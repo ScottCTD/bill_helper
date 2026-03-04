@@ -98,6 +98,7 @@ def run_to_schema(run: AgentRun) -> AgentRunRead:
         assistant_message_id=run.assistant_message_id,
         status=run.status,
         model_name=run.model_name,
+        context_tokens=run.context_tokens,
         input_tokens=run.input_tokens,
         output_tokens=run.output_tokens,
         cache_read_tokens=run.cache_read_tokens,

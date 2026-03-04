@@ -91,6 +91,23 @@ export function latestRunMetric(
   return null;
 }
 
+export function buildThreadUsageTotals(detail: AgentThreadDetail | undefined): {
+  context: number | null;
+  input: number | null;
+  output: number | null;
+  cacheRead: number | null;
+  totalCost: number | null;
+} {
+  const runs = detail?.runs ?? [];
+  return {
+    context: detail?.current_context_tokens ?? null,
+    input: totalRunMetric(runs, "input_tokens"),
+    output: totalRunMetric(runs, "output_tokens"),
+    cacheRead: totalRunMetric(runs, "cache_read_tokens"),
+    totalCost: totalRunMetric(runs, "total_cost_usd"),
+  };
+}
+
 export function summarizeRunChangeTypes(changeItems: AgentChangeItem[]): {
   entryCount: number;
   tagCount: number;

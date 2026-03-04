@@ -453,6 +453,7 @@ class AgentRun(Base):
     )
     status: Mapped[AgentRunStatus] = mapped_column(Enum(AgentRunStatus), nullable=False, index=True)
     model_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    context_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cache_read_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)

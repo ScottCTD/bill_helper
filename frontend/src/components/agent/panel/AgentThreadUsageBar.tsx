@@ -22,7 +22,7 @@ export function AgentThreadUsageBar(props: AgentThreadUsageBarProps) {
   return (
     <div className="agent-thread-usage" aria-label="Thread usage and cost">
       <span>Context: {formatUsageTokens(totals.context)}</span>
-      <span>Input: {formatUsageTokens(totals.input)}</span>
+      <span>Total input: {formatUsageTokens(totals.input)}</span>
       <span>Output: {formatUsageTokens(totals.output)}</span>
       <span>Cache read: {formatUsageTokens(totals.cacheRead)}</span>
       <span>Cache hit rate: {formatUsagePercent(cacheHitRate)}</span>

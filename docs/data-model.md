@@ -219,6 +219,7 @@ Fields:
 - `assistant_message_id` (nullable FK -> `agent_messages.id`)
 - `status` (`AgentRunStatus`)
 - `model_name`
+- `context_tokens` (nullable int; best-effort prompt-size snapshot for the run's current model-visible context, including tool schemas)
 - `input_tokens` (nullable int)
 - `output_tokens` (nullable int)
 - `cache_read_tokens` (nullable int)

@@ -12,6 +12,7 @@ The goal is an all-in-one place to view and analyze personal finances — a cent
 - Natural language interface for managing entries, tags, and entities
 - Review-gated proposals — the agent proposes changes, you approve or reject each one
 - Real-time token streaming with tool-call observability
+- Live thread usage metrics, including current context-window size and cumulative token/cost totals
 - Image and PDF attachment support (bank statements, receipts)
 - Provider-agnostic model routing via LiteLLM (OpenAI, Anthropic, Google, OpenRouter, etc.)
 - Optional Langfuse tracing for observability
@@ -26,7 +27,7 @@ The goal is an all-in-one place to view and analyze personal finances — a cent
 **Developer Experience**
 - SQLite database with Alembic migrations — no external DB required
 - Hot-reload dev server for both backend and frontend
-- 107 backend tests, frontend unit + integration tests
+- 100+ backend tests, plus frontend unit + integration tests
 - Configurable via environment variables or runtime settings UI
 
 ## Tech Stack

@@ -331,8 +331,9 @@ Timeline features:
 - when a run has review items, the review request/action block renders below the assistant message content
 - completed assistant messages no longer render per-message run metadata rows (`Run: completed ...`)
 - cumulative thread usage/cost bar is shown once above the composer:
-  - `Context`, `Input`, `Output`, `Cache read`, `Cache hit rate`
+  - `Context`, `Total input`, `Output`, `Cache read`, `Cache hit rate`
   - token counters use compact `x.xxK` formatting
+  - `Context` comes from backend-computed `current_context_tokens` (best-effort current prompt size); `Total input` remains cumulative billed input usage across runs
   - rightmost `Total cost` (USD; computed from backend LiteLLM pricing fields)
 - run-level proposal summary cards:
   - pending copy (`N proposed changes pending review`)

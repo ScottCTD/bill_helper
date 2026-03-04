@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.enums import AgentMessageRole, AgentRunStatus, AgentToolCallStatus
 from backend.models import AgentChangeItem, AgentMessage, AgentRun, AgentThread, AgentToolCall
+from backend.services.agent.context_tokens import count_context_tokens
 from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.model_client import AgentModelError, LiteLLMModelClient, validate_litellm_environment
 from backend.services.agent.tools import (
@@ -314,6 +315,29 @@ def _apply_usage_totals_to_run(run: AgentRun, totals: dict[str, int | None]) -> 
     run.cache_write_tokens = totals["cache_write_tokens"]
 
 
+def _calculate_context_tokens(
+    *,
+    model_name: str,
+    llm_messages: list[dict[str, Any]],
+) -> int | None:
+    return count_context_tokens(
+        model_name=model_name,
+        messages=llm_messages,
+        tools=build_openai_tool_schemas(),
+    )
+
+
+def _update_run_context_tokens(
+    *,
+    run: AgentRun,
+    llm_messages: list[dict[str, Any]],
+) -> None:
+    run.context_tokens = _calculate_context_tokens(
+        model_name=run.model_name,
+        llm_messages=llm_messages,
+    )
+
+
 def _final_assistant_content(content: str) -> str:
     normalized = content.strip()
     if normalized:
@@ -334,12 +358,17 @@ def _create_run(
     user_message: AgentMessage,
 ) -> AgentRun:
     settings = resolve_runtime_settings(db)
+    llm_messages = build_llm_messages(db, thread.id, current_user_message_id=user_message.id)
 
     run = AgentRun(
         thread_id=thread.id,
         user_message_id=user_message.id,
         status=AgentRunStatus.RUNNING,
         model_name=settings.agent_model,
+        context_tokens=_calculate_context_tokens(
+            model_name=settings.agent_model,
+            llm_messages=llm_messages,
+        ),
     )
     thread.updated_at = utc_now()
     db.add(run)
@@ -420,6 +449,8 @@ def _execute_agent_run(
                         "tool_calls": tool_calls,
                     }
                 )
+                _update_run_context_tokens(run=run, llm_messages=llm_messages)
+                db.add(run)
                 assistant_update = _record_assistant_intermediate_update(
                     db,
                     run=run,
@@ -437,6 +468,8 @@ def _execute_agent_run(
                     llm_messages.append(
                         recorded_tool_call.llm_message
                     )
+                    _update_run_context_tokens(run=run, llm_messages=llm_messages)
+                    db.add(run)
                     db.commit()
                 continue
 
@@ -596,6 +629,8 @@ def _execute_agent_run_stream(
                         "tool_calls": tool_calls,
                     }
                 )
+                _update_run_context_tokens(run=run, llm_messages=llm_messages)
+                db.add(run)
                 assistant_update = _record_assistant_intermediate_update(
                     db,
                     run=run,
@@ -623,6 +658,8 @@ def _execute_agent_run_stream(
                         tool_context=tool_context,
                     )
                     llm_messages.append(recorded_tool_call.llm_message)
+                    _update_run_context_tokens(run=run, llm_messages=llm_messages)
+                    db.add(run)
                     db.commit()
                     reasoning_update_message = _extract_reasoning_update_message(recorded_tool_call.persisted_row)
                     if reasoning_update_message is not None:

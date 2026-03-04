@@ -467,7 +467,9 @@ Response: `AgentThreadDetailRead` with:
 - `messages` (with attachment metadata)
 - `runs` (with tool calls + change items + review actions)
 - `configured_model_name` (current resolved runtime model from `/settings` override or env default)
-- each run also includes nullable usage counters:
+- `current_context_tokens` (best-effort prompt size for the selected thread using the current configured model; prefers the newest running run snapshot when available)
+- each run also includes nullable context/usage counters:
+  - `context_tokens`
   - `input_tokens`
   - `output_tokens`
   - `cache_read_tokens`
@@ -496,7 +498,7 @@ Behavior:
 - validates attachment count/size against configured limits
 - accepts `image/*` and `application/pdf` uploads
 - persists message + attachments
-- creates an `agent_runs` row with initial `status=running`
+- creates an `agent_runs` row with initial `status=running` and best-effort initial `context_tokens`
 - starts bounded tool-calling execution in background
 - PDF attachments are parsed to text via PyMuPDF (line-trimmed and internal-whitespace-normalized) before model calls
 - when the configured model supports vision, each uploaded PDF page is also sent to the model as an `image_url` part
@@ -510,6 +512,7 @@ Response: `AgentRunRead`
 
 Usage behavior:
 
+- `context_tokens` is a best-effort snapshot of the run's current model-visible prompt size (message history plus tool schemas), and runtime refreshes it as tool-loop messages are appended
 - usage counters are aggregated across all model calls within the run (including tool-calling loops)
 - cache counters normalize provider-specific aliases (`cached_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`)
 - pricing fields are computed from aggregated input/output tokens using LiteLLM `cost_per_token`
@@ -583,7 +586,7 @@ Response: `AgentRunRead`
 
 Returned run payload includes:
 
-- run lifecycle metadata (`status`, `model_name`, `error_text`)
+- run lifecycle metadata (`status`, `model_name`, `error_text`, `context_tokens`)
 - tool calls (including `output_text` + `output_json`) and change items
 - usage counters (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`)
 - derived pricing fields (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)

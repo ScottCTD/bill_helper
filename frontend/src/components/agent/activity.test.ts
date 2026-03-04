@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   appendPendingReasoningUpdateToActivity,
   appendPendingToolCallToActivity,
+  buildThreadUsageTotals,
   buildRunActivityTimeline,
   runsByAssistantMessage,
   runsWithoutAssistantMessage,
@@ -73,6 +74,7 @@ describe("activity helpers", () => {
       },
       messages: [],
       configured_model_name: "gpt-test",
+      current_context_tokens: 42,
       runs: [
         buildRun({ id: "run-b", created_at: "2026-02-15T10:02:00Z", assistant_message_id: "assistant-1" }),
         buildRun({ id: "run-a", created_at: "2026-02-15T10:01:00Z", assistant_message_id: "assistant-1" }),
@@ -101,6 +103,27 @@ describe("activity helpers", () => {
     expect(latestRunMetric(none, "input_tokens")).toBeNull();
     expect(latestRunMetric(runs, "input_tokens")).toBe(15);
     expect(latestRunMetric([buildRun({ id: "run-5", input_tokens: 33 })], "input_tokens")).toBe(33);
+
+    expect(
+      buildThreadUsageTotals({
+        thread: {
+          id: "thread-1",
+          title: "Thread",
+          created_at: "2026-02-15T10:00:00Z",
+          updated_at: "2026-02-15T10:05:00Z"
+        },
+        messages: [],
+        runs,
+        configured_model_name: "gpt-test",
+        current_context_tokens: 88
+      })
+    ).toEqual({
+      context: 88,
+      input: 25,
+      output: 60,
+      cacheRead: 0,
+      totalCost: 0.003
+    });
 
     const changeSummary = summarizeRunChangeTypes([
       buildChangeItem({ id: "change-1", change_type: "create_entry" }),

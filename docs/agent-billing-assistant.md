@@ -15,7 +15,8 @@ This document describes the architecture, prompts, tools, and usage workflow of 
    - Removable attachment chips (image thumbnails + PDF file chips) appear above the composer before send.
    - Paste (`Cmd/Ctrl+V`) and drag-drop ingestion for image/PDF attachments.
    - Composer shortcut: `Cmd+Enter` (or `Ctrl+Enter`) sends the message.
-   - Cumulative thread usage bar above the composer: `Context`, `Input`, `Output`, `Cache read`, `Cache hit rate`, `Total cost`.
+   - Cumulative thread usage bar above the composer: `Context`, `Total input`, `Output`, `Cache read`, `Cache hit rate`, `Total cost`.
+   - `Context` is the best-effort current prompt size for the selected thread; `Total input` remains the cumulative billed input usage across completed and in-flight runs.
    - Run-level proposal summary cards with pending counts.
 6. Open the run review modal and process proposals:
    - Entry proposals support JSON edit-before-approve with unified payload diff.

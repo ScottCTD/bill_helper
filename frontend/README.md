@@ -181,7 +181,7 @@ uv run python scripts/check_docs_sync.py
 - Agent composer attachments support images and PDFs (picker, paste, and drag-drop paths); unsupported files are skipped with a local error.
 - Draft and persisted PDF attachments render as file chips/links in timeline surfaces, while images continue to render as thumbnails.
 - Agent message send uses backend SSE (`POST /api/v1/agent/threads/{thread_id}/messages/stream`) so assistant text appears incrementally in real time.
-- Thread usage bar now includes `Context` (latest run input token size) plus `Cache hit rate`, in addition to raw input/output/cache read counters and total cost.
+- Thread usage bar now shows `Context` as the current prompt context-window size for the selected thread, alongside cumulative `Total input`, `Output`, `Cache read`, `Cache hit rate`, and total cost.
 - Token counters in the usage bar are compactly formatted as `x.xxK` to reduce horizontal space pressure.
 - Streaming assistant activity now supports interleaved reasoning updates (`reasoning_update`) plus grouped tool-call traces, and the same interleaved trace remains visible after run completion.
 - If a tool-calling model turn streams assistant text before its tool calls finish, the pending bubble text is cleared when the matching `reasoning_update` arrives so that text is shown as a progress bubble instead of being mistaken for the final answer.

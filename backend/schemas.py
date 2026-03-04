@@ -542,6 +542,7 @@ class AgentRunRead(BaseModel):
     assistant_message_id: str | None = None
     status: AgentRunStatus
     model_name: str
+    context_tokens: int | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
     cache_read_tokens: int | None = None
@@ -563,6 +564,7 @@ class AgentThreadDetailRead(BaseModel):
     messages: list[AgentMessageRead]
     runs: list[AgentRunRead]
     configured_model_name: str
+    current_context_tokens: int | None = None
 
 
 class AgentChangeItemApproveRequest(BaseModel):

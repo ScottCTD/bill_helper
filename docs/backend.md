@@ -144,9 +144,13 @@ Agent services:
   - supports both non-stream execution and SSE execution (`run_existing_agent_run_stream`) for incremental text delivery
   - emits `reasoning_update` SSE events when `send_intermediate_update` tool calls succeed, and when a tool-calling model step includes assistant text that should be treated as the same user-visible progress signal
   - supports manual run interruption (`interrupt_agent_run`) and cooperative stop checks between model/tool steps
+  - computes best-effort `context_tokens` snapshots from the model-visible prompt payload (messages + tool schemas) when a run is created and as tool-loop messages are appended
   - aggregates model usage metrics across all model calls in a run and persists totals on `agent_runs`
   - passes model observability context (`user`, `session_id=thread.id`, run-level `trace`) on each model request for conversation-level trace grouping
   - delegates message assembly and model calls to dedicated modules
+- `backend/services/agent/context_tokens.py`
+  - wraps LiteLLM `token_counter` for best-effort prompt-size estimation
+  - counts context with `use_default_image_token_count=True` and returns `None` when provider/model tokenization is unavailable
 - `backend/services/agent/prompts.py`
   - central system prompt definition
   - organizes policy into sectioned rule groups (tool discipline, proposal workflows, execution, final response)
@@ -229,6 +233,12 @@ Agent services:
 - `backend/services/agent/serializers.py`
   - timeline-ready nested serializer helpers
 
+Thread detail behavior:
+
+- `GET /api/v1/agent/threads/{thread_id}` now returns `current_context_tokens`.
+- When a run is active, thread detail reuses the newest running run's `context_tokens` instead of recomputing on every poll.
+- When no run is active, thread detail recomputes prompt size from the current persisted conversation state and falls back to the newest stored run snapshot if token counting fails.
+
 ## Routers
 
 Core routers:
@@ -293,6 +303,7 @@ Settings router:
 - `0018_add_tag_description`
 - `0019_add_transfer_entry_kind`
 - `0020_add_agent_message_attachment_original_filename`
+- `0021_add_agent_run_context_tokens`
 
 Commands:
 

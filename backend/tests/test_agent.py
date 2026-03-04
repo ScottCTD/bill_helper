@@ -179,6 +179,116 @@ def test_thread_detail_includes_configured_model_name(client):
     assert detail["configured_model_name"] == get_settings().agent_model
 
 
+def test_run_includes_context_tokens(client, monkeypatch):
+    monkeypatch.setattr(
+        "backend.services.agent.runtime._calculate_context_tokens",
+        lambda *, model_name, llm_messages: 321,
+    )
+    patch_model(
+        monkeypatch,
+        lambda _messages: {"role": "assistant", "content": "Here is the final answer with no proposals."},
+    )
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "What happened this month?")
+
+    assert run["context_tokens"] == 321
+
+    run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
+    run_response.raise_for_status()
+    assert run_response.json()["context_tokens"] == 321
+
+
+def test_thread_detail_computes_current_context_tokens_for_idle_thread(client, monkeypatch):
+    monkeypatch.setattr(
+        "backend.services.agent.runtime._calculate_context_tokens",
+        lambda *, model_name, llm_messages: 123,
+    )
+    patch_model(
+        monkeypatch,
+        lambda _messages: {"role": "assistant", "content": "Here is the final answer with no proposals."},
+    )
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "What happened this month?")
+    assert run["context_tokens"] == 123
+
+    monkeypatch.setattr("backend.routers.agent.count_context_tokens", lambda **_kwargs: 777)
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+
+    assert detail["current_context_tokens"] == 777
+    assert detail["runs"][0]["context_tokens"] == 123
+
+
+def test_thread_detail_prefers_running_run_context_tokens(client, monkeypatch):
+    proceed_second_call = Event()
+    entered_second_call = Event()
+    call_count = {"value": 0}
+
+    monkeypatch.setattr(
+        "backend.services.agent.runtime._calculate_context_tokens",
+        lambda *, model_name, llm_messages: len(llm_messages) * 100,
+    )
+    monkeypatch.setattr("backend.routers.agent.count_context_tokens", lambda **_kwargs: 9999)
+
+    def multi_step_model(_messages):
+        call_count["value"] += 1
+        if call_count["value"] == 1:
+            return {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_list_tags",
+                        "type": "function",
+                        "function": {"name": "list_tags", "arguments": "{}"},
+                    }
+                ],
+            }
+
+        entered_second_call.set()
+        proceed_second_call.wait(timeout=1.0)
+        return {"role": "assistant", "content": "Done"}
+
+    patch_model(monkeypatch, multi_step_model)
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "List current tags.", wait_for_completion=False)
+
+    assert run["status"] == "running"
+    assert entered_second_call.wait(timeout=1.0)
+
+    run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
+    run_response.raise_for_status()
+    running_payload = run_response.json()
+    assert running_payload["status"] == "running"
+    assert running_payload["context_tokens"] == 400
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+
+    assert detail["current_context_tokens"] == 400
+    assert detail["runs"][0]["context_tokens"] == 400
+
+    proceed_second_call.set()
+
+    deadline = time.monotonic() + 1.0
+    while time.monotonic() < deadline:
+        run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
+        run_response.raise_for_status()
+        payload = run_response.json()
+        if payload["status"] != "running":
+            assert payload["context_tokens"] == 400
+            return
+        time.sleep(0.01)
+
+    raise AssertionError("Timed out waiting for multi-step run to complete")
+
+
 def test_delete_thread_removes_thread_from_list_and_detail(client):
     thread = create_thread(client)
 

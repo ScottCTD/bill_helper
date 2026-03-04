@@ -37,6 +37,7 @@
 - `versions/0018_add_tag_description.py`: adds optional free-text tag description (`tags.description`).
 - `versions/0019_add_transfer_entry_kind.py`: documents addition of `TRANSFER` to `EntryKind` enum (no DDL change for SQLite).
 - `versions/0020_add_agent_message_attachment_original_filename.py`: adds optional upload-name storage for agent attachments (`agent_message_attachments.original_filename`) and safely no-ops if the column already exists in a drifted local DB.
+- `versions/0021_add_agent_run_context_tokens.py`: adds nullable prompt-size snapshots for agent runs (`agent_runs.context_tokens`) and safely no-ops if the column already exists.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
@@ -76,7 +77,7 @@
 - `serializers.py`: ORM-to-schema mapping helpers.
 - `taxonomy.py`: shared taxonomy normalization, term assignment, and usage-count helpers.
 - `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, plus DB-backed `user_memory`.
-- `agent/`: agent runtime, tool execution, serialization, prompt/model adapters, and review apply handlers.
+- `agent/`: agent runtime, tool execution, prompt-size counting, serialization, prompt/model adapters, and review apply handlers.
 
 ### Backend Tests (`/backend/tests`)
 

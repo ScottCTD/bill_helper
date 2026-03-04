@@ -72,6 +72,7 @@ Touch together:
 Touch together:
 
 - `backend/routers/agent.py`
+- `backend/services/agent/context_tokens.py`
 - `backend/services/agent/runtime.py`
 - `backend/tests/test_agent.py`
 
@@ -145,6 +146,7 @@ uv run python scripts/check_docs_sync.py
 - SSE streams can include `text_delta`, `tool_call`, and `reasoning_update` events before terminal run status events.
 - Run tool-call payloads include exact model-visible tool text (`output_text`) in addition to structured `output_json`.
 - Usage normalization maps provider-specific cache fields (`cached_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`) into run-level `cache_read_tokens` / `cache_write_tokens`.
+- Agent runs now persist nullable `context_tokens`, a best-effort prompt-size snapshot for the model-visible context (messages plus tool schemas), and thread detail computes `current_context_tokens` for the selected conversation.
 - Observability context (`user`, `session_id=AgentThread.id`, run trace metadata) is propagated on each model call.
 - When `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` are configured, LiteLLM `langfuse` success/failure callbacks are enabled and trace metadata is sent through LiteLLM `metadata`.
 - Dashboard currency defaults to runtime settings (`/settings` override, else `BILL_HELPER_DASHBOARD_CURRENCY_CODE` / `CAD`).
