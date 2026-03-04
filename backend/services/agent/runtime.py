@@ -72,8 +72,8 @@ class PreparedToolCall:
 
 def ensure_agent_available(db: Session) -> None:
     settings = resolve_runtime_settings(db)
-    # If custom base_url and api_key are configured, skip LiteLLM env validation
-    if settings.agent_base_url and settings.agent_api_key:
+    # If custom base_url or api_key is configured, skip LiteLLM env validation
+    if settings.agent_base_url or settings.agent_api_key:
         return
     has_credentials, missing_keys, request_model = validate_litellm_environment(
         model_name=settings.agent_model,

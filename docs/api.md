@@ -213,14 +213,15 @@ Response highlights:
 
 - `current_user_name`, optional `user_memory`, `default_currency_code`, `dashboard_currency_code`
 - agent runtime fields (`agent_model`, `agent_max_steps`, retry/image limits)
-- `agent_base_url` and `agent_api_key` for custom provider configuration
+- `agent_base_url` for custom provider endpoint
+- `agent_api_key_configured` boolean indicating if a custom API key is set
 - `overrides` object with nullable override values for the same runtime fields, including `user_memory`
 
 Behavior:
 
 - `user_memory` is DB-backed only (no environment fallback)
 - when `user_memory` is set, it is injected into every agent system prompt as persistent user context
-- `agent_api_key` is masked in responses (shown as `***masked***` when set)
+- `agent_api_key` is never returned in responses; use `agent_api_key_configured` to check if a key is set
 
 ## `PATCH /settings`
 
@@ -240,8 +241,8 @@ Body: any subset of:
 - `agent_retry_backoff_multiplier`
 - `agent_max_image_size_bytes`
 - `agent_max_images_per_message`
-- `agent_base_url`
-- `agent_api_key`
+- `agent_base_url` (validated: must use http/https scheme, cannot be localhost/private IPs)
+- `agent_api_key` (cannot be the masked sentinel value "***masked***")
 
 Response: `RuntimeSettingsRead`
 

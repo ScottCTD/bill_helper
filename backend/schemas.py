@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Any
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, ValidationError
 
 from backend.enums import (
     AgentChangeStatus,
@@ -395,7 +396,7 @@ class RuntimeSettingsOverridesRead(BaseModel):
     agent_max_image_size_bytes: int | None = None
     agent_max_images_per_message: int | None = None
     agent_base_url: str | None = None
-    agent_api_key: str | None = None
+    agent_api_key_configured: bool = False
 
 
 class RuntimeSettingsRead(BaseModel):
@@ -412,7 +413,7 @@ class RuntimeSettingsRead(BaseModel):
     agent_max_image_size_bytes: int
     agent_max_images_per_message: int
     agent_base_url: str | None = None
-    agent_api_key: str | None = None
+    agent_api_key_configured: bool = False
     overrides: RuntimeSettingsOverridesRead
 
 
@@ -464,6 +465,51 @@ class RuntimeSettingsUpdate(BaseModel):
             return None
         normalized = " ".join(str(value).split()).strip().upper()
         return normalized or None
+
+    @field_validator("agent_base_url", mode="before")
+    @classmethod
+    def validate_agent_base_url(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(str(value).split()).strip()
+        if not normalized:
+            return None
+        # Validate URL format
+        parsed = urlparse(normalized)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError("agent_base_url must use http or https scheme")
+        if not parsed.netloc:
+            raise ValueError("agent_base_url must have a valid host")
+        # Block private IP ranges and localhost to prevent SSRF
+        hostname = parsed.hostname or ""
+        blocked_hosts = ("localhost", "127.0.0.1", "::1", "0.0.0.0")
+        if hostname.lower() in blocked_hosts:
+            raise ValueError(
+                "agent_base_url cannot point to localhost or loopback addresses"
+            )
+        # Block private IP ranges
+        if hostname.startswith("10.") or hostname.startswith("192.168."):
+            raise ValueError("agent_base_url cannot point to private IP ranges")
+        if hostname.startswith("172."):
+            parts = hostname.split(".")
+            if len(parts) >= 2 and parts[1].isdigit():
+                octet = int(parts[1])
+                if 16 <= octet <= 31:
+                    raise ValueError("agent_base_url cannot point to private IP ranges")
+        return normalized
+
+    @field_validator("agent_api_key", mode="before")
+    @classmethod
+    def validate_agent_api_key(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        if not normalized:
+            return None
+        # Reject masked sentinel to prevent accidental overwrites
+        if normalized == "***masked***":
+            raise ValueError("agent_api_key cannot be the masked sentinel value")
+        return normalized
 
 
 class AgentThreadCreate(BaseModel):

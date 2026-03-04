@@ -114,18 +114,35 @@ def test_model_client_normalizes_empty_strings_to_none():
 
 
 def test_ensure_agent_available_skips_validation_with_custom_credentials():
-    """When custom base_url and api_key are configured, validation should pass even without env vars."""
+    """When custom base_url or api_key is configured, validation should pass even without env vars."""
     mock_session = MagicMock()
 
     with patch(
         "backend.services.agent.runtime.resolve_runtime_settings"
     ) as mock_resolve:
+        # Test with both set
         mock_resolve.return_value = MagicMock(
             agent_model="openai/gpt-4",
             agent_base_url="https://custom-api.example.com/v1",
             agent_api_key="sk-custom-key",
         )
         # Should not raise any exception
+        ensure_agent_available(mock_session)
+
+        # Test with only base_url set
+        mock_resolve.return_value = MagicMock(
+            agent_model="openai/gpt-4",
+            agent_base_url="https://custom-api.example.com/v1",
+            agent_api_key=None,
+        )
+        ensure_agent_available(mock_session)
+
+        # Test with only api_key set
+        mock_resolve.return_value = MagicMock(
+            agent_model="openai/gpt-4",
+            agent_base_url=None,
+            agent_api_key="sk-custom-key",
+        )
         ensure_agent_available(mock_session)
 
 

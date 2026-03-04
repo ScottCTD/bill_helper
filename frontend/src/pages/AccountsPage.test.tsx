@@ -47,7 +47,7 @@ const runtimeSettingsFixture: RuntimeSettings = {
   agent_max_image_size_bytes: 5_000_000,
   agent_max_images_per_message: 4,
   agent_base_url: null,
-  agent_api_key: null,
+  agent_api_key_configured: false,
   overrides: {
     current_user_name: null,
     user_memory: null,
@@ -62,7 +62,7 @@ const runtimeSettingsFixture: RuntimeSettings = {
     agent_max_image_size_bytes: null,
     agent_max_images_per_message: null,
     agent_base_url: null,
-    agent_api_key: null
+    agent_api_key_configured: false
   }
 };
 

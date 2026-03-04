@@ -102,6 +102,9 @@ def update_runtime_settings_override(
 ) -> RuntimeSettingsRow:
     row = _ensure_runtime_settings_override(db)
     for field_name, value in updates.items():
+        # Skip masked sentinel to prevent accidental overwrites of API key
+        if field_name == "agent_api_key" and value == "***masked***":
+            continue
         setattr(row, field_name, value)
     db.add(row)
     db.flush()
@@ -207,14 +210,10 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         fallback=defaults.agent_max_images_per_message,
     )
     agent_base_url = (
-        _normalize_optional_text(override.agent_base_url)
-        if override and override.agent_base_url is not None
-        else None
+        _normalize_optional_text(override.agent_base_url if override else None)
     ) or _normalize_optional_text(defaults.agent_base_url)
     agent_api_key = (
-        _normalize_optional_secret(override.agent_api_key)
-        if override and override.agent_api_key is not None
-        else None
+        _normalize_optional_secret(override.agent_api_key if override else None)
     ) or _normalize_optional_secret(defaults.agent_api_key)
 
     return ResolvedRuntimeSettings(
@@ -257,7 +256,7 @@ def build_runtime_settings_read(db: Session) -> RuntimeSettingsRead:
         agent_max_image_size_bytes=resolved.agent_max_image_size_bytes,
         agent_max_images_per_message=resolved.agent_max_images_per_message,
         agent_base_url=resolved.agent_base_url,
-        agent_api_key="***masked***" if resolved.agent_api_key else None,
+        agent_api_key_configured=bool(resolved.agent_api_key),
         overrides=RuntimeSettingsOverridesRead(
             current_user_name=_normalize_optional_text(override.current_user_name)
             if override
@@ -300,8 +299,6 @@ def build_runtime_settings_read(db: Session) -> RuntimeSettingsRead:
             agent_base_url=_normalize_optional_text(override.agent_base_url)
             if override
             else None,
-            agent_api_key="***masked***"
-            if override and override.agent_api_key
-            else None,
+            agent_api_key_configured=bool(override and override.agent_api_key),
         ),
     )

@@ -28,6 +28,8 @@ interface SettingsFormState {
   agent_retry_backoff_multiplier: string;
   agent_base_url: string;
   agent_api_key: string;
+  agent_api_key_configured: boolean;
+  agent_api_key_dirty: boolean;
 }
 
 function bytesToMegabytes(value: number): string {
@@ -51,7 +53,9 @@ function buildFormState(data: RuntimeSettings): SettingsFormState {
     agent_retry_max_wait_seconds: String(data.agent_retry_max_wait_seconds),
     agent_retry_backoff_multiplier: String(data.agent_retry_backoff_multiplier),
     agent_base_url: data.agent_base_url ?? "",
-    agent_api_key: data.agent_api_key ?? "",
+    agent_api_key: "", // Always empty - user must re-enter to change
+    agent_api_key_configured: data.agent_api_key_configured ?? false,
+    agent_api_key_dirty: false,
   };
 }
 
@@ -172,9 +176,11 @@ export function SettingsPage() {
       const nextAgentMaxImageSizeBytes = Math.round(imageSizeMb * 1024 * 1024);
 
       const nextAgentBaseUrl = formState.agent_base_url.trim() || null;
-      const nextAgentApiKey = formState.agent_api_key.trim() || null;
+      const nextAgentApiKey = formState.agent_api_key_dirty
+        ? (formState.agent_api_key.trim() || null)
+        : undefined; // undefined means "don't change"
 
-      updateMutation.mutate({
+      const payload: Record<string, unknown> = {
         current_user_name: nextCurrentUserName,
         user_memory: formState.user_memory,
         default_currency_code: nextDefaultCurrencyCode,
@@ -188,8 +194,14 @@ export function SettingsPage() {
         agent_retry_max_wait_seconds: nextAgentRetryMaxWaitSeconds,
         agent_retry_backoff_multiplier: nextAgentRetryBackoffMultiplier,
         agent_base_url: nextAgentBaseUrl,
-        agent_api_key: nextAgentApiKey,
-      });
+      };
+      
+      // Only include agent_api_key if it was explicitly changed
+      if (nextAgentApiKey !== undefined) {
+        payload.agent_api_key = nextAgentApiKey;
+      }
+
+      updateMutation.mutate(payload);
     } catch (error) {
       setFormError((error as Error).message);
     }
@@ -314,7 +326,7 @@ export function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Agent Runtime</CardTitle>
-<CardDescription>Controls model selection and guardrails for new runs. Provider credentials can be set via environment variables or custom endpoint below.</CardDescription>
+            <CardDescription>Controls model selection and guardrails for new runs. Provider credentials can be set via environment variables or custom endpoint below.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <FormField label="Agent model">
@@ -333,12 +345,12 @@ export function SettingsPage() {
               />
             </FormField>
 
-            <FormField label="Custom API key" hint="Optional API key for custom endpoint. Will be masked in responses.">
+            <FormField label="Custom API key" hint={formState.agent_api_key_configured ? "API key is configured. Enter a new value to change it, or leave empty to clear it." : "Optional API key for custom endpoint."}>
               <Input
                 type="password"
-                placeholder="Leave empty to use environment default"
+                placeholder={formState.agent_api_key_configured ? "•••••••• (configured)" : "Leave empty to use environment default"}
                 value={formState.agent_api_key}
-                onChange={(event) => setFormState((state) => (state ? { ...state, agent_api_key: event.target.value } : state))}
+                onChange={(event) => setFormState((state) => (state ? { ...state, agent_api_key: event.target.value, agent_api_key_dirty: true } : state))}
               />
             </FormField>
 
