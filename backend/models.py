@@ -46,7 +46,9 @@ class EntryGroup(Base):
     __tablename__ = "entry_groups"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -61,8 +63,12 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    name: Mapped[str] = mapped_column(
+        String(255), nullable=False, unique=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -71,27 +77,47 @@ class User(Base):
     )
 
     accounts: Mapped[list[Account]] = relationship(back_populates="owner_user")
-    owned_entries: Mapped[list[Entry]] = relationship(back_populates="owner_user", foreign_keys="Entry.owner_user_id")
+    owned_entries: Mapped[list[Entry]] = relationship(
+        back_populates="owner_user", foreign_keys="Entry.owner_user_id"
+    )
 
 
 class RuntimeSettings(Base):
     __tablename__ = "runtime_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    scope: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, default="default")
+    scope: Mapped[str] = mapped_column(
+        String(32), nullable=False, unique=True, default="default"
+    )
     current_user_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     user_memory: Mapped[str | None] = mapped_column(Text, nullable=True)
     default_currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
-    dashboard_currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    dashboard_currency_code: Mapped[str | None] = mapped_column(
+        String(3), nullable=True
+    )
     agent_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     agent_max_steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
     agent_retry_max_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    agent_retry_initial_wait_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
-    agent_retry_max_wait_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
-    agent_retry_backoff_multiplier: Mapped[float | None] = mapped_column(Float, nullable=True)
-    agent_max_image_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    agent_max_images_per_message: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    agent_retry_initial_wait_seconds: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )
+    agent_retry_max_wait_seconds: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )
+    agent_retry_backoff_multiplier: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )
+    agent_max_image_size_bytes: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    agent_max_images_per_message: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    agent_base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    agent_api_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -104,13 +130,19 @@ class Account(Base):
     __tablename__ = "accounts"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    entity_id: Mapped[str | None] = mapped_column(ForeignKey("entities.id", ondelete="SET NULL"), nullable=True, index=True)
+    owner_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    entity_id: Mapped[str | None] = mapped_column(
+        ForeignKey("entities.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     markdown_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -118,7 +150,9 @@ class Account(Base):
         nullable=False,
     )
 
-    snapshots: Mapped[list[AccountSnapshot]] = relationship(back_populates="account", cascade="all, delete-orphan")
+    snapshots: Mapped[list[AccountSnapshot]] = relationship(
+        back_populates="account", cascade="all, delete-orphan"
+    )
     entries: Mapped[list[Entry]] = relationship(back_populates="account")
     owner_user: Mapped[User | None] = relationship(back_populates="accounts")
     entity: Mapped[Entity | None] = relationship(back_populates="accounts")
@@ -128,11 +162,15 @@ class AccountSnapshot(Base):
     __tablename__ = "account_snapshots"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    account_id: Mapped[str] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id: Mapped[str] = mapped_column(
+        ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     snapshot_at: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     balance_minor: Mapped[int] = mapped_column(Integer, nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
     account: Mapped[Account] = relationship(back_populates="snapshots")
 
@@ -140,18 +178,26 @@ class AccountSnapshot(Base):
 class EntryTag(Base):
     __tablename__ = "entry_tags"
 
-    entry_id: Mapped[str] = mapped_column(ForeignKey("entries.id", ondelete="CASCADE"), primary_key=True)
-    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
+    entry_id: Mapped[str] = mapped_column(
+        ForeignKey("entries.id", ondelete="CASCADE"), primary_key=True
+    )
+    tag_id: Mapped[int] = mapped_column(
+        ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True
+    )
 
 
 class Tag(Base):
     __tablename__ = "tags"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True, index=True
+    )
     color: Mapped[str | None] = mapped_column(String(20), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
     entries: Mapped[list[Entry]] = relationship(
         secondary="entry_tags",
@@ -163,9 +209,13 @@ class Entity(Base):
     __tablename__ = "entities"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(
+        String(255), nullable=False, unique=True, index=True
+    )
     category: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -188,11 +238,17 @@ class Taxonomy(Base):
     __tablename__ = "taxonomies"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    key: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
+    key: Mapped[str] = mapped_column(
+        String(100), nullable=False, unique=True, index=True
+    )
     applies_to: Mapped[str] = mapped_column(String(50), nullable=False)
-    cardinality: Mapped[str] = mapped_column(String(20), nullable=False, default="single")
+    cardinality: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="single"
+    )
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -213,7 +269,9 @@ class Taxonomy(Base):
 class TaxonomyTerm(Base):
     __tablename__ = "taxonomy_terms"
     __table_args__ = (
-        UniqueConstraint("taxonomy_id", "normalized_name", name="uq_taxonomy_terms_name"),
+        UniqueConstraint(
+            "taxonomy_id", "normalized_name", name="uq_taxonomy_terms_name"
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
@@ -223,14 +281,18 @@ class TaxonomyTerm(Base):
         index=True,
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
-    normalized_name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    normalized_name: Mapped[str] = mapped_column(
+        String(120), nullable=False, index=True
+    )
     parent_term_id: Mapped[str | None] = mapped_column(
         ForeignKey("taxonomy_terms.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -276,7 +338,9 @@ class TaxonomyAssignment(Base):
     subject_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     subject_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -292,8 +356,12 @@ class Entry(Base):
     __tablename__ = "entries"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    group_id: Mapped[str] = mapped_column(ForeignKey("entry_groups.id", ondelete="RESTRICT"), nullable=False, index=True)
-    account_id: Mapped[str | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True)
+    group_id: Mapped[str] = mapped_column(
+        ForeignKey("entry_groups.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    account_id: Mapped[str | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     kind: Mapped[EntryKind] = mapped_column(Enum(EntryKind), nullable=False, index=True)
     occurred_at: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -318,9 +386,15 @@ class Entry(Base):
     to_entity: Mapped[str | None] = mapped_column(String(255), nullable=True)
     owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
     markdown_body: Mapped[str | None] = mapped_column(Text, nullable=True)
-    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, index=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -361,18 +435,35 @@ class Entry(Base):
 class EntryLink(Base):
     __tablename__ = "entry_links"
     __table_args__ = (
-        UniqueConstraint("source_entry_id", "target_entry_id", "link_type", name="uq_entry_links_tuple"),
+        UniqueConstraint(
+            "source_entry_id",
+            "target_entry_id",
+            "link_type",
+            name="uq_entry_links_tuple",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    source_entry_id: Mapped[str] = mapped_column(ForeignKey("entries.id", ondelete="CASCADE"), nullable=False, index=True)
-    target_entry_id: Mapped[str] = mapped_column(ForeignKey("entries.id", ondelete="CASCADE"), nullable=False, index=True)
-    link_type: Mapped[LinkType] = mapped_column(Enum(LinkType), nullable=False, index=True)
+    source_entry_id: Mapped[str] = mapped_column(
+        ForeignKey("entries.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    target_entry_id: Mapped[str] = mapped_column(
+        ForeignKey("entries.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    link_type: Mapped[LinkType] = mapped_column(
+        Enum(LinkType), nullable=False, index=True
+    )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
-    source_entry: Mapped[Entry] = relationship(back_populates="outgoing_links", foreign_keys=[source_entry_id])
-    target_entry: Mapped[Entry] = relationship(back_populates="incoming_links", foreign_keys=[target_entry_id])
+    source_entry: Mapped[Entry] = relationship(
+        back_populates="outgoing_links", foreign_keys=[source_entry_id]
+    )
+    target_entry: Mapped[Entry] = relationship(
+        back_populates="incoming_links", foreign_keys=[target_entry_id]
+    )
 
 
 class AgentThread(Base):
@@ -380,7 +471,9 @@ class AgentThread(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -404,10 +497,16 @@ class AgentMessage(Base):
     __tablename__ = "agent_messages"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    thread_id: Mapped[str] = mapped_column(ForeignKey("agent_threads.id", ondelete="CASCADE"), nullable=False, index=True)
-    role: Mapped[AgentMessageRole] = mapped_column(Enum(AgentMessageRole), nullable=False, index=True)
+    thread_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_threads.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role: Mapped[AgentMessageRole] = mapped_column(
+        Enum(AgentMessageRole), nullable=False, index=True
+    )
     content_markdown: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
     thread: Mapped[AgentThread] = relationship(back_populates="messages")
     attachments: Mapped[list[AgentMessageAttachment]] = relationship(
@@ -429,11 +528,15 @@ class AgentMessageAttachment(Base):
     __tablename__ = "agent_message_attachments"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    message_id: Mapped[str] = mapped_column(ForeignKey("agent_messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_messages.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     mime_type: Mapped[str] = mapped_column(String(255), nullable=False)
     original_filename: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
     message: Mapped[AgentMessage] = relationship(back_populates="attachments")
 
@@ -442,7 +545,9 @@ class AgentRun(Base):
     __tablename__ = "agent_runs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    thread_id: Mapped[str] = mapped_column(ForeignKey("agent_threads.id", ondelete="CASCADE"), nullable=False, index=True)
+    thread_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_threads.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     user_message_id: Mapped[str] = mapped_column(
         ForeignKey("agent_messages.id", ondelete="CASCADE"),
         nullable=False,
@@ -453,7 +558,9 @@ class AgentRun(Base):
         nullable=True,
         index=True,
     )
-    status: Mapped[AgentRunStatus] = mapped_column(Enum(AgentRunStatus), nullable=False, index=True)
+    status: Mapped[AgentRunStatus] = mapped_column(
+        Enum(AgentRunStatus), nullable=False, index=True
+    )
     model_name: Mapped[str] = mapped_column(String(255), nullable=False)
     context_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -461,11 +568,17 @@ class AgentRun(Base):
     cache_read_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cache_write_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     thread: Mapped[AgentThread] = relationship(back_populates="runs")
-    user_message: Mapped[AgentMessage] = relationship(back_populates="user_runs", foreign_keys=[user_message_id])
+    user_message: Mapped[AgentMessage] = relationship(
+        back_populates="user_runs", foreign_keys=[user_message_id]
+    )
     assistant_message: Mapped[AgentMessage | None] = relationship(
         back_populates="assistant_runs",
         foreign_keys=[assistant_message_id],
@@ -491,16 +604,28 @@ class AgentToolCall(Base):
     __tablename__ = "agent_tool_calls"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True)
-    llm_tool_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    llm_tool_call_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
     tool_name: Mapped[str] = mapped_column(String(128), nullable=False)
     input_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     output_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     output_text: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[AgentToolCallStatus] = mapped_column(Enum(AgentToolCallStatus), nullable=False, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[AgentToolCallStatus] = mapped_column(
+        Enum(AgentToolCallStatus), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     run: Mapped[AgentRun] = relationship(back_populates="tool_calls")
     events: Mapped[list[AgentRunEvent]] = relationship(back_populates="tool_call")
@@ -509,21 +634,31 @@ class AgentToolCall(Base):
 class AgentRunEvent(Base):
     __tablename__ = "agent_run_events"
     __table_args__ = (
-        UniqueConstraint("run_id", "sequence_index", name="uq_agent_run_events_run_sequence"),
+        UniqueConstraint(
+            "run_id", "sequence_index", name="uq_agent_run_events_run_sequence"
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     sequence_index: Mapped[int] = mapped_column(Integer, nullable=False)
-    event_type: Mapped[AgentRunEventType] = mapped_column(Enum(AgentRunEventType), nullable=False, index=True)
-    source: Mapped[AgentRunEventSource | None] = mapped_column(Enum(AgentRunEventSource), nullable=True)
+    event_type: Mapped[AgentRunEventType] = mapped_column(
+        Enum(AgentRunEventType), nullable=False, index=True
+    )
+    source: Mapped[AgentRunEventSource | None] = mapped_column(
+        Enum(AgentRunEventSource), nullable=True
+    )
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
     tool_call_id: Mapped[str | None] = mapped_column(
         ForeignKey("agent_tool_calls.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
     run: Mapped[AgentRun] = relationship(back_populates="events")
     tool_call: Mapped[AgentToolCall | None] = relationship(back_populates="events")
@@ -533,8 +668,12 @@ class AgentChangeItem(Base):
     __tablename__ = "agent_change_items"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True)
-    change_type: Mapped[AgentChangeType] = mapped_column(Enum(AgentChangeType), nullable=False, index=True)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    change_type: Mapped[AgentChangeType] = mapped_column(
+        Enum(AgentChangeType), nullable=False, index=True
+    )
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     rationale_text: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[AgentChangeStatus] = mapped_column(
@@ -546,7 +685,9 @@ class AgentChangeItem(Base):
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     applied_resource_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     applied_resource_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utc_now,
@@ -571,9 +712,13 @@ class AgentReviewAction(Base):
         nullable=False,
         index=True,
     )
-    action: Mapped[AgentReviewActionType] = mapped_column(Enum(AgentReviewActionType), nullable=False, index=True)
+    action: Mapped[AgentReviewActionType] = mapped_column(
+        Enum(AgentReviewActionType), nullable=False, index=True
+    )
     actor: Mapped[str] = mapped_column(String(255), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
     change_item: Mapped[AgentChangeItem] = relationship(back_populates="review_actions")

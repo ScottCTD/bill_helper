@@ -65,6 +65,8 @@ Agent:
   - `agent_retry_backoff_multiplier`
   - `agent_max_image_size_bytes`
   - `agent_max_images_per_message`
+  - `agent_base_url` (optional custom provider endpoint, validated to prevent SSRF)
+  - `agent_api_key` (optional custom provider API key, never exposed in API responses)
 - `created_at`, `updated_at`
 
 Purpose:

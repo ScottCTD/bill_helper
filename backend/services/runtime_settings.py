@@ -75,10 +75,16 @@ class ResolvedRuntimeSettings:
     agent_retry_backoff_multiplier: float
     agent_max_image_size_bytes: int
     agent_max_images_per_message: int
+    agent_base_url: str | None
+    agent_api_key: str | None
 
 
 def get_runtime_settings_override(db: Session) -> RuntimeSettingsRow | None:
-    return db.scalar(select(RuntimeSettingsRow).where(RuntimeSettingsRow.scope == RUNTIME_SETTINGS_SCOPE))
+    return db.scalar(
+        select(RuntimeSettingsRow).where(
+            RuntimeSettingsRow.scope == RUNTIME_SETTINGS_SCOPE
+        )
+    )
 
 
 def _ensure_runtime_settings_override(db: Session) -> RuntimeSettingsRow:
@@ -91,9 +97,14 @@ def _ensure_runtime_settings_override(db: Session) -> RuntimeSettingsRow:
     return created
 
 
-def update_runtime_settings_override(db: Session, updates: dict[str, Any]) -> RuntimeSettingsRow:
+def update_runtime_settings_override(
+    db: Session, updates: dict[str, Any]
+) -> RuntimeSettingsRow:
     row = _ensure_runtime_settings_override(db)
     for field_name, value in updates.items():
+        # Skip masked sentinel to prevent accidental overwrites of API key
+        if field_name == "agent_api_key" and value == "***masked***":
+            continue
         setattr(row, field_name, value)
     db.add(row)
     db.flush()
@@ -105,24 +116,54 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
     override = get_runtime_settings_override(db)
 
     current_user_name = (
-        _normalize_optional_text(override.current_user_name) if override is not None else None
-    ) or _normalize_optional_text(defaults.current_user_name) or "admin"
-    user_memory = _normalize_optional_multiline_text(override.user_memory) if override is not None else None
+        (
+            _normalize_optional_text(override.current_user_name)
+            if override is not None
+            else None
+        )
+        or _normalize_optional_text(defaults.current_user_name)
+        or "admin"
+    )
+    user_memory = (
+        _normalize_optional_multiline_text(override.user_memory)
+        if override is not None
+        else None
+    )
     default_currency_code = (
-        _normalize_optional_currency(override.default_currency_code) if override is not None else None
-    ) or _normalize_optional_currency(defaults.default_currency_code) or "CAD"
+        (
+            _normalize_optional_currency(override.default_currency_code)
+            if override is not None
+            else None
+        )
+        or _normalize_optional_currency(defaults.default_currency_code)
+        or "CAD"
+    )
     dashboard_currency_code = (
-        _normalize_optional_currency(override.dashboard_currency_code) if override is not None else None
-    ) or _normalize_optional_currency(defaults.dashboard_currency_code) or "CAD"
+        (
+            _normalize_optional_currency(override.dashboard_currency_code)
+            if override is not None
+            else None
+        )
+        or _normalize_optional_currency(defaults.dashboard_currency_code)
+        or "CAD"
+    )
     langfuse_public_key = _normalize_optional_secret(defaults.langfuse_public_key)
     langfuse_secret_key = _normalize_optional_secret(defaults.langfuse_secret_key)
     langfuse_host = _normalize_optional_text(defaults.langfuse_host)
     agent_model = (
-        _normalize_optional_text(override.agent_model) if override is not None else None
-    ) or _normalize_optional_text(defaults.agent_model) or "openrouter/qwen/qwen3.5-27b"
+        (
+            _normalize_optional_text(override.agent_model)
+            if override is not None
+            else None
+        )
+        or _normalize_optional_text(defaults.agent_model)
+        or "openrouter/qwen/qwen3.5-27b"
+    )
 
     agent_max_steps = _sanitize_int(
-        override.agent_max_steps if override and override.agent_max_steps is not None else defaults.agent_max_steps,
+        override.agent_max_steps
+        if override and override.agent_max_steps is not None
+        else defaults.agent_max_steps,
         minimum=1,
         fallback=defaults.agent_max_steps,
     )
@@ -168,6 +209,12 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         minimum=1,
         fallback=defaults.agent_max_images_per_message,
     )
+    agent_base_url = (
+        _normalize_optional_text(override.agent_base_url if override else None)
+    ) or _normalize_optional_text(defaults.agent_base_url)
+    agent_api_key = (
+        _normalize_optional_secret(override.agent_api_key if override else None)
+    ) or _normalize_optional_secret(defaults.agent_api_key)
 
     return ResolvedRuntimeSettings(
         api_prefix=defaults.api_prefix,
@@ -186,6 +233,8 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         agent_retry_backoff_multiplier=agent_retry_backoff_multiplier,
         agent_max_image_size_bytes=agent_max_image_size_bytes,
         agent_max_images_per_message=agent_max_images_per_message,
+        agent_base_url=agent_base_url,
+        agent_api_key=agent_api_key,
     )
 
 
@@ -206,18 +255,50 @@ def build_runtime_settings_read(db: Session) -> RuntimeSettingsRead:
         agent_retry_backoff_multiplier=resolved.agent_retry_backoff_multiplier,
         agent_max_image_size_bytes=resolved.agent_max_image_size_bytes,
         agent_max_images_per_message=resolved.agent_max_images_per_message,
+        agent_base_url=resolved.agent_base_url,
+        agent_api_key_configured=bool(resolved.agent_api_key),
         overrides=RuntimeSettingsOverridesRead(
-            current_user_name=_normalize_optional_text(override.current_user_name) if override else None,
-            user_memory=_normalize_optional_multiline_text(override.user_memory) if override else None,
-            default_currency_code=_normalize_optional_currency(override.default_currency_code) if override else None,
-            dashboard_currency_code=_normalize_optional_currency(override.dashboard_currency_code) if override else None,
-            agent_model=_normalize_optional_text(override.agent_model) if override else None,
+            current_user_name=_normalize_optional_text(override.current_user_name)
+            if override
+            else None,
+            user_memory=_normalize_optional_multiline_text(override.user_memory)
+            if override
+            else None,
+            default_currency_code=_normalize_optional_currency(
+                override.default_currency_code
+            )
+            if override
+            else None,
+            dashboard_currency_code=_normalize_optional_currency(
+                override.dashboard_currency_code
+            )
+            if override
+            else None,
+            agent_model=_normalize_optional_text(override.agent_model)
+            if override
+            else None,
             agent_max_steps=override.agent_max_steps if override else None,
-            agent_retry_max_attempts=override.agent_retry_max_attempts if override else None,
-            agent_retry_initial_wait_seconds=override.agent_retry_initial_wait_seconds if override else None,
-            agent_retry_max_wait_seconds=override.agent_retry_max_wait_seconds if override else None,
-            agent_retry_backoff_multiplier=override.agent_retry_backoff_multiplier if override else None,
-            agent_max_image_size_bytes=override.agent_max_image_size_bytes if override else None,
-            agent_max_images_per_message=override.agent_max_images_per_message if override else None,
+            agent_retry_max_attempts=override.agent_retry_max_attempts
+            if override
+            else None,
+            agent_retry_initial_wait_seconds=override.agent_retry_initial_wait_seconds
+            if override
+            else None,
+            agent_retry_max_wait_seconds=override.agent_retry_max_wait_seconds
+            if override
+            else None,
+            agent_retry_backoff_multiplier=override.agent_retry_backoff_multiplier
+            if override
+            else None,
+            agent_max_image_size_bytes=override.agent_max_image_size_bytes
+            if override
+            else None,
+            agent_max_images_per_message=override.agent_max_images_per_message
+            if override
+            else None,
+            agent_base_url=_normalize_optional_text(override.agent_base_url)
+            if override
+            else None,
+            agent_api_key_configured=bool(override and override.agent_api_key),
         ),
     )

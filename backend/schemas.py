@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from ipaddress import ip_address
 from typing import Any
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -394,6 +396,8 @@ class RuntimeSettingsOverridesRead(BaseModel):
     agent_retry_backoff_multiplier: float | None = None
     agent_max_image_size_bytes: int | None = None
     agent_max_images_per_message: int | None = None
+    agent_base_url: str | None = None
+    agent_api_key_configured: bool = False
 
 
 class RuntimeSettingsRead(BaseModel):
@@ -409,6 +413,8 @@ class RuntimeSettingsRead(BaseModel):
     agent_retry_backoff_multiplier: float
     agent_max_image_size_bytes: int
     agent_max_images_per_message: int
+    agent_base_url: str | None = None
+    agent_api_key_configured: bool = False
     overrides: RuntimeSettingsOverridesRead
 
 
@@ -416,15 +422,21 @@ class RuntimeSettingsUpdate(BaseModel):
     current_user_name: str | None = Field(default=None, max_length=255)
     user_memory: str | None = Field(default=None, max_length=4000)
     default_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
-    dashboard_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
+    dashboard_currency_code: str | None = Field(
+        default=None, min_length=3, max_length=3
+    )
     agent_model: str | None = Field(default=None, max_length=255)
     agent_max_steps: int | None = Field(default=None, ge=1, le=500)
     agent_retry_max_attempts: int | None = Field(default=None, ge=1, le=10)
-    agent_retry_initial_wait_seconds: float | None = Field(default=None, ge=0.0, le=30.0)
+    agent_retry_initial_wait_seconds: float | None = Field(
+        default=None, ge=0.0, le=30.0
+    )
     agent_retry_max_wait_seconds: float | None = Field(default=None, ge=0.0, le=120.0)
     agent_retry_backoff_multiplier: float | None = Field(default=None, ge=1.0, le=10.0)
     agent_max_image_size_bytes: int | None = Field(default=None, ge=1024, le=104857600)
     agent_max_images_per_message: int | None = Field(default=None, ge=1, le=12)
+    agent_base_url: str | None = Field(default=None, max_length=500)
+    agent_api_key: str | None = Field(default=None, max_length=500)
 
     @field_validator(
         "current_user_name",
@@ -454,6 +466,55 @@ class RuntimeSettingsUpdate(BaseModel):
             return None
         normalized = " ".join(str(value).split()).strip().upper()
         return normalized or None
+
+    @field_validator("agent_base_url", mode="before")
+    @classmethod
+    def validate_agent_base_url(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(str(value).split()).strip()
+        if not normalized:
+            return None
+        # Validate URL format
+        parsed = urlparse(normalized)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError("agent_base_url must use http or https scheme")
+        if not parsed.netloc:
+            raise ValueError("agent_base_url must have a valid host")
+        hostname = (parsed.hostname or "").strip().lower()
+        if not hostname:
+            raise ValueError("agent_base_url must have a valid host")
+        if hostname == "localhost" or hostname.endswith(".localhost"):
+            raise ValueError("agent_base_url cannot point to localhost hosts")
+
+        # Block unsafe IP literals to reduce SSRF risk.
+        try:
+            host_ip = ip_address(hostname)
+        except ValueError:
+            return normalized
+        if (
+            host_ip.is_private
+            or host_ip.is_loopback
+            or host_ip.is_link_local
+            or host_ip.is_reserved
+            or host_ip.is_multicast
+            or host_ip.is_unspecified
+        ):
+            raise ValueError("agent_base_url cannot point to non-public IP addresses")
+        return normalized
+
+    @field_validator("agent_api_key", mode="before")
+    @classmethod
+    def validate_agent_api_key(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        if not normalized:
+            return None
+        # Reject masked sentinel to prevent accidental overwrites
+        if normalized == "***masked***":
+            raise ValueError("agent_api_key cannot be the masked sentinel value")
+        return normalized
 
 
 class AgentThreadCreate(BaseModel):

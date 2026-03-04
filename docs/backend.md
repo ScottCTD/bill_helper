@@ -49,6 +49,8 @@ Agent settings:
 - `AGENT_MAX_STEPS` (default `100`)
 - `AGENT_MAX_IMAGE_SIZE_BYTES` (default `5MB`; per-attachment size limit for image/PDF agent uploads)
 - `AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`; max image/PDF uploads per message)
+- `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL` (optional; custom API endpoint for LiteLLM)
+- `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY` (optional; custom API key for LiteLLM)
 - runtime pricing uses LiteLLM model-cost mapping (`litellm`) and refreshes cost map from LiteLLM source with local fallback
 
 Runtime override behavior:
@@ -56,6 +58,7 @@ Runtime override behavior:
 - `runtime_settings` table stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`, including `user_memory`
 - effective runtime settings are resolved as `override -> env default` where applicable
 - `user_memory` is an optional DB-only text field used for persistent per-user agent context
+- `agent_base_url` overrides are validated to allow only `http`/`https` URLs and block localhost domains plus non-public IP literals (loopback/private/link-local/reserved/multicast/unspecified)
 
 Behavior notes:
 
@@ -181,6 +184,7 @@ Agent services:
 - `backend/services/agent/model_client.py`
   - LiteLLM client adapter with normalized model error handling
   - normalizes usage metadata from model responses into the runtime contract (`input/output/cache_*` tokens), including provider-specific cache field variants (`cached_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`)
+  - supports custom `base_url` and `api_key` configuration for LiteLLM, enabling use of custom API endpoints and credentials
   - for prompt-caching-capable models, injects explicit LiteLLM `cache_control_injection_points` anchored to system context + latest user turn (negative message index) so tool-loop steps can reuse stable prompt prefixes
   - supports streamed model responses (`complete_stream`) that emit incremental text deltas and final assembled tool-call/message payload
   - applies configured retry policy to stream failures (including mid-stream transport failures)
@@ -305,6 +309,7 @@ Settings router:
 - `0020_add_agent_message_attachment_original_filename`
 - `0021_add_agent_run_context_tokens`
 - `0022_agent_run_events_and_tool_lifecycle`
+- `0023_add_agent_provider_config`
 
 Commands:
 
@@ -422,6 +427,7 @@ Current baseline for `backend/tests/test_agent.py`: `70 passed`.
 
 - no auth/permissions; actor is current configured user string
 - runtime settings are global to the app instance (no per-authenticated-user isolation yet)
+- runtime `agent_api_key` overrides are stored as plaintext in local DB for this prototype; no application-layer encryption-at-rest yet
 - model provider routing is LiteLLM-based using provider env credentials
 - OCR fallback requires a local `tesseract` executable; without it, image-only PDFs still rely on rendered page images for vision-capable models and otherwise degrade to a no-content PDF note
 - no websocket transport; streaming uses SSE only

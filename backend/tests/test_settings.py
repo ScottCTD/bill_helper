@@ -96,6 +96,41 @@ def test_settings_model_override_and_clear(client):
     assert clear_payload["overrides"]["agent_model"] is None
 
 
+def test_settings_agent_provider_config_masks_api_key_in_response(client):
+    response = client.patch(
+        "/api/v1/settings",
+        json={
+            "agent_base_url": "https://api.example.com/v1",
+            "agent_api_key": "sk-test-provider-key",
+        },
+    )
+    response.raise_for_status()
+    payload = response.json()
+
+    assert payload["agent_base_url"] == "https://api.example.com/v1"
+    assert payload["agent_api_key_configured"] is True
+    assert payload["overrides"]["agent_base_url"] == "https://api.example.com/v1"
+    assert payload["overrides"]["agent_api_key_configured"] is True
+    assert "agent_api_key" not in payload
+    assert "agent_api_key" not in payload["overrides"]
+
+
+def test_settings_agent_base_url_rejects_non_public_ip_hosts(client):
+    blocked = [
+        "http://127.0.0.2/v1",
+        "http://10.0.0.5/v1",
+        "http://[::1]:8080/v1",
+    ]
+    for value in blocked:
+        response = client.patch("/api/v1/settings", json={"agent_base_url": value})
+        assert response.status_code == 422, value
+
+
+def test_settings_agent_api_key_rejects_masked_sentinel(client):
+    response = client.patch("/api/v1/settings", json={"agent_api_key": "***masked***"})
+    assert response.status_code == 422
+
+
 def test_settings_user_memory_override_and_clear(client):
     memory_text = "Prefers terse answers.\nUses CAD unless stated otherwise."
     set_override = client.patch("/api/v1/settings", json={"user_memory": memory_text})
