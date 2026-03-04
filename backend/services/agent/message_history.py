@@ -30,6 +30,12 @@ MAX_ACCOUNT_MARKDOWN_CONTEXT_CHARS = 1_500
 MAX_ACCOUNT_MARKDOWN_CONTEXT_LINES = 40
 MAX_ACCOUNT_IMAGE_DATA_URL_CHARS = 120
 MARKDOWN_IMAGE_DATA_URL_PATTERN = re.compile(r"!\[([^\]]*)\]\((data:image[^)]+)\)", re.IGNORECASE)
+FORCED_VISION_MODEL_ALIASES = frozenset(
+    {
+        "openrouter/qwen/qwen3.5-27b",
+        "qwen/qwen3.5-27b",
+    }
+)
 
 
 def attachment_to_data_url(file_path: str, mime_type: str) -> str | None:
@@ -62,6 +68,8 @@ def _model_supports_vision(model_name: str) -> bool:
                 return True
         except Exception:
             continue
+    if any(candidate.lower() in FORCED_VISION_MODEL_ALIASES for candidate in candidates):
+        return True
     return False
 
 

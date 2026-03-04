@@ -28,6 +28,7 @@ Historical implementation docs:
 - `todo/*.md`: active/planned proposal notes that are not source-of-truth behavior docs.
 - `todo/account_markdown_notes.md`: proposal for adding account-level markdown notes editing (parity with entries).
 - `todo/agent_review_workflow_frontend_refactor.md`: proposal for pending-proposal editing workflow and review UX/tool-call transparency refactor.
+- `todo/ocr_fallback_for_redacted_pdfs.md`: proposal for OCR recovery when redacted/exported PDFs remain viewable in Preview but lose a machine-readable text layer for backend extraction.
 - `completed/entry_group_graph_workspace.md`: completed implementation plan for graph-first entry group workspace where group CRUD intent is handled through link operations (no first-class group CRUD).
 
 ## How To Use

@@ -164,6 +164,7 @@ Agent services:
   - converts persisted thread history and attachments into model-ready messages
   - parses PDF attachments with PyMuPDF, normalizes text per line (trim + collapse internal whitespace), and appends extracted text into the user message content passed to the model
   - checks LiteLLM model vision capability and, when supported, renders uploaded PDF pages to PNG data URLs (one page per image part)
+  - falls back to a local allow-list for known OpenRouter vision-model metadata gaps (currently `openrouter/qwen/qwen3.5-27b`) so PDF page-image inputs still reach multimodal models
   - builds account summaries for current user and injects them into the system prompt context
   - includes account-level markdown notes in current-user context (`notes_markdown`) with truncation safeguards for large notes/data-url images
   - prepends reviewed proposal outcomes to the latest user message before user feedback text

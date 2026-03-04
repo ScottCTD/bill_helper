@@ -224,6 +224,15 @@ def test_default_agent_model_is_openrouter_qwen_qwen3_5_27b():
     assert get_settings().agent_model == "openrouter/qwen/qwen3.5-27b"
 
 
+def test_model_supports_vision_has_manual_override_for_openrouter_qwen_qwen3_5_27b(monkeypatch):
+    from backend.services.agent import message_history
+
+    monkeypatch.setattr(message_history.litellm, "supports_vision", lambda _model: False)
+
+    assert message_history._model_supports_vision("openrouter/qwen/qwen3.5-27b") is True
+    assert message_history._model_supports_vision("qwen/qwen3.5-27b") is True
+
+
 def test_pdf_line_normalization_collapses_internal_whitespace_and_trims_edges():
     from backend.services.agent.message_history import _normalize_pdf_text_lines
 
