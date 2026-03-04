@@ -315,6 +315,7 @@ def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThr
         .where(AgentThread.id == thread_id)
         .options(
             selectinload(AgentThread.messages).selectinload(AgentMessage.attachments),
+            selectinload(AgentThread.runs).selectinload(AgentRun.events),
             selectinload(AgentThread.runs).selectinload(AgentRun.tool_calls),
             selectinload(AgentThread.runs)
             .selectinload(AgentRun.change_items)
@@ -398,6 +399,7 @@ def get_run(run_id: str, db: Session = Depends(get_db)) -> AgentRunRead:
         select(AgentRun)
         .where(AgentRun.id == run_id)
         .options(
+            selectinload(AgentRun.events),
             selectinload(AgentRun.tool_calls),
             selectinload(AgentRun.change_items).selectinload(AgentChangeItem.review_actions),
         )

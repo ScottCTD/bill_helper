@@ -1,14 +1,30 @@
-import type { AgentChangeItem, AgentRun, AgentToolCall } from "../../lib/types";
+import type { AgentChangeItem, AgentRun, AgentRunEvent, AgentToolCall } from "../../lib/types";
 
 export function buildToolCall(overrides: Partial<AgentToolCall> = {}): AgentToolCall {
   return {
     id: overrides.id ?? "tool-call-1",
     run_id: overrides.run_id ?? "run-1",
+    llm_tool_call_id: overrides.llm_tool_call_id !== undefined ? overrides.llm_tool_call_id : "provider-call-1",
     tool_name: overrides.tool_name ?? "list_entries",
     input_json: overrides.input_json ?? {},
     output_json: overrides.output_json ?? {},
     output_text: overrides.output_text ?? "OK\nsummary: test",
     status: overrides.status ?? "ok",
+    created_at: overrides.created_at ?? "2026-02-15T10:00:00Z",
+    started_at: overrides.started_at !== undefined ? overrides.started_at : "2026-02-15T10:00:00Z",
+    completed_at: overrides.completed_at !== undefined ? overrides.completed_at : "2026-02-15T10:00:01Z"
+  };
+}
+
+export function buildRunEvent(overrides: Partial<AgentRunEvent> = {}): AgentRunEvent {
+  return {
+    id: overrides.id ?? "run-event-1",
+    run_id: overrides.run_id ?? "run-1",
+    sequence_index: overrides.sequence_index ?? 1,
+    event_type: overrides.event_type ?? "run_started",
+    source: overrides.source !== undefined ? overrides.source : null,
+    message: overrides.message !== undefined ? overrides.message : null,
+    tool_call_id: overrides.tool_call_id !== undefined ? overrides.tool_call_id : null,
     created_at: overrides.created_at ?? "2026-02-15T10:00:00Z"
   };
 }
@@ -49,6 +65,7 @@ export function buildRun(overrides: Partial<AgentRun> = {}): AgentRun {
     error_text: overrides.error_text !== undefined ? overrides.error_text : null,
     created_at: overrides.created_at ?? "2026-02-15T10:00:00Z",
     completed_at: overrides.completed_at !== undefined ? overrides.completed_at : "2026-02-15T10:00:01Z",
+    events: overrides.events ?? [],
     tool_calls: overrides.tool_calls ?? [],
     change_items: overrides.change_items ?? []
   };

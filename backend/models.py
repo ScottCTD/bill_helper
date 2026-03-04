@@ -24,6 +24,8 @@ from backend.enums import (
     AgentChangeStatus,
     AgentChangeType,
     AgentMessageRole,
+    AgentRunEventSource,
+    AgentRunEventType,
     AgentReviewActionType,
     AgentRunStatus,
     AgentToolCallStatus,
@@ -473,6 +475,11 @@ class AgentRun(Base):
         cascade="all, delete-orphan",
         order_by="AgentToolCall.created_at",
     )
+    events: Mapped[list[AgentRunEvent]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="AgentRunEvent.sequence_index",
+    )
     change_items: Mapped[list[AgentChangeItem]] = relationship(
         back_populates="run",
         cascade="all, delete-orphan",
@@ -485,14 +492,41 @@ class AgentToolCall(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    llm_tool_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     tool_name: Mapped[str] = mapped_column(String(128), nullable=False)
     input_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     output_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     output_text: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[AgentToolCallStatus] = mapped_column(Enum(AgentToolCallStatus), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     run: Mapped[AgentRun] = relationship(back_populates="tool_calls")
+    events: Mapped[list[AgentRunEvent]] = relationship(back_populates="tool_call")
+
+
+class AgentRunEvent(Base):
+    __tablename__ = "agent_run_events"
+    __table_args__ = (
+        UniqueConstraint("run_id", "sequence_index", name="uq_agent_run_events_run_sequence"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    sequence_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[AgentRunEventType] = mapped_column(Enum(AgentRunEventType), nullable=False, index=True)
+    source: Mapped[AgentRunEventSource | None] = mapped_column(Enum(AgentRunEventSource), nullable=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tool_call_id: Mapped[str | None] = mapped_column(
+        ForeignKey("agent_tool_calls.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    run: Mapped[AgentRun] = relationship(back_populates="events")
+    tool_call: Mapped[AgentToolCall | None] = relationship(back_populates="events")
 
 
 class AgentChangeItem(Base):

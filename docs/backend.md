@@ -142,7 +142,7 @@ Agent services:
   - executes one run per user message
   - orchestrates bounded tool-calling loop and run lifecycle persistence
   - supports both non-stream execution and SSE execution (`run_existing_agent_run_stream`) for incremental text delivery
-  - emits `reasoning_update` SSE events when `send_intermediate_update` tool calls succeed, and when a tool-calling model step includes assistant text that should be treated as the same user-visible progress signal
+  - persists a canonical ordered `agent_run_events` timeline (`run_started`, `reasoning_update`, per-tool lifecycle, terminal status) and streams those rows as `run_event` SSE messages
   - supports manual run interruption (`interrupt_agent_run`) and cooperative stop checks between model/tool steps
   - computes best-effort `context_tokens` snapshots from the model-visible prompt payload (messages + tool schemas) when a run is created and as tool-loop messages are appended
   - aggregates model usage metrics across all model calls in a run and persists totals on `agent_runs`
@@ -304,6 +304,7 @@ Settings router:
 - `0019_add_transfer_entry_kind`
 - `0020_add_agent_message_attachment_original_filename`
 - `0021_add_agent_run_context_tokens`
+- `0022_agent_run_events_and_tool_lifecycle`
 
 Commands:
 
@@ -339,7 +340,7 @@ Test modules:
 - run usage token persistence (`input/output/cache read/cache write`) including multi-step aggregation and null-safe fallback
 - run API cost fields (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
 - asynchronous run start behavior (`POST /agent/threads/{thread_id}/messages` returns `running` while execution continues)
-- SSE agent message behavior (`POST /agent/threads/{thread_id}/messages/stream`) with incremental `text_delta` events, `reasoning_update` events, and terminal completion/failure events
+- SSE agent message behavior (`POST /agent/threads/{thread_id}/messages/stream`) with incremental `text_delta` events plus persisted `run_event` timeline rows
 - run interruption endpoint behavior (`POST /agent/runs/{run_id}/interrupt`) and no-op semantics for already-terminal runs
 - interrupted-run context injection into the next user turn prompt input
 - observability context propagation for stable per-thread session grouping
@@ -369,13 +370,14 @@ Current baseline for `backend/tests/test_agent.py`: `70 passed`.
 - non-stream sends execute in a background thread; `POST /agent/threads/{thread_id}/messages` returns immediately with `status=running`
 - stream sends execute in-request and emit SSE events from `POST /agent/threads/{thread_id}/messages/stream`; disconnect fallback resumes the run in a background thread
 - `DELETE /api/v1/agent/threads/{thread_id}` returns `409` while that thread has any running run
-- streamed runs may emit `reasoning_update` events in addition to `tool_call` and `text_delta` events, enabling lightweight progress UI before final message persistence
-- if a model emits assistant text in the same step as tool calls, runtime persists that text as a synthetic `send_intermediate_update` tool call (`output_json.message`, `output_json.source="assistant_content"`) so polling/history and SSE both render it as progress instead of a final assistant message
+- streamed runs emit `run_event` rows for run start/finish, reasoning updates, and per-tool lifecycle transitions; `text_delta` remains the only ephemeral stream event
+- `send_intermediate_update` is no longer stored in `agent_tool_calls`; it is persisted only as an `agent_run_events.reasoning_update` row
+- if a model emits assistant text in the same step as tool calls, runtime persists that text as a `reasoning_update` run event with `source="assistant_content"` so history and SSE render it as progress instead of a final assistant message
 - interrupted runs are marked `failed` with user-facing interruption reason text
 - the next user turn after an interruption carries an explicit interruption note in model input (while preserving normal conversation history)
 - model requests include observability payload (`user`, `session_id=thread.id`, trace metadata) with LiteLLM metadata mapping for Langfuse grouping; one trace per thread (`trace_id=thread.id`), per-step generation names (`agent_turn_run_N_step_M`), and `existing_trace_id` for continuation steps or subsequent runs in the same thread so Langfuse displays one trace per conversation
-- each run includes persisted tool traces and change-item audit data
-- tool calls are committed incrementally per tool call to support near-real-time polling visibility
+- each run snapshot includes persisted `events`, lifecycle-aware `tool_calls`, and change-item audit data
+- non-intermediate tool rows are created in `queued` state as soon as the model turn resolves, before tool execution begins
 - persisted tool calls now store both structured payload (`output_json`) and exact model-visible text (`output_text`)
 - attachment-bearing user turns now reach the model as ordered content parts instead of one concatenated text blob: attachment-derived text first, then attachment images, then the user prompt
 - when native PyMuPDF extraction fails for a PDF, the backend attempts local Tesseract OCR before falling back to a no-content note
@@ -423,7 +425,7 @@ Current baseline for `backend/tests/test_agent.py`: `70 passed`.
 - model provider routing is LiteLLM-based using provider env credentials
 - OCR fallback requires a local `tesseract` executable; without it, image-only PDFs still rely on rendered page images for vision-capable models and otherwise degrade to a no-content PDF note
 - no websocket transport; streaming uses SSE only
-- polling is still required for full run snapshots/tool payload details outside streamed deltas
+- run snapshots are still useful for reconciliation/recovery, but healthy live activity no longer depends on rapid polling because the SSE stream carries the ordered run-event timeline
 - no autonomous/background agent runs
 - update/delete proposal types are supported and require review approval before apply
 - taxonomy assignment storage uses string `subject_id` and does not enforce cross-table FK integrity for subject rows

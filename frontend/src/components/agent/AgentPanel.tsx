@@ -15,6 +15,7 @@ import {
   approveAgentChangeItem,
   createAgentThread,
   deleteAgentThread,
+  getAgentRun,
   getAgentThread,
   interruptAgentRun,
   listAgentThreads,
@@ -23,12 +24,20 @@ import {
 } from "../../lib/api";
 import { invalidateAgentThreadData, invalidateEntryReadModels } from "../../lib/queryInvalidation";
 import { queryKeys } from "../../lib/queryKeys";
-import type { AgentChangeItem, AgentStreamEvent, AgentThreadDetail, AgentThreadSummary } from "../../lib/types";
+import type {
+  AgentChangeItem,
+  AgentRun,
+  AgentRunEvent,
+  AgentStreamEvent,
+  AgentThreadDetail,
+  AgentThreadSummary,
+  AgentToolCall
+} from "../../lib/types";
 import {
-  appendPendingReasoningUpdateToActivity,
-  appendPendingToolCallToActivity,
   buildThreadUsageTotals,
+  mergeRunToolCalls,
   runsByAssistantMessage,
+  runsWithoutAssistantMessageByUserMessage,
   runsWithoutAssistantMessage,
   sortRunsByCreatedAt
 } from "./activity";
@@ -59,7 +68,11 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string>("");
   const [draftMessage, setDraftMessage] = useState("");
   const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [isSendPolling, setIsSendPolling] = useState(false);
+  const [isStreamHealthy, setIsStreamHealthy] = useState(false);
+  const [activeStreamRunId, setActiveStreamRunId] = useState<string | null>(null);
+  const [streamedTextByRunId, setStreamedTextByRunId] = useState<Record<string, string>>({});
+  const [optimisticRunEventsByRunId, setOptimisticRunEventsByRunId] = useState<Record<string, AgentRunEvent[]>>({});
+  const [optimisticToolCallsByRunId, setOptimisticToolCallsByRunId] = useState<Record<string, AgentToolCall[]>>({});
   const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null);
   const [pendingAssistantMessage, setPendingAssistantMessage] = useState<PendingAssistantMessage | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -68,6 +81,9 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const { isAtBottom, scrollToBottom, snapToBottom } = useStickToBottom(timelineScrollRef);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
+  const threadRunsRef = useRef<AgentRun[]>([]);
+  const optimisticToolCallsRef = useRef<Record<string, AgentToolCall[]>>({});
+  const hydratingToolCallRunsRef = useRef<Set<string>>(new Set());
   const [isThreadPanelOpen, setIsThreadPanelOpen] = useState(true);
   const { panelWidth, handleMouseDown: handleResizeMouseDown } = useResizablePanel();
   const toggleThreadPanel = useCallback(() => setIsThreadPanelOpen((v) => !v), []);
@@ -116,7 +132,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     refetchInterval: (query) => {
       const detail = query.state.data as AgentThreadDetail | undefined;
       const hasRunningRun = (detail?.runs ?? []).some((run) => run.status === "running");
-      return hasRunningRun || isSendPolling ? 400 : false;
+      return hasRunningRun && !isStreamHealthy ? 5000 : false;
     },
     refetchIntervalInBackground: true
   });
@@ -136,6 +152,14 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
 
   const threadMessages = threadQuery.data?.messages;
   const lastSnappedThreadRef = useRef("");
+
+  useEffect(() => {
+    threadRunsRef.current = threadQuery.data?.runs ?? [];
+  }, [threadQuery.data?.runs]);
+
+  useEffect(() => {
+    optimisticToolCallsRef.current = optimisticToolCallsByRunId;
+  }, [optimisticToolCallsByRunId]);
 
   // Snap to bottom when messages first arrive for a new thread
   useEffect(() => {
@@ -174,6 +198,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       setReviewRunId(null);
       setPendingUserMessage(null);
       setPendingAssistantMessage(null);
+      setOptimisticToolCallsByRunId({});
       setActionError(null);
       invalidateAgentThreadData(queryClient);
     }
@@ -183,7 +208,11 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     mutationFn: interruptAgentRun,
     onSuccess: () => {
       invalidateAgentThreadData(queryClient, selectedThreadId || undefined);
-      setIsSendPolling(false);
+      setIsStreamHealthy(false);
+      setActiveStreamRunId(null);
+      setStreamedTextByRunId({});
+      setOptimisticRunEventsByRunId({});
+      setOptimisticToolCallsByRunId({});
       setPendingAssistantMessage(null);
       setActionError(null);
     }
@@ -215,6 +244,10 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
 
   const runsByAssistantMessageId = useMemo(() => runsByAssistantMessage(threadQuery.data), [threadQuery.data]);
   const pendingAssistantRuns = useMemo(() => runsWithoutAssistantMessage(threadQuery.data), [threadQuery.data]);
+  const pendingAssistantRunsByUserMessageId = useMemo(
+    () => runsWithoutAssistantMessageByUserMessage(threadQuery.data),
+    [threadQuery.data]
+  );
   const hasActiveRun = useMemo(
     () => (threadQuery.data?.runs ?? []).some((run) => run.status === "running"),
     [threadQuery.data?.runs]
@@ -240,18 +273,30 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     if (pendingAssistantMessage.threadId !== selectedThreadId) {
       return null;
     }
-    if (pendingAssistantMessage.runId) {
-      return pendingAssistantRuns.find((run) => run.id === pendingAssistantMessage.runId) ?? null;
+    if (activeStreamRunId) {
+      return (threadQuery.data?.runs ?? []).find((run) => run.id === activeStreamRunId) ?? null;
     }
     const runningRun = [...pendingAssistantRuns].reverse().find((run) => run.status === "running");
     return runningRun ?? null;
-  }, [pendingAssistantMessage, pendingAssistantRuns, selectedThreadId]);
-  const pendingOptimisticActivity = useMemo(() => {
-    if (!pendingAssistantMessage || pendingAssistantMessage.threadId !== selectedThreadId) {
+  }, [activeStreamRunId, pendingAssistantMessage, pendingAssistantRuns, selectedThreadId, threadQuery.data?.runs]);
+  const activeStreamText = useMemo(() => {
+    if (!activeStreamRunId) {
+      return "";
+    }
+    return streamedTextByRunId[activeStreamRunId] ?? "";
+  }, [activeStreamRunId, streamedTextByRunId]);
+  const activeOptimisticEvents = useMemo(() => {
+    if (!activeStreamRunId) {
       return [];
     }
-    return pendingAssistantMessage.activity;
-  }, [pendingAssistantMessage, selectedThreadId]);
+    return optimisticRunEventsByRunId[activeStreamRunId] ?? [];
+  }, [activeStreamRunId, optimisticRunEventsByRunId]);
+  const activeOptimisticToolCalls = useMemo(() => {
+    if (!activeStreamRunId) {
+      return [];
+    }
+    return optimisticToolCallsByRunId[activeStreamRunId] ?? [];
+  }, [activeStreamRunId, optimisticToolCallsByRunId]);
   const selectedRunForReview = useMemo(() => {
     if (!reviewRunId) {
       return null;
@@ -306,6 +351,11 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       return;
     }
     setPendingAssistantMessage(null);
+    setActiveStreamRunId(null);
+    setStreamedTextByRunId({});
+    setOptimisticRunEventsByRunId({});
+    setOptimisticToolCallsByRunId({});
+    setIsStreamHealthy(false);
   }, [pendingAssistantMessage, selectedThreadId, threadQuery.data?.messages]);
 
   const activeModelName = useMemo(() => {
@@ -335,6 +385,11 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   useEffect(() => {
     setReviewRunId(null);
     setPendingAssistantMessage(null);
+    setActiveStreamRunId(null);
+    setStreamedTextByRunId({});
+    setOptimisticRunEventsByRunId({});
+    setOptimisticToolCallsByRunId({});
+    setIsStreamHealthy(false);
   }, [selectedThreadId]);
 
   useEffect(() => {
@@ -346,6 +401,11 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
     if (!isRunInFlight && !pendingUserMessage) {
       setPendingAssistantMessage(null);
+      setActiveStreamRunId(null);
+      setStreamedTextByRunId({});
+      setOptimisticRunEventsByRunId({});
+      setOptimisticToolCallsByRunId({});
+      setIsStreamHealthy(false);
     }
   }, [isRunInFlight, pendingAssistantMessage, pendingUserMessage, selectedThreadId]);
 
@@ -395,73 +455,86 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     return created.id;
   }
 
-  function handleAgentStreamEvent(threadId: string, event: AgentStreamEvent) {
-    const streamEvent = event as AgentStreamEvent & {
-      type?: string;
-      run_id?: string;
-      delta?: string;
-      tool_name?: string;
-      message?: string;
-      error_text?: string | null;
-    };
-    const eventType = String(streamEvent.type || "");
+  const hydrateStreamToolCalls = useCallback(async (runId: string, toolCallId: string) => {
+    const persistedRun = threadRunsRef.current.find((run) => run.id === runId);
+    if (persistedRun?.tool_calls.some((toolCall) => toolCall.id === toolCallId)) {
+      return;
+    }
 
-    if (eventType === "run_started") {
-      setPendingAssistantMessage((current) => {
-        if (!current || current.threadId !== threadId) {
-          return current;
-        }
-        return { ...current, runId: streamEvent.run_id || current.runId };
-      });
+    const optimisticToolCalls = optimisticToolCallsRef.current[runId] ?? [];
+    if (optimisticToolCalls.some((toolCall) => toolCall.id === toolCallId)) {
       return;
     }
-    if (eventType === "tool_call") {
-      setPendingAssistantMessage((current) => {
-        if (!current || current.threadId !== threadId) {
-          return current;
-        }
-        return {
-          ...current,
-          runId: current.runId || streamEvent.run_id || null,
-          activity: appendPendingToolCallToActivity(current.activity, String(streamEvent.tool_name || ""))
-        };
-      });
+
+    if (hydratingToolCallRunsRef.current.has(runId)) {
       return;
     }
-    if (eventType === "reasoning_update" || eventType === "reasoning") {
-      const source = (streamEvent as Record<string, unknown>).source as string | undefined;
-      const normalizedSource =
-        source === "model_reasoning" || source === "assistant_content" || source === "tool_call"
-          ? source
-          : "tool_call";
-      setPendingAssistantMessage((current) => {
-        if (!current || current.threadId !== threadId) {
+
+    hydratingToolCallRunsRef.current.add(runId);
+    try {
+      const run = await getAgentRun(runId);
+      setOptimisticToolCallsByRunId((current) => {
+        const existing = current[run.id] ?? [];
+        const nextToolCalls = mergeRunToolCalls(existing, run.tool_calls);
+        if (
+          existing.length === nextToolCalls.length &&
+          existing.every((toolCall, index) => {
+            const nextToolCall = nextToolCalls[index];
+            return nextToolCall && toolCall.id === nextToolCall.id && toolCall.status === nextToolCall.status;
+          })
+        ) {
           return current;
         }
         return {
           ...current,
-          runId: current.runId || streamEvent.run_id || null,
-          content: "",
-          activity: appendPendingReasoningUpdateToActivity(current.activity, String(streamEvent.message || ""), normalizedSource)
+          [run.id]: nextToolCalls
         };
       });
-      return;
+    } catch {
+      // Ignore transient hydration errors; later lifecycle events or the final snapshot will retry/reconcile.
+    } finally {
+      hydratingToolCallRunsRef.current.delete(runId);
     }
-    if (eventType === "text_delta") {
-      setPendingAssistantMessage((current) => {
-        if (!current || current.threadId !== threadId) {
+  }, []);
+
+  function handleAgentStreamEvent(threadId: string, event: AgentStreamEvent) {
+    if (event.type === "run_event") {
+      setActiveStreamRunId((current) => current || event.run_id);
+      setOptimisticRunEventsByRunId((current) => {
+        const existing = current[event.run_id] ?? [];
+        if (existing.some((item) => item.id === event.event.id)) {
           return current;
         }
         return {
           ...current,
-          runId: current.runId || streamEvent.run_id || null,
-          content: `${current.content}${String(streamEvent.delta || "")}`
+          [event.run_id]: [...existing, event.event]
         };
       });
+      if (event.event.tool_call_id) {
+        void hydrateStreamToolCalls(event.run_id, event.event.tool_call_id);
+      }
+      if (event.event.event_type === "reasoning_update" && event.event.source === "assistant_content") {
+        setStreamedTextByRunId((current) => {
+          if (!current[event.run_id]) {
+            return current;
+          }
+          return {
+            ...current,
+            [event.run_id]: ""
+          };
+        });
+      }
+      if (event.event.event_type === "run_failed" && event.event.message) {
+        setActionError(event.event.message);
+      }
       return;
     }
-    if (eventType === "run_failed" && streamEvent.error_text) {
-      setActionError(streamEvent.error_text);
+    if (event.type === "text_delta") {
+      setActiveStreamRunId((current) => current || event.run_id);
+      setStreamedTextByRunId((current) => ({
+        ...current,
+        [event.run_id]: `${current[event.run_id] ?? ""}${event.delta}`
+      }));
     }
   }
 
@@ -479,7 +552,11 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       const sendAbortController = new AbortController();
       sendAbortControllerRef.current = sendAbortController;
       setIsSendingMessage(true);
-      setIsSendPolling(true);
+      setIsStreamHealthy(true);
+      setActiveStreamRunId(null);
+      setStreamedTextByRunId({});
+      setOptimisticRunEventsByRunId({});
+      setOptimisticToolCallsByRunId({});
       invalidateAgentThreadData(queryClient, threadId);
       const baselineLastUserMessageId =
         [...(threadQuery.data?.messages ?? [])]
@@ -510,10 +587,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         id: `pending-assistant-${Date.now()}`,
         threadId,
         createdAt: new Date().toISOString(),
-        content: "",
-        runId: null,
-        baselineLastAssistantMessageId,
-        activity: []
+        baselineLastAssistantMessageId
       });
       setDraftMessage("");
       setDraftFiles([]);
@@ -528,6 +602,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         onEvent: (streamEvent) => handleAgentStreamEvent(threadId, streamEvent)
       });
       sendAbortControllerRef.current = null;
+      setIsStreamHealthy(false);
       const detail = await getAgentThread(threadId);
       queryClient.setQueryData(queryKeys.agent.thread(threadId), detail);
       invalidateAgentThreadData(queryClient, threadId);
@@ -543,33 +618,40 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         }
         return null;
       });
+      setActiveStreamRunId(null);
+      setStreamedTextByRunId({});
+      setOptimisticRunEventsByRunId({});
+      setOptimisticToolCallsByRunId({});
     } catch (error) {
       sendAbortControllerRef.current = null;
-      setPendingUserMessage((current) => {
-        return current ? null : current;
-      });
-      setPendingAssistantMessage(null);
+      setIsStreamHealthy(false);
       if ((error as Error).name === "AbortError") {
+        setPendingUserMessage((current) => {
+          return current ? null : current;
+        });
         setActionError(null);
       } else {
         setActionError((error as Error).message);
       }
     } finally {
       setIsSendingMessage(false);
-      setIsSendPolling(false);
     }
   }
 
   async function handleStopRun() {
     setActionError(null);
     setIsSendingMessage(false);
-    setIsSendPolling(false);
+    setIsStreamHealthy(false);
     setPendingAssistantMessage(null);
+    setActiveStreamRunId(null);
+    setStreamedTextByRunId({});
+    setOptimisticRunEventsByRunId({});
+    setOptimisticToolCallsByRunId({});
     if (sendAbortControllerRef.current) {
       sendAbortControllerRef.current.abort();
       sendAbortControllerRef.current = null;
     }
-    let runIdToInterrupt = activeRunId || pendingAssistantMessage?.runId || null;
+    let runIdToInterrupt = activeRunId || activeStreamRunId || null;
     if (!runIdToInterrupt && selectedThreadId) {
       try {
         const detail = await getAgentThread(selectedThreadId);
@@ -688,12 +770,17 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               timelineScrollRef={timelineScrollRef}
               runsByAssistantMessageId={runsByAssistantMessageId}
               pendingAssistantRuns={pendingAssistantRuns}
+              pendingAssistantRunsByUserMessageId={pendingAssistantRunsByUserMessageId}
               pendingUserMessage={pendingUserMessage}
               pendingAssistantMessage={pendingAssistantMessage}
               shouldShowOptimisticAssistantBubble={shouldShowOptimisticAssistantBubble}
               pendingRunAttachedToOptimisticMessage={pendingRunAttachedToOptimisticMessage}
               isMutating={isMutating}
-              pendingOptimisticActivityCount={pendingOptimisticActivity.length}
+              activeStreamText={activeStreamText}
+              optimisticRunEventsByRunId={optimisticRunEventsByRunId}
+              optimisticToolCallsByRunId={optimisticToolCallsByRunId}
+              activeOptimisticEvents={activeOptimisticEvents}
+              activeOptimisticToolCalls={activeOptimisticToolCalls}
               onReviewRun={setReviewRunId}
               isAtBottom={isAtBottom}
               scrollToBottom={scrollToBottom}

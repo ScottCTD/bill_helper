@@ -1,8 +1,8 @@
-import type { RefObject } from "react";
+import { Fragment, type RefObject } from "react";
 import { ArrowDown, FileText } from "lucide-react";
 
 import { withApiBase } from "../../../lib/api";
-import type { AgentMessage, AgentRun } from "../../../lib/types";
+import type { AgentMessage, AgentRun, AgentRunEvent, AgentToolCall } from "../../../lib/types";
 import { cn } from "../../../lib/utils";
 import { AgentRunBlock, PendingAssistantActivityBlock } from "../AgentRunBlock";
 import { MarkdownRenderer } from "../../ui/MarkdownRenderer";
@@ -17,12 +17,17 @@ interface AgentTimelineProps {
   timelineScrollRef: RefObject<HTMLDivElement | null>;
   runsByAssistantMessageId: Map<string, AgentRun[]>;
   pendingAssistantRuns: AgentRun[];
+  pendingAssistantRunsByUserMessageId: Map<string, AgentRun[]>;
   pendingUserMessage: PendingUserMessage | null;
   pendingAssistantMessage: PendingAssistantMessage | null;
   shouldShowOptimisticAssistantBubble: boolean;
   pendingRunAttachedToOptimisticMessage: AgentRun | null;
   isMutating: boolean;
-  pendingOptimisticActivityCount: number;
+  activeStreamText: string;
+  optimisticRunEventsByRunId: Record<string, AgentRunEvent[]>;
+  optimisticToolCallsByRunId: Record<string, AgentToolCall[]>;
+  activeOptimisticEvents: AgentRunEvent[];
+  activeOptimisticToolCalls: AgentToolCall[];
   onReviewRun: (runId: string | null) => void;
   isAtBottom: boolean;
   scrollToBottom: () => void;
@@ -37,12 +42,17 @@ export function AgentTimeline(props: AgentTimelineProps) {
     timelineScrollRef,
     runsByAssistantMessageId,
     pendingAssistantRuns,
+    pendingAssistantRunsByUserMessageId,
     pendingUserMessage,
     pendingAssistantMessage,
     shouldShowOptimisticAssistantBubble,
     pendingRunAttachedToOptimisticMessage,
     isMutating,
-    pendingOptimisticActivityCount,
+    activeStreamText,
+    optimisticRunEventsByRunId = {},
+    optimisticToolCallsByRunId = {},
+    activeOptimisticEvents = [],
+    activeOptimisticToolCalls = [],
     onReviewRun,
     isAtBottom,
     scrollToBottom
@@ -50,6 +60,10 @@ export function AgentTimeline(props: AgentTimelineProps) {
 
   function isImageMimeType(mimeType: string): boolean {
     return mimeType.toLowerCase().startsWith("image/");
+  }
+
+  function hasRenderableRunCard(run: AgentRun, optimisticEvents: AgentRunEvent[] = []): boolean {
+    return Boolean(run.error_text) || run.events.length > 0 || run.change_items.length > 0 || optimisticEvents.length > 0;
   }
 
   return (
@@ -67,63 +81,111 @@ export function AgentTimeline(props: AgentTimelineProps) {
             const shouldRenderMarkdown = !isUser;
             const renderedContent = message.content_markdown;
             const messageRuns = isAssistant ? runsByAssistantMessageId.get(message.id) ?? [] : [];
+            const userMessageRuns = isUser ? pendingAssistantRunsByUserMessageId.get(message.id) ?? [] : [];
 
             return (
-              <article key={message.id} className={cn("agent-message", isAssistant && "agent-message-assistant", isUser && "agent-message-user")}>
-                <header>
-                  <strong>{isUser ? "You" : isAssistant ? "Assistant" : message.role}</strong>
-                  <span className="muted">{prettyDateTime(message.created_at)}</span>
-                </header>
+              <Fragment key={message.id}>
+                <article className={cn("agent-message", isAssistant && "agent-message-assistant", isUser && "agent-message-user")}>
+                  <header>
+                    <strong>{isUser ? "You" : isAssistant ? "Assistant" : message.role}</strong>
+                    <span className="muted">{prettyDateTime(message.created_at)}</span>
+                  </header>
 
-                {isAssistant
-                  ? messageRuns.map((run) => (
-                      <AgentRunBlock key={`${run.id}-activity`} run={run} isMutating={isMutating} onReviewRun={onReviewRun} mode="activity" />
-                    ))
-                  : null}
-
-                {renderedContent.trim() ? (
-                  shouldRenderMarkdown ? (
-                    <MarkdownRenderer markdown={renderedContent} />
-                  ) : (
-                    <p className="agent-message-text">{renderedContent}</p>
-                  )
-                ) : (
-                  <p className="muted">(no text)</p>
-                )}
-
-                {message.attachments.length > 0 ? (
-                  <div className="agent-message-attachments">
-                    {message.attachments.map((attachment) => (
-                      isImageMimeType(attachment.mime_type) ? (
-                        <img
-                          key={attachment.id}
-                          className="agent-message-attachment-image"
-                          src={withApiBase(attachment.attachment_url)}
-                          alt="User upload"
-                          loading="lazy"
+                  {isAssistant
+                    ? messageRuns.map((run) => (
+                        <AgentRunBlock
+                          key={`${run.id}-activity`}
+                          run={run}
+                          isMutating={isMutating}
+                          onReviewRun={onReviewRun}
+                          mode="activity"
+                          optimisticEvents={optimisticRunEventsByRunId[run.id] ?? []}
+                          optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
                         />
-                      ) : (
-                        <a
-                          key={attachment.id}
-                          className="agent-message-attachment-file"
-                          href={withApiBase(attachment.attachment_url)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <FileText className="h-4 w-4" />
-                          <span>{attachment.mime_type === "application/pdf" ? "Open PDF attachment" : "Open attachment"}</span>
-                        </a>
-                      )
-                    ))}
-                  </div>
-                ) : null}
+                      ))
+                    : null}
 
-                {isAssistant
-                  ? messageRuns.map((run) => (
-                      <AgentRunBlock key={`${run.id}-summary`} run={run} isMutating={isMutating} onReviewRun={onReviewRun} mode="summary" />
-                    ))
+                  {renderedContent.trim() ? (
+                    shouldRenderMarkdown ? (
+                      <MarkdownRenderer markdown={renderedContent} />
+                    ) : (
+                      <p className="agent-message-text">{renderedContent}</p>
+                    )
+                  ) : (
+                    <p className="muted">(no text)</p>
+                  )}
+
+                  {message.attachments.length > 0 ? (
+                    <div className="agent-message-attachments">
+                      {message.attachments.map((attachment) => (
+                        isImageMimeType(attachment.mime_type) ? (
+                          <img
+                            key={attachment.id}
+                            className="agent-message-attachment-image"
+                            src={withApiBase(attachment.attachment_url)}
+                            alt="User upload"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <a
+                            key={attachment.id}
+                            className="agent-message-attachment-file"
+                            href={withApiBase(attachment.attachment_url)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <FileText className="h-4 w-4" />
+                            <span>{attachment.mime_type === "application/pdf" ? "Open PDF attachment" : "Open attachment"}</span>
+                          </a>
+                        )
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {isAssistant
+                    ? messageRuns.map((run) => (
+                        <AgentRunBlock
+                          key={`${run.id}-summary`}
+                          run={run}
+                          isMutating={isMutating}
+                          onReviewRun={onReviewRun}
+                          mode="summary"
+                          optimisticEvents={optimisticRunEventsByRunId[run.id] ?? []}
+                          optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
+                        />
+                      ))
+                    : null}
+                </article>
+
+                {isUser
+                  ? userMessageRuns.map((run) => {
+                      const optimisticEvents = optimisticRunEventsByRunId[run.id] ?? [];
+                      if (!hasRenderableRunCard(run, optimisticEvents)) {
+                        return null;
+                      }
+                      const attachedToOptimisticMessage = pendingRunAttachedToOptimisticMessage && pendingRunAttachedToOptimisticMessage.id === run.id;
+                      if (attachedToOptimisticMessage) {
+                        return null;
+                      }
+                      return (
+                        <article key={`${run.id}-unattached`} className="agent-message agent-message-assistant agent-message-working">
+                          <header>
+                            <strong>Assistant</strong>
+                            <span className="muted">{prettyDateTime(run.created_at)}</span>
+                          </header>
+                          <AgentRunBlock
+                            run={run}
+                            isMutating={isMutating}
+                            onReviewRun={onReviewRun}
+                            mode="activity"
+                            optimisticEvents={optimisticEvents}
+                            optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
+                          />
+                        </article>
+                      );
+                    })
                   : null}
-              </article>
+              </Fragment>
             );
           })}
 
@@ -162,30 +224,43 @@ export function AgentTimeline(props: AgentTimelineProps) {
                 <span className="muted">{prettyDateTime(pendingAssistantMessage.createdAt)}</span>
               </header>
               {pendingRunAttachedToOptimisticMessage ? (
-                <AgentRunBlock run={pendingRunAttachedToOptimisticMessage} isMutating={isMutating} onReviewRun={onReviewRun} mode="activity" />
-              ) : pendingOptimisticActivityCount > 0 ? (
-                <PendingAssistantActivityBlock activity={pendingAssistantMessage.activity} />
+                <AgentRunBlock
+                  run={pendingRunAttachedToOptimisticMessage}
+                  isMutating={isMutating}
+                  onReviewRun={onReviewRun}
+                  mode="activity"
+                  optimisticEvents={activeOptimisticEvents}
+                  optimisticToolCalls={activeOptimisticToolCalls}
+                  streamingAssistantText={activeStreamText}
+                />
+              ) : activeOptimisticEvents.length > 0 || activeStreamText.length > 0 ? (
+                <PendingAssistantActivityBlock
+                  events={activeOptimisticEvents}
+                  toolCalls={activeOptimisticToolCalls}
+                  streamingAssistantText={activeStreamText}
+                />
               ) : null}
-              {pendingAssistantMessage.content.trim() ? (
+              {!activeStreamText.length && activeOptimisticEvents.length === 0 && !pendingRunAttachedToOptimisticMessage ? (
                 <p className="agent-message-text agent-message-streaming-text">
-                  {pendingAssistantMessage.content}
                   <span className="agent-message-caret">{"\u258d"}</span>
                 </p>
-              ) : (
-                <p className="agent-message-text">
-                  <span className="agent-message-caret">{"\u258d"}</span>
-                </p>
-              )}
+              ) : null}
             </article>
           ) : null}
 
           {pendingAssistantRuns.map((run) => {
-            const hasVisibleContent = Boolean(run.error_text) || run.tool_calls.length > 0 || run.change_items.length > 0;
+            const optimisticEvents = optimisticRunEventsByRunId[run.id] ?? [];
             const attachedToOptimisticMessage = pendingRunAttachedToOptimisticMessage && pendingRunAttachedToOptimisticMessage.id === run.id;
+            const alreadyAnchoredToUserMessage = Boolean(
+              (messages ?? []).some((message) => message.id === run.user_message_id)
+            );
             if (attachedToOptimisticMessage) {
               return null;
             }
-            if (!hasVisibleContent) {
+            if (alreadyAnchoredToUserMessage) {
+              return null;
+            }
+            if (!hasRenderableRunCard(run, optimisticEvents)) {
               return null;
             }
             return (
@@ -194,7 +269,13 @@ export function AgentTimeline(props: AgentTimelineProps) {
                   <strong>Assistant</strong>
                   <span className="muted">{prettyDateTime(run.created_at)}</span>
                 </header>
-                <AgentRunBlock run={run} isMutating={isMutating} onReviewRun={onReviewRun} />
+                <AgentRunBlock
+                  run={run}
+                  isMutating={isMutating}
+                  onReviewRun={onReviewRun}
+                  optimisticEvents={optimisticEvents}
+                  optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
+                />
               </article>
             );
           })}

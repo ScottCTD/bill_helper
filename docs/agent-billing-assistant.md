@@ -60,7 +60,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
    - for the latest user turn only: review outcomes (if any) and interruption prefix (if the previous run was interrupted) prepended before that user feedback text
 4. Runtime loops: model call → optional tool calls (including sparse `send_intermediate_update` progress notes) → tool results appended → repeat (bounded by `agent_max_steps`).
 5. Runtime persists final assistant message and marks run `completed` or `failed`.
-6. For streaming: SSE emits `reasoning_update` when `send_intermediate_update` is called or when the model emits assistant text in the same turn as tool calls. On client disconnect mid-stream, the run continues in the background.
+6. For streaming: SSE emits `text_delta` plus persisted `run_event` rows. `run_event` covers run start/finish, `reasoning_update`, and each tool lifecycle transition. `send_intermediate_update` is stored only as a reasoning event (not a fake tool row). On client disconnect mid-stream, the run continues in the background.
 
 ## Thread Lifecycle Endpoints
 
@@ -514,9 +514,9 @@ Each tool emits model-visible text plus structured `output_json`:
 - Failure: `status: "ERROR"`, `summary`, optional `details`
 - Proposal tools additionally return `proposal_id` and `proposal_short_id`.
 
-Runtime persists every tool call in `agent_tool_calls` and feeds tool output text back to the model for next-step decisions.
-When `send_intermediate_update` is called during SSE runs, runtime emits a `reasoning_update` stream event so the frontend can render progress updates in real time.
-If the model emits assistant text in the same turn as tool calls, runtime also persists that text as a synthetic `send_intermediate_update` trace (`output_json.source="assistant_content"`) and emits the same `reasoning_update` event shape.
+Runtime persists non-intermediate tool calls in `agent_tool_calls` as soon as the model turn resolves, starting in `queued` state before execution begins, and feeds tool output text back to the model for next-step decisions.
+When `send_intermediate_update` is called, runtime persists an `agent_run_events.reasoning_update` row and streams it as `run_event`; it no longer creates an `agent_tool_calls` row.
+If the model emits assistant text in the same turn as tool calls, runtime persists that text as a `reasoning_update` run event with `source="assistant_content"` instead of a synthetic tool trace.
 For continuation after review, `message_history.py` prepends a compact review-results block to the latest user message, then includes user feedback text below it (not as dynamic system prompt text).
 Pending proposals from older runs do not block new proposal tools; the model can continue proposing while unresolved items remain pending.
 Pending proposals can be revised or removed by id in later turns without forcing immediate human review.

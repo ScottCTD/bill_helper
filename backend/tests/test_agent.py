@@ -1005,11 +1005,12 @@ def test_run_persists_assistant_tool_step_text_as_intermediate_update(client, mo
     run = send_message(client, thread["id"], "List current tags.")
 
     assert run["status"] == "completed"
-    assert len(run["tool_calls"]) == 2
-    assert run["tool_calls"][0]["tool_name"] == "send_intermediate_update"
-    assert run["tool_calls"][0]["output_json"]["message"] == "I am checking current tags before making any changes."
-    assert run["tool_calls"][0]["output_json"]["source"] == "assistant_content"
-    assert run["tool_calls"][1]["tool_name"] == "list_tags"
+    assert len(run["tool_calls"]) == 1
+    assert run["tool_calls"][0]["tool_name"] == "list_tags"
+    reasoning_events = [event for event in run["events"] if event["event_type"] == "reasoning_update"]
+    assert len(reasoning_events) == 1
+    assert reasoning_events[0]["message"] == "I am checking current tags before making any changes."
+    assert reasoning_events[0]["source"] == "assistant_content"
 
 
 def test_final_message_strips_empty_pending_review_footer(client, monkeypatch):
@@ -1098,10 +1099,11 @@ def test_stream_message_endpoint_emits_real_time_events(client, monkeypatch):
     events = collect_sse_events(client, thread["id"], "say hello")
 
     assert events
-    assert events[0]["type"] == "run_started"
+    run_event_types = [event["event"]["event_type"] for event in events if event.get("type") == "run_event"]
+    assert run_event_types[0] == "run_started"
     text = "".join(event.get("delta", "") for event in events if event.get("type") == "text_delta")
     assert text == "Hello"
-    assert events[-1]["type"] == "run_completed"
+    assert run_event_types[-1] == "run_completed"
 
     detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
     detail_response.raise_for_status()
@@ -1155,20 +1157,27 @@ def test_stream_message_endpoint_emits_reasoning_update_events(client, monkeypat
     thread = create_thread(client)
     events = collect_sse_events(client, thread["id"], "process this import")
 
-    reasoning_updates = [event for event in events if event.get("type") == "reasoning_update"]
+    reasoning_updates = [
+        event["event"]
+        for event in events
+        if event.get("type") == "run_event" and event.get("event", {}).get("event_type") == "reasoning_update"
+    ]
     assert len(reasoning_updates) == 1
     assert reasoning_updates[0]["message"] == "I am checking existing entries and tags."
-    assert not [event for event in events if event.get("type") == "tool_call"]
-    assert events[-1]["type"] == "run_completed"
+    assert not [
+        event
+        for event in events
+        if event.get("type") == "run_event" and event.get("event", {}).get("event_type") == "tool_call_queued"
+    ]
+    assert events[-1]["event"]["event_type"] == "run_completed"
 
     detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
     detail_response.raise_for_status()
     detail = detail_response.json()
     assert len(detail["runs"]) == 1
     run = detail["runs"][0]
-    assert len(run["tool_calls"]) == 1
-    assert run["tool_calls"][0]["tool_name"] == "send_intermediate_update"
-    assert run["tool_calls"][0]["output_json"]["message"] == "I am checking existing entries and tags."
+    assert len(run["tool_calls"]) == 0
+    assert [event["event_type"] for event in run["events"] if event["event_type"] == "reasoning_update"] == ["reasoning_update"]
 
 
 def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasoning_update(client, monkeypatch):
@@ -1223,13 +1232,24 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
     thread = create_thread(client)
     events = collect_sse_events(client, thread["id"], "process this import")
 
-    reasoning_updates = [event for event in events if event.get("type") == "reasoning_update"]
+    reasoning_updates = [
+        event["event"]
+        for event in events
+        if event.get("type") == "run_event" and event.get("event", {}).get("event_type") == "reasoning_update"
+    ]
     assert len(reasoning_updates) == 1
     assert reasoning_updates[0]["message"] == "I am checking current tags before making any changes."
 
-    tool_calls = [event for event in events if event.get("type") == "tool_call"]
-    assert len(tool_calls) == 1
-    assert tool_calls[0]["tool_name"] == "list_tags"
+    tool_call_events = [
+        event["event"]
+        for event in events
+        if event.get("type") == "run_event" and event.get("event", {}).get("event_type", "").startswith("tool_call_")
+    ]
+    assert [event["event_type"] for event in tool_call_events] == [
+        "tool_call_queued",
+        "tool_call_started",
+        "tool_call_completed",
+    ]
 
     text = "".join(event.get("delta", "") for event in events if event.get("type") == "text_delta")
     assert text == "I am checking current tags before making any changes.Done."
@@ -1239,11 +1259,12 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
     detail = detail_response.json()
     assert len(detail["runs"]) == 1
     run = detail["runs"][0]
-    assert len(run["tool_calls"]) == 2
-    assert run["tool_calls"][0]["tool_name"] == "send_intermediate_update"
-    assert run["tool_calls"][0]["output_json"]["message"] == "I am checking current tags before making any changes."
-    assert run["tool_calls"][0]["output_json"]["source"] == "assistant_content"
-    assert run["tool_calls"][1]["tool_name"] == "list_tags"
+    assert len(run["tool_calls"]) == 1
+    assert run["tool_calls"][0]["tool_name"] == "list_tags"
+    reasoning_run_events = [event for event in run["events"] if event["event_type"] == "reasoning_update"]
+    assert len(reasoning_run_events) == 1
+    assert reasoning_run_events[0]["message"] == "I am checking current tags before making any changes."
+    assert reasoning_run_events[0]["source"] == "assistant_content"
 
 
 def test_model_observability_uses_thread_as_session_id(client, monkeypatch):

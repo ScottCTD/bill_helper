@@ -1196,7 +1196,7 @@
   }
 
   .agent-run-activity-timeline {
-    @apply grid gap-2;
+    @apply grid gap-1;
   }
 
   .agent-run-root-activity {
@@ -1204,7 +1204,7 @@
   }
 
   .agent-run-root-activity > summary {
-    @apply flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-muted/60;
+    @apply flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors hover:bg-muted/60;
     list-style: none;
   }
 
@@ -1221,7 +1221,7 @@
   }
 
   .agent-run-root-activity > .agent-run-activity-timeline {
-    @apply px-2 pb-2;
+    @apply px-2 pb-1.5;
   }
 
   .agent-reasoning-update-collapsible {
@@ -1229,7 +1229,7 @@
   }
 
   .agent-reasoning-update-collapsible > summary {
-    @apply flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs leading-5 text-muted-foreground transition-colors hover:bg-muted/40;
+    @apply flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-xs leading-4 text-muted-foreground transition-colors hover:bg-muted/40;
     list-style: none;
   }
 
@@ -1254,15 +1254,15 @@
   }
 
   .agent-reasoning-update-collapsible > .agent-run-reasoning-update {
-    @apply mx-2.5 mb-2 mt-0 rounded-md border-0 bg-transparent px-0 py-0;
+    @apply mx-2 mb-1.5 mt-0 rounded-md border-0 bg-transparent px-0 py-0;
   }
 
   .agent-run-reasoning-update {
-    @apply m-0 rounded-md border border-border/75 bg-muted/25 px-2.5 py-1.5 text-xs leading-5 text-muted-foreground;
+    @apply m-0 rounded-md border border-border/75 bg-muted/25 px-2 py-1 text-xs leading-4 text-muted-foreground;
   }
 
   .agent-run-reasoning-update.agent-markdown {
-    @apply gap-1 text-xs leading-5 text-muted-foreground;
+    @apply gap-0.5 text-xs leading-4 text-muted-foreground;
   }
 
   .agent-tool-call-group {
@@ -1319,7 +1319,7 @@
   }
 
   .agent-tool-call-static > summary {
-    @apply flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-muted/60;
+    @apply flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs transition-colors hover:bg-muted/60;
     list-style: none;
   }
 
@@ -1328,7 +1328,7 @@
   }
 
   .agent-tool-call summary {
-    @apply flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-muted/60;
+    @apply flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs transition-colors hover:bg-muted/60;
     list-style: none;
   }
 
@@ -1361,11 +1361,11 @@
   }
 
   .agent-tool-call-status {
-    @apply inline-flex rounded-full border border-border/80 bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground;
+    @apply inline-flex rounded-full border border-border/80 bg-muted px-1.5 py-0 text-[10px] font-medium text-muted-foreground;
   }
 
   .agent-tool-call-details {
-    @apply grid gap-1.5 border-l-2 border-border/60 py-1 pl-5 ml-[7px] mt-0.5 mb-1;
+    @apply grid gap-1 border-l-2 border-border/60 py-0.5 pl-4 ml-[7px] mt-0.5 mb-0.5;
   }
 
   .agent-tool-call-details-label {
@@ -1380,6 +1380,13 @@
   .agent-change-item pre {
     @apply mt-0 overflow-auto rounded-md border border-border/80 bg-muted/40 p-2 text-xs;
     font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+  }
+
+  .agent-tool-call-output,
+  .agent-tool-call-arguments {
+    @apply whitespace-pre-wrap break-words overflow-x-hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .agent-entry-override {

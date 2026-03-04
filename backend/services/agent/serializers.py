@@ -5,6 +5,7 @@ from backend.models import (
     AgentMessage,
     AgentMessageAttachment,
     AgentReviewAction,
+    AgentRunEvent,
     AgentRun,
     AgentThread,
     AgentToolCall,
@@ -14,6 +15,7 @@ from backend.schemas import (
     AgentMessageAttachmentRead,
     AgentMessageRead,
     AgentReviewActionRead,
+    AgentRunEventRead,
     AgentRunRead,
     AgentThreadRead,
     AgentThreadSummaryRead,
@@ -48,12 +50,28 @@ def tool_call_to_schema(tool_call: AgentToolCall) -> AgentToolCallRead:
     return AgentToolCallRead(
         id=tool_call.id,
         run_id=tool_call.run_id,
+        llm_tool_call_id=tool_call.llm_tool_call_id,
         tool_name=tool_call.tool_name,
         input_json=tool_call.input_json,
         output_json=tool_call.output_json,
         output_text=tool_call.output_text,
         status=tool_call.status,
         created_at=tool_call.created_at,
+        started_at=tool_call.started_at,
+        completed_at=tool_call.completed_at,
+    )
+
+
+def run_event_to_schema(event: AgentRunEvent) -> AgentRunEventRead:
+    return AgentRunEventRead(
+        id=event.id,
+        run_id=event.run_id,
+        sequence_index=event.sequence_index,
+        event_type=event.event_type,
+        source=event.source,
+        message=event.message,
+        tool_call_id=event.tool_call_id,
+        created_at=event.created_at,
     )
 
 
@@ -109,6 +127,7 @@ def run_to_schema(run: AgentRun) -> AgentRunRead:
         error_text=run.error_text,
         created_at=run.created_at,
         completed_at=run.completed_at,
+        events=[run_event_to_schema(event) for event in run.events],
         tool_calls=[tool_call_to_schema(call) for call in run.tool_calls],
         change_items=[change_item_to_schema(item) for item in run.change_items],
     )

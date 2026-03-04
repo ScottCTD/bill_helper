@@ -166,7 +166,7 @@ Current seeded taxonomies:
 - `entry_id` (PK/FK -> `entries.id`)
 - `tag_id` (PK/FK -> `tags.id`)
 
-## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`, `0020_add_agent_message_attachment_original_filename`)
+## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`, `0020_add_agent_message_attachment_original_filename`, `0021_add_agent_run_context_tokens`, `0022_agent_run_events_and_tool_lifecycle`)
 
 ## `agent_threads`
 
@@ -242,11 +242,34 @@ Fields:
 
 - `id` (PK UUID string)
 - `run_id` (FK -> `agent_runs.id`)
+- `llm_tool_call_id` (nullable provider tool-call id)
 - `tool_name`
 - `input_json`
 - `output_json`
 - `output_text` (exact tool result text that was sent to the model)
 - `status` (`AgentToolCallStatus`)
+- `created_at`
+- `started_at` (nullable)
+- `completed_at` (nullable)
+
+Operational notes:
+
+- non-intermediate tool rows are created when the model turn resolves, before execution starts
+- `send_intermediate_update` is represented only as a `reasoning_update` row in `agent_run_events`, not as an `agent_tool_calls` row
+
+## `agent_run_events`
+
+Purpose: canonical ordered activity timeline for live streaming and historical replay.
+
+Fields:
+
+- `id` (PK UUID string)
+- `run_id` (FK -> `agent_runs.id`)
+- `sequence_index` (monotonic per run)
+- `event_type` (`AgentRunEventType`)
+- `source` (nullable `AgentRunEventSource`)
+- `message` (nullable)
+- `tool_call_id` (nullable FK -> `agent_tool_calls.id`)
 - `created_at`
 
 ## `agent_change_items`

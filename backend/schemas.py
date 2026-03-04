@@ -9,6 +9,8 @@ from backend.enums import (
     AgentChangeStatus,
     AgentChangeType,
     AgentMessageRole,
+    AgentRunEventSource,
+    AgentRunEventType,
     AgentReviewActionType,
     AgentRunStatus,
     AgentToolCallStatus,
@@ -497,11 +499,27 @@ class AgentMessageRead(BaseModel):
 class AgentToolCallRead(BaseModel):
     id: str
     run_id: str
+    llm_tool_call_id: str | None = None
     tool_name: str
     input_json: dict[str, Any]
     output_json: dict[str, Any]
     output_text: str
     status: AgentToolCallStatus
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AgentRunEventRead(BaseModel):
+    id: str
+    run_id: str
+    sequence_index: int
+    event_type: AgentRunEventType
+    source: AgentRunEventSource | None = None
+    message: str | None = None
+    tool_call_id: str | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -553,6 +571,7 @@ class AgentRunRead(BaseModel):
     error_text: str | None = None
     created_at: datetime
     completed_at: datetime | None = None
+    events: list[AgentRunEventRead] = Field(default_factory=list)
     tool_calls: list[AgentToolCallRead] = Field(default_factory=list)
     change_items: list[AgentChangeItemRead] = Field(default_factory=list)
 

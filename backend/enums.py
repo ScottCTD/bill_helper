@@ -28,8 +28,29 @@ class AgentRunStatus(StrEnum):
 
 
 class AgentToolCallStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
     OK = "ok"
     ERROR = "error"
+    CANCELLED = "cancelled"
+
+
+class AgentRunEventType(StrEnum):
+    RUN_STARTED = "run_started"
+    REASONING_UPDATE = "reasoning_update"
+    TOOL_CALL_QUEUED = "tool_call_queued"
+    TOOL_CALL_STARTED = "tool_call_started"
+    TOOL_CALL_COMPLETED = "tool_call_completed"
+    TOOL_CALL_FAILED = "tool_call_failed"
+    TOOL_CALL_CANCELLED = "tool_call_cancelled"
+    RUN_COMPLETED = "run_completed"
+    RUN_FAILED = "run_failed"
+
+
+class AgentRunEventSource(StrEnum):
+    MODEL_REASONING = "model_reasoning"
+    ASSISTANT_CONTENT = "assistant_content"
+    TOOL_CALL = "tool_call"
 
 
 class AgentChangeType(StrEnum):

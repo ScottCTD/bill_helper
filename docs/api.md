@@ -481,6 +481,12 @@ Response: `AgentThreadDetailRead` with:
 - each tool call in a run includes both:
   - `output_json` (structured payload)
   - `output_text` (exact model-visible tool result text persisted from runtime)
+- each tool call in a run also includes lifecycle metadata:
+  - `llm_tool_call_id`
+  - `started_at`
+  - `completed_at`
+  - `status` can now be `queued`, `running`, `ok`, `error`, or `cancelled`
+- each run now includes ordered `events[]` rows for replayable run activity history
 
 ## `POST /agent/threads/{thread_id}/messages`
 
@@ -550,25 +556,16 @@ Response content type: `text/event-stream`
 
 Event contract (`event` name and JSON payload `data`):
 
-- `run_started`
-  - `{ "type": "run_started", "run_id": "<id>" }`
 - `text_delta`
   - `{ "type": "text_delta", "run_id": "<id>", "delta": "<token fragment>" }`
-- `tool_call`
-  - `{ "type": "tool_call", "run_id": "<id>", "tool_name": "<tool name>" }`
-- `reasoning_update`
-  - `{ "type": "reasoning_update", "run_id": "<id>", "message": "<brief intermediate update>" }`
-- terminal success:
-  - `run_completed`
-  - `{ "type": "run_completed", "run_id": "<id>", "assistant_message_id": "<id|null>", "status": "completed", "error_text": null }`
-- terminal failure:
-  - `run_failed`
-  - `{ "type": "run_failed", "run_id": "<id>", "assistant_message_id": "<id|null>", "status": "failed", "error_text": "<reason|null>" }`
+- `run_event`
+  - `{ "type": "run_event", "run_id": "<id>", "event": { "id": "<id>", "run_id": "<id>", "sequence_index": 1, "event_type": "run_started|reasoning_update|tool_call_queued|tool_call_started|tool_call_completed|tool_call_failed|tool_call_cancelled|run_completed|run_failed", "source": "model_reasoning|assistant_content|tool_call|null", "message": "<optional message>", "tool_call_id": "<tool-call-id|null>", "created_at": "<iso timestamp>" } }`
 
 Usage behavior:
 
 - usage counters/costs are still persisted on the run record and returned from run/thread snapshot endpoints
-- SSE events stream text/tool progress only (including intermediate reasoning updates); usage totals are not emitted incrementally
+- run/thread snapshots now include `runs[].events` plus lifecycle-aware `tool_calls[]` (`llm_tool_call_id`, `started_at`, `completed_at`, expanded status values)
+- SSE events stream text plus ordered run activity only; usage totals are not emitted incrementally
 - transient stream failures are retried using configured agent retry settings
 - retries after partial streamed text suppress already-emitted prefixes to avoid duplicate text
 

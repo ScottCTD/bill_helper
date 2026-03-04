@@ -106,7 +106,7 @@ uv run python scripts/check_docs_sync.py
 - `GET /api/v1/groups` omits singleton components (`entry_count < 2`) to focus on linked groups.
 - Agent tool contracts are name/selector-based (no domain IDs in model-facing arguments/outputs).
 - Entry selector/patch tool args are resilient to accidental nested JSON-object string encoding and normalize to objects before validation.
-- Agent emits progress notes via `send_intermediate_update`; when a run needs tool calls, prompt policy requires it as the first tool call, and runtime streams successful calls as `reasoning_update` SSE events.
+- Agent emits progress notes via `send_intermediate_update`; when a run needs tool calls, prompt policy requires it as the first tool call, and runtime persists them as `agent_run_events.reasoning_update` instead of fake tool-call rows.
 - Entry create proposals can omit currency and fall back to the resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
 - Proposal tool outputs include `proposal_id` + `proposal_short_id` for follow-up reference in later turns.
 - Pending proposals can be edited or removed in-thread via `update_pending_proposal` / `remove_pending_proposal` (pending-only, thread-scoped).
@@ -143,8 +143,8 @@ uv run python scripts/check_docs_sync.py
 - Agent message delivery now supports both modes:
   - async start + polling: `POST /api/v1/agent/threads/{thread_id}/messages`
   - SSE token stream: `POST /api/v1/agent/threads/{thread_id}/messages/stream`
-- SSE streams can include `text_delta`, `tool_call`, and `reasoning_update` events before terminal run status events.
-- Run tool-call payloads include exact model-visible tool text (`output_text`) in addition to structured `output_json`.
+- SSE streams now use `text_delta` plus `run_event`; `run_event.event_type` covers run start/finish, reasoning updates, and per-tool lifecycle transitions.
+- Run tool-call payloads now include lifecycle metadata (`llm_tool_call_id`, `started_at`, `completed_at`) in addition to exact model-visible tool text (`output_text`) and structured `output_json`.
 - Usage normalization maps provider-specific cache fields (`cached_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`) into run-level `cache_read_tokens` / `cache_write_tokens`.
 - Agent runs now persist nullable `context_tokens`, a best-effort prompt-size snapshot for the model-visible context (messages plus tool schemas), and thread detail computes `current_context_tokens` for the selected conversation.
 - Observability context (`user`, `session_id=AgentThread.id`, run trace metadata) is propagated on each model call.

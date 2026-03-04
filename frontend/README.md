@@ -183,8 +183,15 @@ uv run python scripts/check_docs_sync.py
 - Agent message send uses backend SSE (`POST /api/v1/agent/threads/{thread_id}/messages/stream`) so assistant text appears incrementally in real time.
 - Thread usage bar now shows `Context` as the current prompt context-window size for the selected thread, alongside cumulative `Total input`, `Output`, `Cache read`, `Cache hit rate`, and total cost.
 - Token counters in the usage bar are compactly formatted as `x.xxK` to reduce horizontal space pressure.
-- Streaming assistant activity now supports interleaved reasoning updates (`reasoning_update`) plus grouped tool-call traces, and the same interleaved trace remains visible after run completion.
-- If a tool-calling model turn streams assistant text before its tool calls finish, the pending bubble text is cleared when the matching `reasoning_update` arrives so that text is shown as a progress bubble instead of being mistaken for the final answer.
+- Streaming assistant activity now uses persisted `run.events` (`run_event` over SSE) so the same per-tool lifecycle timeline is visible live and after reload.
+- Agent activity rendering is now strictly event-driven: `run.tool_calls` enrich visible tool rows, but the UI no longer reconstructs standalone activity rows from tool snapshots that lack matching `run.events`.
+- Active SSE streams disable rapid thread polling; the UI falls back to slower recovery polling only when a run is still active without a healthy local stream.
+- When live `run_event` tool lifecycle rows arrive before the next thread snapshot, the UI performs a one-off `GET /api/v1/agent/runs/{run_id}` hydration fetch so the in-flight tool row can show the real tool name/arguments immediately instead of a placeholder id.
+- While a response is streaming, transient assistant text now renders inside the same collapsible Assistant/update bubble used by live activity (instead of a separate plain pending paragraph). When the matching `reasoning_update` (`source="assistant_content"`) arrives, that transient text buffer is cleared so the persisted update row becomes the authoritative version.
+- The live Assistant/update bubble now becomes visible as soon as streaming starts (`run_started`), even before the first visible token or activity row exists; whitespace-only early `text_delta` chunks render as the same block-cursor placeholder (`▍`) instead of being suppressed until later content arrives.
+- Runs that finish without a persisted assistant message (for example, an interrupted run) now render immediately after the user message that triggered them, instead of being appended at the bottom of the thread.
+- During streaming, reasoning/update bubbles may auto-open, but tool rows stay collapsed by default so long tool runs do not keep forcing open the latest tool call.
+- Expanded tool-call arguments and model-visible tool output now line-wrap instead of forcing horizontal scrolling on long single-line payloads.
 - Optimistic user bubbles are reconciled against persisted timeline messages to avoid temporary duplicate user-message blocks during send.
 - Route pages are lazy-loaded from `App.tsx` to keep initial bundle load bounded as feature count grows.
 - Agent run rendering and activity derivation are split from `AgentPanel.tsx` into dedicated modules to reduce coordinator complexity.

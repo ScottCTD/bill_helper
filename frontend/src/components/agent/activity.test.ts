@@ -1,18 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  appendPendingReasoningUpdateToActivity,
-  appendPendingToolCallToActivity,
+  buildRunTimelineFromEvents,
   buildThreadUsageTotals,
-  buildRunActivityTimeline,
+  latestRunMetric,
+  mergeRunEvents,
+  mergeRunToolCalls,
   runsByAssistantMessage,
+  runsWithoutAssistantMessageByUserMessage,
   runsWithoutAssistantMessage,
   sortRunsByCreatedAt,
   summarizeRunChangeTypes,
-  latestRunMetric,
   totalRunMetric
 } from "./activity";
-import { buildChangeItem, buildRun, buildToolCall } from "../../test/factories/agent";
+import { buildChangeItem, buildRun, buildRunEvent, buildToolCall } from "../../test/factories/agent";
 import type { AgentThreadDetail } from "../../lib/types";
 
 afterEach(() => {
@@ -20,48 +21,123 @@ afterEach(() => {
 });
 
 describe("activity helpers", () => {
-  it("builds interleaved run activity timeline from tool calls", () => {
-    const timeline = buildRunActivityTimeline([
-      buildToolCall({ id: "tool-1", created_at: "2026-02-15T10:00:00Z", tool_name: "list_entries" }),
-      buildToolCall({
-        id: "tool-2",
-        created_at: "2026-02-15T10:00:01Z",
-        tool_name: "send_intermediate_update",
-        output_json: { message: "Looking up historical entries" }
-      }),
-      buildToolCall({ id: "tool-3", created_at: "2026-02-15T10:00:02Z", tool_name: "create_entry" })
-    ]);
+  it("builds interleaved timeline from run events and tool calls", () => {
+    const toolCall = buildToolCall({ id: "tool-1", tool_name: "list_entries" });
+    const timeline = buildRunTimelineFromEvents(
+      [
+        buildRunEvent({ id: "event-1", sequence_index: 1, event_type: "tool_call_queued", tool_call_id: "tool-1" }),
+        buildRunEvent({
+          id: "event-2",
+          sequence_index: 2,
+          event_type: "reasoning_update",
+          message: "Looking up historical entries",
+          source: "tool_call"
+        }),
+        buildRunEvent({ id: "event-3", sequence_index: 3, event_type: "tool_call_completed", tool_call_id: "tool-1" })
+      ],
+      [toolCall]
+    );
+
+    expect(timeline).toHaveLength(2);
+    expect(timeline[0]).toMatchObject({ type: "tool_call", toolCallId: "tool-1", lifecycleEventType: "tool_call_completed" });
+    expect(timeline[1]).toMatchObject({ type: "reasoning_update", message: "Looking up historical entries" });
+  });
+
+  it("keeps placeholder tool rows when events arrive before tool snapshots", () => {
+    const timeline = buildRunTimelineFromEvents(
+      [buildRunEvent({ id: "event-1", sequence_index: 1, event_type: "tool_call_queued", tool_call_id: "tool-1" })],
+      []
+    );
+
+    expect(timeline).toHaveLength(1);
+    expect(timeline[0]).toMatchObject({ type: "tool_call", toolCallId: "tool-1", toolCall: null });
+  });
+
+  it("does not reconstruct activity from tool rows when run events are missing", () => {
+    const timeline = buildRunTimelineFromEvents(
+      [],
+      [buildToolCall({ id: "tool-1", tool_name: "legacy_tool", status: "ok" })]
+    );
+
+    expect(timeline).toEqual([]);
+  });
+
+  it("keeps tool rows in original queue order while updating lifecycle in place", () => {
+    const timeline = buildRunTimelineFromEvents(
+      [
+        buildRunEvent({ id: "event-1", sequence_index: 1, event_type: "tool_call_queued", tool_call_id: "tool-1" }),
+        buildRunEvent({ id: "event-2", sequence_index: 2, event_type: "tool_call_queued", tool_call_id: "tool-2" }),
+        buildRunEvent({
+          id: "event-3",
+          sequence_index: 3,
+          event_type: "reasoning_update",
+          message: "Continuing with the next batch",
+          source: "assistant_content"
+        }),
+        buildRunEvent({ id: "event-4", sequence_index: 4, event_type: "tool_call_started", tool_call_id: "tool-1" }),
+        buildRunEvent({ id: "event-5", sequence_index: 5, event_type: "tool_call_completed", tool_call_id: "tool-2" })
+      ],
+      [
+        buildToolCall({ id: "tool-1", tool_name: "first_tool", status: "running" }),
+        buildToolCall({ id: "tool-2", tool_name: "second_tool", status: "ok" })
+      ]
+    );
 
     expect(timeline).toHaveLength(3);
-    expect(timeline[0]).toMatchObject({ type: "tool_batch", key: "tool-1-tool-1" });
-    expect(timeline[1]).toMatchObject({ type: "reasoning_update", message: "Looking up historical entries" });
-    expect(timeline[2]).toMatchObject({ type: "tool_batch", key: "tool-3-tool-3" });
+    expect(timeline[0]).toMatchObject({ type: "tool_call", toolCallId: "tool-1", lifecycleEventType: "tool_call_started" });
+    expect(timeline[1]).toMatchObject({ type: "tool_call", toolCallId: "tool-2", lifecycleEventType: "tool_call_completed" });
+    expect(timeline[2]).toMatchObject({ type: "reasoning_update", message: "Continuing with the next batch" });
   });
 
-  it("batches pending tool calls and ignores intermediate update tool", () => {
-    vi.spyOn(Date, "now").mockReturnValue(1700000000000);
+  it("merges persisted and optimistic events without duplicates", () => {
+    const merged = mergeRunEvents(
+      [
+        buildRunEvent({ id: "event-1", sequence_index: 1 }),
+        buildRunEvent({ id: "event-2", sequence_index: 2 })
+      ],
+      [
+        buildRunEvent({ id: "event-2", sequence_index: 2 }),
+        buildRunEvent({ id: "event-3", sequence_index: 3 })
+      ]
+    );
 
-    const first = appendPendingToolCallToActivity([], "list_entries");
-    expect(first).toHaveLength(1);
-    expect(first[0]).toMatchObject({ type: "tool_batch", toolNames: ["list_entries"] });
-
-    const second = appendPendingToolCallToActivity(first, "create_entry");
-    expect(second).toHaveLength(1);
-    expect(second[0]).toMatchObject({ type: "tool_batch", toolNames: ["list_entries", "create_entry"] });
-
-    const unchanged = appendPendingToolCallToActivity(second, "send_intermediate_update");
-    expect(unchanged).toEqual(second);
+    expect(merged.map((event) => event.id)).toEqual(["event-1", "event-2", "event-3"]);
   });
 
-  it("appends trimmed reasoning updates only", () => {
-    vi.spyOn(Date, "now").mockReturnValue(1700000000000);
+  it("orders merged events by sequence index before timestamp", () => {
+    const merged = mergeRunEvents(
+      [
+        buildRunEvent({
+          id: "event-2",
+          sequence_index: 2,
+          created_at: "2026-02-15T10:02:00Z"
+        }),
+        buildRunEvent({
+          id: "event-3",
+          sequence_index: 3,
+          created_at: "2026-02-15T10:00:00Z"
+        })
+      ],
+      [
+        buildRunEvent({
+          id: "event-1",
+          sequence_index: 1,
+          created_at: "2026-02-15T10:03:00Z"
+        })
+      ]
+    );
 
-    const withUpdate = appendPendingReasoningUpdateToActivity([], "  Step 1 complete  ");
-    expect(withUpdate).toHaveLength(1);
-    expect(withUpdate[0]).toMatchObject({ type: "reasoning_update", message: "Step 1 complete" });
+    expect(merged.map((event) => event.id)).toEqual(["event-1", "event-2", "event-3"]);
+  });
 
-    const unchanged = appendPendingReasoningUpdateToActivity(withUpdate, "   ");
-    expect(unchanged).toEqual(withUpdate);
+  it("merges optimistic tool snapshots over older persisted tool rows", () => {
+    const merged = mergeRunToolCalls(
+      [buildToolCall({ id: "tool-1", status: "queued", output_text: "" })],
+      [buildToolCall({ id: "tool-1", status: "ok", output_text: "OK" })]
+    );
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ id: "tool-1", status: "ok", output_text: "OK" });
   });
 
   it("indexes runs by assistant message and separates unattached runs", () => {
@@ -78,7 +154,7 @@ describe("activity helpers", () => {
       runs: [
         buildRun({ id: "run-b", created_at: "2026-02-15T10:02:00Z", assistant_message_id: "assistant-1" }),
         buildRun({ id: "run-a", created_at: "2026-02-15T10:01:00Z", assistant_message_id: "assistant-1" }),
-        buildRun({ id: "run-c", created_at: "2026-02-15T10:03:00Z", assistant_message_id: null })
+        buildRun({ id: "run-c", created_at: "2026-02-15T10:03:00Z", assistant_message_id: null, user_message_id: "user-3" })
       ]
     };
 
@@ -87,13 +163,16 @@ describe("activity helpers", () => {
 
     const unattached = runsWithoutAssistantMessage(threadDetail);
     expect(unattached.map((run) => run.id)).toEqual(["run-c"]);
+
+    const unattachedByUserMessage = runsWithoutAssistantMessageByUserMessage(threadDetail);
+    expect(unattachedByUserMessage.get("user-3")?.map((run) => run.id)).toEqual(["run-c"]);
   });
 
   it("aggregates metrics and change-type counts", () => {
     const runs = [
-      buildRun({ id: "run-1", input_tokens: 10, total_cost_usd: 0.001 }),
-      buildRun({ id: "run-2", input_tokens: 15, total_cost_usd: 0.002 }),
-      buildRun({ id: "run-3", input_tokens: null, total_cost_usd: null })
+      buildRun({ id: "run-1", input_tokens: 10, output_tokens: 20, total_cost_usd: 0.001 }),
+      buildRun({ id: "run-2", input_tokens: 15, output_tokens: 40, total_cost_usd: 0.002 }),
+      buildRun({ id: "run-3", input_tokens: null, output_tokens: null, total_cost_usd: null })
     ];
     expect(totalRunMetric(runs, "input_tokens")).toBe(25);
     expect(totalRunMetric(runs, "total_cost_usd")).toBe(0.003);

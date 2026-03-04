@@ -313,19 +313,24 @@ Timeline features:
 - assistant/system message bodies render markdown via `react-markdown` + `remark-gfm` (sanitized defaults, GFM tables/task lists/strikethrough)
 - attachment previews for uploaded images and PDF files
 - run blocks are anchored to assistant-side timeline events (`assistant_message_id`) to keep tool activity in assistant flow
-- active runs without an assistant message render only when there is visible activity payload (tool calls/errors/review summary)
-- running assistant bubbles interleave `send_intermediate_update` reasoning notes with grouped non-update tool-call batches
-- when a tool-calling model turn also streams assistant text, that text is reclassified into the same reasoning-update bubble once the matching `reasoning_update` event arrives, instead of remaining in the pending final-answer body
-- completed runs retain the same interleaved reasoning/tool-batch structure for consistency with in-flight rendering
-- tool-call traces now use two-level disclosure:
-  - outer run-level toggle (`N tool calls`)
-  - inner per-tool toggle (arguments + model-visible output text; structured JSON remains as secondary debug disclosure)
-- during active execution, outer tool-batch collapse is intentionally disabled to avoid flicker while batches are growing
+- active runs without an assistant message render only when there is visible activity payload (`run.events`, errors, or review summary)
+- running assistant bubbles render the same ordered `run.events` timeline used by persisted runs
+- reasoning notes (`reasoning_update`) and individual tool lifecycle rows are interleaved in sequence order
+- tool rows appear as soon as `tool_call_queued` arrives, then update in place through `Running`, `Completed`, `Failed`, or `Cancelled`
+- `run.tool_calls` now act only as metadata snapshots for those event-driven rows; the client no longer synthesizes standalone activity rows from tool snapshots that do not have matching `run.events`
+- if a live tool lifecycle event arrives before `run.tool_calls` is present in the selected thread snapshot, the client performs a one-off `GET /agent/runs/{run_id}` hydration fetch so the row can render the actual tool name and arguments during the same stream
+- while a response is streaming, transient assistant text is rendered inside the same collapsible Assistant/update bubble used for live activity (not as a separate plain-text pending answer)
+- if a tool-calling turn emitted assistant text before its tool calls, that buffered text is cleared as soon as the matching `reasoning_update` with `source="assistant_content"` arrives, so the persisted update row cleanly replaces the transient version instead of duplicating it
+- the live Assistant/update bubble is visible as soon as `run_started` arrives, even if no visible tool/update rows exist yet; whitespace-only early `text_delta` chunks render the same block-cursor placeholder (`▍`) instead of being hidden by whitespace trimming
+- runs without a persisted assistant message (for example, interrupted runs) are anchored after their triggering user message via `run.user_message_id`, rather than being appended at the end of the thread
+- during streaming, reasoning/update bubbles may auto-open for the latest update, but tool-call rows remain collapsed by default so large tool runs do not keep expanding the newest tool row
+- expanded tool-call arguments and model-visible output use wrapped preformatted blocks so long JSON lines/tool text do not require horizontal scrolling
+- per-tool traces remain individually collapsible (arguments immediately, outputs after terminal completion/failure)
 - a rotating chevron icon indicates the expand/collapse state of each tool call
 - expanded tool-call details are indented with a left border line for visual hierarchy
 - message and tool-call timestamps are hidden by default and fade in on hover for a cleaner look
 - the composer shares the same horizontal padding as the conversation area (no extra inset)
-- while send/run is in-flight, timeline polling stays active so tool-call progress can appear before final assistant text
+- while this tab owns a healthy SSE stream, rapid run polling is disabled; if a run is still active without a local stream, the UI falls back to 5-second recovery polling
 - assistant message cards render run/tool activity before assistant markdown content, so final text appears after tool-call context
 - in-flight run cards do not render separate `Run: running (...)` header/timestamp rows; activity is shown via thinking/tool traces only
 - when a run has review items, the review request/action block renders below the assistant message content
@@ -388,10 +393,11 @@ Composer:
 - optimistic user bubble is auto-removed once the persisted server-side user message arrives, preventing temporary duplicate user blocks
 - optimistic assistant placeholder rendering: assistant bubble appears immediately after submit (without waiting for run-status polling) with a flashing block cursor (`▍`) while awaiting first assistant content/activity
 - assistant response text is streamed from backend SSE in real time (`POST /api/v1/agent/threads/{thread_id}/messages/stream`)
-- streamed assistant bubble remains visible while tool-call activity cards are also shown, so token deltas are not hidden during long multi-tool runs
-- stream event activity (`tool_call` + `reasoning_update`) for the active run is rendered inside the same streaming assistant bubble (instead of a second temporary assistant bubble)
+- streamed assistant bubble remains visible while the active run timeline updates inside the same card, so token deltas are not hidden during long multi-tool runs
+- once the backend emits `run_started`, the optimistic assistant bubble transitions into the live activity bubble immediately; if the first streamed chunks are only whitespace, the activity bubble keeps showing `▍` until visible text arrives
+- stream event activity now comes from `run_event`, and optimistic events are merged by `event.id` until the next persisted thread snapshot arrives
 - optimistic assistant bubble is reconciled away as soon as a new persisted assistant message arrives, preventing split-then-merge visual artifacts
-- active-run polling refreshes timeline state while backend run status is `running`
+- if the SSE stream drops before terminal state, the optimistic run stays visible while 5-second recovery polling fills in the missing persisted events
 
 Layout mode: full-page AI home experience (drawer mode has been removed).
 
@@ -498,7 +504,7 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
   - `GET /groups/{group_id}`
 - frontend now depends on agent API contracts and attachment URLs
 - multipart requests are required for agent message send with image/PDF attachments
-- agent send now depends on SSE parsing for incremental assistant text events (`run_started`, `text_delta`, `tool_call`, `reasoning_update`, `run_completed`, `run_failed`)
+- agent send now depends on SSE parsing for incremental assistant text (`text_delta`) plus persisted activity events (`run_event`)
 - all query keys/invalidation rules are now centralized, so new pages/features should reuse `queryKeys` + `queryInvalidation` helpers
 - UI primitives should be sourced from `frontend/src/components/ui/*` before introducing one-off controls/styles
 - page-level integration tests now cover accounts/properties orchestration flows:

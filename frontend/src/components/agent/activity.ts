@@ -1,16 +1,30 @@
-import type { AgentChangeItem, AgentRun, AgentThreadDetail } from "../../lib/types";
-
-const INTERMEDIATE_UPDATE_TOOL_NAME = "send_intermediate_update";
+import type {
+  AgentChangeItem,
+  AgentRun,
+  AgentRunEvent,
+  AgentRunEventSource,
+  AgentRunEventType,
+  AgentThreadDetail
+} from "../../lib/types";
 
 export type RunToolCall = AgentRun["tool_calls"][number];
+export type ReasoningUpdateSource = AgentRunEventSource;
 
-interface RunActivityToolBatch {
-  type: "tool_batch";
+type ToolLifecycleEventType =
+  | "tool_call_queued"
+  | "tool_call_started"
+  | "tool_call_completed"
+  | "tool_call_failed"
+  | "tool_call_cancelled";
+
+interface RunActivityToolCallItem {
+  type: "tool_call";
   key: string;
-  toolCalls: RunToolCall[];
+  toolCallId: string;
+  toolCall: RunToolCall | null;
+  lifecycleEventType: ToolLifecycleEventType;
+  createdAt: string;
 }
-
-export type ReasoningUpdateSource = "model_reasoning" | "assistant_content" | "tool_call";
 
 interface RunActivityReasoningUpdate {
   type: "reasoning_update";
@@ -20,25 +34,18 @@ interface RunActivityReasoningUpdate {
   createdAt: string;
 }
 
-export type RunActivityItem = RunActivityToolBatch | RunActivityReasoningUpdate;
+export type RunActivityItem = RunActivityToolCallItem | RunActivityReasoningUpdate;
 
-interface PendingAssistantToolBatchActivity {
-  type: "tool_batch";
-  key: string;
-  toolNames: string[];
+function byTimestamp(left: string, right: string): number {
+  return new Date(left).getTime() - new Date(right).getTime();
 }
 
-interface PendingAssistantReasoningUpdateActivity {
-  type: "reasoning_update";
-  key: string;
-  message: string;
-  source: ReasoningUpdateSource;
+function sortedToolCalls(toolCalls: RunToolCall[]): RunToolCall[] {
+  return [...toolCalls].sort((left, right) => byTimestamp(left.created_at, right.created_at));
 }
-
-export type PendingAssistantActivityItem = PendingAssistantToolBatchActivity | PendingAssistantReasoningUpdateActivity;
 
 export function sortRunsByCreatedAt(runs: AgentRun[]): AgentRun[] {
-  return [...runs].sort((left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime());
+  return [...runs].sort((left, right) => byTimestamp(left.created_at, right.created_at));
 }
 
 export function runsByAssistantMessage(detail: AgentThreadDetail | undefined): Map<string, AgentRun[]> {
@@ -59,6 +66,19 @@ export function runsByAssistantMessage(detail: AgentThreadDetail | undefined): M
 
 export function runsWithoutAssistantMessage(detail: AgentThreadDetail | undefined): AgentRun[] {
   return sortRunsByCreatedAt((detail?.runs ?? []).filter((run) => !run.assistant_message_id));
+}
+
+export function runsWithoutAssistantMessageByUserMessage(detail: AgentThreadDetail | undefined): Map<string, AgentRun[]> {
+  const map = new Map<string, AgentRun[]>();
+  runsWithoutAssistantMessage(detail).forEach((run) => {
+    const runs = map.get(run.user_message_id);
+    if (runs) {
+      runs.push(run);
+      return;
+    }
+    map.set(run.user_message_id, [run]);
+  });
+  return map;
 }
 
 export function totalRunMetric(
@@ -104,7 +124,7 @@ export function buildThreadUsageTotals(detail: AgentThreadDetail | undefined): {
     input: totalRunMetric(runs, "input_tokens"),
     output: totalRunMetric(runs, "output_tokens"),
     cacheRead: totalRunMetric(runs, "cache_read_tokens"),
-    totalCost: totalRunMetric(runs, "total_cost_usd"),
+    totalCost: totalRunMetric(runs, "total_cost_usd")
   };
 }
 
@@ -131,149 +151,97 @@ export function summarizeRunChangeTypes(changeItems: AgentChangeItem[]): {
     }
   });
 
-  return {
-    entryCount,
-    tagCount,
-    entityCount
-  };
+  return { entryCount, tagCount, entityCount };
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
-}
-
-function extractIntermediateUpdateFromToolCall(toolCall: RunToolCall): { message: string; source: ReasoningUpdateSource } | null {
-  if (toolCall.tool_name !== INTERMEDIATE_UPDATE_TOOL_NAME) {
-    return null;
-  }
-  const outputJson = asRecord(toolCall.output_json);
-  const inputJson = asRecord(toolCall.input_json);
-
-  let message: string | null = null;
-  const outputMessage = outputJson?.message;
-  if (typeof outputMessage === "string" && outputMessage.trim()) {
-    message = outputMessage.trim();
-  }
-  if (!message) {
-    const inputMessage = inputJson?.message;
-    if (typeof inputMessage === "string" && inputMessage.trim()) {
-      message = inputMessage.trim();
+function sortRunEvents(events: AgentRunEvent[]): AgentRunEvent[] {
+  return [...events].sort((left, right) => {
+    if (left.sequence_index !== right.sequence_index) {
+      return left.sequence_index - right.sequence_index;
     }
-  }
-  if (!message) {
-    return null;
-  }
-
-  const rawSource = (outputJson?.source ?? inputJson?.source) as string | undefined;
-  const source: ReasoningUpdateSource =
-    rawSource === "model_reasoning" || rawSource === "assistant_content" || rawSource === "tool_call"
-      ? rawSource
-      : "tool_call";
-
-  return { message, source };
-}
-
-function sortToolCallsByCreatedAt(toolCalls: RunToolCall[]): RunToolCall[] {
-  return [...toolCalls].sort((left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime());
-}
-
-export function buildRunActivityTimeline(toolCalls: RunToolCall[]): RunActivityItem[] {
-  const timeline: RunActivityItem[] = [];
-  const sortedCalls = sortToolCallsByCreatedAt(toolCalls);
-  let pendingBatch: RunToolCall[] = [];
-
-  const flushPendingBatch = () => {
-    if (pendingBatch.length === 0) {
-      return;
-    }
-    const first = pendingBatch[0];
-    const last = pendingBatch[pendingBatch.length - 1];
-    timeline.push({
-      type: "tool_batch",
-      key: `${first.id}-${last.id}`,
-      toolCalls: pendingBatch
-    });
-    pendingBatch = [];
-  };
-
-  sortedCalls.forEach((toolCall) => {
-    const update = extractIntermediateUpdateFromToolCall(toolCall);
-    if (!update) {
-      pendingBatch.push(toolCall);
-      return;
-    }
-    flushPendingBatch();
-    timeline.push({
-      type: "reasoning_update",
-      key: toolCall.id,
-      message: update.message,
-      source: update.source,
-      createdAt: toolCall.created_at
-    });
+    return byTimestamp(left.created_at, right.created_at);
   });
-  flushPendingBatch();
+}
+
+export function mergeRunEvents(persisted: AgentRunEvent[], optimistic: AgentRunEvent[] = []): AgentRunEvent[] {
+  const byId = new Map<string, AgentRunEvent>();
+  [...persisted, ...optimistic].forEach((event) => {
+    byId.set(event.id, event);
+  });
+  return sortRunEvents([...byId.values()]);
+}
+
+export function mergeRunToolCalls(persisted: RunToolCall[], optimistic: RunToolCall[] = []): RunToolCall[] {
+  const byId = new Map<string, RunToolCall>();
+  [...persisted, ...optimistic].forEach((toolCall) => {
+    byId.set(toolCall.id, toolCall);
+  });
+  return sortedToolCalls([...byId.values()]);
+}
+
+function isToolLifecycleEventType(value: AgentRunEventType): value is ToolLifecycleEventType {
+  return (
+    value === "tool_call_queued" ||
+    value === "tool_call_started" ||
+    value === "tool_call_completed" ||
+    value === "tool_call_failed" ||
+    value === "tool_call_cancelled"
+  );
+}
+
+export function buildRunTimelineFromEvents(events: AgentRunEvent[], toolCalls: RunToolCall[]): RunActivityItem[] {
+  const mergedEvents = sortRunEvents(events);
+  const timeline: RunActivityItem[] = [];
+  const mergedToolCalls = mergeRunToolCalls(toolCalls);
+  const toolCallById = new Map(mergedToolCalls.map((toolCall) => [toolCall.id, toolCall]));
+  const seenToolItems = new Map<string, RunActivityToolCallItem>();
+
+  mergedEvents.forEach((event) => {
+    if (event.event_type === "reasoning_update") {
+      const normalized = (event.message || "").trim();
+      if (!normalized) {
+        return;
+      }
+      timeline.push({
+        type: "reasoning_update",
+        key: event.id,
+        message: normalized,
+        source: event.source ?? "tool_call",
+        createdAt: event.created_at
+      });
+      return;
+    }
+
+    if (!isToolLifecycleEventType(event.event_type) || !event.tool_call_id) {
+      return;
+    }
+
+    const existingItem = seenToolItems.get(event.tool_call_id);
+    if (existingItem) {
+      existingItem.toolCall = existingItem.toolCall ?? toolCallById.get(event.tool_call_id) ?? null;
+      existingItem.lifecycleEventType = event.event_type;
+      existingItem.createdAt = event.created_at;
+      return;
+    }
+
+    const item: RunActivityToolCallItem = {
+      type: "tool_call",
+      key: event.tool_call_id,
+      toolCallId: event.tool_call_id,
+      toolCall: toolCallById.get(event.tool_call_id) ?? null,
+      lifecycleEventType: event.event_type,
+      createdAt: event.created_at
+    };
+    seenToolItems.set(event.tool_call_id, item);
+    timeline.push(item);
+  });
+
   return timeline;
 }
 
-export function appendPendingToolCallToActivity(
-  activity: PendingAssistantActivityItem[],
-  toolName: string
-): PendingAssistantActivityItem[] {
-  if (!toolName || toolName === INTERMEDIATE_UPDATE_TOOL_NAME) {
-    return activity;
-  }
-
-  const last = activity[activity.length - 1];
-  if (last?.type === "tool_batch") {
-    const updatedBatch: PendingAssistantToolBatchActivity = {
-      ...last,
-      toolNames: [...last.toolNames, toolName]
-    };
-    return [...activity.slice(0, -1), updatedBatch];
-  }
-  return [
-    ...activity,
-    {
-      type: "tool_batch",
-      key: `tool-batch-${activity.length + 1}-${Date.now()}`,
-      toolNames: [toolName]
-    }
-  ];
-}
-
-export function appendPendingReasoningUpdateToActivity(
-  activity: PendingAssistantActivityItem[],
-  message: string,
-  source: ReasoningUpdateSource = "tool_call"
-): PendingAssistantActivityItem[] {
-  const normalized = message.trim();
-  if (!normalized) {
-    return activity;
-  }
-  return [
-    ...activity,
-    {
-      type: "reasoning_update",
-      key: `reasoning-update-${activity.length + 1}-${Date.now()}`,
-      message: normalized,
-      source
-    }
-  ];
-}
-
-export function summarizeActivityTimeline(items: RunActivityItem[]): string {
-  let toolCount = 0;
-  let updateCount = 0;
-  items.forEach((item) => {
-    if (item.type === "tool_batch") {
-      toolCount += item.toolCalls.length;
-    } else {
-      updateCount += 1;
-    }
-  });
+export function summarizeActivityTimeline(items: RunActivityItem[], extraUpdateCount: number = 0): string {
+  const toolCount = items.filter((item) => item.type === "tool_call").length;
+  const updateCount = items.filter((item) => item.type === "reasoning_update").length + extraUpdateCount;
   const parts: string[] = [];
   if (toolCount > 0) {
     parts.push(`${toolCount} tool call${toolCount === 1 ? "" : "s"}`);
@@ -305,4 +273,27 @@ export function reasoningSourceLabel(source: ReasoningUpdateSource): string {
     case "tool_call":
       return "Update";
   }
+}
+
+export function toolLifecycleLabel(eventType: ToolLifecycleEventType): string {
+  switch (eventType) {
+    case "tool_call_queued":
+      return "Queued";
+    case "tool_call_started":
+      return "Running";
+    case "tool_call_completed":
+      return "Completed";
+    case "tool_call_failed":
+      return "Failed";
+    case "tool_call_cancelled":
+      return "Cancelled";
+  }
+}
+
+export function isToolLifecycleTerminal(eventType: ToolLifecycleEventType): boolean {
+  return (
+    eventType === "tool_call_completed" ||
+    eventType === "tool_call_failed" ||
+    eventType === "tool_call_cancelled"
+  );
 }

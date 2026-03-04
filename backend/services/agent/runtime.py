@@ -10,14 +10,21 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.enums import AgentMessageRole, AgentRunStatus, AgentToolCallStatus
-from backend.models import AgentChangeItem, AgentMessage, AgentRun, AgentThread, AgentToolCall
+from backend.enums import (
+    AgentMessageRole,
+    AgentRunEventSource,
+    AgentRunEventType,
+    AgentRunStatus,
+    AgentToolCallStatus,
+)
+from backend.models import AgentChangeItem, AgentMessage, AgentRun, AgentRunEvent, AgentThread, AgentToolCall
 from backend.services.agent.context_tokens import count_context_tokens
 from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.model_client import AgentModelError, LiteLLMModelClient, validate_litellm_environment
 from backend.services.agent.tools import (
     INTERMEDIATE_UPDATE_TOOL_NAME,
     ToolContext,
+    ToolExecutionResult,
     build_openai_tool_schemas,
     execute_tool,
 )
@@ -45,9 +52,11 @@ class AgentRuntimeUnavailable(RuntimeError):
 
 
 @dataclass(slots=True)
-class RecordedToolCall:
-    llm_message: dict[str, Any]
-    persisted_row: AgentToolCall
+class PreparedToolCall:
+    tool_call: dict[str, Any]
+    tool_name: str
+    arguments: dict[str, Any]
+    persisted_row: AgentToolCall | None = None
 
 
 def ensure_agent_available(db: Session) -> None:
@@ -134,6 +143,7 @@ def _persist_final_message(
     *,
     status: AgentRunStatus,
     error_text: str | None = None,
+    commit: bool = True,
 ) -> None:
     assistant = AgentMessage(
         thread_id=thread.id,
@@ -149,7 +159,10 @@ def _persist_final_message(
     thread.updated_at = utc_now()
     db.add(run)
     db.add(thread)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
 
 
 def _load_run_snapshot(db: Session, run_id: str) -> AgentRun:
@@ -157,6 +170,7 @@ def _load_run_snapshot(db: Session, run_id: str) -> AgentRun:
         select(AgentRun)
         .where(AgentRun.id == run_id)
         .options(
+            selectinload(AgentRun.events),
             selectinload(AgentRun.tool_calls),
             selectinload(AgentRun.change_items).selectinload(AgentChangeItem.review_actions),
         )
@@ -178,105 +192,243 @@ def _parse_tool_arguments(raw_arguments: Any) -> dict[str, Any]:
         return {}
 
 
-def _record_tool_call_and_result(
+def _next_run_event_sequence(db: Session, run_id: str) -> int:
+    current_max = db.scalar(
+        select(func.max(AgentRunEvent.sequence_index)).where(AgentRunEvent.run_id == run_id)
+    )
+    return int(current_max or 0) + 1
+
+
+def _persist_run_event(
+    db: Session,
+    *,
+    run: AgentRun,
+    event_type: AgentRunEventType,
+    source: AgentRunEventSource | None = None,
+    message: str | None = None,
+    tool_call: AgentToolCall | None = None,
+) -> AgentRunEvent:
+    event_row = AgentRunEvent(
+        run_id=run.id,
+        sequence_index=_next_run_event_sequence(db, run.id),
+        event_type=event_type,
+        source=source,
+        message=message,
+        tool_call_id=tool_call.id if tool_call is not None else None,
+    )
+    db.add(event_row)
+    db.flush()
+    return event_row
+
+
+def _emit_run_event(run: AgentRun, persisted_event: AgentRunEvent) -> dict[str, Any]:
+    return {
+        "type": "run_event",
+        "run_id": run.id,
+        "event": {
+            "id": persisted_event.id,
+            "run_id": persisted_event.run_id,
+            "sequence_index": persisted_event.sequence_index,
+            "event_type": persisted_event.event_type.value,
+            "source": persisted_event.source.value if persisted_event.source is not None else None,
+            "message": persisted_event.message,
+            "tool_call_id": persisted_event.tool_call_id,
+            "created_at": persisted_event.created_at.isoformat(),
+        },
+    }
+
+
+def _queue_tool_call_record(
     db: Session,
     *,
     run: AgentRun,
     tool_call: dict[str, Any],
-    tool_context: ToolContext,
-) -> RecordedToolCall:
+) -> PreparedToolCall:
     function = tool_call.get("function") or {}
-    name = str(function.get("name") or "")
+    tool_name = str(function.get("name") or "(unknown)")
     arguments = _parse_tool_arguments(function.get("arguments") or "{}")
+    if tool_name == INTERMEDIATE_UPDATE_TOOL_NAME:
+        return PreparedToolCall(
+            tool_call=tool_call,
+            tool_name=tool_name,
+            arguments=arguments,
+            persisted_row=None,
+        )
 
-    result = execute_tool(name, arguments, tool_context)
     tool_row = AgentToolCall(
         run_id=run.id,
-        tool_name=name or "(unknown)",
+        llm_tool_call_id=str(tool_call.get("id") or "") or None,
+        tool_name=tool_name,
         input_json=arguments,
-        output_json=result.output_json,
-        output_text=result.output_text,
-        status=AgentToolCallStatus.OK if result.status == "ok" else AgentToolCallStatus.ERROR,
+        output_json={},
+        output_text="",
+        status=AgentToolCallStatus.QUEUED,
     )
     db.add(tool_row)
     db.flush()
-
-    return RecordedToolCall(
-        llm_message={
-            "role": "tool",
-            "tool_call_id": tool_call.get("id"),
-            "name": name,
-            "content": result.output_text,
-        },
+    return PreparedToolCall(
+        tool_call=tool_call,
+        tool_name=tool_name,
+        arguments=arguments,
         persisted_row=tool_row,
     )
 
 
-def _extract_reasoning_update_message(tool_call: AgentToolCall) -> str | None:
-    if tool_call.tool_name != INTERMEDIATE_UPDATE_TOOL_NAME:
-        return None
-
-    output_json = tool_call.output_json if isinstance(tool_call.output_json, dict) else {}
-    output_message = output_json.get("message")
-    if isinstance(output_message, str):
-        normalized_output = output_message.strip()
-        if normalized_output:
-            return normalized_output
-
-    input_json = tool_call.input_json if isinstance(tool_call.input_json, dict) else {}
-    input_message = input_json.get("message")
-    if isinstance(input_message, str):
-        normalized_input = input_message.strip()
-        if normalized_input:
-            return normalized_input
-    return None
+def _mark_tool_call_running(db: Session, tool_call: AgentToolCall) -> None:
+    tool_call.status = AgentToolCallStatus.RUNNING
+    tool_call.started_at = utc_now()
+    db.add(tool_call)
+    db.flush()
 
 
-def _extract_reasoning_update_source(tool_call: AgentToolCall) -> str:
-    output_json = tool_call.output_json if isinstance(tool_call.output_json, dict) else {}
-    source = output_json.get("source")
-    if isinstance(source, str) and source:
-        return source
-    input_json = tool_call.input_json if isinstance(tool_call.input_json, dict) else {}
-    source = input_json.get("source")
-    if isinstance(source, str) and source:
-        return source
-    return "tool_call"
+def _finalize_tool_call_success(
+    db: Session,
+    *,
+    tool_call: AgentToolCall,
+    result: ToolExecutionResult,
+) -> None:
+    tool_call.output_json = result.output_json
+    tool_call.output_text = result.output_text
+    tool_call.status = AgentToolCallStatus.OK
+    tool_call.completed_at = utc_now()
+    db.add(tool_call)
+    db.flush()
 
 
-def _normalize_intermediate_update_message(message: str) -> str | None:
+def _finalize_tool_call_error(
+    db: Session,
+    *,
+    tool_call: AgentToolCall,
+    result: ToolExecutionResult,
+) -> None:
+    tool_call.output_json = result.output_json
+    tool_call.output_text = result.output_text
+    tool_call.status = AgentToolCallStatus.ERROR
+    tool_call.completed_at = utc_now()
+    db.add(tool_call)
+    db.flush()
+
+
+def _cancel_incomplete_tool_calls(db: Session, run: AgentRun) -> list[AgentRunEvent]:
+    incomplete_calls = list(
+        db.scalars(
+            select(AgentToolCall)
+            .where(
+                AgentToolCall.run_id == run.id,
+                AgentToolCall.status.in_(
+                    [AgentToolCallStatus.QUEUED, AgentToolCallStatus.RUNNING]
+                ),
+            )
+            .order_by(AgentToolCall.created_at)
+        )
+    )
+    cancelled_events: list[AgentRunEvent] = []
+    for tool_call in incomplete_calls:
+        tool_call.status = AgentToolCallStatus.CANCELLED
+        tool_call.completed_at = tool_call.completed_at or utc_now()
+        db.add(tool_call)
+        cancelled_events.append(
+            _persist_run_event(
+                db,
+                run=run,
+                event_type=AgentRunEventType.TOOL_CALL_CANCELLED,
+                tool_call=tool_call,
+            )
+        )
+    return cancelled_events
+
+def _normalize_reasoning_message(message: str) -> str | None:
     normalized = message.strip()
     return normalized or None
 
 
-def _record_assistant_intermediate_update(
+def _record_reasoning_update_event(
     db: Session,
     *,
     run: AgentRun,
     message: str,
-    source: str = "assistant_content",
-) -> AgentToolCall | None:
-    normalized_message = _normalize_intermediate_update_message(message)
+    source: AgentRunEventSource,
+) -> AgentRunEvent | None:
+    normalized_message = _normalize_reasoning_message(message)
     if normalized_message is None:
         return None
-
-    tool_row = AgentToolCall(
-        run_id=run.id,
-        tool_name=INTERMEDIATE_UPDATE_TOOL_NAME,
-        input_json={
-            "message": normalized_message,
-            "source": source,
-        },
-        output_json={
-            "message": normalized_message,
-            "source": source,
-        },
-        output_text=f"OK: {normalized_message}",
-        status=AgentToolCallStatus.OK,
+    return _persist_run_event(
+        db,
+        run=run,
+        event_type=AgentRunEventType.REASONING_UPDATE,
+        source=source,
+        message=normalized_message,
     )
-    db.add(tool_row)
-    db.flush()
-    return tool_row
+
+
+def _reasoning_source_from_value(value: Any) -> AgentRunEventSource:
+    if value == AgentRunEventSource.MODEL_REASONING.value:
+        return AgentRunEventSource.MODEL_REASONING
+    if value == AgentRunEventSource.ASSISTANT_CONTENT.value:
+        return AgentRunEventSource.ASSISTANT_CONTENT
+    return AgentRunEventSource.TOOL_CALL
+
+
+def _extract_reasoning_from_tool_result(
+    result: ToolExecutionResult,
+    arguments: dict[str, Any],
+) -> tuple[str | None, AgentRunEventSource]:
+    output_json = result.output_json if isinstance(result.output_json, dict) else {}
+    output_message = output_json.get("message")
+    if isinstance(output_message, str):
+        normalized_output = output_message.strip()
+        if normalized_output:
+            return normalized_output, _reasoning_source_from_value(
+                output_json.get("source") or arguments.get("source")
+            )
+
+    input_message = arguments.get("message")
+    if isinstance(input_message, str):
+        normalized_input = input_message.strip()
+        if normalized_input:
+            return normalized_input, _reasoning_source_from_value(
+                output_json.get("source") or arguments.get("source")
+            )
+    return None, _reasoning_source_from_value(output_json.get("source") or arguments.get("source"))
+
+
+def _tool_result_llm_message(prepared_tool_call: PreparedToolCall, result: ToolExecutionResult) -> dict[str, Any]:
+    return {
+        "role": "tool",
+        "tool_call_id": prepared_tool_call.tool_call.get("id"),
+        "name": prepared_tool_call.tool_name,
+        "content": result.output_text,
+    }
+
+
+def _ensure_run_started_event(db: Session, run: AgentRun) -> AgentRunEvent | None:
+    existing_event = db.scalar(
+        select(AgentRunEvent.id)
+        .where(
+            AgentRunEvent.run_id == run.id,
+            AgentRunEvent.event_type == AgentRunEventType.RUN_STARTED,
+        )
+        .limit(1)
+    )
+    if existing_event is not None:
+        return None
+    return _persist_run_event(db, run=run, event_type=AgentRunEventType.RUN_STARTED)
+
+
+def _run_has_terminal_event(db: Session, run_id: str) -> bool:
+    return (
+        db.scalar(
+            select(AgentRunEvent.id)
+            .where(
+                AgentRunEvent.run_id == run_id,
+                AgentRunEvent.event_type.in_(
+                    [AgentRunEventType.RUN_COMPLETED, AgentRunEventType.RUN_FAILED]
+                ),
+            )
+            .limit(1)
+        )
+        is not None
+    )
 
 
 def _coerce_usage_int(value: Any) -> int | None:
@@ -383,6 +535,175 @@ def _run_is_stopped(db: Session, run: AgentRun) -> bool:
     return run.status != AgentRunStatus.RUNNING
 
 
+def _events_after_sequence(db: Session, run_id: str, sequence_index: int) -> list[AgentRunEvent]:
+    return list(
+        db.scalars(
+            select(AgentRunEvent)
+            .where(
+                AgentRunEvent.run_id == run_id,
+                AgentRunEvent.sequence_index > sequence_index,
+            )
+            .order_by(AgentRunEvent.sequence_index)
+        )
+    )
+
+
+def _persist_terminal_run_state(
+    db: Session,
+    *,
+    thread: AgentThread | None,
+    run: AgentRun,
+    status: AgentRunStatus,
+    error_text: str | None,
+    event_type: AgentRunEventType,
+    event_message: str | None,
+    assistant_content: str | None = None,
+    persist_assistant_message: bool = True,
+) -> AgentRunEvent | None:
+    if _run_has_terminal_event(db, run.id):
+        return None
+
+    if persist_assistant_message and assistant_content is not None:
+        _persist_final_message(
+            db,
+            thread if thread is not None else db.get(AgentThread, run.thread_id),  # pragma: no cover - defensive
+            run,
+            assistant_content,
+            status=status,
+            error_text=error_text,
+            commit=False,
+        )
+    else:
+        run.status = status
+        run.error_text = error_text
+        run.completed_at = utc_now()
+        if thread is not None:
+            thread.updated_at = utc_now()
+            db.add(thread)
+        db.add(run)
+        db.flush()
+
+    terminal_event = _persist_run_event(
+        db,
+        run=run,
+        event_type=event_type,
+        message=event_message,
+    )
+    db.commit()
+    return terminal_event
+
+
+def _prepare_tool_turn(
+    db: Session,
+    *,
+    run: AgentRun,
+    llm_messages: list[dict[str, Any]],
+    assistant_content: str,
+    model_reasoning: str,
+    tool_calls: list[dict[str, Any]],
+) -> tuple[list[PreparedToolCall], list[AgentRunEvent]]:
+    prepared_calls: list[PreparedToolCall] = []
+    event_rows: list[AgentRunEvent] = []
+
+    reasoning_event = _record_reasoning_update_event(
+        db,
+        run=run,
+        message=model_reasoning,
+        source=AgentRunEventSource.MODEL_REASONING,
+    )
+    if reasoning_event is not None:
+        event_rows.append(reasoning_event)
+
+    llm_messages.append(
+        {
+            "role": "assistant",
+            "content": assistant_content,
+            "tool_calls": tool_calls,
+        }
+    )
+    assistant_event = _record_reasoning_update_event(
+        db,
+        run=run,
+        message=assistant_content,
+        source=AgentRunEventSource.ASSISTANT_CONTENT,
+    )
+    if assistant_event is not None:
+        event_rows.append(assistant_event)
+
+    for tool_call in tool_calls:
+        prepared_call = _queue_tool_call_record(db, run=run, tool_call=tool_call)
+        prepared_calls.append(prepared_call)
+        if prepared_call.persisted_row is None:
+            continue
+        event_rows.append(
+            _persist_run_event(
+                db,
+                run=run,
+                event_type=AgentRunEventType.TOOL_CALL_QUEUED,
+                tool_call=prepared_call.persisted_row,
+            )
+        )
+
+    _update_run_context_tokens(run=run, llm_messages=llm_messages)
+    db.add(run)
+    db.commit()
+    return prepared_calls, event_rows
+
+
+def _run_prepared_tool_call_nonstream(
+    db: Session,
+    *,
+    run: AgentRun,
+    prepared_tool_call: PreparedToolCall,
+    tool_context: ToolContext,
+    llm_messages: list[dict[str, Any]],
+) -> None:
+    if prepared_tool_call.tool_name == INTERMEDIATE_UPDATE_TOOL_NAME:
+        result = execute_tool(prepared_tool_call.tool_name, prepared_tool_call.arguments, tool_context)
+        llm_messages.append(_tool_result_llm_message(prepared_tool_call, result))
+        reasoning_message, source = _extract_reasoning_from_tool_result(result, prepared_tool_call.arguments)
+        _record_reasoning_update_event(
+            db,
+            run=run,
+            message=reasoning_message or "",
+            source=source,
+        )
+        _update_run_context_tokens(run=run, llm_messages=llm_messages)
+        db.add(run)
+        db.commit()
+        return
+
+    tool_row = prepared_tool_call.persisted_row
+    if tool_row is None:  # pragma: no cover - defensive guard
+        return
+
+    _mark_tool_call_running(db, tool_row)
+    _persist_run_event(
+        db,
+        run=run,
+        event_type=AgentRunEventType.TOOL_CALL_STARTED,
+        tool_call=tool_row,
+    )
+    db.commit()
+
+    result = execute_tool(prepared_tool_call.tool_name, prepared_tool_call.arguments, tool_context)
+    db.refresh(tool_row, attribute_names=["status"])
+    if tool_row.status == AgentToolCallStatus.CANCELLED:
+        return
+
+    if result.status == "ok":
+        _finalize_tool_call_success(db, tool_call=tool_row, result=result)
+        terminal_type = AgentRunEventType.TOOL_CALL_COMPLETED
+    else:
+        _finalize_tool_call_error(db, tool_call=tool_row, result=result)
+        terminal_type = AgentRunEventType.TOOL_CALL_FAILED
+    _persist_run_event(db, run=run, event_type=terminal_type, tool_call=tool_row)
+    llm_messages.append(_tool_result_llm_message(prepared_tool_call, result))
+    _update_run_context_tokens(run=run, llm_messages=llm_messages)
+    db.add(run)
+    db.commit()
+
+
 def _execute_agent_run(
     db: Session,
     *,
@@ -391,6 +712,10 @@ def _execute_agent_run(
 ) -> AgentRun:
     settings = resolve_runtime_settings(db)
     max_steps = max(settings.agent_max_steps, 1)
+
+    started_event = _ensure_run_started_event(db, run)
+    if started_event is not None:
+        db.commit()
 
     llm_messages = build_llm_messages(db, thread.id, current_user_message_id=run.user_message_id)
     tool_context = ToolContext(db=db, run_id=run.id)
@@ -433,108 +758,89 @@ def _execute_agent_run(
             assistant_content = assistant_message.get("content") or ""
             model_reasoning = (assistant_message.get("reasoning") or "").strip()
 
-            if model_reasoning:
-                _record_assistant_intermediate_update(
-                    db,
-                    run=run,
-                    message=model_reasoning,
-                    source="model_reasoning",
-                )
-
             if tool_calls:
-                llm_messages.append(
-                    {
-                        "role": "assistant",
-                        "content": assistant_content,
-                        "tool_calls": tool_calls,
-                    }
-                )
-                _update_run_context_tokens(run=run, llm_messages=llm_messages)
-                db.add(run)
-                assistant_update = _record_assistant_intermediate_update(
+                prepared_calls, _event_rows = _prepare_tool_turn(
                     db,
                     run=run,
-                    message=assistant_content,
+                    llm_messages=llm_messages,
+                    assistant_content=assistant_content,
+                    model_reasoning=model_reasoning,
+                    tool_calls=tool_calls,
                 )
-                for tool_call in tool_calls:
+                for prepared_tool_call in prepared_calls:
                     if _run_is_stopped(db, run):
                         return _load_run_snapshot(db, run.id)
-                    recorded_tool_call = _record_tool_call_and_result(
+                    _run_prepared_tool_call_nonstream(
                         db,
                         run=run,
-                        tool_call=tool_call,
+                        prepared_tool_call=prepared_tool_call,
                         tool_context=tool_context,
+                        llm_messages=llm_messages,
                     )
-                    llm_messages.append(
-                        recorded_tool_call.llm_message
-                    )
-                    _update_run_context_tokens(run=run, llm_messages=llm_messages)
-                    db.add(run)
-                    db.commit()
                 continue
 
-            _persist_final_message(
+            reasoning_event = _record_reasoning_update_event(
                 db,
-                thread,
-                run,
-                _final_assistant_content(assistant_content),
+                run=run,
+                message=model_reasoning,
+                source=AgentRunEventSource.MODEL_REASONING,
+            )
+            if reasoning_event is not None:
+                db.commit()
+
+            _persist_terminal_run_state(
+                db,
+                thread=thread,
+                run=run,
                 status=AgentRunStatus.COMPLETED,
+                error_text=None,
+                event_type=AgentRunEventType.RUN_COMPLETED,
+                event_message=None,
+                assistant_content=_final_assistant_content(assistant_content),
             )
             return _load_run_snapshot(db, run.id)
 
-        _persist_final_message(
+        _persist_terminal_run_state(
             db,
-            thread,
-            run,
-            (
+            thread=thread,
+            run=run,
+            status=AgentRunStatus.FAILED,
+            error_text="maximum tool steps reached",
+            event_type=AgentRunEventType.RUN_FAILED,
+            event_message="maximum tool steps reached",
+            assistant_content=(
                 "I reached the configured max tool steps before finishing. "
                 "Please review the existing tool outputs and pending review items."
             ),
-            status=AgentRunStatus.FAILED,
-            error_text="maximum tool steps reached",
         )
         return _load_run_snapshot(db, run.id)
     except AgentModelError as exc:
-        _persist_final_message(
+        _persist_terminal_run_state(
             db,
-            thread,
-            run,
-            (
+            thread=thread,
+            run=run,
+            status=AgentRunStatus.FAILED,
+            error_text=str(exc),
+            event_type=AgentRunEventType.RUN_FAILED,
+            event_message=str(exc),
+            assistant_content=(
                 "I could not complete this run because the language model request failed.\n"
                 f"Error: {str(exc)}"
             ),
-            status=AgentRunStatus.FAILED,
-            error_text=str(exc),
         )
         return _load_run_snapshot(db, run.id)
     except Exception as exc:  # pragma: no cover - defensive guard
-        _persist_final_message(
+        _persist_terminal_run_state(
             db,
-            thread,
-            run,
-            "I encountered an internal error while processing this request.",
+            thread=thread,
+            run=run,
             status=AgentRunStatus.FAILED,
             error_text=str(exc),
+            event_type=AgentRunEventType.RUN_FAILED,
+            event_message=str(exc),
+            assistant_content="I encountered an internal error while processing this request.",
         )
         return _load_run_snapshot(db, run.id)
-
-
-def _run_terminal_stream_event(run: AgentRun) -> dict[str, Any]:
-    if run.status == AgentRunStatus.COMPLETED:
-        return {
-            "type": "run_completed",
-            "run_id": run.id,
-            "assistant_message_id": run.assistant_message_id,
-            "status": run.status.value,
-            "error_text": run.error_text,
-        }
-    return {
-        "type": "run_failed",
-        "run_id": run.id,
-        "assistant_message_id": run.assistant_message_id,
-        "status": run.status.value,
-        "error_text": run.error_text,
-    }
 
 
 def _execute_agent_run_stream(
@@ -545,6 +851,17 @@ def _execute_agent_run_stream(
 ) -> Iterator[dict[str, Any]]:
     settings = resolve_runtime_settings(db)
     max_steps = max(settings.agent_max_steps, 1)
+    last_emitted_sequence = 0
+
+    def emit_row(event_row: AgentRunEvent) -> dict[str, Any]:
+        nonlocal last_emitted_sequence
+        last_emitted_sequence = max(last_emitted_sequence, event_row.sequence_index)
+        return _emit_run_event(run, event_row)
+
+    started_event = _ensure_run_started_event(db, run)
+    if started_event is not None:
+        db.commit()
+        yield emit_row(started_event)
 
     llm_messages = build_llm_messages(db, thread.id, current_user_message_id=run.user_message_id)
     tool_context = ToolContext(db=db, run_id=run.id)
@@ -561,7 +878,8 @@ def _execute_agent_run_stream(
     try:
         for step_index in range(max_steps):
             if _run_is_stopped(db, run):
-                yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+                for event_row in _events_after_sequence(db, run.id, last_emitted_sequence):
+                    yield emit_row(event_row)
                 return
 
             observability = _model_observability_context(
@@ -593,7 +911,8 @@ def _execute_agent_run_stream(
                 raise AgentModelError("model request failed: no response")
 
             if _run_is_stopped(db, run):
-                yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+                for event_row in _events_after_sequence(db, run.id, last_emitted_sequence):
+                    yield emit_row(event_row)
                 return
 
             _accumulate_usage_totals(usage_totals, _extract_usage(assistant_message))
@@ -604,126 +923,149 @@ def _execute_agent_run_stream(
             assistant_content = assistant_message.get("content") or ""
             model_reasoning = (assistant_message.get("reasoning") or "").strip()
 
-            if model_reasoning:
-                reasoning_row = _record_assistant_intermediate_update(
-                    db,
-                    run=run,
-                    message=model_reasoning,
-                    source="model_reasoning",
-                )
-                if reasoning_row is not None:
-                    reasoning_msg = _extract_reasoning_update_message(reasoning_row)
-                    if reasoning_msg is not None:
-                        yield {
-                            "type": "reasoning_update",
-                            "run_id": run.id,
-                            "message": reasoning_msg,
-                            "source": "model_reasoning",
-                        }
-
             if tool_calls:
-                llm_messages.append(
-                    {
-                        "role": "assistant",
-                        "content": assistant_content,
-                        "tool_calls": tool_calls,
-                    }
-                )
-                _update_run_context_tokens(run=run, llm_messages=llm_messages)
-                db.add(run)
-                assistant_update = _record_assistant_intermediate_update(
+                prepared_calls, event_rows = _prepare_tool_turn(
                     db,
                     run=run,
-                    message=assistant_content,
+                    llm_messages=llm_messages,
+                    assistant_content=assistant_content,
+                    model_reasoning=model_reasoning,
+                    tool_calls=tool_calls,
                 )
-                if assistant_update is not None:
-                    reasoning_update_message = _extract_reasoning_update_message(assistant_update)
-                    if reasoning_update_message is not None:
-                        yield {
-                            "type": "reasoning_update",
-                            "run_id": run.id,
-                            "message": reasoning_update_message,
-                            "source": "assistant_content",
-                        }
-                for tool_call in tool_calls:
+                for event_row in event_rows:
+                    yield emit_row(event_row)
+
+                for prepared_tool_call in prepared_calls:
                     if _run_is_stopped(db, run):
-                        yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+                        for event_row in _events_after_sequence(db, run.id, last_emitted_sequence):
+                            yield emit_row(event_row)
                         return
-                    function = tool_call.get("function") or {}
-                    tool_name = str(function.get("name") or "(unknown)")
-                    recorded_tool_call = _record_tool_call_and_result(
+
+                    if prepared_tool_call.tool_name == INTERMEDIATE_UPDATE_TOOL_NAME:
+                        result = execute_tool(prepared_tool_call.tool_name, prepared_tool_call.arguments, tool_context)
+                        llm_messages.append(_tool_result_llm_message(prepared_tool_call, result))
+                        reasoning_message, source = _extract_reasoning_from_tool_result(result, prepared_tool_call.arguments)
+                        reasoning_event = _record_reasoning_update_event(
+                            db,
+                            run=run,
+                            message=reasoning_message or "",
+                            source=source,
+                        )
+                        _update_run_context_tokens(run=run, llm_messages=llm_messages)
+                        db.add(run)
+                        db.commit()
+                        if reasoning_event is not None:
+                            yield emit_row(reasoning_event)
+                        continue
+
+                    tool_row = prepared_tool_call.persisted_row
+                    if tool_row is None:  # pragma: no cover - defensive guard
+                        continue
+
+                    _mark_tool_call_running(db, tool_row)
+                    started_row = _persist_run_event(
                         db,
                         run=run,
-                        tool_call=tool_call,
-                        tool_context=tool_context,
+                        event_type=AgentRunEventType.TOOL_CALL_STARTED,
+                        tool_call=tool_row,
                     )
-                    llm_messages.append(recorded_tool_call.llm_message)
+                    db.commit()
+                    yield emit_row(started_row)
+
+                    result = execute_tool(prepared_tool_call.tool_name, prepared_tool_call.arguments, tool_context)
+                    db.refresh(tool_row, attribute_names=["status"])
+                    if tool_row.status == AgentToolCallStatus.CANCELLED:
+                        continue
+
+                    if result.status == "ok":
+                        _finalize_tool_call_success(db, tool_call=tool_row, result=result)
+                        completion_type = AgentRunEventType.TOOL_CALL_COMPLETED
+                    else:
+                        _finalize_tool_call_error(db, tool_call=tool_row, result=result)
+                        completion_type = AgentRunEventType.TOOL_CALL_FAILED
+                    completed_row = _persist_run_event(
+                        db,
+                        run=run,
+                        event_type=completion_type,
+                        tool_call=tool_row,
+                    )
+                    llm_messages.append(_tool_result_llm_message(prepared_tool_call, result))
                     _update_run_context_tokens(run=run, llm_messages=llm_messages)
                     db.add(run)
                     db.commit()
-                    reasoning_update_message = _extract_reasoning_update_message(recorded_tool_call.persisted_row)
-                    if reasoning_update_message is not None:
-                        yield {
-                            "type": "reasoning_update",
-                            "run_id": run.id,
-                            "message": reasoning_update_message,
-                            "source": _extract_reasoning_update_source(recorded_tool_call.persisted_row),
-                        }
-                    else:
-                        yield {
-                            "type": "tool_call",
-                            "run_id": run.id,
-                            "tool_name": tool_name,
-                        }
+                    yield emit_row(completed_row)
                 continue
 
-            _persist_final_message(
+            reasoning_event = _record_reasoning_update_event(
                 db,
-                thread,
-                run,
-                _final_assistant_content(assistant_content),
-                status=AgentRunStatus.COMPLETED,
+                run=run,
+                message=model_reasoning,
+                source=AgentRunEventSource.MODEL_REASONING,
             )
-            yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+            if reasoning_event is not None:
+                db.commit()
+                yield emit_row(reasoning_event)
+
+            terminal_event = _persist_terminal_run_state(
+                db,
+                thread=thread,
+                run=run,
+                status=AgentRunStatus.COMPLETED,
+                error_text=None,
+                event_type=AgentRunEventType.RUN_COMPLETED,
+                event_message=None,
+                assistant_content=_final_assistant_content(assistant_content),
+            )
+            if terminal_event is not None:
+                yield emit_row(terminal_event)
             return
 
-        _persist_final_message(
+        terminal_event = _persist_terminal_run_state(
             db,
-            thread,
-            run,
-            (
+            thread=thread,
+            run=run,
+            status=AgentRunStatus.FAILED,
+            error_text="maximum tool steps reached",
+            event_type=AgentRunEventType.RUN_FAILED,
+            event_message="maximum tool steps reached",
+            assistant_content=(
                 "I reached the configured max tool steps before finishing. "
                 "Please review the existing tool outputs and pending review items."
             ),
-            status=AgentRunStatus.FAILED,
-            error_text="maximum tool steps reached",
         )
-        yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+        if terminal_event is not None:
+            yield emit_row(terminal_event)
         return
     except AgentModelError as exc:
-        _persist_final_message(
+        terminal_event = _persist_terminal_run_state(
             db,
-            thread,
-            run,
-            (
+            thread=thread,
+            run=run,
+            status=AgentRunStatus.FAILED,
+            error_text=str(exc),
+            event_type=AgentRunEventType.RUN_FAILED,
+            event_message=str(exc),
+            assistant_content=(
                 "I could not complete this run because the language model request failed.\n"
                 f"Error: {str(exc)}"
             ),
-            status=AgentRunStatus.FAILED,
-            error_text=str(exc),
         )
-        yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+        if terminal_event is not None:
+            yield emit_row(terminal_event)
         return
     except Exception as exc:  # pragma: no cover - defensive guard
-        _persist_final_message(
+        terminal_event = _persist_terminal_run_state(
             db,
-            thread,
-            run,
-            "I encountered an internal error while processing this request.",
+            thread=thread,
+            run=run,
             status=AgentRunStatus.FAILED,
             error_text=str(exc),
+            event_type=AgentRunEventType.RUN_FAILED,
+            event_message=str(exc),
+            assistant_content="I encountered an internal error while processing this request.",
         )
-        yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+        if terminal_event is not None:
+            yield emit_row(terminal_event)
         return
 
 
@@ -741,11 +1083,16 @@ def run_existing_agent_run(db: Session, run_id: str) -> AgentRun | None:
 
     thread = db.get(AgentThread, run.thread_id)
     if thread is None:
-        run.status = AgentRunStatus.FAILED
-        run.error_text = "thread not found"
-        run.completed_at = utc_now()
-        db.add(run)
-        db.commit()
+        _persist_terminal_run_state(
+            db,
+            thread=None,
+            run=run,
+            status=AgentRunStatus.FAILED,
+            error_text="thread not found",
+            event_type=AgentRunEventType.RUN_FAILED,
+            event_message="thread not found",
+            persist_assistant_message=False,
+        )
         return _load_run_snapshot(db, run.id)
 
     return _execute_agent_run(db, thread=thread, run=run)
@@ -754,29 +1101,29 @@ def run_existing_agent_run(db: Session, run_id: str) -> AgentRun | None:
 def run_existing_agent_run_stream(db: Session, run_id: str) -> Iterator[dict[str, Any]]:
     run = db.get(AgentRun, run_id)
     if run is None:
-        yield {
-            "type": "run_failed",
-            "run_id": run_id,
-            "assistant_message_id": None,
-            "status": AgentRunStatus.FAILED.value,
-            "error_text": "run not found",
-        }
         return
     if run.status != AgentRunStatus.RUNNING:
-        yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+        snapshot = _load_run_snapshot(db, run.id)
+        for event_row in snapshot.events:
+            yield _emit_run_event(snapshot, event_row)
         return
 
     thread = db.get(AgentThread, run.thread_id)
     if thread is None:
-        run.status = AgentRunStatus.FAILED
-        run.error_text = "thread not found"
-        run.completed_at = utc_now()
-        db.add(run)
-        db.commit()
-        yield _run_terminal_stream_event(_load_run_snapshot(db, run.id))
+        terminal_event = _persist_terminal_run_state(
+            db,
+            thread=None,
+            run=run,
+            status=AgentRunStatus.FAILED,
+            error_text="thread not found",
+            event_type=AgentRunEventType.RUN_FAILED,
+            event_message="thread not found",
+            persist_assistant_message=False,
+        )
+        if terminal_event is not None:
+            yield _emit_run_event(run, terminal_event)
         return
 
-    yield {"type": "run_started", "run_id": run.id}
     yield from _execute_agent_run_stream(db, thread=thread, run=run)
 
 
@@ -792,13 +1139,16 @@ def interrupt_agent_run(db: Session, run_id: str, *, reason: str = "Run interrup
     if run.status != AgentRunStatus.RUNNING:
         return _load_run_snapshot(db, run.id)
 
-    run.status = AgentRunStatus.FAILED
-    run.error_text = reason
-    run.completed_at = utc_now()
     thread = db.get(AgentThread, run.thread_id)
-    if thread is not None:
-        thread.updated_at = utc_now()
-        db.add(thread)
-    db.add(run)
-    db.commit()
+    _cancel_incomplete_tool_calls(db, run)
+    _persist_terminal_run_state(
+        db,
+        thread=thread,
+        run=run,
+        status=AgentRunStatus.FAILED,
+        error_text=reason,
+        event_type=AgentRunEventType.RUN_FAILED,
+        event_message=reason,
+        persist_assistant_message=False,
+    )
     return _load_run_snapshot(db, run.id)

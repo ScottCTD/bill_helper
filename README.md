@@ -11,7 +11,7 @@ The goal is an all-in-one place to view and analyze personal finances — a cent
 **AI Chat Assistant**
 - Natural language interface for managing entries, tags, and entities
 - Review-gated proposals — the agent proposes changes, you approve or reject each one
-- Real-time token streaming with tool-call observability
+- Real-time token streaming with persisted per-tool lifecycle observability
 - Live thread usage metrics, including current context-window size and cumulative token/cost totals
 - Image and PDF attachment support (bank statements, receipts)
 - Provider-agnostic model routing via LiteLLM (OpenAI, Anthropic, Google, OpenRouter, etc.)
