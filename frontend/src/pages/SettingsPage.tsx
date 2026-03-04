@@ -26,6 +26,8 @@ interface SettingsFormState {
   agent_retry_initial_wait_seconds: string;
   agent_retry_max_wait_seconds: string;
   agent_retry_backoff_multiplier: string;
+  agent_base_url: string;
+  agent_api_key: string;
 }
 
 function bytesToMegabytes(value: number): string {
@@ -48,6 +50,8 @@ function buildFormState(data: RuntimeSettings): SettingsFormState {
     agent_retry_initial_wait_seconds: String(data.agent_retry_initial_wait_seconds),
     agent_retry_max_wait_seconds: String(data.agent_retry_max_wait_seconds),
     agent_retry_backoff_multiplier: String(data.agent_retry_backoff_multiplier),
+    agent_base_url: data.agent_base_url ?? "",
+    agent_api_key: data.agent_api_key ?? "",
   };
 }
 
@@ -167,6 +171,9 @@ export function SettingsPage() {
       }
       const nextAgentMaxImageSizeBytes = Math.round(imageSizeMb * 1024 * 1024);
 
+      const nextAgentBaseUrl = formState.agent_base_url.trim() || null;
+      const nextAgentApiKey = formState.agent_api_key.trim() || null;
+
       updateMutation.mutate({
         current_user_name: nextCurrentUserName,
         user_memory: formState.user_memory,
@@ -180,6 +187,8 @@ export function SettingsPage() {
         agent_retry_initial_wait_seconds: nextAgentRetryInitialWaitSeconds,
         agent_retry_max_wait_seconds: nextAgentRetryMaxWaitSeconds,
         agent_retry_backoff_multiplier: nextAgentRetryBackoffMultiplier,
+        agent_base_url: nextAgentBaseUrl,
+        agent_api_key: nextAgentApiKey,
       });
     } catch (error) {
       setFormError((error as Error).message);
@@ -200,6 +209,8 @@ export function SettingsPage() {
       agent_retry_initial_wait_seconds: null,
       agent_retry_max_wait_seconds: null,
       agent_retry_backoff_multiplier: null,
+      agent_base_url: null,
+      agent_api_key: null,
     });
   }
 
@@ -303,13 +314,31 @@ export function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Agent Runtime</CardTitle>
-            <CardDescription>Controls model selection and guardrails for new runs. Provider credentials are read from environment variables.</CardDescription>
+<CardDescription>Controls model selection and guardrails for new runs. Provider credentials can be set via environment variables or custom endpoint below.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <FormField label="Agent model">
               <Input
                 value={formState.agent_model}
                 onChange={(event) => setFormState((state) => (state ? { ...state, agent_model: event.target.value } : state))}
+              />
+            </FormField>
+
+            <FormField label="Custom API endpoint" hint="Optional custom base URL for the model provider (e.g., https://api.example.com/v1).">
+              <Input
+                type="url"
+                placeholder="https://api.example.com/v1"
+                value={formState.agent_base_url}
+                onChange={(event) => setFormState((state) => (state ? { ...state, agent_base_url: event.target.value } : state))}
+              />
+            </FormField>
+
+            <FormField label="Custom API key" hint="Optional API key for custom endpoint. Will be masked in responses.">
+              <Input
+                type="password"
+                placeholder="Leave empty to use environment default"
+                value={formState.agent_api_key}
+                onChange={(event) => setFormState((state) => (state ? { ...state, agent_api_key: event.target.value } : state))}
               />
             </FormField>
 

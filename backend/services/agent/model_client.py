@@ -6,7 +6,12 @@ from typing import Any
 
 import litellm
 from litellm import APIConnectionError, APIError, OpenAIError, Timeout
-from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    Retrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 
 class AgentModelError(RuntimeError):
@@ -76,7 +81,9 @@ def _supports_prompt_caching(model_name: str) -> bool:
         return False
 
 
-def _cache_injection_points_for_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _cache_injection_points_for_messages(
+    messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     # Prefer stable anchors for tool-heavy loops:
     # 1) all system messages (long-lived instruction/context prefix)
     # 2) latest user turn (stable across intra-run tool steps)
@@ -88,7 +95,11 @@ def _cache_injection_points_for_messages(messages: list[dict[str, Any]]) -> list
     ]
 
     latest_user_index = next(
-        (index for index in range(len(messages) - 1, -1, -1) if messages[index].get("role") == "user"),
+        (
+            index
+            for index in range(len(messages) - 1, -1, -1)
+            if messages[index].get("role") == "user"
+        ),
         None,
     )
     if latest_user_index is not None:
@@ -109,13 +120,17 @@ def _cache_injection_points_for_messages(messages: list[dict[str, Any]]) -> list
 def _enable_langfuse_callbacks() -> None:
     with _LANGFUSE_CALLBACK_LOCK:
         for attribute_name in ("success_callback", "failure_callback"):
-            callbacks = _normalize_callback_values(getattr(litellm, attribute_name, None))
+            callbacks = _normalize_callback_values(
+                getattr(litellm, attribute_name, None)
+            )
             if _LANGFUSE_CALLBACK_NAME not in callbacks:
                 callbacks.append(_LANGFUSE_CALLBACK_NAME)
                 setattr(litellm, attribute_name, callbacks)
 
 
-def _build_observability_extra_body(observability: dict[str, Any] | None) -> dict[str, Any] | None:
+def _build_observability_extra_body(
+    observability: dict[str, Any] | None,
+) -> dict[str, Any] | None:
     if not isinstance(observability, dict):
         return None
 
@@ -144,7 +159,9 @@ def _coerce_step(value: Any) -> int | None:
     return None
 
 
-def _build_observability_metadata(observability: dict[str, Any] | None) -> dict[str, Any] | None:
+def _build_observability_metadata(
+    observability: dict[str, Any] | None,
+) -> dict[str, Any] | None:
     if not isinstance(observability, dict):
         return None
 
@@ -152,7 +169,9 @@ def _build_observability_metadata(observability: dict[str, Any] | None) -> dict[
     trace_metadata: dict[str, Any] = {}
 
     user = _normalize_observability_text(observability.get("user"), max_length=256)
-    session_id = _normalize_observability_text(observability.get("session_id"), max_length=256)
+    session_id = _normalize_observability_text(
+        observability.get("session_id"), max_length=256
+    )
     trace = observability.get("trace")
 
     if user is not None:
@@ -163,9 +182,15 @@ def _build_observability_metadata(observability: dict[str, Any] | None) -> dict[
     generation_name = "agent_turn"
     if isinstance(trace, dict):
         trace_id = _normalize_observability_text(trace.get("trace_id"), max_length=256)
-        trace_name = _normalize_observability_text(trace.get("trace_name"), max_length=256)
-        generation_name = _normalize_observability_text(trace.get("generation_name"), max_length=128)
-        thread_id = _normalize_observability_text(trace.get("thread_id"), max_length=256)
+        trace_name = _normalize_observability_text(
+            trace.get("trace_name"), max_length=256
+        )
+        generation_name = _normalize_observability_text(
+            trace.get("generation_name"), max_length=128
+        )
+        thread_id = _normalize_observability_text(
+            trace.get("thread_id"), max_length=256
+        )
         run_id = _normalize_observability_text(trace.get("run_id"), max_length=256)
         step = _coerce_step(trace.get("step"))
         is_first_run_in_thread = trace.get("is_first_run_in_thread", True)
@@ -315,6 +340,8 @@ class LiteLLMModelClient:
         langfuse_public_key: str | None = None,
         langfuse_secret_key: str | None = None,
         langfuse_host: str | None = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
     ) -> None:
         self._model_name = (model_name or "").strip() or "openrouter/qwen/qwen3.5-27b"
         self._tools = tools
@@ -325,7 +352,12 @@ class LiteLLMModelClient:
         self._langfuse_public_key = _normalize_secret(langfuse_public_key)
         self._langfuse_secret_key = _normalize_secret(langfuse_secret_key)
         self._langfuse_host = _normalize_host(langfuse_host)
-        self._langfuse_enabled = self._langfuse_public_key is not None and self._langfuse_secret_key is not None
+        self._langfuse_enabled = (
+            self._langfuse_public_key is not None
+            and self._langfuse_secret_key is not None
+        )
+        self._base_url = _normalize_host(base_url)
+        self._api_key = _normalize_secret(api_key)
         if self._langfuse_enabled:
             _enable_langfuse_callbacks()
 
@@ -351,6 +383,11 @@ class LiteLLMModelClient:
             request["langfuse_secret_key"] = self._langfuse_secret_key
             if self._langfuse_host is not None:
                 request["langfuse_host"] = self._langfuse_host
+
+        if self._base_url is not None:
+            request["base_url"] = self._base_url
+        if self._api_key is not None:
+            request["api_key"] = self._api_key
 
         metadata = _build_observability_metadata(observability)
         if metadata is not None:
@@ -423,7 +460,9 @@ class LiteLLMModelClient:
         response = None
         for attempt in retrying:
             with attempt:
-                response = self._chat_completion_once(messages, observability=observability)
+                response = self._chat_completion_once(
+                    messages, observability=observability
+                )
         if response is None:  # pragma: no cover - defensive guard
             raise AgentModelError("model request failed: no response")
 
@@ -497,7 +536,9 @@ class LiteLLMModelClient:
                             # Some OpenAI-compatible providers reject `stream_options`; retry once without it.
                             retry_request = dict(request)
                             retry_request.pop("stream_options", None)
-                            stream = self._completion_with_transient_ssl_retry(retry_request)
+                            stream = self._completion_with_transient_ssl_retry(
+                                retry_request
+                            )
                         else:
                             raise
 
@@ -514,12 +555,13 @@ class LiteLLMModelClient:
                                 continue
 
                             content_delta = _coerce_text(_read_attr(delta, "content"))
-                            reasoning_delta = (
-                                _coerce_text(_read_attr(delta, "reasoning_content"))
-                                or _coerce_text(_read_attr(delta, "reasoning"))
-                            )
+                            reasoning_delta = _coerce_text(
+                                _read_attr(delta, "reasoning_content")
+                            ) or _coerce_text(_read_attr(delta, "reasoning"))
                             if reasoning_delta is not None:
-                                reasoning_content = f"{reasoning_content}{reasoning_delta}"
+                                reasoning_content = (
+                                    f"{reasoning_content}{reasoning_delta}"
+                                )
                             if content_delta is not None:
                                 attempt_content = f"{attempt_content}{content_delta}"
                                 if attempt_content.startswith(emitted_content):
@@ -531,10 +573,16 @@ class LiteLLMModelClient:
                                     # Retry replaying an already-emitted prefix; suppress duplicates.
                                     continue
                                 else:
-                                    raise AgentModelError("model request failed: stream retry produced divergent output")
+                                    raise AgentModelError(
+                                        "model request failed: stream retry produced divergent output"
+                                    )
 
-                            for tool_call_delta in _read_attr(delta, "tool_calls") or []:
-                                index = _coerce_index(_read_attr(tool_call_delta, "index"))
+                            for tool_call_delta in (
+                                _read_attr(delta, "tool_calls") or []
+                            ):
+                                index = _coerce_index(
+                                    _read_attr(tool_call_delta, "index")
+                                )
                                 if index is None:
                                     continue
                                 current = attempt_tool_calls_by_index.setdefault(
@@ -546,23 +594,35 @@ class LiteLLMModelClient:
                                     },
                                 )
 
-                                delta_id = _coerce_text(_read_attr(tool_call_delta, "id"))
+                                delta_id = _coerce_text(
+                                    _read_attr(tool_call_delta, "id")
+                                )
                                 if delta_id is not None:
                                     if not current["id"]:
                                         current["id"] = delta_id
 
-                                delta_type = _coerce_text(_read_attr(tool_call_delta, "type"))
+                                delta_type = _coerce_text(
+                                    _read_attr(tool_call_delta, "type")
+                                )
                                 if delta_type is not None:
                                     current["type"] = delta_type
 
                                 delta_function = _read_attr(tool_call_delta, "function")
-                                delta_name = _coerce_text(_read_attr(delta_function, "name"))
+                                delta_name = _coerce_text(
+                                    _read_attr(delta_function, "name")
+                                )
                                 if delta_name is not None:
-                                    current["function"]["name"] = f"{current['function']['name']}{delta_name}"
+                                    current["function"]["name"] = (
+                                        f"{current['function']['name']}{delta_name}"
+                                    )
 
-                                delta_arguments = _coerce_text(_read_attr(delta_function, "arguments"))
+                                delta_arguments = _coerce_text(
+                                    _read_attr(delta_function, "arguments")
+                                )
                                 if delta_arguments is not None:
-                                    current["function"]["arguments"] = f"{current['function']['arguments']}{delta_arguments}"
+                                    current["function"]["arguments"] = (
+                                        f"{current['function']['arguments']}{delta_arguments}"
+                                    )
 
                     if not attempt_content and emitted_content:
                         final_content = emitted_content
@@ -581,7 +641,10 @@ class LiteLLMModelClient:
 
         if not final_content:
             final_content = emitted_content
-        tool_calls = [final_tool_calls_by_index[index] for index in sorted(final_tool_calls_by_index)]
+        tool_calls = [
+            final_tool_calls_by_index[index]
+            for index in sorted(final_tool_calls_by_index)
+        ]
         yield {
             "type": "done",
             "message": {

@@ -49,6 +49,8 @@ Agent settings:
 - `AGENT_MAX_STEPS` (default `100`)
 - `AGENT_MAX_IMAGE_SIZE_BYTES` (default `5MB`; per-attachment size limit for image/PDF agent uploads)
 - `AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`; max image/PDF uploads per message)
+- `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL` (optional; custom API endpoint for LiteLLM)
+- `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY` (optional; custom API key for LiteLLM)
 - runtime pricing uses LiteLLM model-cost mapping (`litellm`) and refreshes cost map from LiteLLM source with local fallback
 
 Runtime override behavior:
@@ -181,6 +183,7 @@ Agent services:
 - `backend/services/agent/model_client.py`
   - LiteLLM client adapter with normalized model error handling
   - normalizes usage metadata from model responses into the runtime contract (`input/output/cache_*` tokens), including provider-specific cache field variants (`cached_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`)
+  - supports custom `base_url` and `api_key` configuration for LiteLLM, enabling use of custom API endpoints and credentials
   - for prompt-caching-capable models, injects explicit LiteLLM `cache_control_injection_points` anchored to system context + latest user turn (negative message index) so tool-loop steps can reuse stable prompt prefixes
   - supports streamed model responses (`complete_stream`) that emit incremental text deltas and final assembled tool-call/message payload
   - applies configured retry policy to stream failures (including mid-stream transport failures)
@@ -305,6 +308,7 @@ Settings router:
 - `0020_add_agent_message_attachment_original_filename`
 - `0021_add_agent_run_context_tokens`
 - `0022_agent_run_events_and_tool_lifecycle`
+- `0023_add_agent_provider_config`
 
 Commands:
 

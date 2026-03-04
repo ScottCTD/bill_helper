@@ -17,10 +17,21 @@ from backend.enums import (
     AgentRunStatus,
     AgentToolCallStatus,
 )
-from backend.models import AgentChangeItem, AgentMessage, AgentRun, AgentRunEvent, AgentThread, AgentToolCall
+from backend.models import (
+    AgentChangeItem,
+    AgentMessage,
+    AgentRun,
+    AgentRunEvent,
+    AgentThread,
+    AgentToolCall,
+)
 from backend.services.agent.context_tokens import count_context_tokens
 from backend.services.agent.message_history import build_llm_messages
-from backend.services.agent.model_client import AgentModelError, LiteLLMModelClient, validate_litellm_environment
+from backend.services.agent.model_client import (
+    AgentModelError,
+    LiteLLMModelClient,
+    validate_litellm_environment,
+)
 from backend.services.agent.tools import (
     INTERMEDIATE_UPDATE_TOOL_NAME,
     ToolContext,
@@ -61,6 +72,9 @@ class PreparedToolCall:
 
 def ensure_agent_available(db: Session) -> None:
     settings = resolve_runtime_settings(db)
+    # If custom base_url and api_key are configured, skip LiteLLM env validation
+    if settings.agent_base_url and settings.agent_api_key:
+        return
     has_credentials, missing_keys, request_model = validate_litellm_environment(
         model_name=settings.agent_model,
     )
@@ -70,7 +84,7 @@ def ensure_agent_available(db: Session) -> None:
     raise AgentRuntimeUnavailable(
         "Agent runtime is not configured. "
         f"Model target: {request_model}.{missing_text} "
-        "Provide provider credentials via environment variables for BILL_HELPER_AGENT_MODEL."
+        "Provide provider credentials via environment variables or configure custom base_url and api_key in settings."
     )
 
 
@@ -86,6 +100,8 @@ def _build_model_client(db: Session) -> LiteLLMModelClient:
         langfuse_public_key=settings.langfuse_public_key,
         langfuse_secret_key=settings.langfuse_secret_key,
         langfuse_host=settings.langfuse_host,
+        base_url=settings.agent_base_url,
+        api_key=settings.agent_api_key,
     )
 
 
@@ -106,7 +122,9 @@ def _call_model_stream(
     observability: dict[str, Any] | None = None,
 ) -> Iterator[dict[str, Any]]:
     # Kept as a stable seam so tests can monkeypatch streaming model responses.
-    return _build_model_client(db).complete_stream(messages, observability=observability)
+    return _build_model_client(db).complete_stream(
+        messages, observability=observability
+    )
 
 
 def _model_observability_context(
@@ -172,7 +190,9 @@ def _load_run_snapshot(db: Session, run_id: str) -> AgentRun:
         .options(
             selectinload(AgentRun.events),
             selectinload(AgentRun.tool_calls),
-            selectinload(AgentRun.change_items).selectinload(AgentChangeItem.review_actions),
+            selectinload(AgentRun.change_items).selectinload(
+                AgentChangeItem.review_actions
+            ),
         )
     )
     if run is None:  # pragma: no cover - defensive guard
@@ -194,7 +214,9 @@ def _parse_tool_arguments(raw_arguments: Any) -> dict[str, Any]:
 
 def _next_run_event_sequence(db: Session, run_id: str) -> int:
     current_max = db.scalar(
-        select(func.max(AgentRunEvent.sequence_index)).where(AgentRunEvent.run_id == run_id)
+        select(func.max(AgentRunEvent.sequence_index)).where(
+            AgentRunEvent.run_id == run_id
+        )
     )
     return int(current_max or 0) + 1
 
@@ -230,7 +252,9 @@ def _emit_run_event(run: AgentRun, persisted_event: AgentRunEvent) -> dict[str, 
             "run_id": persisted_event.run_id,
             "sequence_index": persisted_event.sequence_index,
             "event_type": persisted_event.event_type.value,
-            "source": persisted_event.source.value if persisted_event.source is not None else None,
+            "source": persisted_event.source.value
+            if persisted_event.source is not None
+            else None,
             "message": persisted_event.message,
             "tool_call_id": persisted_event.tool_call_id,
             "created_at": persisted_event.created_at.isoformat(),
@@ -337,6 +361,7 @@ def _cancel_incomplete_tool_calls(db: Session, run: AgentRun) -> list[AgentRunEv
         )
     return cancelled_events
 
+
 def _normalize_reasoning_message(message: str) -> str | None:
     normalized = message.strip()
     return normalized or None
@@ -389,10 +414,14 @@ def _extract_reasoning_from_tool_result(
             return normalized_input, _reasoning_source_from_value(
                 output_json.get("source") or arguments.get("source")
             )
-    return None, _reasoning_source_from_value(output_json.get("source") or arguments.get("source"))
+    return None, _reasoning_source_from_value(
+        output_json.get("source") or arguments.get("source")
+    )
 
 
-def _tool_result_llm_message(prepared_tool_call: PreparedToolCall, result: ToolExecutionResult) -> dict[str, Any]:
+def _tool_result_llm_message(
+    prepared_tool_call: PreparedToolCall, result: ToolExecutionResult
+) -> dict[str, Any]:
     return {
         "role": "tool",
         "tool_call_id": prepared_tool_call.tool_call.get("id"),
@@ -510,7 +539,9 @@ def _create_run(
     user_message: AgentMessage,
 ) -> AgentRun:
     settings = resolve_runtime_settings(db)
-    llm_messages = build_llm_messages(db, thread.id, current_user_message_id=user_message.id)
+    llm_messages = build_llm_messages(
+        db, thread.id, current_user_message_id=user_message.id
+    )
 
     run = AgentRun(
         thread_id=thread.id,
@@ -535,7 +566,9 @@ def _run_is_stopped(db: Session, run: AgentRun) -> bool:
     return run.status != AgentRunStatus.RUNNING
 
 
-def _events_after_sequence(db: Session, run_id: str, sequence_index: int) -> list[AgentRunEvent]:
+def _events_after_sequence(
+    db: Session, run_id: str, sequence_index: int
+) -> list[AgentRunEvent]:
     return list(
         db.scalars(
             select(AgentRunEvent)
@@ -566,7 +599,9 @@ def _persist_terminal_run_state(
     if persist_assistant_message and assistant_content is not None:
         _persist_final_message(
             db,
-            thread if thread is not None else db.get(AgentThread, run.thread_id),  # pragma: no cover - defensive
+            thread
+            if thread is not None
+            else db.get(AgentThread, run.thread_id),  # pragma: no cover - defensive
             run,
             assistant_content,
             status=status,
@@ -659,9 +694,13 @@ def _run_prepared_tool_call_nonstream(
     llm_messages: list[dict[str, Any]],
 ) -> None:
     if prepared_tool_call.tool_name == INTERMEDIATE_UPDATE_TOOL_NAME:
-        result = execute_tool(prepared_tool_call.tool_name, prepared_tool_call.arguments, tool_context)
+        result = execute_tool(
+            prepared_tool_call.tool_name, prepared_tool_call.arguments, tool_context
+        )
         llm_messages.append(_tool_result_llm_message(prepared_tool_call, result))
-        reasoning_message, source = _extract_reasoning_from_tool_result(result, prepared_tool_call.arguments)
+        reasoning_message, source = _extract_reasoning_from_tool_result(
+            result, prepared_tool_call.arguments
+        )
         _record_reasoning_update_event(
             db,
             run=run,
@@ -686,7 +725,9 @@ def _run_prepared_tool_call_nonstream(
     )
     db.commit()
 
-    result = execute_tool(prepared_tool_call.tool_name, prepared_tool_call.arguments, tool_context)
+    result = execute_tool(
+        prepared_tool_call.tool_name, prepared_tool_call.arguments, tool_context
+    )
     db.refresh(tool_row, attribute_names=["status"])
     if tool_row.status == AgentToolCallStatus.CANCELLED:
         return
@@ -717,9 +758,16 @@ def _execute_agent_run(
     if started_event is not None:
         db.commit()
 
-    llm_messages = build_llm_messages(db, thread.id, current_user_message_id=run.user_message_id)
+    llm_messages = build_llm_messages(
+        db, thread.id, current_user_message_id=run.user_message_id
+    )
     tool_context = ToolContext(db=db, run_id=run.id)
-    run_count = db.scalar(select(func.count(AgentRun.id)).where(AgentRun.thread_id == thread.id)) or 0
+    run_count = (
+        db.scalar(
+            select(func.count(AgentRun.id)).where(AgentRun.thread_id == thread.id)
+        )
+        or 0
+    )
     is_first_run_in_thread = run_count == 1
     run_index = run_count
     usage_totals: dict[str, int | None] = {
@@ -863,9 +911,16 @@ def _execute_agent_run_stream(
         db.commit()
         yield emit_row(started_event)
 
-    llm_messages = build_llm_messages(db, thread.id, current_user_message_id=run.user_message_id)
+    llm_messages = build_llm_messages(
+        db, thread.id, current_user_message_id=run.user_message_id
+    )
     tool_context = ToolContext(db=db, run_id=run.id)
-    run_count = db.scalar(select(func.count(AgentRun.id)).where(AgentRun.thread_id == thread.id)) or 0
+    run_count = (
+        db.scalar(
+            select(func.count(AgentRun.id)).where(AgentRun.thread_id == thread.id)
+        )
+        or 0
+    )
     is_first_run_in_thread = run_count == 1
     run_index = run_count
     usage_totals: dict[str, int | None] = {
@@ -878,7 +933,9 @@ def _execute_agent_run_stream(
     try:
         for step_index in range(max_steps):
             if _run_is_stopped(db, run):
-                for event_row in _events_after_sequence(db, run.id, last_emitted_sequence):
+                for event_row in _events_after_sequence(
+                    db, run.id, last_emitted_sequence
+                ):
                     yield emit_row(event_row)
                 return
 
@@ -911,7 +968,9 @@ def _execute_agent_run_stream(
                 raise AgentModelError("model request failed: no response")
 
             if _run_is_stopped(db, run):
-                for event_row in _events_after_sequence(db, run.id, last_emitted_sequence):
+                for event_row in _events_after_sequence(
+                    db, run.id, last_emitted_sequence
+                ):
                     yield emit_row(event_row)
                 return
 
@@ -937,14 +996,24 @@ def _execute_agent_run_stream(
 
                 for prepared_tool_call in prepared_calls:
                     if _run_is_stopped(db, run):
-                        for event_row in _events_after_sequence(db, run.id, last_emitted_sequence):
+                        for event_row in _events_after_sequence(
+                            db, run.id, last_emitted_sequence
+                        ):
                             yield emit_row(event_row)
                         return
 
                     if prepared_tool_call.tool_name == INTERMEDIATE_UPDATE_TOOL_NAME:
-                        result = execute_tool(prepared_tool_call.tool_name, prepared_tool_call.arguments, tool_context)
-                        llm_messages.append(_tool_result_llm_message(prepared_tool_call, result))
-                        reasoning_message, source = _extract_reasoning_from_tool_result(result, prepared_tool_call.arguments)
+                        result = execute_tool(
+                            prepared_tool_call.tool_name,
+                            prepared_tool_call.arguments,
+                            tool_context,
+                        )
+                        llm_messages.append(
+                            _tool_result_llm_message(prepared_tool_call, result)
+                        )
+                        reasoning_message, source = _extract_reasoning_from_tool_result(
+                            result, prepared_tool_call.arguments
+                        )
                         reasoning_event = _record_reasoning_update_event(
                             db,
                             run=run,
@@ -972,13 +1041,19 @@ def _execute_agent_run_stream(
                     db.commit()
                     yield emit_row(started_row)
 
-                    result = execute_tool(prepared_tool_call.tool_name, prepared_tool_call.arguments, tool_context)
+                    result = execute_tool(
+                        prepared_tool_call.tool_name,
+                        prepared_tool_call.arguments,
+                        tool_context,
+                    )
                     db.refresh(tool_row, attribute_names=["status"])
                     if tool_row.status == AgentToolCallStatus.CANCELLED:
                         continue
 
                     if result.status == "ok":
-                        _finalize_tool_call_success(db, tool_call=tool_row, result=result)
+                        _finalize_tool_call_success(
+                            db, tool_call=tool_row, result=result
+                        )
                         completion_type = AgentRunEventType.TOOL_CALL_COMPLETED
                     else:
                         _finalize_tool_call_error(db, tool_call=tool_row, result=result)
@@ -989,7 +1064,9 @@ def _execute_agent_run_stream(
                         event_type=completion_type,
                         tool_call=tool_row,
                     )
-                    llm_messages.append(_tool_result_llm_message(prepared_tool_call, result))
+                    llm_messages.append(
+                        _tool_result_llm_message(prepared_tool_call, result)
+                    )
                     _update_run_context_tokens(run=run, llm_messages=llm_messages)
                     db.add(run)
                     db.commit()
@@ -1069,7 +1146,9 @@ def _execute_agent_run_stream(
         return
 
 
-def start_agent_run(db: Session, thread: AgentThread, user_message: AgentMessage) -> AgentRun:
+def start_agent_run(
+    db: Session, thread: AgentThread, user_message: AgentMessage
+) -> AgentRun:
     ensure_agent_available(db)
     return _create_run(db, thread=thread, user_message=user_message)
 
@@ -1127,12 +1206,16 @@ def run_existing_agent_run_stream(db: Session, run_id: str) -> Iterator[dict[str
     yield from _execute_agent_run_stream(db, thread=thread, run=run)
 
 
-def run_agent_turn(db: Session, thread: AgentThread, user_message: AgentMessage) -> AgentRun:
+def run_agent_turn(
+    db: Session, thread: AgentThread, user_message: AgentMessage
+) -> AgentRun:
     run = start_agent_run(db, thread, user_message)
     return _execute_agent_run(db, thread=thread, run=run)
 
 
-def interrupt_agent_run(db: Session, run_id: str, *, reason: str = "Run interrupted by user.") -> AgentRun | None:
+def interrupt_agent_run(
+    db: Session, run_id: str, *, reason: str = "Run interrupted by user."
+) -> AgentRun | None:
     run = db.get(AgentRun, run_id)
     if run is None:
         return None

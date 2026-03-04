@@ -394,6 +394,8 @@ class RuntimeSettingsOverridesRead(BaseModel):
     agent_retry_backoff_multiplier: float | None = None
     agent_max_image_size_bytes: int | None = None
     agent_max_images_per_message: int | None = None
+    agent_base_url: str | None = None
+    agent_api_key: str | None = None
 
 
 class RuntimeSettingsRead(BaseModel):
@@ -409,6 +411,8 @@ class RuntimeSettingsRead(BaseModel):
     agent_retry_backoff_multiplier: float
     agent_max_image_size_bytes: int
     agent_max_images_per_message: int
+    agent_base_url: str | None = None
+    agent_api_key: str | None = None
     overrides: RuntimeSettingsOverridesRead
 
 
@@ -416,15 +420,21 @@ class RuntimeSettingsUpdate(BaseModel):
     current_user_name: str | None = Field(default=None, max_length=255)
     user_memory: str | None = Field(default=None, max_length=4000)
     default_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
-    dashboard_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
+    dashboard_currency_code: str | None = Field(
+        default=None, min_length=3, max_length=3
+    )
     agent_model: str | None = Field(default=None, max_length=255)
     agent_max_steps: int | None = Field(default=None, ge=1, le=500)
     agent_retry_max_attempts: int | None = Field(default=None, ge=1, le=10)
-    agent_retry_initial_wait_seconds: float | None = Field(default=None, ge=0.0, le=30.0)
+    agent_retry_initial_wait_seconds: float | None = Field(
+        default=None, ge=0.0, le=30.0
+    )
     agent_retry_max_wait_seconds: float | None = Field(default=None, ge=0.0, le=120.0)
     agent_retry_backoff_multiplier: float | None = Field(default=None, ge=1.0, le=10.0)
     agent_max_image_size_bytes: int | None = Field(default=None, ge=1024, le=104857600)
     agent_max_images_per_message: int | None = Field(default=None, ge=1, le=12)
+    agent_base_url: str | None = Field(default=None, max_length=500)
+    agent_api_key: str | None = Field(default=None, max_length=500)
 
     @field_validator(
         "current_user_name",
