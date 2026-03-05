@@ -24,12 +24,12 @@ This folder contains the source-of-truth documentation for the current MVP imple
 Historical implementation docs:
 
 - `completed/*.md`: closed implementation plans and migration notes. These are archival and not source-of-truth for current behavior.
-- `completed/xdg_shared_config_and_data.md`: XDG-based shared config/data design — env cascade, data directory, Docker readiness.
 - `todo/*.md`: active/planned proposal notes that are not source-of-truth behavior docs.
-- `todo/account_markdown_notes.md`: proposal for adding account-level markdown notes editing (parity with entries).
-- `todo/agent_review_workflow_frontend_refactor.md`: proposal for pending-proposal editing workflow and review UX/tool-call transparency refactor.
-- `todo/ocr_fallback_for_redacted_pdfs.md`: proposal for OCR recovery when redacted/exported PDFs remain viewable in Preview but lose a machine-readable text layer for backend extraction.
-- `completed/entry_group_graph_workspace.md`: completed implementation plan for graph-first entry group workspace where group CRUD intent is handled through link operations (no first-class group CRUD).
+
+**Naming rule**: Files in `todo/` and `completed/` must use a date prefix (YYYY-MM-DD). When creating a new todo or completed doc, name it `YYYY-MM-DD_slug.md` (e.g. `2026-03-05_feature_proposal.md`).
+
+- `completed/2026-03-03_xdg_shared_config_and_data.md`: XDG-based shared config/data design — env cascade, data directory, Docker readiness.
+- `completed/2026-02-20_entry_group_graph_workspace.md`: graph-first entry group workspace where group CRUD intent is handled through link operations (no first-class group CRUD).
 
 ## How To Use
 

@@ -4,4 +4,4 @@ This proposal has been implemented.
 
 See:
 
-- `docs/completed/agent_unified_diff_review_modal.md`
+- `docs/completed/2026-02-09_agent_unified_diff_review_modal.md`
