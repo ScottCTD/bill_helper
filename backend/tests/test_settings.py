@@ -1,68 +1,8 @@
 from __future__ import annotations
 
 import json
-import time
-from inspect import signature
 
-
-def patch_model(monkeypatch, handler):
-    from backend.services.agent import runtime
-
-    handler_params = signature(handler).parameters
-    params = list(handler_params.values())
-    accepts_db = len(params) > 1 and params[1].kind in (
-        params[1].POSITIONAL_ONLY,
-        params[1].POSITIONAL_OR_KEYWORD,
-        params[1].VAR_POSITIONAL,
-    )
-    accepts_kwargs = any(param.kind == param.VAR_KEYWORD for param in handler_params.values())
-    accepts_observability = "observability" in handler_params
-
-    def wrapped(messages, db, **kwargs):
-        if accepts_db:
-            if accepts_kwargs or accepts_observability:
-                return handler(messages, db, **kwargs)
-            return handler(messages, db)
-        if accepts_kwargs or accepts_observability:
-            return handler(messages, **kwargs)
-        return handler(messages)
-
-    monkeypatch.setattr(runtime, "_call_model", wrapped)
-
-
-def create_thread(client) -> dict:
-    response = client.post("/api/v1/agent/threads", json={})
-    response.raise_for_status()
-    return response.json()
-
-
-def send_message(
-    client,
-    thread_id: str,
-    content: str,
-    *,
-    timeout_seconds: float = 2.0,
-) -> dict:
-    response = client.post(
-        f"/api/v1/agent/threads/{thread_id}/messages",
-        data={"content": content},
-    )
-    response.raise_for_status()
-    run = response.json()
-    if run.get("status") != "running":
-        return run
-
-    run_id = run["id"]
-    deadline = time.monotonic() + timeout_seconds
-    while time.monotonic() < deadline:
-        run_response = client.get(f"/api/v1/agent/runs/{run_id}")
-        run_response.raise_for_status()
-        run = run_response.json()
-        if run.get("status") != "running":
-            return run
-        time.sleep(0.01)
-
-    raise AssertionError("Timed out waiting for agent run to complete")
+from backend.tests.agent_test_utils import create_thread, patch_model, send_message
 
 
 def test_settings_endpoint_returns_effective_defaults(client):
@@ -80,6 +20,24 @@ def test_settings_endpoint_returns_effective_defaults(client):
     assert payload["agent_model"] == settings.agent_model
     assert payload["overrides"]["user_memory"] is None
     assert payload["overrides"]["agent_model"] is None
+
+
+def test_settings_endpoint_uses_request_principal_for_current_user_name(client):
+    response = client.get(
+        "/api/v1/settings",
+        headers={"X-Bill-Helper-Principal": "Alice"},
+    )
+    response.raise_for_status()
+    payload = response.json()
+    assert payload["current_user_name"] == "Alice"
+
+
+def test_settings_patch_rejects_identity_override_field(client):
+    response = client.patch(
+        "/api/v1/settings",
+        json={"current_user_name": "alice"},
+    )
+    assert response.status_code == 422
 
 
 def test_settings_model_override_and_clear(client):

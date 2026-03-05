@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from backend.enums import EntryKind
-from backend.models import Entry, EntryLink, Tag
+from backend.enums_finance import EntryKind
+from backend.models_finance import Entry, EntryLink, Tag
 from backend.services.tags import generate_random_tag_color
 
 
@@ -24,8 +24,15 @@ def normalize_tag_name(name: str) -> str:
     return name.strip().lower()
 
 
-def get_or_create_tags(db: Session, tag_names: list[str]) -> list[Tag]:
-    normalized_names = sorted({normalize_tag_name(name) for name in tag_names if name.strip()})
+def normalize_required_tag_name(name: str) -> str:
+    normalized = normalize_tag_name(name)
+    if not normalized:
+        raise ValueError("Tag name cannot be empty")
+    return normalized
+
+
+def ensure_tags(db: Session, tag_names: list[str]) -> list[Tag]:
+    normalized_names = sorted({normalize_required_tag_name(name) for name in tag_names})
     if not normalized_names:
         return []
 
@@ -45,7 +52,7 @@ def get_or_create_tags(db: Session, tag_names: list[str]) -> list[Tag]:
 
 
 def set_entry_tags(db: Session, entry: Entry, tag_names: list[str]) -> None:
-    entry.tags = get_or_create_tags(db, tag_names)
+    entry.tags = ensure_tags(db, tag_names)
 
 
 def soft_delete_entry(db: Session, entry: Entry) -> None:

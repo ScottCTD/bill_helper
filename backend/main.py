@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.auth import get_current_principal
 from backend.config import get_settings
-from backend.routers import accounts, agent, currencies, dashboard, entities, entries, groups, links, settings, tags, taxonomies, users
+from backend.routers import currencies, dashboard, entities, entries, groups, links, settings, tags, taxonomies, users
+from backend.routers.agent_api.routes import router as agent_router
+from backend.routers.finance.accounts import router as accounts_router
 
 
 def create_app() -> FastAPI:
@@ -26,27 +29,33 @@ def create_app() -> FastAPI:
     def healthcheck() -> dict[str, str]:
         return {"status": "ok"}
 
-    app.include_router(accounts.router, prefix=app_settings.api_prefix)
-    app.include_router(currencies.router, prefix=app_settings.api_prefix)
-    app.include_router(entities.router, prefix=app_settings.api_prefix)
-    app.include_router(entries.router, prefix=app_settings.api_prefix)
-    app.include_router(tags.router, prefix=app_settings.api_prefix)
-    app.include_router(taxonomies.router, prefix=app_settings.api_prefix)
-    app.include_router(users.router, prefix=app_settings.api_prefix)
-    app.include_router(links.router, prefix=app_settings.api_prefix)
-    app.include_router(groups.router, prefix=app_settings.api_prefix)
-    app.include_router(dashboard.router, prefix=app_settings.api_prefix)
-    app.include_router(agent.router, prefix=app_settings.api_prefix)
-    app.include_router(settings.router, prefix=app_settings.api_prefix)
+    protected_dependencies = [Depends(get_current_principal)]
+    protected_routers = (
+        accounts_router,
+        currencies.router,
+        entities.router,
+        entries.router,
+        tags.router,
+        taxonomies.router,
+        users.router,
+        links.router,
+        groups.router,
+        dashboard.router,
+        agent_router,
+        settings.router,
+    )
+    for router in protected_routers:
+        app.include_router(
+            router,
+            prefix=app_settings.api_prefix,
+            dependencies=protected_dependencies,
+        )
 
     return app
 
 
-app = create_app()
-
-
 def main() -> None:
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("backend.main:create_app", host="0.0.0.0", port=8000, reload=True, factory=True)
 
 
 if __name__ == "__main__":

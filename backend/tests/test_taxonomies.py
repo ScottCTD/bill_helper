@@ -76,6 +76,29 @@ def test_taxonomy_term_create_and_rename(client):
     assert any(item["name"] == "recurring bills" for item in payload)
 
 
+def test_taxonomy_term_create_rejects_duplicates(client):
+    first_create = client.post(
+        "/api/v1/taxonomies/tag_type/terms",
+        json={"name": "Utilities"},
+    )
+    first_create.raise_for_status()
+
+    duplicate_create = client.post(
+        "/api/v1/taxonomies/tag_type/terms",
+        json={"name": "  utilities  "},
+    )
+    assert duplicate_create.status_code == 409
+    assert duplicate_create.json()["detail"] == "Term already exists"
+
+
+def test_taxonomy_term_create_rejects_parent_term_field(client):
+    response = client.post(
+        "/api/v1/taxonomies/tag_type/terms",
+        json={"name": "utilities", "parent_term_id": "abc"},
+    )
+    assert response.status_code == 422
+
+
 def test_entity_update_response_reads_taxonomy_category_after_term_rename(client):
     entity_response = client.post(
         "/api/v1/entities",
@@ -123,3 +146,20 @@ def test_entity_category_terms_support_description(client):
     rename_term.raise_for_status()
     renamed = rename_term.json()
     assert renamed["description"] == "Service providers and recurring vendors"
+
+
+def test_shared_taxonomy_mutations_require_admin_principal(client):
+    scoped_headers = {"X-Bill-Helper-Principal": "alice"}
+
+    entity_response = client.post("/api/v1/entities", json={"name": "Local Shop"}, headers=scoped_headers)
+    assert entity_response.status_code == 403
+
+    tag_response = client.post("/api/v1/tags", json={"name": "groceries"}, headers=scoped_headers)
+    assert tag_response.status_code == 403
+
+    term_response = client.post(
+        "/api/v1/taxonomies/tag_type/terms",
+        json={"name": "food"},
+        headers=scoped_headers,
+    )
+    assert term_response.status_code == 403

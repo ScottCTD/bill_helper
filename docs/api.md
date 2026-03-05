@@ -8,6 +8,10 @@ Base URL: `http://localhost:8000/api/v1`
 - `POST /agent/threads/{thread_id}/messages` and `POST /agent/threads/{thread_id}/messages/stream` use multipart form-data.
 - Money values use integer minor units (`amount_minor`, `balance_minor`).
 - Currency codes are normalized to uppercase server-side.
+- Optional request principal header: `X-Bill-Helper-Principal`.
+- If the header is omitted, the configured app default user is used.
+- Non-admin principals are scoped to their own user-owned resources (`accounts`, `entries`, `users`).
+- Admin principal can access all user-owned resources and cross-user assignment flows.
 
 ## Accounts
 
@@ -31,6 +35,8 @@ List accounts.
 
 Response: `AccountRead[]`
 
+Behavior: results are principal-scoped by account owner.
+
 ## `PATCH /accounts/{account_id}`
 
 Partial update.
@@ -44,6 +50,8 @@ Body fields (all optional):
 - `is_active`
 
 Response: `AccountRead`
+
+Behavior: account lookup/update is principal-scoped.
 
 ## `POST /accounts/{account_id}/snapshots`
 
@@ -75,9 +83,14 @@ Response: `ReconciliationRead`
 
 ## `GET /users`
 
-List users (marks current configured user).
+List users (marks current request principal).
 
 Response: `UserRead[]`
+
+Behavior:
+
+- admin principal: returns all users
+- non-admin principal: returns only caller user row
 
 ## `POST /users`
 
@@ -87,11 +100,15 @@ Response: `UserRead`
 
 Errors: `400` empty name, `409` duplicate.
 
+Authorization: admin principal only.
+
 ## `PATCH /users/{user_id}`
 
 Update user.
 
 Response: `UserRead`
+
+Behavior: non-admin principal may update only itself.
 
 ## Entities
 
@@ -112,11 +129,15 @@ Body:
 
 Response: `EntityRead`
 
+Authorization: admin principal only.
+
 ## `PATCH /entities/{entity_id}`
 
 Update entity name/category.
 
 Response: `EntityRead`
+
+Authorization: admin principal only.
 
 Behavior:
 
@@ -145,11 +166,15 @@ Response: `TagRead`
 
 Errors: `400` empty name, `409` duplicate.
 
+Authorization: admin principal only.
+
 ## `PATCH /tags/{tag_id}`
 
 Update tag name/color/description/type.
 
 Response: `TagRead`
+
+Authorization: admin principal only.
 
 ## Taxonomies
 
@@ -172,15 +197,18 @@ Response: `TaxonomyTermRead[]`
 
 ## `POST /taxonomies/{taxonomy_key}/terms`
 
-Create or reuse a normalized taxonomy term.
+Create a normalized taxonomy term.
 
 Body:
 
 - `name`
-- `parent_term_id` (optional)
 - `description` (optional)
 
 Response: `TaxonomyTermRead`
+
+Errors: `400` invalid taxonomy key or term name, `404` unknown taxonomy, `409` duplicate term name within the taxonomy.
+
+Authorization: admin principal only.
 
 ## `PATCH /taxonomies/{taxonomy_key}/terms/{term_id}`
 
@@ -192,6 +220,8 @@ Body:
 - `description` (optional)
 
 Response: `TaxonomyTermRead`
+
+Authorization: admin principal only.
 
 ## Currencies
 
@@ -211,7 +241,7 @@ Response: `RuntimeSettingsRead`
 
 Response highlights:
 
-- `current_user_name`, optional `user_memory`, `default_currency_code`, `dashboard_currency_code`
+- `current_user_name` (resolved from request principal), optional `user_memory`, `default_currency_code`, `dashboard_currency_code`
 - agent runtime fields (`agent_model`, `agent_max_steps`, retry/image limits)
 - `agent_base_url` for custom provider endpoint
 - `agent_api_key_configured` boolean indicating if a custom API key is set
@@ -229,7 +259,6 @@ Partially update runtime settings overrides.
 
 Body: any subset of:
 
-- `current_user_name`
 - `user_memory`
 - `default_currency_code`
 - `dashboard_currency_code`
@@ -243,6 +272,12 @@ Body: any subset of:
 - `agent_max_images_per_message`
 - `agent_base_url` (validated: must use http/https scheme, cannot target localhost domains or non-public IP literals)
 - `agent_api_key` (cannot be the masked sentinel value "***masked***")
+
+Authorization: admin principal only.
+
+Notes:
+
+- identity fields are not mutable through runtime settings (unknown fields are rejected with `422`)
 
 Response: `RuntimeSettingsRead`
 
@@ -274,6 +309,7 @@ Behavior:
 - tag names are normalized to lowercase
 - missing tags are auto-created with random colors
 - owner defaults to configured current user if omitted
+- entry ownership is scoped to the requesting principal
 
 ## `GET /entries`
 
@@ -290,11 +326,15 @@ Query params:
 
 Response: `EntryListResponse`
 
+Behavior: list results are principal-scoped by `owner_user_id`.
+
 ## `GET /entries/{entry_id}`
 
 Get entry detail with links.
 
 Response: `EntryDetailRead`
+
+Behavior: entry lookup is principal-scoped.
 
 ## `PATCH /entries/{entry_id}`
 
@@ -302,11 +342,15 @@ Partial update.
 
 Response: `EntryRead`
 
+Behavior: entry update is principal-scoped.
+
 ## `DELETE /entries/{entry_id}`
 
 Soft-delete entry and remove links.
 
 Response: `204`
+
+Behavior: entry delete is principal-scoped.
 
 ## Entry Links
 
@@ -324,11 +368,15 @@ Response: `LinkRead`
 
 Errors: `400` self-link, `404` not found, `409` duplicate tuple.
 
+Behavior: both source and target entries must be visible to the requesting principal.
+
 ## `DELETE /links/{link_id}`
 
 Delete link.
 
 Response: `204`
+
+Behavior: link deletion requires principal access to both linked entries.
 
 ## Groups
 
@@ -352,12 +400,15 @@ Behavior:
 - groups are connected components derived from active entry links
 - single-entry components are omitted (response includes groups with `entry_count >= 2` only)
 - endpoint is read-only (no group create/update/delete API)
+- responses are principal-scoped to visible entries
 
 ## `GET /groups/{group_id}`
 
 Fetch group graph.
 
 Response: `GroupGraphRead`
+
+Behavior: group graph lookup is principal-scoped.
 
 ## Dashboard
 
@@ -421,6 +472,10 @@ Daily classification rule for dashboard analytics:
 - expense tagged with `daily` is counted as daily spend
 - `non-daily` / `non_daily` / `nondaily` tag overrides and forces non-daily classification
 
+Access scope:
+
+- dashboard totals/reconciliation are principal-scoped to visible accounts/entries
+
 ## Agent (Append-Only ReAct)
 
 ## `GET /agent/threads`
@@ -428,6 +483,8 @@ Daily classification rule for dashboard analytics:
 List threads (most recently updated first).
 
 Response: `AgentThreadSummaryRead[]`
+
+Authorization: admin principal only.
 
 Each row includes:
 
@@ -446,6 +503,8 @@ Body:
 
 Response: `AgentThreadRead`
 
+Authorization: admin principal only.
+
 ## `DELETE /agent/threads/{thread_id}`
 
 Delete one thread and its persisted timeline artifacts.
@@ -458,6 +517,8 @@ Behavior:
 
 Response: `204 No Content`
 
+Authorization: admin principal only.
+
 Errors:
 
 - `404` thread not found
@@ -468,6 +529,8 @@ Errors:
 Fetch timeline-ready thread detail.
 
 Response: `AgentThreadDetailRead` with:
+
+Authorization: admin principal only.
 
 - `thread`
 - `messages` (with attachment metadata)
@@ -497,6 +560,8 @@ Response: `AgentThreadDetailRead` with:
 ## `POST /agent/threads/{thread_id}/messages`
 
 Create user message and run agent.
+
+Authorization: admin principal only.
 
 Content type: `multipart/form-data`
 
@@ -541,6 +606,8 @@ Errors:
 ## `POST /agent/threads/{thread_id}/messages/stream`
 
 Create user message and run agent with real-time server-sent events (SSE).
+
+Authorization: admin principal only.
 
 Content type: `multipart/form-data`
 
@@ -587,6 +654,8 @@ Get a run snapshot.
 
 Response: `AgentRunRead`
 
+Authorization: admin principal only.
+
 Returned run payload includes:
 
 - run lifecycle metadata (`status`, `model_name`, `error_text`, `context_tokens`)
@@ -616,6 +685,8 @@ Interrupt a currently-running run.
 
 Response: `AgentRunRead`
 
+Authorization: admin principal only.
+
 Behavior:
 
 - if run is `running`, backend marks it `failed` with `error_text = "Run interrupted by user."`
@@ -636,6 +707,8 @@ Body:
 - `payload_override` (optional; supported for `create_entry` and `update_entry` items)
 
 Response: `AgentChangeItemRead`
+
+Authorization: admin principal only.
 
 State rules:
 
@@ -665,6 +738,8 @@ Body:
 
 Response: `AgentChangeItemRead`
 
+Authorization: admin principal only.
+
 State rules:
 
 - allowed only for `PENDING_REVIEW`
@@ -677,6 +752,8 @@ Serve uploaded agent attachment (image or PDF).
 Response:
 
 - binary file with stored MIME type
+
+Authorization: admin principal only.
 
 Errors:
 

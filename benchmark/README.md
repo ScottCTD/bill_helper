@@ -154,11 +154,14 @@ Weighted composite: entries (60%), entities (25%), tags (15%). Entry score combi
 
 ## Production Parity
 
-The runner reuses the production agent code directly:
+The runner reuses production agent code through a stable benchmark-facing service contract:
+- Benchmark contract: `backend/services/agent/benchmark_interface.py` (`run_benchmark_case`)
 - Same tool schemas and execution (`backend/services/agent/tools.py`)
 - Same message construction (`backend/services/agent/message_history.py`)
 - Same system prompt (`backend/services/agent/prompts.py`)
 - Model client via LiteLLM (`backend/services/agent/model_client.py`)
+- Same run-step state machine via adapterized orchestrator (`backend/services/agent/run_orchestrator.py`)
+- Same tool-call/usage helper semantics (`backend/services/agent/protocol_helpers.py`)
 
 The only change is the model name, injected via `RuntimeSettings` override in the isolated temp DB.
 
@@ -167,3 +170,11 @@ The only change is the model name, injected via `RuntimeSettings` override in th
 - **Production DB is never touched during benchmark runs.** Each case copies its snapshot to a unique temp file.
 - Runs are isolated from each other (separate temp DB per case).
 - `snapshot.py restore` is the only command that writes to the production DB path, and it requires an explicit manual invocation.
+
+## CLI Error Contract
+
+- Benchmark scripts are module-native (`uv run python -m benchmark.<script>`) and do not mutate `sys.path` for local imports.
+- Reusable helpers are side-effect-light functions that return typed results (`create_default_snapshot`, `generate_ground_truth`) so callers can reuse logic without process-control coupling.
+- JSON benchmark artifacts (`metadata.json`, `results.json`, `trace.json`, `run_meta.json`, `score.json`, report outputs) are written atomically via temp-file + replace semantics to avoid partial files on interruption/crash.
+- Worker functions (`run_benchmark`, `score_run`, `generate_ground_truth`, snapshot helpers) are exception-based.
+- CLI wrappers convert failures to process exit codes only in `main()` (`raise SystemExit(main())`), keeping script failure behavior consistent across benchmark tools.

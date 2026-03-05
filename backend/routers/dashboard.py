@@ -6,10 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.auth import RequestPrincipal, get_current_principal
 from backend.database import get_db
-from backend.models import Account
-from backend.schemas import DashboardRead
+from backend.models_finance import Account
+from backend.schemas_finance import DashboardRead
+from backend.services.access_scope import account_owner_filter, entry_owner_filter
 from backend.services.finance import (
+    DashboardAnalyticsOptions,
     build_dashboard_analytics,
     build_reconciliation,
     month_window,
@@ -23,6 +26,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 def get_dashboard(
     month: str = Query(default_factory=lambda: date.today().strftime("%Y-%m"), pattern=r"^\d{4}-\d{2}$"),
     db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> DashboardRead:
     try:
         start, end = month_window(month)
@@ -36,7 +40,11 @@ def get_dashboard(
         db,
         start=start,
         end=end,
-        currency_code=dashboard_currency_code,
+        options=DashboardAnalyticsOptions(
+            currency_code=dashboard_currency_code,
+            entry_filter=entry_owner_filter(principal),
+            account_filter=account_owner_filter(principal),
+        ),
     )
 
     as_of = min(date.today(), end - timedelta(days=1))
@@ -46,6 +54,7 @@ def get_dashboard(
             .where(
                 Account.is_active.is_(True),
                 Account.currency_code == dashboard_currency_code,
+                account_owner_filter(principal),
             )
             .order_by(Account.name.asc())
         )

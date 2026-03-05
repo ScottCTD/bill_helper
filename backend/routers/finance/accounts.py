@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+from datetime import date
+
+from fastapi import APIRouter, Depends, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from backend.auth import RequestPrincipal, get_current_principal
+from backend.database import get_db
+from backend.models_finance import Account, AccountSnapshot
+from backend.schemas_finance import (
+    AccountCreate,
+    AccountRead,
+    AccountUpdate,
+    ReconciliationRead,
+    SnapshotCreate,
+    SnapshotRead,
+)
+from backend.services.access_scope import (
+    account_owner_filter,
+    get_account_for_principal_or_404,
+)
+from backend.services.accounts import (
+    create_account_from_payload,
+    update_account_from_payload,
+)
+from backend.services.finance import build_reconciliation
+
+router = APIRouter(prefix="/accounts", tags=["accounts"])
+
+
+@router.post("", response_model=AccountRead, status_code=status.HTTP_201_CREATED)
+def create_account(
+    payload: AccountCreate,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> AccountRead:
+    account = create_account_from_payload(
+        db,
+        payload=payload,
+        principal=principal,
+    )
+    db.commit()
+    db.refresh(account)
+    return AccountRead.model_validate(account)
+
+
+@router.get("", response_model=list[AccountRead])
+def list_accounts(
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> list[AccountRead]:
+    accounts = list(
+        db.scalars(
+            select(Account)
+            .where(account_owner_filter(principal))
+            .order_by(Account.created_at.asc())
+        )
+    )
+    return [AccountRead.model_validate(account) for account in accounts]
+
+
+@router.patch("/{account_id}", response_model=AccountRead)
+def update_account(
+    account_id: str,
+    payload: AccountUpdate,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> AccountRead:
+    account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
+    update_account_from_payload(
+        db,
+        account=account,
+        payload=payload,
+        principal=principal,
+    )
+    db.commit()
+    db.refresh(account)
+    return AccountRead.model_validate(account)
+
+
+@router.post("/{account_id}/snapshots", response_model=SnapshotRead, status_code=status.HTTP_201_CREATED)
+def create_snapshot(
+    account_id: str,
+    payload: SnapshotCreate,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> SnapshotRead:
+    account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
+
+    snapshot = AccountSnapshot(
+        account_id=account_id,
+        snapshot_at=payload.snapshot_at,
+        balance_minor=payload.balance_minor,
+        note=payload.note,
+    )
+    db.add(snapshot)
+    db.commit()
+    db.refresh(snapshot)
+    return SnapshotRead.model_validate(snapshot)
+
+
+@router.get("/{account_id}/snapshots", response_model=list[SnapshotRead])
+def list_snapshots(
+    account_id: str,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> list[SnapshotRead]:
+    get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
+
+    snapshots = list(
+        db.scalars(
+            select(AccountSnapshot)
+            .where(AccountSnapshot.account_id == account_id)
+            .order_by(AccountSnapshot.snapshot_at.desc(), AccountSnapshot.created_at.desc())
+        )
+    )
+    return [SnapshotRead.model_validate(snapshot) for snapshot in snapshots]
+
+
+@router.get("/{account_id}/reconciliation", response_model=ReconciliationRead)
+def account_reconciliation(
+    account_id: str,
+    as_of: date | None = None,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> ReconciliationRead:
+    account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
+
+    effective_as_of = as_of or date.today()
+    return build_reconciliation(db, account, effective_as_of)

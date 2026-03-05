@@ -1,23 +1,17 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from ipaddress import ip_address
 from typing import Any
-from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.enums import (
-    AgentChangeStatus,
-    AgentChangeType,
-    AgentMessageRole,
-    AgentRunEventSource,
-    AgentRunEventType,
-    AgentReviewActionType,
-    AgentRunStatus,
-    AgentToolCallStatus,
-    EntryKind,
-    LinkType,
+from backend.enums_finance import EntryKind, LinkType
+from backend.services.runtime_settings_normalization import (
+    normalize_currency_code_or_none,
+    normalize_multiline_text_or_none,
+    normalize_text_or_none,
+    validate_agent_api_key_or_none,
+    validate_agent_base_url_or_none,
 )
 
 
@@ -104,12 +98,15 @@ class TaxonomyRead(BaseModel):
 
 
 class TaxonomyTermCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(min_length=1, max_length=120)
-    parent_term_id: str | None = None
     description: str | None = Field(default=None, max_length=2000)
 
 
 class TaxonomyTermUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str | None = Field(default=None, min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=2000)
 
@@ -119,7 +116,6 @@ class TaxonomyTermRead(BaseModel):
     taxonomy_id: str
     name: str
     normalized_name: str
-    parent_term_id: str | None = None
     description: str | None = None
     usage_count: int = 0
 
@@ -384,7 +380,6 @@ class DashboardRead(BaseModel):
 
 
 class RuntimeSettingsOverridesRead(BaseModel):
-    current_user_name: str | None = None
     user_memory: str | None = None
     default_currency_code: str | None = None
     dashboard_currency_code: str | None = None
@@ -419,7 +414,8 @@ class RuntimeSettingsRead(BaseModel):
 
 
 class RuntimeSettingsUpdate(BaseModel):
-    current_user_name: str | None = Field(default=None, max_length=255)
+    model_config = ConfigDict(extra="forbid")
+
     user_memory: str | None = Field(default=None, max_length=4000)
     default_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     dashboard_currency_code: str | None = Field(
@@ -439,7 +435,6 @@ class RuntimeSettingsUpdate(BaseModel):
     agent_api_key: str | None = Field(default=None, max_length=500)
 
     @field_validator(
-        "current_user_name",
         "agent_model",
         mode="before",
     )
@@ -447,212 +442,32 @@ class RuntimeSettingsUpdate(BaseModel):
     def normalize_optional_text(cls, value: Any) -> str | None:
         if value is None:
             return None
-        normalized = " ".join(str(value).split()).strip()
-        return normalized or None
+        return normalize_text_or_none(str(value))
 
     @field_validator("user_memory", mode="before")
     @classmethod
     def normalize_optional_multiline_text(cls, value: Any) -> str | None:
         if value is None:
             return None
-        normalized = str(value).replace("\r\n", "\n").replace("\r", "\n")
-        normalized = "\n".join(line.rstrip() for line in normalized.split("\n")).strip()
-        return normalized or None
+        return normalize_multiline_text_or_none(str(value))
 
     @field_validator("default_currency_code", "dashboard_currency_code", mode="before")
     @classmethod
     def normalize_optional_currency(cls, value: Any) -> str | None:
         if value is None:
             return None
-        normalized = " ".join(str(value).split()).strip().upper()
-        return normalized or None
+        return normalize_currency_code_or_none(str(value))
 
     @field_validator("agent_base_url", mode="before")
     @classmethod
     def validate_agent_base_url(cls, value: Any) -> str | None:
         if value is None:
             return None
-        normalized = " ".join(str(value).split()).strip()
-        if not normalized:
-            return None
-        # Validate URL format
-        parsed = urlparse(normalized)
-        if parsed.scheme not in ("http", "https"):
-            raise ValueError("agent_base_url must use http or https scheme")
-        if not parsed.netloc:
-            raise ValueError("agent_base_url must have a valid host")
-        hostname = (parsed.hostname or "").strip().lower()
-        if not hostname:
-            raise ValueError("agent_base_url must have a valid host")
-        if hostname == "localhost" or hostname.endswith(".localhost"):
-            raise ValueError("agent_base_url cannot point to localhost hosts")
-
-        # Block unsafe IP literals to reduce SSRF risk.
-        try:
-            host_ip = ip_address(hostname)
-        except ValueError:
-            return normalized
-        if (
-            host_ip.is_private
-            or host_ip.is_loopback
-            or host_ip.is_link_local
-            or host_ip.is_reserved
-            or host_ip.is_multicast
-            or host_ip.is_unspecified
-        ):
-            raise ValueError("agent_base_url cannot point to non-public IP addresses")
-        return normalized
+        return validate_agent_base_url_or_none(str(value))
 
     @field_validator("agent_api_key", mode="before")
     @classmethod
     def validate_agent_api_key(cls, value: Any) -> str | None:
         if value is None:
             return None
-        normalized = str(value).strip()
-        if not normalized:
-            return None
-        # Reject masked sentinel to prevent accidental overwrites
-        if normalized == "***masked***":
-            raise ValueError("agent_api_key cannot be the masked sentinel value")
-        return normalized
-
-
-class AgentThreadCreate(BaseModel):
-    title: str | None = Field(default=None, max_length=255)
-
-
-class AgentThreadRead(BaseModel):
-    id: str
-    title: str | None = None
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentThreadSummaryRead(AgentThreadRead):
-    last_message_preview: str | None = None
-    pending_change_count: int = 0
-    has_running_run: bool = False
-
-
-class AgentMessageAttachmentRead(BaseModel):
-    id: str
-    message_id: str
-    mime_type: str
-    file_path: str
-    attachment_url: str
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentMessageRead(BaseModel):
-    id: str
-    thread_id: str
-    role: AgentMessageRole
-    content_markdown: str
-    created_at: datetime
-    attachments: list[AgentMessageAttachmentRead] = Field(default_factory=list)
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentToolCallRead(BaseModel):
-    id: str
-    run_id: str
-    llm_tool_call_id: str | None = None
-    tool_name: str
-    input_json: dict[str, Any] | None = None
-    output_json: dict[str, Any] | None = None
-    output_text: str | None = None
-    has_full_payload: bool = False
-    status: AgentToolCallStatus
-    created_at: datetime
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentRunEventRead(BaseModel):
-    id: str
-    run_id: str
-    sequence_index: int
-    event_type: AgentRunEventType
-    source: AgentRunEventSource | None = None
-    message: str | None = None
-    tool_call_id: str | None = None
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentReviewActionRead(BaseModel):
-    id: str
-    change_item_id: str
-    action: AgentReviewActionType
-    actor: str
-    note: str | None = None
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentChangeItemRead(BaseModel):
-    id: str
-    run_id: str
-    change_type: AgentChangeType
-    payload_json: dict[str, Any]
-    rationale_text: str
-    status: AgentChangeStatus
-    review_note: str | None = None
-    applied_resource_type: str | None = None
-    applied_resource_id: str | None = None
-    created_at: datetime
-    updated_at: datetime
-    review_actions: list[AgentReviewActionRead] = Field(default_factory=list)
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentRunRead(BaseModel):
-    id: str
-    thread_id: str
-    user_message_id: str
-    assistant_message_id: str | None = None
-    status: AgentRunStatus
-    model_name: str
-    context_tokens: int | None = None
-    input_tokens: int | None = None
-    output_tokens: int | None = None
-    cache_read_tokens: int | None = None
-    cache_write_tokens: int | None = None
-    input_cost_usd: float | None = None
-    output_cost_usd: float | None = None
-    total_cost_usd: float | None = None
-    error_text: str | None = None
-    created_at: datetime
-    completed_at: datetime | None = None
-    events: list[AgentRunEventRead] = Field(default_factory=list)
-    tool_calls: list[AgentToolCallRead] = Field(default_factory=list)
-    change_items: list[AgentChangeItemRead] = Field(default_factory=list)
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentThreadDetailRead(BaseModel):
-    thread: AgentThreadRead
-    messages: list[AgentMessageRead]
-    runs: list[AgentRunRead]
-    configured_model_name: str
-    current_context_tokens: int | None = None
-
-
-class AgentChangeItemApproveRequest(BaseModel):
-    note: str | None = None
-    payload_override: dict[str, Any] | None = None
-
-
-class AgentChangeItemRejectRequest(BaseModel):
-    note: str | None = None
+        return validate_agent_api_key_or_none(str(value))

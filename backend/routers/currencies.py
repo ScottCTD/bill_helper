@@ -5,8 +5,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import Entry
-from backend.schemas import CurrencyRead
+from backend.models_finance import Entry
+from backend.schemas_finance import CurrencyRead
 
 router = APIRouter(prefix="/currencies", tags=["currencies"])
 

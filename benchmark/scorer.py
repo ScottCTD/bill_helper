@@ -11,13 +11,10 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-RESULTS_DIR = REPO_ROOT / "benchmark" / "results" / "runs"
-CASES_DIR = REPO_ROOT / "benchmark" / "fixtures" / "cases"
-REPORTS_DIR = REPO_ROOT / "benchmark" / "reports"
+from benchmark.io_utils import atomic_write_json
+from benchmark.paths import CASES_DIR, REPORTS_DIR, RESULTS_DIR
 
 
 def _normalize_text(s: str | None) -> str:
@@ -401,46 +398,51 @@ def score_run(run_id: str) -> dict[str, Any]:
     run_dir = RESULTS_DIR / run_id
     meta_path = run_dir / "run_meta.json"
     if not meta_path.exists():
-        print(f"Error: run meta not found at {meta_path}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"run meta not found at {meta_path}")
 
     meta = json.loads(meta_path.read_text())
     case_ids = meta.get("cases", [])
 
     case_scores: list[CaseScore] = []
     for cid in case_ids:
-        try:
-            cs = score_case(cid, run_id)
-            case_scores.append(cs)
+        gt_path = CASES_DIR / cid / "ground_truth.json"
+        results_path = RESULTS_DIR / run_id / "cases" / cid / "results.json"
+        if not gt_path.exists():
+            print(f"  Skipping {cid}: missing ground truth at {gt_path}")
+            continue
+        if not results_path.exists():
+            print(f"  Skipping {cid}: missing results at {results_path}")
+            continue
 
-            gt_data = json.loads((CASES_DIR / cid / "ground_truth.json").read_text())
-            results_data = json.loads((RESULTS_DIR / run_id / "cases" / cid / "results.json").read_text())
-            gt_entries = gt_data.get("entries", [])
-            pred_entries = results_data.get("entries", [])
+        cs = score_case(cid, run_id)
+        case_scores.append(cs)
 
-            entry_details = _build_entry_details(cs, gt_entries, pred_entries)
+        gt_data = json.loads(gt_path.read_text())
+        results_data = json.loads(results_path.read_text())
+        gt_entries = gt_data.get("entries", [])
+        pred_entries = results_data.get("entries", [])
 
-            score_out = {
-                "case_id": cs.case_id,
-                "tags": cs.tag_score.as_dict(),
-                "entities": cs.entity_score.as_dict(),
-                "entries": {
-                    "gt_count": cs.gt_count,
-                    "pred_count": cs.pred_count,
-                    "matched_count": cs.matched_count,
-                    "precision": round(cs.precision, 4),
-                    "recall": round(cs.recall, 4),
-                    "field_scores": {k: round(v, 4) for k, v in cs.field_scores.as_dict().items()},
-                    "mismatched": entry_details["mismatched"],
-                    "unmatched_gt": entry_details["unmatched_gt"],
-                    "unmatched_pred": entry_details["unmatched_pred"],
-                },
-                "overall_score": round(cs.overall_score(), 4),
-            }
-            score_path = RESULTS_DIR / run_id / "cases" / cid / "score.json"
-            score_path.write_text(json.dumps(score_out, indent=2) + "\n")
-        except FileNotFoundError as exc:
-            print(f"  Skipping {cid}: {exc}")
+        entry_details = _build_entry_details(cs, gt_entries, pred_entries)
+
+        score_out = {
+            "case_id": cs.case_id,
+            "tags": cs.tag_score.as_dict(),
+            "entities": cs.entity_score.as_dict(),
+            "entries": {
+                "gt_count": cs.gt_count,
+                "pred_count": cs.pred_count,
+                "matched_count": cs.matched_count,
+                "precision": round(cs.precision, 4),
+                "recall": round(cs.recall, 4),
+                "field_scores": {k: round(v, 4) for k, v in cs.field_scores.as_dict().items()},
+                "mismatched": entry_details["mismatched"],
+                "unmatched_gt": entry_details["unmatched_gt"],
+                "unmatched_pred": entry_details["unmatched_pred"],
+            },
+            "overall_score": round(cs.overall_score(), 4),
+        }
+        score_path = RESULTS_DIR / run_id / "cases" / cid / "score.json"
+        atomic_write_json(score_path, score_out)
 
     _print_run_summary(meta, case_scores)
 
@@ -565,11 +567,11 @@ def compare_runs(run_ids: list[str], report_name: str | None = None) -> None:
             "runs": reports,
         }
         out_path = REPORTS_DIR / f"{report_name}.json"
-        out_path.write_text(json.dumps(comparison, indent=2) + "\n")
+        atomic_write_json(out_path, comparison)
         print(f"\nReport saved to: {out_path}")
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(description="Score benchmark results.")
     sub = parser.add_subparsers(dest="command")
 
@@ -581,13 +583,18 @@ def main() -> None:
     compare_p.add_argument("--save-report", default=None, help="Save comparison report with this name")
 
     args = parser.parse_args()
-    if args.command == "run":
-        score_run(args.run_id)
-    elif args.command == "compare":
-        compare_runs(args.run_ids, report_name=args.save_report)
-    else:
-        parser.print_help()
+    try:
+        if args.command == "run":
+            score_run(args.run_id)
+        elif args.command == "compare":
+            compare_runs(args.run_ids, report_name=args.save_report)
+        else:
+            parser.print_help()
+        return 0
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -33,6 +33,7 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 - services: normalization, calculations, group recomputation, agent orchestration
 - models: persistence structure and relationships
 - schemas: API contracts
+- app bootstrap: explicit `create_app()` factory (uvicorn factory mode), avoiding import-time initialization side effects
 
 ## Agent Architecture
 
@@ -44,7 +45,7 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 4. runtime executes bounded tool-calling loop via LiteLLM using configured provider model
 5. each tool call is persisted to `agent_tool_calls`
 6. proposal tools create `agent_change_items` (`PENDING_REVIEW`)
-7. stream path emits incremental `text_delta`, `tool_call`, and `reasoning_update` events while the run executes
+7. stream path emits incremental `text_delta` plus persisted `run_event` payloads (run start/finish, reasoning updates, and per-tool lifecycle events)
 8. runtime enforces a final assistant message and marks run `completed` or `failed`
 
 ## Review Boundary
@@ -78,13 +79,17 @@ Contract notes:
 
 ## Agent Internal Boundaries (Refactor Baseline)
 
-- `runtime.py`: run lifecycle orchestration and tool loop state machine
-- `message_history.py`: persisted conversation/attachment conversion into LLM messages
-- `message_history.py`: prepends reviewed proposal outcomes into the latest user message for follow-up turns
+- `runtime.py`: run lifecycle coordinator and stable model-call monkeypatch seam (`call_model`, `call_model_stream`)
+- `orchestration/runtime_state.py`: runtime event/tool-call/terminal-state persistence helpers
+- `run_orchestrator.py`: shared step-state machine used by runtime sync/stream flows and benchmark adapters
+- `message_history.py`: message-history query flow and turn-level review/interruption prefix composition
+- `content_assembly/attachments.py`: attachment parsing (PDF text/OCR, image payloads, vision capability checks)
+- `content_assembly/user_context.py`: current-user/account context normalization and truncation for prompt assembly
 - `model_client.py`: LiteLLM adapter and normalized model errors
 - `model_client.py`: tenacity retries for model completion calls
 - `change_apply.py`: change-type handler registry for review-time resource application
 - `review.py`: approval/rejection transitions and audit writes
+- `benchmark_interface.py`: benchmark-facing case execution contract returning normalized predictions/trace payloads
 
 ## Frontend State Strategy
 
@@ -130,7 +135,7 @@ Cross-page consistency:
 
 - single-user local mode; no auth RBAC yet
 - agent actor label uses configured current-user name
-- only image attachments are accepted in agent messages
+- only image and PDF attachments are accepted in agent messages
 - no arbitrary code execution tools in agent runtime
 
 ## Out of Scope (Current)

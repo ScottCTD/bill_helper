@@ -133,11 +133,6 @@ export function SettingsPage() {
     }
     setFormError(null);
     try {
-      const nextCurrentUserName = formState.current_user_name.trim();
-      if (!nextCurrentUserName) {
-        throw new Error("Current user name is required.");
-      }
-
       const nextDefaultCurrencyCode = formState.default_currency_code.trim().toUpperCase();
       const nextDashboardCurrencyCode = formState.dashboard_currency_code.trim().toUpperCase();
       if (nextDefaultCurrencyCode.length !== 3 || nextDashboardCurrencyCode.length !== 3) {
@@ -181,7 +176,6 @@ export function SettingsPage() {
         : undefined; // undefined means "don't change"
 
       const payload: Record<string, unknown> = {
-        current_user_name: nextCurrentUserName,
         user_memory: formState.user_memory,
         default_currency_code: nextDefaultCurrencyCode,
         dashboard_currency_code: nextDashboardCurrencyCode,
@@ -209,7 +203,6 @@ export function SettingsPage() {
 
   function resetOverrides() {
     updateMutation.mutate({
-      current_user_name: null,
       user_memory: null,
       default_currency_code: null,
       dashboard_currency_code: null,
@@ -268,17 +261,14 @@ export function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>General</CardTitle>
-            <CardDescription>Defaults used by new ledger flows and user attribution.</CardDescription>
+            <CardDescription>Defaults used by new ledger flows. Request identity is controlled by the active principal, not settings.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <FormField
               label="Current user name"
-              hint="Used for review actor attribution and owner defaults when creating entries/accounts."
+              hint="Read-only request principal for this session."
             >
-              <Input
-                value={formState.current_user_name}
-                onChange={(event) => setFormState((state) => (state ? { ...state, current_user_name: event.target.value } : state))}
-              />
+              <Input value={formState.current_user_name} readOnly />
             </FormField>
 
             <FormField

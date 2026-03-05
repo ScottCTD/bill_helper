@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from backend.models import Entry, EntryLink, Tag
-from backend.schemas import EntryDetailRead, EntryRead, LinkRead, TagRead
+from backend.models_finance import Entry, EntryLink, Tag
+from backend.schemas_finance import EntryDetailRead, EntryRead, LinkRead, TagRead
 
 
 def tag_to_schema(tag: Tag) -> TagRead:

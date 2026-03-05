@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, timedelta
 from statistics import median
 
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
-from backend.enums import EntryKind
-from backend.models import Account, AccountSnapshot, Entity, Entry, EntryTag, Tag
-from backend.schemas import (
+from backend.enums_finance import EntryKind
+from backend.models_finance import Account, AccountSnapshot, Entity, Entry, EntryTag, Tag
+from backend.schemas_finance import (
     DailyExpensePoint,
     DashboardBreakdownItem,
     DashboardDailySpendingPoint,
@@ -26,6 +28,30 @@ DASHBOARD_DEFAULT_CURRENCY_CODE = "CAD"
 DASHBOARD_DAILY_TAG_NAME = "daily"
 DASHBOARD_NON_DAILY_TAG_NAMES = frozenset({"non-daily", "non_daily", "nondaily"})
 WEEKDAY_LABELS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+@dataclass(slots=True)
+class _ExpenseAnalyticsRollup:
+    expense_totals_by_date: dict[date, int]
+    daily_expense_totals_by_date: dict[date, int]
+    non_daily_expense_totals_by_date: dict[date, int]
+    spending_by_from: dict[str, int]
+    spending_by_to: dict[str, int]
+    spending_by_tag: dict[str, int]
+    weekday_totals: dict[int, int]
+    largest_expenses: list[DashboardLargestExpenseItem]
+
+
+DashboardFilter = ColumnElement[bool]
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardAnalyticsOptions:
+    currency_code: str = DASHBOARD_DEFAULT_CURRENCY_CODE
+    trend_months: int = 6
+    today: date | None = None
+    entry_filter: DashboardFilter | None = None
+    account_filter: DashboardFilter | None = None
 
 
 def compute_ledger_balance(db: Session, account_id: str, as_of: date) -> int:
@@ -103,17 +129,18 @@ def _entry_has_daily_tag(entry: Entry) -> bool:
     return DASHBOARD_DAILY_TAG_NAME in normalized_names
 
 
-def _account_entity_ids(db: Session) -> set[str]:
-    linked_account_entity_ids = {
-        entity_id
-        for entity_id in db.scalars(select(Account.entity_id)).all()
-        if entity_id
-    }
-    categorized_account_entity_ids = {
-        entity_id
-        for entity_id in db.scalars(select(Entity.id).where(Entity.category == "account")).all()
-        if entity_id
-    }
+def _account_entity_ids(
+    db: Session,
+    *,
+    account_filter: DashboardFilter | None = None,
+) -> set[str]:
+    linked_accounts_stmt = select(Account.entity_id)
+    if account_filter is not None:
+        linked_accounts_stmt = linked_accounts_stmt.where(account_filter)
+    linked_account_entity_ids = {entity_id for entity_id in db.scalars(linked_accounts_stmt).all() if entity_id}
+
+    categorized_accounts_stmt = select(Entity.id).where(Entity.category == "account")
+    categorized_account_entity_ids = {entity_id for entity_id in db.scalars(categorized_accounts_stmt).all() if entity_id}
     return linked_account_entity_ids | categorized_account_entity_ids
 
 
@@ -126,20 +153,28 @@ def _is_internal_account_transfer(entry: Entry, account_entity_ids: set[str]) ->
     )
 
 
-def _list_entries_for_window(db: Session, start: date, end: date, currency_code: str) -> list[Entry]:
-    return list(
-        db.scalars(
-            select(Entry)
-            .where(
-                Entry.is_deleted.is_(False),
-                Entry.occurred_at >= start,
-                Entry.occurred_at < end,
-                Entry.currency_code == currency_code,
-            )
-            .options(selectinload(Entry.tags))
-            .order_by(Entry.occurred_at.asc(), Entry.created_at.asc())
+def _list_entries_for_window(
+    db: Session,
+    start: date,
+    end: date,
+    currency_code: str,
+    *,
+    entry_filter: DashboardFilter | None = None,
+) -> list[Entry]:
+    stmt = (
+        select(Entry)
+        .where(
+            Entry.is_deleted.is_(False),
+            Entry.occurred_at >= start,
+            Entry.occurred_at < end,
+            Entry.currency_code == currency_code,
         )
+        .options(selectinload(Entry.tags))
+        .order_by(Entry.occurred_at.asc(), Entry.created_at.asc())
     )
+    if entry_filter is not None:
+        stmt = stmt.where(entry_filter)
+    return list(db.scalars(stmt))
 
 
 def _build_breakdown_items(totals: dict[str, int], limit: int = 8) -> list[DashboardBreakdownItem]:
@@ -158,24 +193,29 @@ def _build_breakdown_items(totals: dict[str, int], limit: int = 8) -> list[Dashb
     ]
 
 
-def build_dashboard_analytics(
+def _list_non_transfer_entries_for_window(
     db: Session,
     *,
     start: date,
     end: date,
-    currency_code: str = DASHBOARD_DEFAULT_CURRENCY_CODE,
-    trend_months: int = 6,
-    today: date | None = None,
-) -> dict[str, object]:
-    normalized_currency = currency_code.upper()
-    account_entity_ids = _account_entity_ids(db)
-    month_entries = [
+    currency_code: str,
+    account_entity_ids: set[str],
+    entry_filter: DashboardFilter | None = None,
+) -> list[Entry]:
+    return [
         entry
-        for entry in _list_entries_for_window(db, start, end, normalized_currency)
+        for entry in _list_entries_for_window(
+            db,
+            start,
+            end,
+            currency_code,
+            entry_filter=entry_filter,
+        )
         if not _is_internal_account_transfer(entry, account_entity_ids)
     ]
-    expense_entries = [entry for entry in month_entries if entry.kind == EntryKind.EXPENSE]
 
+
+def _rollup_expense_entries(expense_entries: list[Entry]) -> _ExpenseAnalyticsRollup:
     expense_totals_by_date: dict[date, int] = defaultdict(int)
     daily_expense_totals_by_date: dict[date, int] = defaultdict(int)
     non_daily_expense_totals_by_date: dict[date, int] = defaultdict(int)
@@ -184,8 +224,6 @@ def build_dashboard_analytics(
     spending_by_tag: dict[str, int] = defaultdict(int)
     weekday_totals: dict[int, int] = defaultdict(int)
     largest_expenses: list[DashboardLargestExpenseItem] = []
-
-    income_total_minor = sum(entry.amount_minor for entry in month_entries if entry.kind == EntryKind.INCOME)
 
     for entry in expense_entries:
         amount_minor = entry.amount_minor
@@ -220,17 +258,38 @@ def build_dashboard_analytics(
             )
         )
 
-    daily_expense_total_minor = sum(daily_expense_totals_by_date.values())
-    non_daily_expense_total_minor = sum(non_daily_expense_totals_by_date.values())
+    return _ExpenseAnalyticsRollup(
+        expense_totals_by_date=expense_totals_by_date,
+        daily_expense_totals_by_date=daily_expense_totals_by_date,
+        non_daily_expense_totals_by_date=non_daily_expense_totals_by_date,
+        spending_by_from=spending_by_from,
+        spending_by_to=spending_by_to,
+        spending_by_tag=spending_by_tag,
+        weekday_totals=weekday_totals,
+        largest_expenses=largest_expenses,
+    )
+
+
+def _build_dashboard_kpis(
+    *,
+    rollup: _ExpenseAnalyticsRollup,
+    income_total_minor: int,
+) -> DashboardKpisRead:
+    daily_expense_total_minor = sum(rollup.daily_expense_totals_by_date.values())
+    non_daily_expense_total_minor = sum(rollup.non_daily_expense_totals_by_date.values())
     expense_total_minor = daily_expense_total_minor + non_daily_expense_total_minor
 
-    daily_expense_values = list(daily_expense_totals_by_date.values())
+    daily_expense_values = list(rollup.daily_expense_totals_by_date.values())
     average_daily_expense_minor = (
-        int(round(sum(daily_expense_values) / len(daily_expense_values))) if daily_expense_values else 0
+        int(round(sum(daily_expense_values) / len(daily_expense_values)))
+        if daily_expense_values
+        else 0
     )
-    median_daily_expense_minor = int(round(median(daily_expense_values))) if daily_expense_values else 0
+    median_daily_expense_minor = (
+        int(round(median(daily_expense_values))) if daily_expense_values else 0
+    )
 
-    kpis = DashboardKpisRead(
+    return DashboardKpisRead(
         expense_total_minor=expense_total_minor,
         income_total_minor=income_total_minor,
         net_total_minor=income_total_minor - expense_total_minor,
@@ -241,26 +300,53 @@ def build_dashboard_analytics(
         daily_spending_days=len(daily_expense_values),
     )
 
+
+def _build_daily_spending_points(
+    *,
+    start: date,
+    end: date,
+    rollup: _ExpenseAnalyticsRollup,
+) -> list[DashboardDailySpendingPoint]:
     daily_spending: list[DashboardDailySpendingPoint] = []
     cursor = start
     while cursor < end:
         daily_spending.append(
             DashboardDailySpendingPoint(
                 date=cursor,
-                expense_total_minor=expense_totals_by_date.get(cursor, 0),
-                daily_expense_minor=daily_expense_totals_by_date.get(cursor, 0),
-                non_daily_expense_minor=non_daily_expense_totals_by_date.get(cursor, 0),
+                expense_total_minor=rollup.expense_totals_by_date.get(cursor, 0),
+                daily_expense_minor=rollup.daily_expense_totals_by_date.get(cursor, 0),
+                non_daily_expense_minor=rollup.non_daily_expense_totals_by_date.get(cursor, 0),
             )
         )
         cursor += timedelta(days=1)
+    return daily_spending
 
-    trend_start = _shift_month(start, -(max(trend_months, 1) - 1))
-    trend_entries = [
-        entry
-        for entry in _list_entries_for_window(db, trend_start, end, normalized_currency)
-        if not _is_internal_account_transfer(entry, account_entity_ids)
+
+def _build_monthly_trend(
+    *,
+    db: Session,
+    start: date,
+    end: date,
+    currency_code: str,
+    trend_months: int,
+    account_entity_ids: set[str],
+    entry_filter: DashboardFilter | None = None,
+) -> list[DashboardMonthlyTrendPoint]:
+    normalized_trend_months = max(trend_months, 1)
+    trend_start = _shift_month(start, -(normalized_trend_months - 1))
+    trend_entries = _list_non_transfer_entries_for_window(
+        db,
+        start=trend_start,
+        end=end,
+        currency_code=currency_code,
+        account_entity_ids=account_entity_ids,
+        entry_filter=entry_filter,
+    )
+
+    trend_month_keys = [
+        _shift_month(start, -offset).strftime("%Y-%m")
+        for offset in range(normalized_trend_months - 1, -1, -1)
     ]
-    trend_month_keys = [_shift_month(start, -offset).strftime("%Y-%m") for offset in range(max(trend_months, 1) - 1, -1, -1)]
     monthly_rollup = {
         month_key: {
             "expense_total_minor": 0,
@@ -277,23 +363,37 @@ def build_dashboard_analytics(
             continue
         if entry.kind == EntryKind.INCOME:
             bucket["income_total_minor"] += entry.amount_minor
+            continue
+        bucket["expense_total_minor"] += entry.amount_minor
+        if _entry_has_daily_tag(entry):
+            bucket["daily_expense_minor"] += entry.amount_minor
         else:
-            bucket["expense_total_minor"] += entry.amount_minor
-            if _entry_has_daily_tag(entry):
-                bucket["daily_expense_minor"] += entry.amount_minor
-            else:
-                bucket["non_daily_expense_minor"] += entry.amount_minor
+            bucket["non_daily_expense_minor"] += entry.amount_minor
 
-    monthly_trend = [
+    return [
         DashboardMonthlyTrendPoint(month=month_key, **monthly_rollup[month_key])
         for month_key in trend_month_keys
     ]
 
-    weekday_spending = [
-        DashboardWeekdaySpendingPoint(weekday=WEEKDAY_LABELS[index], total_minor=weekday_totals.get(index, 0))
+
+def _build_weekday_spending_points(weekday_totals: dict[int, int]) -> list[DashboardWeekdaySpendingPoint]:
+    return [
+        DashboardWeekdaySpendingPoint(
+            weekday=WEEKDAY_LABELS[index],
+            total_minor=weekday_totals.get(index, 0),
+        )
         for index in range(len(WEEKDAY_LABELS))
     ]
 
+
+def _build_projection(
+    *,
+    start: date,
+    end: date,
+    today: date | None,
+    expense_entries: list[Entry],
+    expense_total_minor: int,
+) -> DashboardProjectionRead:
     now = today or date.today()
     is_current_month = now.year == start.year and now.month == start.month
     if is_current_month:
@@ -307,7 +407,12 @@ def build_dashboard_analytics(
         projected_total_minor = (
             spent_to_date_minor
             if days_elapsed == 0
-            else int(round(spent_to_date_minor + (spent_to_date_minor / days_elapsed) * days_remaining))
+            else int(
+                round(
+                    spent_to_date_minor
+                    + (spent_to_date_minor / days_elapsed) * days_remaining
+                )
+            )
         )
         projected_remaining_minor = max(projected_total_minor - spent_to_date_minor, 0)
     else:
@@ -317,7 +422,7 @@ def build_dashboard_analytics(
         projected_total_minor = None
         projected_remaining_minor = None
 
-    projection = DashboardProjectionRead(
+    return DashboardProjectionRead(
         is_current_month=is_current_month,
         days_elapsed=days_elapsed,
         days_remaining=days_remaining,
@@ -326,19 +431,77 @@ def build_dashboard_analytics(
         projected_remaining_minor=projected_remaining_minor,
     )
 
-    ranked_expenses = sorted(
+
+def _rank_expenses(
+    largest_expenses: list[DashboardLargestExpenseItem],
+) -> list[DashboardLargestExpenseItem]:
+    return sorted(
         largest_expenses,
         key=lambda entry: (entry.amount_minor, entry.occurred_at.toordinal(), entry.name),
         reverse=True,
     )
 
+
+def build_dashboard_analytics(
+    db: Session,
+    *,
+    start: date,
+    end: date,
+    options: DashboardAnalyticsOptions | None = None,
+) -> dict[str, object]:
+    analytics_options = options or DashboardAnalyticsOptions()
+    normalized_currency = analytics_options.currency_code.upper()
+    account_entity_ids = _account_entity_ids(
+        db,
+        account_filter=analytics_options.account_filter,
+    )
+    month_entries = _list_non_transfer_entries_for_window(
+        db,
+        start=start,
+        end=end,
+        currency_code=normalized_currency,
+        account_entity_ids=account_entity_ids,
+        entry_filter=analytics_options.entry_filter,
+    )
+    expense_entries = [entry for entry in month_entries if entry.kind == EntryKind.EXPENSE]
+    rollup = _rollup_expense_entries(expense_entries)
+
+    income_total_minor = sum(entry.amount_minor for entry in month_entries if entry.kind == EntryKind.INCOME)
+    kpis = _build_dashboard_kpis(
+        rollup=rollup,
+        income_total_minor=income_total_minor,
+    )
+    daily_spending = _build_daily_spending_points(
+        start=start,
+        end=end,
+        rollup=rollup,
+    )
+    monthly_trend = _build_monthly_trend(
+        db=db,
+        start=start,
+        end=end,
+        currency_code=normalized_currency,
+        trend_months=analytics_options.trend_months,
+        account_entity_ids=account_entity_ids,
+        entry_filter=analytics_options.entry_filter,
+    )
+    weekday_spending = _build_weekday_spending_points(rollup.weekday_totals)
+    projection = _build_projection(
+        start=start,
+        end=end,
+        today=analytics_options.today,
+        expense_entries=expense_entries,
+        expense_total_minor=kpis.expense_total_minor,
+    )
+    ranked_expenses = _rank_expenses(rollup.largest_expenses)
+
     return {
         "kpis": kpis,
         "daily_spending": daily_spending,
         "monthly_trend": monthly_trend,
-        "spending_by_from": _build_breakdown_items(spending_by_from),
-        "spending_by_to": _build_breakdown_items(spending_by_to),
-        "spending_by_tag": _build_breakdown_items(spending_by_tag),
+        "spending_by_from": _build_breakdown_items(rollup.spending_by_from),
+        "spending_by_to": _build_breakdown_items(rollup.spending_by_to),
+        "spending_by_tag": _build_breakdown_items(rollup.spending_by_tag),
         "weekday_spending": weekday_spending,
         "largest_expenses": ranked_expenses[:8],
         "projection": projection,

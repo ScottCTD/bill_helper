@@ -13,6 +13,8 @@ from tenacity import (
     wait_exponential,
 )
 
+from backend.services.agent.error_policy import recoverable_result
+
 
 class AgentModelError(RuntimeError):
     pass
@@ -26,6 +28,20 @@ _TRANSIENT_SSL_BAD_RECORD_MAC_MARKERS = (
     "bad record mac",
 )
 _PROMPT_CACHE_INJECTION_POINTS_MAX = 4
+PROMPT_CACHE_SUPPORT_EXCEPTIONS = (
+    AttributeError,
+    KeyError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
+ENV_VALIDATION_EXCEPTIONS = (
+    AttributeError,
+    KeyError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
 
 
 def _normalize_secret(value: Any) -> str | None:
@@ -77,7 +93,13 @@ def _is_transient_ssl_bad_record_mac_error(exc: Exception) -> bool:
 def _supports_prompt_caching(model_name: str) -> bool:
     try:
         return bool(litellm.utils.supports_prompt_caching(model_name))
-    except Exception:
+    except PROMPT_CACHE_SUPPORT_EXCEPTIONS as exc:
+        recoverable_result(
+            scope="model_client.supports_prompt_caching",
+            fallback=False,
+            error=exc,
+            context={"model_name": model_name},
+        )
         return False
 
 
@@ -302,13 +324,114 @@ def _coerce_index(value: Any) -> int | None:
     return None
 
 
+def _empty_usage_totals() -> dict[str, int | None]:
+    return {
+        "input_tokens": None,
+        "output_tokens": None,
+        "cache_read_tokens": None,
+        "cache_write_tokens": None,
+    }
+
+
+def _apply_usage_totals(
+    usage_totals: dict[str, int | None],
+    usage: dict[str, int | None],
+) -> None:
+    for field, value in usage.items():
+        if value is not None:
+            usage_totals[field] = value
+
+
+def _append_stream_content(
+    *,
+    emitted_content: str,
+    attempt_content: str,
+    content_delta: str,
+) -> tuple[str, str, str | None]:
+    attempt_content = f"{attempt_content}{content_delta}"
+    if attempt_content.startswith(emitted_content):
+        suffix = attempt_content[len(emitted_content) :]
+        if not suffix:
+            return emitted_content, attempt_content, None
+        return attempt_content, attempt_content, suffix
+    if emitted_content.startswith(attempt_content):
+        # Retry replaying an already-emitted prefix; suppress duplicates.
+        return emitted_content, attempt_content, None
+    raise AgentModelError(
+        "model request failed: stream retry produced divergent output"
+    )
+
+
+def _finalize_stream_content(
+    *,
+    emitted_content: str,
+    attempt_content: str,
+) -> tuple[str, str, str | None]:
+    if not attempt_content and emitted_content:
+        return emitted_content, emitted_content, None
+    if attempt_content.startswith(emitted_content):
+        suffix = attempt_content[len(emitted_content) :]
+        if not suffix:
+            return emitted_content, attempt_content, None
+        return attempt_content, attempt_content, suffix
+    return emitted_content, emitted_content, None
+
+
+def _merge_tool_call_delta(
+    *,
+    tool_calls_by_index: dict[int, dict[str, Any]],
+    tool_call_delta: Any,
+) -> None:
+    index = _coerce_index(_read_attr(tool_call_delta, "index"))
+    if index is None:
+        return
+
+    current = tool_calls_by_index.setdefault(
+        index,
+        {
+            "id": "",
+            "type": "function",
+            "function": {"name": "", "arguments": ""},
+        },
+    )
+
+    delta_id = _coerce_text(_read_attr(tool_call_delta, "id"))
+    if delta_id is not None and not current["id"]:
+        current["id"] = delta_id
+
+    delta_type = _coerce_text(_read_attr(tool_call_delta, "type"))
+    if delta_type is not None:
+        current["type"] = delta_type
+
+    delta_function = _read_attr(tool_call_delta, "function")
+    delta_name = _coerce_text(_read_attr(delta_function, "name"))
+    if delta_name is not None:
+        current["function"]["name"] = f"{current['function']['name']}{delta_name}"
+
+    delta_arguments = _coerce_text(_read_attr(delta_function, "arguments"))
+    if delta_arguments is not None:
+        current["function"]["arguments"] = (
+            f"{current['function']['arguments']}{delta_arguments}"
+        )
+
+
+def _ordered_tool_calls(tool_calls_by_index: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
+    return [tool_calls_by_index[index] for index in sorted(tool_calls_by_index)]
+
+
 def validate_litellm_environment(*, model_name: str) -> tuple[bool, list[str], str]:
     normalized_model = (model_name or "").strip() or "openrouter/qwen/qwen3.5-27b"
     try:
         validation = litellm.validate_environment(
             model=normalized_model,
         )
-    except Exception:
+    except ENV_VALIDATION_EXCEPTIONS as exc:
+        recoverable_result(
+            scope="model_client.validate_environment",
+            fallback=None,
+            error=exc,
+            context={"model_name": normalized_model},
+        )
         # Keep fail-fast only when we can confidently determine missing credentials.
         return True, [], normalized_model
 
@@ -441,6 +564,21 @@ class LiteLLMModelClient:
         except Exception as exc:
             raise self._to_model_error(exc) from exc
 
+    def _stream_completion_once(self, request: dict[str, Any]) -> Any:
+        try:
+            return self._completion_with_transient_ssl_retry(request)
+        except OpenAIError as exc:
+            status_code = getattr(exc, "status_code", None)
+            if request.get("stream_options") and status_code in (400, 422):
+                # Some OpenAI-compatible providers reject `stream_options`; retry once without it.
+                retry_request = {
+                    key: value
+                    for key, value in request.items()
+                    if key != "stream_options"
+                }
+                return self._completion_with_transient_ssl_retry(retry_request)
+            raise
+
     def complete(
         self,
         messages: list[dict[str, Any]],
@@ -504,12 +642,7 @@ class LiteLLMModelClient:
         emitted_content = ""
         final_content = ""
         reasoning_content = ""
-        usage_totals: dict[str, int | None] = {
-            "input_tokens": None,
-            "output_tokens": None,
-            "cache_read_tokens": None,
-            "cache_write_tokens": None,
-        }
+        usage_totals = _empty_usage_totals()
         final_tool_calls_by_index: dict[int, dict[str, Any]] = {}
 
         retrying = Retrying(
@@ -526,27 +659,14 @@ class LiteLLMModelClient:
         for attempt in retrying:
             with attempt:
                 try:
+                    stream = self._stream_completion_once(request)
                     attempt_content = ""
                     attempt_tool_calls_by_index: dict[int, dict[str, Any]] = {}
-                    try:
-                        stream = self._completion_with_transient_ssl_retry(request)
-                    except OpenAIError as exc:
-                        status_code = getattr(exc, "status_code", None)
-                        if request.get("stream_options") and status_code in (400, 422):
-                            # Some OpenAI-compatible providers reject `stream_options`; retry once without it.
-                            retry_request = dict(request)
-                            retry_request.pop("stream_options", None)
-                            stream = self._completion_with_transient_ssl_retry(
-                                retry_request
-                            )
-                        else:
-                            raise
-
                     for chunk in stream:
-                        usage = _normalize_usage(_read_attr(chunk, "usage"))
-                        for field, value in usage.items():
-                            if value is not None:
-                                usage_totals[field] = value
+                        _apply_usage_totals(
+                            usage_totals,
+                            _normalize_usage(_read_attr(chunk, "usage")),
+                        )
 
                         choices = _read_attr(chunk, "choices") or []
                         for choice in choices:
@@ -554,7 +674,6 @@ class LiteLLMModelClient:
                             if delta is None:
                                 continue
 
-                            content_delta = _coerce_text(_read_attr(delta, "content"))
                             reasoning_delta = _coerce_text(
                                 _read_attr(delta, "reasoning_content")
                             ) or _coerce_text(_read_attr(delta, "reasoning"))
@@ -562,95 +681,45 @@ class LiteLLMModelClient:
                                 reasoning_content = (
                                     f"{reasoning_content}{reasoning_delta}"
                                 )
+
+                            content_delta = _coerce_text(_read_attr(delta, "content"))
                             if content_delta is not None:
-                                attempt_content = f"{attempt_content}{content_delta}"
-                                if attempt_content.startswith(emitted_content):
-                                    suffix = attempt_content[len(emitted_content) :]
-                                    if suffix:
-                                        emitted_content = attempt_content
-                                        yield {"type": "text_delta", "delta": suffix}
-                                elif emitted_content.startswith(attempt_content):
-                                    # Retry replaying an already-emitted prefix; suppress duplicates.
-                                    continue
-                                else:
-                                    raise AgentModelError(
-                                        "model request failed: stream retry produced divergent output"
+                                emitted_content, attempt_content, text_delta = (
+                                    _append_stream_content(
+                                        emitted_content=emitted_content,
+                                        attempt_content=attempt_content,
+                                        content_delta=content_delta,
                                     )
-
-                            for tool_call_delta in (
-                                _read_attr(delta, "tool_calls") or []
-                            ):
-                                index = _coerce_index(
-                                    _read_attr(tool_call_delta, "index")
                                 )
-                                if index is None:
-                                    continue
-                                current = attempt_tool_calls_by_index.setdefault(
-                                    index,
-                                    {
-                                        "id": "",
-                                        "type": "function",
-                                        "function": {"name": "", "arguments": ""},
-                                    },
+                                if text_delta is not None:
+                                    yield {"type": "text_delta", "delta": text_delta}
+
+                            for tool_call_delta in _read_attr(delta, "tool_calls") or []:
+                                _merge_tool_call_delta(
+                                    tool_calls_by_index=attempt_tool_calls_by_index,
+                                    tool_call_delta=tool_call_delta,
                                 )
 
-                                delta_id = _coerce_text(
-                                    _read_attr(tool_call_delta, "id")
-                                )
-                                if delta_id is not None:
-                                    if not current["id"]:
-                                        current["id"] = delta_id
-
-                                delta_type = _coerce_text(
-                                    _read_attr(tool_call_delta, "type")
-                                )
-                                if delta_type is not None:
-                                    current["type"] = delta_type
-
-                                delta_function = _read_attr(tool_call_delta, "function")
-                                delta_name = _coerce_text(
-                                    _read_attr(delta_function, "name")
-                                )
-                                if delta_name is not None:
-                                    current["function"]["name"] = (
-                                        f"{current['function']['name']}{delta_name}"
-                                    )
-
-                                delta_arguments = _coerce_text(
-                                    _read_attr(delta_function, "arguments")
-                                )
-                                if delta_arguments is not None:
-                                    current["function"]["arguments"] = (
-                                        f"{current['function']['arguments']}{delta_arguments}"
-                                    )
-
-                    if not attempt_content and emitted_content:
-                        final_content = emitted_content
-                    else:
-                        if attempt_content.startswith(emitted_content):
-                            suffix = attempt_content[len(emitted_content) :]
-                            if suffix:
-                                emitted_content = attempt_content
-                                yield {"type": "text_delta", "delta": suffix}
-                            final_content = attempt_content
-                        else:
-                            final_content = emitted_content
+                    emitted_content, final_content, trailing_delta = (
+                        _finalize_stream_content(
+                            emitted_content=emitted_content,
+                            attempt_content=attempt_content,
+                        )
+                    )
+                    if trailing_delta is not None:
+                        yield {"type": "text_delta", "delta": trailing_delta}
                     final_tool_calls_by_index = attempt_tool_calls_by_index
                 except Exception as exc:
                     raise self._to_model_error(exc) from exc
 
         if not final_content:
             final_content = emitted_content
-        tool_calls = [
-            final_tool_calls_by_index[index]
-            for index in sorted(final_tool_calls_by_index)
-        ]
         yield {
             "type": "done",
             "message": {
                 "role": "assistant",
                 "content": final_content,
-                "tool_calls": tool_calls,
+                "tool_calls": _ordered_tool_calls(final_tool_calls_by_index),
                 "usage": usage_totals,
                 "reasoning": reasoning_content,
             },

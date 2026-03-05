@@ -2,69 +2,90 @@
 
 from __future__ import annotations
 
-import json
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from backend.database import build_engine_for_url, build_session_maker
+import backend.models_agent  # noqa: F401
+import backend.models_finance  # noqa: F401
+from backend.db_meta import Base
+from backend.services.bootstrap import (
+    run_schema_seed_and_stamp,
+    stamp_alembic_head_for_sqlite_path,
+)
+from benchmark.io_utils import atomic_write_json
+from benchmark.paths import SNAPSHOTS_DIR
+from scripts.seed_defaults import seed_all
+from sqlalchemy.orm import Session
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SNAP_DIR = REPO_ROOT / "benchmark" / "fixtures" / "snapshots" / "default"
-
-sys.path.insert(0, str(REPO_ROOT))
+SNAP_DIR = SNAPSHOTS_DIR / "default"
 
 
-def main() -> None:
-    import backend.models  # noqa: F401 — ensure all models are registered with Base
-    from backend.database import Base
+@dataclass(slots=True)
+class SnapshotCreationResult:
+    db_path: Path
+    user_name: str
+    account_names: list[str]
+    tag_count: int
+    entity_category_count: int
+    has_user_memory: bool
 
-    SNAP_DIR.mkdir(parents=True, exist_ok=True)
-    db_path = SNAP_DIR / "db.sqlite3"
-    if db_path.exists():
-        db_path.unlink()
 
-    engine = create_engine(
-        f"sqlite:///{db_path}",
-        future=True,
-        connect_args={"check_same_thread": False},
-    )
-    Base.metadata.create_all(bind=engine)
-    make_session = sessionmaker(bind=engine, autocommit=False, autoflush=False, class_=Session)
-    db = make_session()
-
-    from scripts.seed_defaults import seed_all
+def _seed_default_snapshot(db: Session, *, db_path: Path) -> SnapshotCreationResult:
     result = seed_all(db, include_user_memory=True)
-
-    print(f"Created default snapshot at {db_path}")
-    print(f"  User: {result['user']}")
-    print(f"  Accounts: {', '.join(result['accounts'])}")
-    print(f"  Tags: {result['tags']}")
-    print(f"  Entity categories: {result['entity_categories']}")
-    print(f"  User memory: {'yes' if result['user_memory'] else 'no'}")
-
-    from alembic.config import Config
-    from alembic import command
-
-    alembic_ini = REPO_ROOT / "alembic.ini"
-    cfg = Config(str(alembic_ini))
-    cfg.set_main_option("script_location", str(REPO_ROOT / "alembic"))
-    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
-    command.stamp(cfg, "head")
-    print("  Alembic stamped at head")
-
     meta = {
         "name": "default",
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "size_bytes": db_path.stat().st_size,
         "note": "Empty DB with accounts, default tags, entity categories, and user memory",
     }
-    (SNAP_DIR / "metadata.json").write_text(json.dumps(meta, indent=2) + "\n")
+    atomic_write_json(SNAP_DIR / "metadata.json", meta)
+    return SnapshotCreationResult(
+        db_path=db_path,
+        user_name=str(result["user"]),
+        account_names=[str(name) for name in result["accounts"]],
+        tag_count=int(result["tags"]),
+        entity_category_count=int(result["entity_categories"]),
+        has_user_memory=bool(result["user_memory"]),
+    )
 
-    db.close()
-    engine.dispose()
+
+def create_default_snapshot() -> SnapshotCreationResult:
+    SNAP_DIR.mkdir(parents=True, exist_ok=True)
+    db_path = SNAP_DIR / "db.sqlite3"
+    if db_path.exists():
+        db_path.unlink()
+
+    engine = build_engine_for_url(f"sqlite:///{db_path}")
+    make_session = build_session_maker(engine)
+    return run_schema_seed_and_stamp(
+        engine=engine,
+        metadata=Base.metadata,
+        make_session=make_session,
+        seed=lambda db: _seed_default_snapshot(db, db_path=db_path),
+        recreate_schema=False,
+        stamp=lambda: stamp_alembic_head_for_sqlite_path(db_path),
+    )
+
+
+def main() -> int:
+    try:
+        result = create_default_snapshot()
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Created default snapshot at {result.db_path}")
+    print(f"  User: {result.user_name}")
+    print(f"  Accounts: {', '.join(result.account_names)}")
+    print(f"  Tags: {result.tag_count}")
+    print(f"  Entity categories: {result.entity_category_count}")
+    print(f"  User memory: {'yes' if result.has_user_memory else 'no'}")
+    print("  Alembic stamped at head")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

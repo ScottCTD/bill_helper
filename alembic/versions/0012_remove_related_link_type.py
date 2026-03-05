@@ -21,7 +21,6 @@ new_link_type_enum = sa.Enum("RECURRING", "SPLIT", "BUNDLE", name="linktype")
 
 
 def upgrade() -> None:
-    # Preserve graph connectivity while removing ambiguous legacy label.
     op.execute(sa.text("UPDATE entry_links SET link_type = 'BUNDLE' WHERE link_type = 'RELATED'"))
     with op.batch_alter_table("entry_links") as batch_op:
         batch_op.alter_column(

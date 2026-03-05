@@ -6,22 +6,33 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from backend.config import get_settings
-from backend.database import Base
+from backend.db_meta import Base
 
-# Import models so metadata includes all tables.
-from backend import models  # noqa: F401
+# Import domain models so metadata includes all tables.
+from backend import models_agent  # noqa: F401
+from backend import models_finance  # noqa: F401
 
 config = context.config
-settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_url)
-
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
 
 
+def _configure_database_url() -> None:
+    configured_database_url = config.get_main_option("sqlalchemy.url")
+    # Keep explicit command/config URLs, but preserve settings-driven default behavior.
+    if not configured_database_url or configured_database_url == "sqlite:///bill_helper.db":
+        settings = get_settings()
+        config.set_main_option("sqlalchemy.url", settings.database_url)
+
+
+def _configure_logging() -> None:
+    if config.config_file_name is not None:
+        fileConfig(config.config_file_name)
+
+
 def run_migrations_offline() -> None:
+    _configure_database_url()
+    _configure_logging()
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -36,6 +47,8 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    _configure_database_url()
+    _configure_logging()
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

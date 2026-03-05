@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import Column, Integer, MetaData, Table, create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
-from backend.database import Base, SessionLocal, engine
-from backend.models import Account
-from backend.services.bootstrap import should_seed_demo_data, should_stamp_existing_schema
+from backend.database import build_engine, build_session_maker
+from backend.db_meta import Base
+from backend.models_finance import Account
+from backend.services.bootstrap import (
+    run_schema_seed_and_stamp,
+    should_seed_demo_data,
+    should_stamp_existing_schema,
+)
+
+engine = build_engine()
+SessionLocal = build_session_maker(engine)
 
 
 @pytest.fixture()
@@ -62,3 +71,63 @@ def test_should_not_stamp_existing_schema_when_alembic_version_has_revision(db_s
     db_session.commit()
 
     assert should_stamp_existing_schema(db_session) is False
+
+
+def test_run_schema_seed_and_stamp_calls_seed_then_stamp():
+    metadata = MetaData()
+    markers = Table("markers", metadata, Column("id", Integer, primary_key=True))
+    local_engine = create_engine("sqlite:///:memory:", future=True)
+    make_session = sessionmaker(bind=local_engine, class_=Session)
+    events: list[str] = []
+
+    def seed(db: Session) -> str:
+        db.execute(markers.insert().values(id=1))
+        db.commit()
+        events.append("seed")
+        return "ok"
+
+    def stamp() -> None:
+        events.append("stamp")
+
+    result = run_schema_seed_and_stamp(
+        engine=local_engine,
+        metadata=metadata,
+        make_session=make_session,
+        seed=seed,
+        recreate_schema=False,
+        stamp=stamp,
+    )
+
+    assert result == "ok"
+    assert events == ["seed", "stamp"]
+
+
+def test_run_schema_seed_and_stamp_recreate_schema_drops_existing_rows():
+    metadata = MetaData()
+    markers = Table("markers", metadata, Column("id", Integer, primary_key=True))
+    local_engine = create_engine("sqlite:///:memory:", future=True)
+    metadata.create_all(bind=local_engine)
+
+    initial_session = sessionmaker(bind=local_engine, class_=Session)()
+    initial_session.execute(markers.insert().values(id=1))
+    initial_session.commit()
+    initial_session.close()
+
+    make_session = sessionmaker(bind=local_engine, class_=Session)
+
+    def seed(db: Session) -> int:
+        existing = db.scalar(text("SELECT COUNT(*) FROM markers"))
+        db.execute(markers.insert().values(id=2))
+        db.commit()
+        return int(existing or 0)
+
+    existing_count_before_seed = run_schema_seed_and_stamp(
+        engine=local_engine,
+        metadata=metadata,
+        make_session=make_session,
+        seed=seed,
+        recreate_schema=True,
+        stamp=None,
+    )
+
+    assert existing_count_before_seed == 0

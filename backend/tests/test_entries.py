@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 
-def create_account(client) -> str:
+def create_account(client, *, headers: dict[str, str] | None = None) -> str:
     response = client.post(
         "/api/v1/accounts",
         json={
@@ -11,6 +11,7 @@ def create_account(client) -> str:
             "currency_code": "USD",
             "is_active": True,
         },
+        headers=headers,
     )
     response.raise_for_status()
     return response.json()["id"]
@@ -25,7 +26,14 @@ def create_entity(client, name: str, category: str | None = None) -> dict:
     return response.json()
 
 
-def create_entry(client, account_id: str, name: str, occurred_at: str = "2026-01-01") -> dict:
+def create_entry(
+    client,
+    account_id: str,
+    name: str,
+    occurred_at: str = "2026-01-01",
+    *,
+    headers: dict[str, str] | None = None,
+) -> dict:
     response = client.post(
         "/api/v1/entries",
         json={
@@ -37,6 +45,7 @@ def create_entry(client, account_id: str, name: str, occurred_at: str = "2026-01
             "currency_code": "USD",
             "tags": ["food"],
         },
+        headers=headers,
     )
     response.raise_for_status()
     return response.json()
@@ -89,6 +98,104 @@ def test_link_create_and_delete_recomputes_groups(client):
 
     assert entry2_after["group_id"] == entry3_after["group_id"]
     assert entry1_after["group_id"] != entry2_after["group_id"]
+
+
+def test_group_recompute_rebuilds_all_active_components(client):
+    from backend.database import get_session_maker
+    from backend.models_finance import Entry
+
+    account_id = create_account(client)
+    entry1 = create_entry(client, account_id, "Entry 1")
+    entry2 = create_entry(client, account_id, "Entry 2")
+    entry3 = create_entry(client, account_id, "Entry 3")
+    entry4 = create_entry(client, account_id, "Entry 4")
+
+    first_component_link = client.post(
+        f"/api/v1/entries/{entry1['id']}/links",
+        json={"target_entry_id": entry2["id"], "link_type": "BUNDLE"},
+    )
+    first_component_link.raise_for_status()
+    second_component_link_response = client.post(
+        f"/api/v1/entries/{entry3['id']}/links",
+        json={"target_entry_id": entry4["id"], "link_type": "BUNDLE"},
+    )
+    second_component_link_response.raise_for_status()
+
+    first_group_id = client.get(f"/api/v1/entries/{entry1['id']}").json()["group_id"]
+
+    make_session = get_session_maker()
+    db = make_session()
+    try:
+        tampered_entry = db.get(Entry, entry3["id"])
+        assert tampered_entry is not None
+        tampered_entry.group_id = first_group_id
+        db.add(tampered_entry)
+        db.commit()
+    finally:
+        db.close()
+
+    delete_response = client.delete(f"/api/v1/links/{first_component_link.json()['id']}")
+    assert delete_response.status_code == 204
+
+    entry1_after = client.get(f"/api/v1/entries/{entry1['id']}").json()
+    entry3_after = client.get(f"/api/v1/entries/{entry3['id']}").json()
+    entry4_after = client.get(f"/api/v1/entries/{entry4['id']}").json()
+    assert entry3_after["group_id"] == entry4_after["group_id"]
+    assert entry3_after["group_id"] != entry1_after["group_id"]
+
+
+def test_entry_routes_are_scoped_by_principal(client):
+    account_id = create_account(client)
+    admin_entry = create_entry(client, account_id, "Admin only")
+
+    scoped_headers = {"X-Bill-Helper-Principal": "alice"}
+    detail_response = client.get(f"/api/v1/entries/{admin_entry['id']}", headers=scoped_headers)
+    assert detail_response.status_code == 404
+
+    list_response = client.get("/api/v1/entries", headers=scoped_headers)
+    list_response.raise_for_status()
+    payload = list_response.json()
+    assert payload["total"] == 0
+    assert payload["items"] == []
+
+
+def test_group_routes_are_scoped_by_principal(client):
+    admin_account_id = create_account(client)
+    admin_first = create_entry(client, admin_account_id, "Admin Entry 1")
+    admin_second = create_entry(client, admin_account_id, "Admin Entry 2", occurred_at="2026-01-02")
+    admin_link = client.post(
+        f"/api/v1/entries/{admin_first['id']}/links",
+        json={"target_entry_id": admin_second["id"], "link_type": "BUNDLE"},
+    )
+    admin_link.raise_for_status()
+
+    alice_headers = {"X-Bill-Helper-Principal": "alice"}
+    alice_account_id = create_account(client, headers=alice_headers)
+    alice_first = create_entry(client, alice_account_id, "Alice Entry 1", headers=alice_headers)
+    alice_second = create_entry(
+        client,
+        alice_account_id,
+        "Alice Entry 2",
+        occurred_at="2026-01-03",
+        headers=alice_headers,
+    )
+    alice_link = client.post(
+        f"/api/v1/entries/{alice_first['id']}/links",
+        json={"target_entry_id": alice_second["id"], "link_type": "BUNDLE"},
+        headers=alice_headers,
+    )
+    alice_link.raise_for_status()
+
+    admin_group_id = client.get(f"/api/v1/entries/{admin_first['id']}").json()["group_id"]
+
+    scoped_groups = client.get("/api/v1/groups", headers=alice_headers)
+    scoped_groups.raise_for_status()
+    payload = scoped_groups.json()
+    assert payload
+    assert all(group["latest_entry_name"].startswith("Alice") for group in payload)
+
+    scoped_detail = client.get(f"/api/v1/groups/{admin_group_id}", headers=alice_headers)
+    assert scoped_detail.status_code == 404
 
 
 def test_link_create_rejects_related_link_type(client):

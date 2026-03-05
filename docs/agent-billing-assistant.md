@@ -43,9 +43,9 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | Model client | `backend/services/agent/model_client.py` | LiteLLM adapter, tool wiring, retry-enabled model completion, explicit prompt-cache breakpoint injection (system + latest user anchors via negative index) for cache-capable models |
 | Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks (including duplicate enrichment via `propose_update_entry`), proposal ordering, explicit new entry/tag/entity specifications, canonical tag/entity normalization (including general tag examples and non-location/default anti-collision rules), error recovery, and current-user context section |
 | Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; parses PDF attachments to text via PyMuPDF (line-trimmed and internal-whitespace-normalized); when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` from `markdown_body` with truncation safeguards); prepends review outcomes and interruption prefix before current user feedback in the latest user message |
-| Tools | `backend/services/agent/tools.py` | Read/progress/proposal tool schemas, pending-proposal mutation tool, validation, execution, tool-level retry |
+| Tools | `backend/services/agent/tool_args.py`, `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_propose.py`, `backend/services/agent/proposal_patching.py`, `backend/services/agent/tool_runtime.py`, `backend/services/agent/tools.py` | Split tool contract/runtime stack: argument schemas + normalization, read/progress handlers, proposal/mutation handlers, patch-map helpers, execution/retry registry, and thin facade |
 | Review/apply | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py` | Approval/rejection, apply handlers for proposed CRUD changes |
-| API router | `backend/routers/agent.py` | Threads/runs/send/review/attachment endpoints |
+| API router | `backend/routers/agent_api/routes.py` | Threads/runs/send/review/attachment endpoints |
 
 ## Runtime Flow
 
@@ -200,7 +200,7 @@ You are an expert in personal finance and accounting. You always call the right 
 
 ## Tools
 
-All tools are defined in `backend/services/agent/tools.py` and exposed as OpenAI function schemas. Each tool returns plain-text `content` to the model.
+Tool execution is composed from `backend/services/agent/tool_runtime.py` (registry + execution policy) with handlers in `backend/services/agent/tool_handlers_read.py` and `backend/services/agent/tool_handlers_propose.py`, argument contracts in `backend/services/agent/tool_args.py`, and patch-map helpers in `backend/services/agent/proposal_patching.py`. `backend/services/agent/tools.py` is a thin facade that re-exports runtime interfaces. Each tool returns plain-text `content` to the model.
 
 Proposal tools (`propose_*`, `update_pending_proposal`, `remove_pending_proposal`) create `AgentChangeItem` rows with status `PENDING_REVIEW`. They do not mutate domain data; changes apply only after human approval via approve/reject endpoints.
 
@@ -561,11 +561,16 @@ In `change_apply.py`:
 
 | File | Purpose |
 |------|---------|
-| `backend/services/agent/tools.py` | Tool definitions and handlers |
+| `backend/services/agent/tool_args.py` | Tool argument schemas and normalization helpers |
+| `backend/services/agent/tool_handlers_read.py` | Read/progress tool handlers |
+| `backend/services/agent/tool_handlers_propose.py` | Proposal/update/remove handlers |
+| `backend/services/agent/proposal_patching.py` | Pending proposal patch-map application helpers |
+| `backend/services/agent/tool_runtime.py` | Tool registry and execution/retry policy |
+| `backend/services/agent/tools.py` | Thin tool facade/re-export layer |
 | `backend/services/agent/runtime.py` | Run orchestration, tool loop |
 | `backend/services/agent/model_client.py` | LiteLLM client with retry |
 | `backend/services/agent/prompts.py` | System prompt |
 | `backend/services/agent/message_history.py` | LLM message construction and review-result user-message augmentation |
 | `backend/services/agent/review.py` | Approve/reject logic |
 | `backend/services/agent/change_apply.py` | Apply handlers for approved changes |
-| `backend/routers/agent.py` | Agent HTTP endpoints |
+| `backend/routers/agent_api/routes.py` | Agent HTTP endpoints |

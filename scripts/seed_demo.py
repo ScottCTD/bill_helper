@@ -4,30 +4,39 @@ import argparse
 import csv
 import os
 import re
-import sys
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from pathlib import Path
 
-from alembic import command
-from alembic.config import Config
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.database import Base, SessionLocal, engine
-from backend.enums import EntryKind
-from backend.models import Account, Entry
-from backend.services.entities import get_or_create_entity
+from backend.database import build_engine, build_session_maker
+from backend.db_meta import Base
+from backend.enums_finance import EntryKind
+from backend.models_finance import Account, Entry
+from backend.services.entities import ensure_entity_by_name
 from backend.services.entries import normalize_tag_name, set_entry_tags
 from backend.services.groups import assign_initial_group
+from backend.services.bootstrap import (
+    run_schema_seed_and_stamp,
+    stamp_alembic_head_for_database_url,
+)
+from backend.services.taxonomy_constants import (
+    TAG_TYPE_SUBJECT_TYPE,
+    TAG_TYPE_TAXONOMY_KEY,
+)
 from backend.services.taxonomy import assign_single_term_by_name
-from backend.services.users import get_or_create_user
+from backend.services.users import ensure_user_by_name
 SUPPORTED_CURRENCIES = ("CAD", "USD", "CNY")
 DEFAULT_ENTRY_CURRENCY = "CAD"
-TAG_TYPE_TAXONOMY_KEY = "tag_type"
-TAG_TYPE_SUBJECT_TYPE = "tag"
-REPO_ROOT = Path(__file__).resolve().parents[1]
-ALEMBIC_INI_PATH = REPO_ROOT / "alembic.ini"
+
+
+@dataclass(slots=True)
+class SeedDemoResult:
+    debit_account_name: str
+    credit_account_name: str
+    imported_row_count: int
 
 
 def _normalize_whitespace(value: str) -> str:
@@ -112,8 +121,8 @@ def _resolve_counterparty(
 ):
     lowered = description.lower()
     if kind == EntryKind.INCOME and lowered.startswith("payment from"):
-        return get_or_create_entity(db, debit_account_entity_name, category="account")
-    return get_or_create_entity(db, _title_case(description), category="merchant")
+        return ensure_entity_by_name(db, debit_account_entity_name, category="account")
+    return ensure_entity_by_name(db, _title_case(description), category="merchant")
 
 
 def _iter_credit_rows(csv_path: str) -> list[dict[str, str]]:
@@ -128,17 +137,107 @@ def _iter_credit_rows(csv_path: str) -> list[dict[str, str]]:
         return rows
 
 
-def _stamp_alembic_head() -> None:
-    cfg = Config(str(ALEMBIC_INI_PATH))
-    cfg.set_main_option("script_location", str(REPO_ROOT / "alembic"))
-    command.stamp(cfg, "head")
+def _seed_demo_rows(
+    db: Session,
+    *,
+    credit_rows: list[dict[str, str]],
+) -> SeedDemoResult:
+    existing_accounts = db.scalars(select(Account)).all()
+    if existing_accounts:
+        raise RuntimeError("Database reset failed: accounts still present after drop/create.")
+
+    default_user = ensure_user_by_name(db, "admin")
+
+    debit_entity = ensure_entity_by_name(db, "Demo Debit", category="account")
+    credit_entity = ensure_entity_by_name(db, "Demo Credit", category="account")
+
+    debit_account = Account(
+        owner_user_id=default_user.id,
+        entity_id=debit_entity.id,
+        name=debit_entity.name,
+        currency_code=DEFAULT_ENTRY_CURRENCY,
+        is_active=True,
+    )
+    credit_account = Account(
+        owner_user_id=default_user.id,
+        entity_id=credit_entity.id,
+        name=credit_entity.name,
+        currency_code=DEFAULT_ENTRY_CURRENCY,
+        is_active=True,
+    )
+    db.add_all([debit_account, credit_account])
+    db.flush()
+
+    for row in credit_rows:
+        description = _normalize_whitespace(row.get("Description", ""))
+        sub_description = _normalize_whitespace(row.get("Sub-description", ""))
+        kind = _parse_kind(row.get("Type of Transaction", ""))
+        counterparty = _resolve_counterparty(
+            db,
+            description=description,
+            debit_account_entity_name=debit_account.name,
+            kind=kind,
+        )
+
+        from_entity = credit_entity
+        to_entity = counterparty
+        if kind == EntryKind.INCOME:
+            from_entity = counterparty
+            to_entity = credit_entity
+
+        entry = Entry(
+            account_id=credit_account.id,
+            group_id="",
+            kind=kind,
+            occurred_at=date.fromisoformat(row["Date"]),
+            name=_title_case(description),
+            amount_minor=_parse_amount_minor(row.get("Amount", "0")),
+            currency_code=DEFAULT_ENTRY_CURRENCY,
+            from_entity_id=from_entity.id,
+            to_entity_id=to_entity.id,
+            owner_user_id=default_user.id,
+            from_entity=from_entity.name,
+            to_entity=to_entity.name,
+            owner=default_user.name,
+            markdown_body=(
+                f"Imported from statement CSV. "
+                f"Sub-description: {sub_description or '(none)'}; "
+                f"source_type={_normalize_whitespace(row.get('Type of Transaction', '')) or '(unknown)'}."
+            ),
+        )
+        db.add(entry)
+        assign_initial_group(db, entry)
+        tag_types = _derive_tags(
+            description=description,
+            sub_description=sub_description,
+            transaction_type=row.get("Type of Transaction", ""),
+        )
+        set_entry_tags(
+            db,
+            entry,
+            list(tag_types.keys()),
+        )
+        for tag in entry.tags:
+            tag_type = tag_types.get(normalize_tag_name(tag.name))
+            if not tag_type:
+                continue
+            assign_single_term_by_name(
+                db,
+                taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
+                subject_type=TAG_TYPE_SUBJECT_TYPE,
+                subject_id=tag.id,
+                term_name=tag_type,
+            )
+
+    db.commit()
+    return SeedDemoResult(
+        debit_account_name=debit_account.name,
+        credit_account_name=credit_account.name,
+        imported_row_count=len(credit_rows),
+    )
 
 
 def seed(csv_path: str) -> None:
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    _stamp_alembic_head()
-
     if not os.path.exists(csv_path):
         raise FileNotFoundError(
             f"Credit CSV not found at {csv_path}. "
@@ -146,104 +245,24 @@ def seed(csv_path: str) -> None:
         )
     credit_rows = _iter_credit_rows(csv_path)
 
-    db = SessionLocal()
-    try:
-        existing_accounts = db.scalars(select(Account)).all()
-        if existing_accounts:
-            raise RuntimeError("Database reset failed: accounts still present after drop/create.")
+    engine = build_engine()
+    make_session = build_session_maker(engine)
+    database_url = str(engine.url)
+    result = run_schema_seed_and_stamp(
+        engine=engine,
+        metadata=Base.metadata,
+        make_session=make_session,
+        seed=lambda db: _seed_demo_rows(db, credit_rows=credit_rows),
+        recreate_schema=True,
+        stamp=lambda: stamp_alembic_head_for_database_url(database_url=database_url),
+    )
 
-        default_user = get_or_create_user(db, "admin")
-
-        debit_entity = get_or_create_entity(db, "Demo Debit", category="account")
-        credit_entity = get_or_create_entity(db, "Demo Credit", category="account")
-
-        debit_account = Account(
-            owner_user_id=default_user.id,
-            entity_id=debit_entity.id,
-            name=debit_entity.name,
-            currency_code=DEFAULT_ENTRY_CURRENCY,
-            is_active=True,
-        )
-        credit_account = Account(
-            owner_user_id=default_user.id,
-            entity_id=credit_entity.id,
-            name=credit_entity.name,
-            currency_code=DEFAULT_ENTRY_CURRENCY,
-            is_active=True,
-        )
-        db.add_all([debit_account, credit_account])
-        db.flush()
-
-        for row in credit_rows:
-            description = _normalize_whitespace(row.get("Description", ""))
-            sub_description = _normalize_whitespace(row.get("Sub-description", ""))
-            kind = _parse_kind(row.get("Type of Transaction", ""))
-            counterparty = _resolve_counterparty(
-                db,
-                description=description,
-                debit_account_entity_name=debit_account.name,
-                kind=kind,
-            )
-
-            from_entity = credit_entity
-            to_entity = counterparty
-            if kind == EntryKind.INCOME:
-                from_entity = counterparty
-                to_entity = credit_entity
-
-            entry = Entry(
-                account_id=credit_account.id,
-                group_id="",
-                kind=kind,
-                occurred_at=date.fromisoformat(row["Date"]),
-                name=_title_case(description),
-                amount_minor=_parse_amount_minor(row.get("Amount", "0")),
-                currency_code=DEFAULT_ENTRY_CURRENCY,
-                from_entity_id=from_entity.id,
-                to_entity_id=to_entity.id,
-                owner_user_id=default_user.id,
-                from_entity=from_entity.name,
-                to_entity=to_entity.name,
-                owner=default_user.name,
-                markdown_body=(
-                    f"Imported from statement CSV. "
-                    f"Sub-description: {sub_description or '(none)'}; "
-                    f"source_type={_normalize_whitespace(row.get('Type of Transaction', '')) or '(unknown)'}."
-                ),
-            )
-            db.add(entry)
-            assign_initial_group(db, entry)
-            tag_types = _derive_tags(
-                description=description,
-                sub_description=sub_description,
-                transaction_type=row.get("Type of Transaction", ""),
-            )
-            set_entry_tags(
-                db,
-                entry,
-                list(tag_types.keys()),
-            )
-            for tag in entry.tags:
-                tag_type = tag_types.get(normalize_tag_name(tag.name))
-                if not tag_type:
-                    continue
-                assign_single_term_by_name(
-                    db,
-                    taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
-                    subject_type=TAG_TYPE_SUBJECT_TYPE,
-                    subject_id=tag.id,
-                    term_name=tag_type,
-                )
-
-        db.commit()
-        print(
-            "Database reseeded. "
-            f"Accounts: {debit_account.name}, {credit_account.name}. "
-            f"Currencies configured: {', '.join(SUPPORTED_CURRENCIES)}. "
-            f"Imported {len(credit_rows)} entries from {csv_path}."
-        )
-    finally:
-        db.close()
+    print(
+        "Database reseeded. "
+        f"Accounts: {result.debit_account_name}, {result.credit_account_name}. "
+        f"Currencies configured: {', '.join(SUPPORTED_CURRENCIES)}. "
+        f"Imported {result.imported_row_count} entries from {csv_path}."
+    )
 
 
 def main() -> None:
