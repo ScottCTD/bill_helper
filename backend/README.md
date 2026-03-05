@@ -140,6 +140,7 @@ uv run python scripts/check_docs_sync.py
 - `list_tags` tool results now include both tag `type` and tag `description` in the model-visible tool output so tag semantics are available without a separate API read.
 - Agent runs can be interrupted via `POST /api/v1/agent/runs/{run_id}/interrupt`; interrupted runs transition to `failed`.
 - Thread deletion is available via `DELETE /api/v1/agent/threads/{thread_id}` and is blocked (`409`) while that thread has a running run.
+- Thread summary rows from `GET /api/v1/agent/threads` now include `has_running_run` so the frontend can show per-thread active-run indicators.
 - Thread deletion also removes that thread's persisted upload directories under `.data/agent_uploads/<message_id>/...`.
 - Follow-up user turns after an interrupted run now include an interruption context note in model input so the agent treats the interrupted request as unfinished context.
 - Agent message delivery now supports both modes:

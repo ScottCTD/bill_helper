@@ -109,6 +109,13 @@ def _current_context_tokens_for_thread(
 
 def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:
     threads = list(db.scalars(select(AgentThread).order_by(AgentThread.updated_at.desc())))
+    running_thread_ids = set(
+        db.scalars(
+            select(AgentRun.thread_id)
+            .where(AgentRun.status == AgentRunStatus.RUNNING)
+            .distinct()
+        )
+    )
     summaries: list[AgentThreadSummaryRead] = []
     for thread in threads:
         last_message = db.scalar(
@@ -133,6 +140,7 @@ def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:
                 thread,
                 last_message_preview=(last_message[:120] if last_message else None),
                 pending_change_count=pending_change_count,
+                has_running_run=thread.id in running_thread_ids,
             )
         )
     return summaries

@@ -533,6 +533,7 @@ class AgentThreadRead(BaseModel):
 class AgentThreadSummaryRead(AgentThreadRead):
     last_message_preview: str | None = None
     pending_change_count: int = 0
+    has_running_run: bool = False
 
 
 class AgentMessageAttachmentRead(BaseModel):

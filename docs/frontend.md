@@ -509,6 +509,7 @@ Operationally, frontend styling now depends on Tailwind build-time generation an
   - `GET /groups`
   - `GET /groups/{group_id}`
 - frontend now depends on agent API contracts and attachment URLs
+- thread rail running indicators now depend on `GET /agent/threads` summary field `has_running_run`
 - multipart requests are required for agent message send with image/PDF attachments
 - agent send now depends on SSE parsing for incremental assistant text (`text_delta`) plus persisted activity events (`run_event`)
 - all query keys/invalidation rules are now centralized, so new pages/features should reuse `queryKeys` + `queryInvalidation` helpers

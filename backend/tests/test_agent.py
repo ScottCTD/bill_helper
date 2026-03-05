@@ -336,6 +336,40 @@ def test_delete_thread_rejects_running_run(client, monkeypatch):
     assert final_status != "running"
 
 
+def test_thread_list_marks_running_threads(client, monkeypatch):
+    block_model = Event()
+    block_model.clear()
+
+    def waiting_model(_messages):
+        block_model.wait(timeout=1.0)
+        return {"role": "assistant", "content": "Done"}
+
+    patch_model(monkeypatch, waiting_model)
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Please wait", wait_for_completion=False)
+    assert run["status"] == "running"
+
+    list_response = client.get("/api/v1/agent/threads")
+    list_response.raise_for_status()
+    listed_row = next(row for row in list_response.json() if row["id"] == thread["id"])
+    assert listed_row["has_running_run"] is True
+
+    block_model.set()
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
+        run_response.raise_for_status()
+        if run_response.json().get("status") != "running":
+            break
+        time.sleep(0.01)
+
+    list_response = client.get("/api/v1/agent/threads")
+    list_response.raise_for_status()
+    listed_row = next(row for row in list_response.json() if row["id"] == thread["id"])
+    assert listed_row["has_running_run"] is False
+
+
 def test_delete_thread_removes_uploaded_attachment_files(client, monkeypatch):
     patch_model(monkeypatch, lambda _messages: {"role": "assistant", "content": "Attachment processed."})
 

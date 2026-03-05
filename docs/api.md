@@ -434,6 +434,7 @@ Each row includes:
 - thread metadata
 - `last_message_preview`
 - `pending_change_count`
+- `has_running_run` (`true` when any run in that thread is still `running`)
 
 ## `POST /agent/threads`
 

@@ -375,6 +375,7 @@ Current baseline for `backend/tests/test_agent.py`: `70 passed`.
 - non-stream sends execute in a background thread; `POST /agent/threads/{thread_id}/messages` returns immediately with `status=running`
 - stream sends execute in-request and emit SSE events from `POST /agent/threads/{thread_id}/messages/stream`; disconnect fallback resumes the run in a background thread
 - `DELETE /api/v1/agent/threads/{thread_id}` returns `409` while that thread has any running run
+- `GET /api/v1/agent/threads` summary rows now include `has_running_run` for per-thread active-run badges in the frontend thread rail
 - streamed runs emit `run_event` rows for run start/finish, reasoning updates, and per-tool lifecycle transitions; `text_delta` remains the only ephemeral stream event
 - `send_intermediate_update` is no longer stored in `agent_tool_calls`; it is persisted only as an `agent_run_events.reasoning_update` row
 - if a model emits assistant text in the same step as tool calls, runtime persists that text as a `reasoning_update` run event with `source="assistant_content"` so history and SSE render it as progress instead of a final assistant message

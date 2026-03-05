@@ -12,7 +12,8 @@ const THREADS: AgentThreadSummary[] = [
     created_at: "2026-02-20T10:00:00Z",
     updated_at: "2026-02-20T10:01:00Z",
     last_message_preview: null,
-    pending_change_count: 0
+    pending_change_count: 0,
+    has_running_run: false
   },
   {
     id: "thread-2",
@@ -20,7 +21,8 @@ const THREADS: AgentThreadSummary[] = [
     created_at: "2026-02-20T11:00:00Z",
     updated_at: "2026-02-20T11:01:00Z",
     last_message_preview: null,
-    pending_change_count: 0
+    pending_change_count: 0,
+    has_running_run: false
   }
 ];
 
@@ -82,5 +84,22 @@ describe("AgentThreadList", () => {
 
     expect(screen.queryByRole("button", { name: "Delete thread Groceries" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete thread Utilities" })).not.toBeInTheDocument();
+  });
+
+  it("shows a running status indicator for active threads", () => {
+    render(
+      <AgentThreadList
+        threads={[{ ...THREADS[0], has_running_run: true }]}
+        selectedThreadId="thread-1"
+        isLoading={false}
+        errorMessage={null}
+        onSelectThread={() => undefined}
+        onDeleteThread={() => undefined}
+        deletingThreadId={null}
+        isDeleteDisabled={false}
+      />
+    );
+
+    expect(screen.getByLabelText("Thread is processing")).toBeInTheDocument();
   });
 });

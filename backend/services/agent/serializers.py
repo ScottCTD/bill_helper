@@ -147,6 +147,7 @@ def thread_summary_to_schema(
     *,
     last_message_preview: str | None,
     pending_change_count: int,
+    has_running_run: bool,
 ) -> AgentThreadSummaryRead:
     return AgentThreadSummaryRead(
         id=thread.id,
@@ -155,4 +156,5 @@ def thread_summary_to_schema(
         updated_at=thread.updated_at,
         last_message_preview=last_message_preview,
         pending_change_count=pending_change_count,
+        has_running_run=has_running_run,
     )

@@ -1012,11 +1012,29 @@
   }
 
   .agent-thread-button {
-    @apply flex h-full min-w-0 flex-1 items-center justify-start rounded-md border-none bg-transparent px-2.5 py-0 pr-10 text-left text-sm font-medium leading-5 shadow-none hover:bg-transparent;
+    @apply flex h-full min-w-0 flex-1 items-center justify-start rounded-md border-none bg-transparent px-2.5 py-0 pr-14 text-left text-sm font-medium leading-5 shadow-none hover:bg-transparent;
   }
 
   .agent-thread-label {
     @apply block min-w-0 flex-1 truncate leading-5;
+  }
+
+  .agent-thread-status-indicator {
+    @apply pointer-events-none absolute right-8 top-1/2 inline-flex h-4 w-4 -translate-y-1/2 items-center justify-center text-muted-foreground/85;
+  }
+
+  .agent-thread-running-indicator {
+    @apply text-muted-foreground;
+    animation: agent-thread-spin 1s linear infinite;
+  }
+
+  @keyframes agent-thread-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .agent-thread-delete-button {

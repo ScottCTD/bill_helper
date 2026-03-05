@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 
 import type { AgentThreadSummary } from "../../../lib/types";
 import { Button } from "../../ui/button";
@@ -16,8 +16,16 @@ interface AgentThreadListProps {
 }
 
 export function AgentThreadList(props: AgentThreadListProps) {
-  const { threads, selectedThreadId, isLoading, errorMessage, onSelectThread, onDeleteThread, deletingThreadId, isDeleteDisabled } =
-    props;
+  const {
+    threads,
+    selectedThreadId,
+    isLoading,
+    errorMessage,
+    onSelectThread,
+    onDeleteThread,
+    deletingThreadId,
+    isDeleteDisabled
+  } = props;
 
   return (
     <>
@@ -27,6 +35,7 @@ export function AgentThreadList(props: AgentThreadListProps) {
         <div className="agent-thread-list-scroll scroll-surface">
           {(threads ?? []).map((thread) => {
             const isSelected = thread.id === selectedThreadId;
+            const isRunning = thread.has_running_run;
             return (
               <div key={thread.id} className={isSelected ? "agent-thread-row group selected" : "agent-thread-row group"}>
                 <Button
@@ -35,9 +44,15 @@ export function AgentThreadList(props: AgentThreadListProps) {
                   className="agent-thread-button"
                   onClick={() => onSelectThread(thread.id)}
                   title={thread.title || "Untitled thread"}
+                  aria-label={thread.title || "Untitled thread"}
                 >
                   <span className="agent-thread-label">{compactThreadName(thread)}</span>
                 </Button>
+                {isRunning ? (
+                  <span className="agent-thread-status-indicator" role="status" aria-label="Thread is processing">
+                    <Loader2 className="agent-thread-running-indicator h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                ) : null}
                 {!isDeleteDisabled ? (
                   <Button
                     type="button"
