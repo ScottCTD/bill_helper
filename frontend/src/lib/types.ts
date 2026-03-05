@@ -1,0 +1,426 @@
+export type EntryKind = "EXPENSE" | "INCOME" | "TRANSFER";
+export type LinkType = "RECURRING" | "SPLIT" | "BUNDLE";
+
+export interface Tag {
+  id: number;
+  name: string;
+  color: string | null;
+  description?: string | null;
+  type?: string | null;
+  entry_count?: number | null;
+}
+
+export interface Entity {
+  id: string;
+  name: string;
+  category: string | null;
+  from_count?: number | null;
+  to_count?: number | null;
+  account_count?: number | null;
+  entry_count?: number | null;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  is_current_user: boolean;
+  account_count?: number | null;
+  entry_count?: number | null;
+}
+
+export interface Currency {
+  code: string;
+  name: string;
+  entry_count: number;
+  is_placeholder: boolean;
+}
+
+export interface Taxonomy {
+  id: string;
+  key: string;
+  applies_to: string;
+  cardinality: string;
+  display_name: string;
+}
+
+export interface TaxonomyTerm {
+  id: string;
+  taxonomy_id: string;
+  name: string;
+  normalized_name: string;
+  parent_term_id: string | null;
+  description?: string | null;
+  usage_count: number;
+}
+
+export interface Account {
+  id: string;
+  owner_user_id: string | null;
+  entity_id: string | null;
+  name: string;
+  markdown_body: string | null;
+  currency_code: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Snapshot {
+  id: string;
+  account_id: string;
+  snapshot_at: string;
+  balance_minor: number;
+  note: string | null;
+  created_at: string;
+}
+
+export interface Reconciliation {
+  account_id: string;
+  account_name: string;
+  currency_code: string;
+  as_of: string;
+  ledger_balance_minor: number;
+  snapshot_balance_minor: number | null;
+  snapshot_at: string | null;
+  delta_minor: number | null;
+}
+
+export interface Link {
+  id: string;
+  source_entry_id: string;
+  target_entry_id: string;
+  link_type: LinkType;
+  note: string | null;
+  created_at: string;
+}
+
+export interface Entry {
+  id: string;
+  group_id: string;
+  account_id: string | null;
+  kind: EntryKind;
+  occurred_at: string;
+  name: string;
+  amount_minor: number;
+  currency_code: string;
+  from_entity_id: string | null;
+  to_entity_id: string | null;
+  owner_user_id: string | null;
+  from_entity: string | null;
+  to_entity: string | null;
+  owner: string | null;
+  markdown_body: string | null;
+  created_at: string;
+  updated_at: string;
+  tags: Tag[];
+}
+
+export interface EntryDetail extends Entry {
+  links: Link[];
+}
+
+export interface EntryListResponse {
+  items: Entry[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface GroupNode {
+  id: string;
+  name: string;
+  kind: EntryKind;
+  amount_minor: number;
+  occurred_at: string;
+}
+
+export interface GroupEdge {
+  id: string;
+  source_entry_id: string;
+  target_entry_id: string;
+  link_type: LinkType;
+  note: string | null;
+}
+
+export interface GroupGraph {
+  group_id: string;
+  nodes: GroupNode[];
+  edges: GroupEdge[];
+}
+
+export interface GroupSummary {
+  group_id: string;
+  entry_count: number;
+  edge_count: number;
+  first_occurred_at: string;
+  last_occurred_at: string;
+  latest_entry_name: string;
+}
+
+export interface DailyExpensePoint {
+  date: string;
+  currency_code: string;
+  total_minor: number;
+}
+
+export interface TopTag {
+  tag: string;
+  currency_code: string;
+  total_minor: number;
+}
+
+export interface DashboardKpis {
+  expense_total_minor: number;
+  income_total_minor: number;
+  net_total_minor: number;
+  daily_expense_total_minor: number;
+  non_daily_expense_total_minor: number;
+  average_daily_expense_minor: number;
+  median_daily_expense_minor: number;
+  daily_spending_days: number;
+}
+
+export interface DashboardDailySpendingPoint {
+  date: string;
+  expense_total_minor: number;
+  daily_expense_minor: number;
+  non_daily_expense_minor: number;
+}
+
+export interface DashboardMonthlyTrendPoint {
+  month: string;
+  expense_total_minor: number;
+  income_total_minor: number;
+  daily_expense_minor: number;
+  non_daily_expense_minor: number;
+}
+
+export interface DashboardBreakdownItem {
+  label: string;
+  total_minor: number;
+  share: number;
+}
+
+export interface DashboardWeekdaySpendingPoint {
+  weekday: string;
+  total_minor: number;
+}
+
+export interface DashboardLargestExpenseItem {
+  id: string;
+  occurred_at: string;
+  name: string;
+  to_entity: string | null;
+  amount_minor: number;
+  is_daily: boolean;
+}
+
+export interface DashboardProjection {
+  is_current_month: boolean;
+  days_elapsed: number;
+  days_remaining: number;
+  spent_to_date_minor: number;
+  projected_total_minor: number | null;
+  projected_remaining_minor: number | null;
+}
+
+export interface Dashboard {
+  month: string;
+  currency_code: string;
+  kpis: DashboardKpis;
+  daily_spending: DashboardDailySpendingPoint[];
+  monthly_trend: DashboardMonthlyTrendPoint[];
+  spending_by_from: DashboardBreakdownItem[];
+  spending_by_to: DashboardBreakdownItem[];
+  spending_by_tag: DashboardBreakdownItem[];
+  weekday_spending: DashboardWeekdaySpendingPoint[];
+  largest_expenses: DashboardLargestExpenseItem[];
+  projection: DashboardProjection;
+  reconciliation: Reconciliation[];
+}
+
+export interface RuntimeSettingsOverrides {
+  current_user_name: string | null;
+  user_memory: string | null;
+  default_currency_code: string | null;
+  dashboard_currency_code: string | null;
+  agent_model: string | null;
+  agent_max_steps: number | null;
+  agent_retry_max_attempts: number | null;
+  agent_retry_initial_wait_seconds: number | null;
+  agent_retry_max_wait_seconds: number | null;
+  agent_retry_backoff_multiplier: number | null;
+  agent_max_image_size_bytes: number | null;
+  agent_max_images_per_message: number | null;
+  agent_base_url: string | null;
+  agent_api_key_configured: boolean;
+}
+
+export interface RuntimeSettings {
+  current_user_name: string;
+  user_memory: string | null;
+  default_currency_code: string;
+  dashboard_currency_code: string;
+  agent_model: string;
+  agent_max_steps: number;
+  agent_retry_max_attempts: number;
+  agent_retry_initial_wait_seconds: number;
+  agent_retry_max_wait_seconds: number;
+  agent_retry_backoff_multiplier: number;
+  agent_max_image_size_bytes: number;
+  agent_max_images_per_message: number;
+  agent_base_url: string | null;
+  agent_api_key_configured: boolean;
+  overrides: RuntimeSettingsOverrides;
+}
+
+export type AgentMessageRole = "user" | "assistant" | "system";
+export type AgentRunStatus = "running" | "completed" | "failed";
+export type AgentToolCallStatus = "queued" | "running" | "ok" | "error" | "cancelled";
+export type AgentRunEventType =
+  | "run_started"
+  | "reasoning_update"
+  | "tool_call_queued"
+  | "tool_call_started"
+  | "tool_call_completed"
+  | "tool_call_failed"
+  | "tool_call_cancelled"
+  | "run_completed"
+  | "run_failed";
+export type AgentRunEventSource = "model_reasoning" | "assistant_content" | "tool_call";
+export type AgentChangeType =
+  | "create_entry"
+  | "update_entry"
+  | "delete_entry"
+  | "create_tag"
+  | "update_tag"
+  | "delete_tag"
+  | "create_entity"
+  | "update_entity"
+  | "delete_entity";
+export type AgentChangeStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "APPLIED" | "APPLY_FAILED";
+export type AgentReviewActionType = "approve" | "reject";
+
+export interface AgentThread {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentThreadSummary extends AgentThread {
+  last_message_preview: string | null;
+  pending_change_count: number;
+  has_running_run: boolean;
+}
+
+export interface AgentMessageAttachment {
+  id: string;
+  message_id: string;
+  mime_type: string;
+  file_path: string;
+  attachment_url: string;
+  created_at: string;
+}
+
+export interface AgentMessage {
+  id: string;
+  thread_id: string;
+  role: AgentMessageRole;
+  content_markdown: string;
+  created_at: string;
+  attachments: AgentMessageAttachment[];
+}
+
+export interface AgentToolCall {
+  id: string;
+  run_id: string;
+  llm_tool_call_id: string | null;
+  tool_name: string;
+  input_json: Record<string, unknown> | null;
+  output_json: Record<string, unknown> | null;
+  output_text: string | null;
+  has_full_payload: boolean;
+  status: AgentToolCallStatus;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface AgentRunEvent {
+  id: string;
+  run_id: string;
+  sequence_index: number;
+  event_type: AgentRunEventType;
+  source: AgentRunEventSource | null;
+  message: string | null;
+  tool_call_id: string | null;
+  created_at: string;
+}
+
+export interface AgentReviewAction {
+  id: string;
+  change_item_id: string;
+  action: AgentReviewActionType;
+  actor: string;
+  note: string | null;
+  created_at: string;
+}
+
+export interface AgentChangeItem {
+  id: string;
+  run_id: string;
+  change_type: AgentChangeType;
+  payload_json: Record<string, unknown>;
+  rationale_text: string;
+  status: AgentChangeStatus;
+  review_note: string | null;
+  applied_resource_type: string | null;
+  applied_resource_id: string | null;
+  created_at: string;
+  updated_at: string;
+  review_actions: AgentReviewAction[];
+}
+
+export interface AgentRun {
+  id: string;
+  thread_id: string;
+  user_message_id: string;
+  assistant_message_id: string | null;
+  status: AgentRunStatus;
+  model_name: string;
+  context_tokens: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_read_tokens: number | null;
+  cache_write_tokens: number | null;
+  input_cost_usd: number | null;
+  output_cost_usd: number | null;
+  total_cost_usd: number | null;
+  error_text: string | null;
+  created_at: string;
+  completed_at: string | null;
+  events: AgentRunEvent[];
+  tool_calls: AgentToolCall[];
+  change_items: AgentChangeItem[];
+}
+
+export interface AgentThreadDetail {
+  thread: AgentThread;
+  messages: AgentMessage[];
+  runs: AgentRun[];
+  configured_model_name: string;
+  current_context_tokens: number | null;
+}
+
+export type AgentStreamEvent =
+  | {
+      type: "text_delta";
+      run_id: string;
+      delta: string;
+    }
+  | {
+      type: "run_event";
+      run_id: string;
+      event: AgentRunEvent;
+    };
