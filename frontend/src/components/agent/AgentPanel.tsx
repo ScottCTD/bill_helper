@@ -79,8 +79,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [reviewRunId, setReviewRunId] = useState<string | null>(null);
   const [optimisticRunningThreadId, setOptimisticRunningThreadId] = useState<string | null>(null);
-  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
-  const { isAtBottom, scrollToBottom, snapToBottom } = useStickToBottom(timelineScrollRef);
+  const { containerRef: timelineScrollRef, isAtBottom, scrollToBottom, snapToBottom } = useStickToBottom<HTMLDivElement>();
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
   const threadRunsRef = useRef<AgentRun[]>([]);

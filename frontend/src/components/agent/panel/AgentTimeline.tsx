@@ -1,4 +1,4 @@
-import { Fragment, type RefObject } from "react";
+import { Fragment, type Ref } from "react";
 import { ArrowDown, FileText } from "lucide-react";
 
 import { withApiBase } from "../../../lib/api";
@@ -14,7 +14,7 @@ interface AgentTimelineProps {
   isLoading: boolean;
   errorMessage: string | null;
   messages: AgentMessage[] | undefined;
-  timelineScrollRef: RefObject<HTMLDivElement | null>;
+  timelineScrollRef: Ref<HTMLDivElement>;
   runsByAssistantMessageId: Map<string, AgentRun[]>;
   pendingAssistantRuns: AgentRun[];
   pendingAssistantRunsByUserMessageId: Map<string, AgentRun[]>;

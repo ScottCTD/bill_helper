@@ -312,6 +312,8 @@ Timeline features:
 - main chat timeline fills remaining space with centered max-width (max 896px / `max-w-4xl`)
 - conversation and composer occupy the left/main area; thread panel occupies the right
 - timeline scroll behavior is a dedicated scroll surface with scrollbar at panel edge
+- timeline auto-follow is managed by `useStickToBottom` (`frontend/src/components/agent/panel/useStickToBottom.ts`) with a callback ref so the hook reliably binds when the timeline scroller mounts
+- while the timeline is at/near bottom (24px threshold), streaming growth from new tool/update rows keeps snapping to the latest content; manual upward scroll detaches auto-follow until the user scrolls back down or presses the down-arrow button
 - desktop thread rail is viewport-bounded and keeps its own independent overflow scroll
 - thread-rail rows are fixed-height non-shrinking items so overflow stays scrollable instead of vertically compressing entries
 - assistant/system message bodies render markdown via `react-markdown` + `remark-gfm` (sanitized defaults, GFM tables/task lists/strikethrough)

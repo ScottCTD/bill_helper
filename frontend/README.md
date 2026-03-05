@@ -173,6 +173,8 @@ uv run python scripts/check_docs_sync.py
 - Agent review modal includes `Reject All` with confirmation; per-item `Approve & Next` is removed in favor of direct approve/reject + batch actions.
 - Expanded tool-call details prioritize model-visible tool output text and keep structured JSON as secondary debug output.
 - Agent home uses a dedicated right-pane timeline scroller while keeping the scrollbar at the panel edge (not beside message bubbles).
+- Timeline auto-follow is handled in `frontend/src/components/agent/panel/useStickToBottom.ts` with callback-ref binding to ensure the mounted timeline node is always tracked.
+- While the user is at/near bottom (24px threshold), incoming streaming tool/update rows auto-follow to the latest content; scrolling up detaches follow mode until the user scrolls back down or presses the down-arrow button.
 - The left thread rail is viewport-bounded with independent overflow scrolling and does not move when timeline content scrolls.
 - Thread rows in the left rail are fixed-height, non-shrinking list items so long thread lists overflow and scroll instead of compressing.
 - Thread rows render a subtle running spinner badge immediately on local send start (optimistic) and continue showing it from `GET /api/v1/agent/threads` when `has_running_run=true`.
