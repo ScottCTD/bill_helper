@@ -43,8 +43,12 @@ def get_session_maker() -> sessionmaker[Session]:
     return build_session_maker(get_engine())
 
 
+# Backward-compatible alias for existing scripts/tests that import SessionLocal.
+SessionLocal = get_session_maker()
+
+
 def open_session() -> Session:
-    return get_session_maker()()
+    return SessionLocal()
 
 
 def get_db() -> Generator[Session, None, None]:
