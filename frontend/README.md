@@ -175,7 +175,7 @@ uv run python scripts/check_docs_sync.py
 - Agent home uses a dedicated right-pane timeline scroller while keeping the scrollbar at the panel edge (not beside message bubbles).
 - The left thread rail is viewport-bounded with independent overflow scrolling and does not move when timeline content scrolls.
 - Thread rows in the left rail are fixed-height, non-shrinking list items so long thread lists overflow and scroll instead of compressing.
-- Thread rows now render a subtle running spinner badge when that thread has `has_running_run=true` from `GET /api/v1/agent/threads`.
+- Thread rows render a subtle running spinner badge immediately on local send start (optimistic) and continue showing it from `GET /api/v1/agent/threads` when `has_running_run=true`.
 - Thread rows expose a right-side delete control inside the same row box on hover/focus (always visible on touch devices) and call `DELETE /api/v1/agent/threads/{thread_id}` after a confirmation prompt.
 - When thread deletion is temporarily disabled (for example, while a run is active), delete controls are hidden entirely to avoid misleading disabled clutter.
 - Deleting the selected thread auto-selects the next thread when available; if none remain, the timeline returns to empty-selection state.

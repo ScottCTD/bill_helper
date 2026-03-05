@@ -78,6 +78,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const [pendingAssistantMessage, setPendingAssistantMessage] = useState<PendingAssistantMessage | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reviewRunId, setReviewRunId] = useState<string | null>(null);
+  const [optimisticRunningThreadId, setOptimisticRunningThreadId] = useState<string | null>(null);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const { isAtBottom, scrollToBottom, snapToBottom } = useStickToBottom(timelineScrollRef);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -571,6 +572,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       const sendAbortController = new AbortController();
       sendAbortControllerRef.current = sendAbortController;
       setIsSendingMessage(true);
+      setOptimisticRunningThreadId(threadId);
       setIsStreamHealthy(true);
       resetOptimisticRunState();
       invalidateAgentThreadData(queryClient, threadId);
@@ -634,10 +636,12 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         }
         return null;
       });
+      setOptimisticRunningThreadId(null);
       resetOptimisticRunState();
     } catch (error) {
       sendAbortControllerRef.current = null;
       setIsStreamHealthy(false);
+      setOptimisticRunningThreadId(null);
       if ((error as Error).name === "AbortError") {
         setPendingUserMessage((current) => {
           return current ? null : current;
@@ -655,6 +659,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     setActionError(null);
     setIsSendingMessage(false);
     setIsStreamHealthy(false);
+    setOptimisticRunningThreadId(null);
     setPendingAssistantMessage(null);
     resetOptimisticRunState();
     if (sendAbortControllerRef.current) {
@@ -855,6 +860,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               deletingThreadId={deleteThreadMutation.isPending ? (deleteThreadMutation.variables ?? null) : null}
               isDeleteDisabled={isMutating || isRunInFlight}
               isOpen={isThreadPanelOpen}
+              optimisticRunningThreadId={optimisticRunningThreadId}
             />
           </div>
         </div>

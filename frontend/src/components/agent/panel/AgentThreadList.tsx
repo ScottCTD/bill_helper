@@ -13,6 +13,7 @@ interface AgentThreadListProps {
   onDeleteThread: (threadId: string) => void;
   deletingThreadId: string | null;
   isDeleteDisabled: boolean;
+  optimisticRunningThreadId: string | null;
 }
 
 export function AgentThreadList(props: AgentThreadListProps) {
@@ -24,7 +25,8 @@ export function AgentThreadList(props: AgentThreadListProps) {
     onSelectThread,
     onDeleteThread,
     deletingThreadId,
-    isDeleteDisabled
+    isDeleteDisabled,
+    optimisticRunningThreadId
   } = props;
 
   return (
@@ -35,7 +37,7 @@ export function AgentThreadList(props: AgentThreadListProps) {
         <div className="agent-thread-list-scroll scroll-surface">
           {(threads ?? []).map((thread) => {
             const isSelected = thread.id === selectedThreadId;
-            const isRunning = thread.has_running_run;
+            const isRunning = thread.has_running_run || optimisticRunningThreadId === thread.id;
             return (
               <div key={thread.id} className={isSelected ? "agent-thread-row group selected" : "agent-thread-row group"}>
                 <Button

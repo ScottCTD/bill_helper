@@ -41,6 +41,7 @@ describe("AgentThreadList", () => {
         onDeleteThread={onDeleteThread}
         deletingThreadId={null}
         isDeleteDisabled={false}
+        optimisticRunningThreadId={null}
       />
     );
 
@@ -62,6 +63,7 @@ describe("AgentThreadList", () => {
         onDeleteThread={() => undefined}
         deletingThreadId="thread-1"
         isDeleteDisabled={false}
+        optimisticRunningThreadId={null}
       />
     );
 
@@ -79,6 +81,7 @@ describe("AgentThreadList", () => {
         onDeleteThread={() => undefined}
         deletingThreadId={null}
         isDeleteDisabled={true}
+        optimisticRunningThreadId={null}
       />
     );
 
@@ -97,6 +100,25 @@ describe("AgentThreadList", () => {
         onDeleteThread={() => undefined}
         deletingThreadId={null}
         isDeleteDisabled={false}
+        optimisticRunningThreadId={null}
+      />
+    );
+
+    expect(screen.getByLabelText("Thread is processing")).toBeInTheDocument();
+  });
+
+  it("shows a running status indicator immediately for optimistic running thread id", () => {
+    render(
+      <AgentThreadList
+        threads={[THREADS[0]]}
+        selectedThreadId="thread-1"
+        isLoading={false}
+        errorMessage={null}
+        onSelectThread={() => undefined}
+        onDeleteThread={() => undefined}
+        deletingThreadId={null}
+        isDeleteDisabled={false}
+        optimisticRunningThreadId="thread-1"
       />
     );
 
