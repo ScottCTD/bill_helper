@@ -15,7 +15,7 @@ import {
   approveAgentChangeItem,
   createAgentThread,
   deleteAgentThread,
-  getAgentRun,
+  getAgentToolCall,
   getAgentThread,
   interruptAgentRun,
   listAgentThreads,
@@ -73,6 +73,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const [streamedTextByRunId, setStreamedTextByRunId] = useState<Record<string, string>>({});
   const [optimisticRunEventsByRunId, setOptimisticRunEventsByRunId] = useState<Record<string, AgentRunEvent[]>>({});
   const [optimisticToolCallsByRunId, setOptimisticToolCallsByRunId] = useState<Record<string, AgentToolCall[]>>({});
+  const [hydratingToolCallIds, setHydratingToolCallIds] = useState<Set<string>>(new Set());
   const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null);
   const [pendingAssistantMessage, setPendingAssistantMessage] = useState<PendingAssistantMessage | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -83,7 +84,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const sendAbortControllerRef = useRef<AbortController | null>(null);
   const threadRunsRef = useRef<AgentRun[]>([]);
   const optimisticToolCallsRef = useRef<Record<string, AgentToolCall[]>>({});
-  const hydratingToolCallRunsRef = useRef<Set<string>>(new Set());
+  const hydratingToolCallIdsRef = useRef<Set<string>>(new Set());
   const [isThreadPanelOpen, setIsThreadPanelOpen] = useState(true);
   const { panelWidth, handleMouseDown: handleResizeMouseDown } = useResizablePanel({
     storageKey: "agent-thread-panel-width",
@@ -124,6 +125,15 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     textarea.style.height = `${nextHeight}px`;
     textarea.style.overflowY = textarea.scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT_PX ? "auto" : "hidden";
   }
+
+  const resetOptimisticRunState = useCallback(() => {
+    setActiveStreamRunId(null);
+    setStreamedTextByRunId({});
+    setOptimisticRunEventsByRunId({});
+    setOptimisticToolCallsByRunId({});
+    setHydratingToolCallIds(new Set());
+    hydratingToolCallIdsRef.current.clear();
+  }, []);
 
   const threadsQuery = useQuery({
     queryKey: queryKeys.agent.threads,
@@ -204,7 +214,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       setReviewRunId(null);
       setPendingUserMessage(null);
       setPendingAssistantMessage(null);
-      setOptimisticToolCallsByRunId({});
+      resetOptimisticRunState();
       setActionError(null);
       invalidateAgentThreadData(queryClient);
     }
@@ -215,10 +225,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     onSuccess: () => {
       invalidateAgentThreadData(queryClient, selectedThreadId || undefined);
       setIsStreamHealthy(false);
-      setActiveStreamRunId(null);
-      setStreamedTextByRunId({});
-      setOptimisticRunEventsByRunId({});
-      setOptimisticToolCallsByRunId({});
+      resetOptimisticRunState();
       setPendingAssistantMessage(null);
       setActionError(null);
     }
@@ -357,12 +364,9 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       return;
     }
     setPendingAssistantMessage(null);
-    setActiveStreamRunId(null);
-    setStreamedTextByRunId({});
-    setOptimisticRunEventsByRunId({});
-    setOptimisticToolCallsByRunId({});
+    resetOptimisticRunState();
     setIsStreamHealthy(false);
-  }, [pendingAssistantMessage, selectedThreadId, threadQuery.data?.messages]);
+  }, [pendingAssistantMessage, resetOptimisticRunState, selectedThreadId, threadQuery.data?.messages]);
 
   const activeModelName = useMemo(() => {
     const runs = threadQuery.data?.runs ?? [];
@@ -391,12 +395,9 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   useEffect(() => {
     setReviewRunId(null);
     setPendingAssistantMessage(null);
-    setActiveStreamRunId(null);
-    setStreamedTextByRunId({});
-    setOptimisticRunEventsByRunId({});
-    setOptimisticToolCallsByRunId({});
+    resetOptimisticRunState();
     setIsStreamHealthy(false);
-  }, [selectedThreadId]);
+  }, [resetOptimisticRunState, selectedThreadId]);
 
   useEffect(() => {
     if (!pendingAssistantMessage) {
@@ -407,13 +408,10 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
     if (!isRunInFlight && !pendingUserMessage) {
       setPendingAssistantMessage(null);
-      setActiveStreamRunId(null);
-      setStreamedTextByRunId({});
-      setOptimisticRunEventsByRunId({});
-      setOptimisticToolCallsByRunId({});
+      resetOptimisticRunState();
       setIsStreamHealthy(false);
     }
-  }, [isRunInFlight, pendingAssistantMessage, pendingUserMessage, selectedThreadId]);
+  }, [isRunInFlight, pendingAssistantMessage, pendingUserMessage, resetOptimisticRunState, selectedThreadId]);
 
   useEffect(() => {
     if (!reviewRunId) {
@@ -461,45 +459,63 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     return created.id;
   }
 
-  const hydrateStreamToolCalls = useCallback(async (runId: string, toolCallId: string) => {
+  const hydrateToolCallDetails = useCallback(async (runId: string, toolCallId: string) => {
     const persistedRun = threadRunsRef.current.find((run) => run.id === runId);
-    if (persistedRun?.tool_calls.some((toolCall) => toolCall.id === toolCallId)) {
+    if (persistedRun?.tool_calls.some((toolCall) => toolCall.id === toolCallId && toolCall.has_full_payload)) {
       return;
     }
 
     const optimisticToolCalls = optimisticToolCallsRef.current[runId] ?? [];
-    if (optimisticToolCalls.some((toolCall) => toolCall.id === toolCallId)) {
+    if (optimisticToolCalls.some((toolCall) => toolCall.id === toolCallId && toolCall.has_full_payload)) {
       return;
     }
 
-    if (hydratingToolCallRunsRef.current.has(runId)) {
+    if (hydratingToolCallIdsRef.current.has(toolCallId)) {
       return;
     }
 
-    hydratingToolCallRunsRef.current.add(runId);
+    hydratingToolCallIdsRef.current.add(toolCallId);
+    setHydratingToolCallIds((current) => {
+      const next = new Set(current);
+      next.add(toolCallId);
+      return next;
+    });
     try {
-      const run = await getAgentRun(runId);
+      const toolCall = await getAgentToolCall(toolCallId);
       setOptimisticToolCallsByRunId((current) => {
-        const existing = current[run.id] ?? [];
-        const nextToolCalls = mergeRunToolCalls(existing, run.tool_calls);
+        const existing = current[runId] ?? [];
+        const nextToolCalls = mergeRunToolCalls(existing, [toolCall]);
         if (
           existing.length === nextToolCalls.length &&
           existing.every((toolCall, index) => {
             const nextToolCall = nextToolCalls[index];
-            return nextToolCall && toolCall.id === nextToolCall.id && toolCall.status === nextToolCall.status;
+            return (
+              nextToolCall &&
+              toolCall.id === nextToolCall.id &&
+              toolCall.status === nextToolCall.status &&
+              toolCall.has_full_payload === nextToolCall.has_full_payload
+            );
           })
         ) {
           return current;
         }
         return {
           ...current,
-          [run.id]: nextToolCalls
+          [runId]: nextToolCalls
         };
       });
     } catch {
-      // Ignore transient hydration errors; later lifecycle events or the final snapshot will retry/reconcile.
+      // Ignore transient hydration errors; later expansions or final snapshots will retry/reconcile.
     } finally {
-      hydratingToolCallRunsRef.current.delete(runId);
+      hydratingToolCallIdsRef.current.delete(toolCallId);
+      setHydratingToolCallIds((current) => {
+        if (!current.has(toolCallId)) {
+          return current;
+        }
+        const next = new Set(current);
+        next.delete(toolCallId);
+        return next;
+      });
     }
   }, []);
 
@@ -516,9 +532,6 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
           [event.run_id]: [...existing, event.event]
         };
       });
-      if (event.event.tool_call_id) {
-        void hydrateStreamToolCalls(event.run_id, event.event.tool_call_id);
-      }
       if (event.event.event_type === "reasoning_update" && event.event.source === "assistant_content") {
         setStreamedTextByRunId((current) => {
           if (!current[event.run_id]) {
@@ -559,10 +572,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       sendAbortControllerRef.current = sendAbortController;
       setIsSendingMessage(true);
       setIsStreamHealthy(true);
-      setActiveStreamRunId(null);
-      setStreamedTextByRunId({});
-      setOptimisticRunEventsByRunId({});
-      setOptimisticToolCallsByRunId({});
+      resetOptimisticRunState();
       invalidateAgentThreadData(queryClient, threadId);
       const baselineLastUserMessageId =
         [...(threadQuery.data?.messages ?? [])]
@@ -624,10 +634,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         }
         return null;
       });
-      setActiveStreamRunId(null);
-      setStreamedTextByRunId({});
-      setOptimisticRunEventsByRunId({});
-      setOptimisticToolCallsByRunId({});
+      resetOptimisticRunState();
     } catch (error) {
       sendAbortControllerRef.current = null;
       setIsStreamHealthy(false);
@@ -649,10 +656,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     setIsSendingMessage(false);
     setIsStreamHealthy(false);
     setPendingAssistantMessage(null);
-    setActiveStreamRunId(null);
-    setStreamedTextByRunId({});
-    setOptimisticRunEventsByRunId({});
-    setOptimisticToolCallsByRunId({});
+    resetOptimisticRunState();
     if (sendAbortControllerRef.current) {
       sendAbortControllerRef.current.abort();
       sendAbortControllerRef.current = null;
@@ -789,6 +793,8 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               optimisticToolCallsByRunId={optimisticToolCallsByRunId}
               activeOptimisticEvents={activeOptimisticEvents}
               activeOptimisticToolCalls={activeOptimisticToolCalls}
+              onHydrateToolCall={hydrateToolCallDetails}
+              hydratingToolCallIds={hydratingToolCallIds}
               onReviewRun={setReviewRunId}
               isAtBottom={isAtBottom}
               scrollToBottom={scrollToBottom}

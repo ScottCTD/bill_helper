@@ -199,7 +199,7 @@ def test_run_includes_context_tokens(client, monkeypatch):
     assert run_response.json()["context_tokens"] == 321
 
 
-def test_thread_detail_computes_current_context_tokens_for_idle_thread(client, monkeypatch):
+def test_thread_detail_uses_persisted_context_tokens_for_idle_thread(client, monkeypatch):
     monkeypatch.setattr(
         "backend.services.agent.runtime._calculate_context_tokens",
         lambda *, model_name, llm_messages: 123,
@@ -213,13 +213,11 @@ def test_thread_detail_computes_current_context_tokens_for_idle_thread(client, m
     run = send_message(client, thread["id"], "What happened this month?")
     assert run["context_tokens"] == 123
 
-    monkeypatch.setattr("backend.routers.agent.count_context_tokens", lambda **_kwargs: 777)
-
     detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
     detail_response.raise_for_status()
     detail = detail_response.json()
 
-    assert detail["current_context_tokens"] == 777
+    assert detail["current_context_tokens"] == 123
     assert detail["runs"][0]["context_tokens"] == 123
 
 
@@ -232,8 +230,6 @@ def test_thread_detail_prefers_running_run_context_tokens(client, monkeypatch):
         "backend.services.agent.runtime._calculate_context_tokens",
         lambda *, model_name, llm_messages: len(llm_messages) * 100,
     )
-    monkeypatch.setattr("backend.routers.agent.count_context_tokens", lambda **_kwargs: 9999)
-
     def multi_step_model(_messages):
         call_count["value"] += 1
         if call_count["value"] == 1:
@@ -973,6 +969,79 @@ def test_run_persists_tool_calls(client, monkeypatch):
     payload = run_detail.json()
     assert payload["assistant_message_id"] == run["assistant_message_id"]
     assert len(payload["tool_calls"]) == 1
+
+
+def test_thread_detail_compacts_tool_call_payloads(client, monkeypatch):
+    calls = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_list_tags",
+                    "type": "function",
+                    "function": {"name": "list_tags", "arguments": "{}"},
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": "Done.",
+        },
+    ]
+    patch_model(monkeypatch, lambda _messages: calls.pop(0))
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "List current tags.")
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+
+    assert len(detail["runs"]) == 1
+    compact_tool_call = detail["runs"][0]["tool_calls"][0]
+    assert compact_tool_call["id"] == run["tool_calls"][0]["id"]
+    assert compact_tool_call["tool_name"] == "list_tags"
+    assert compact_tool_call["has_full_payload"] is False
+    assert compact_tool_call["input_json"] is None
+    assert compact_tool_call["output_json"] is None
+    assert compact_tool_call["output_text"] is None
+
+
+def test_tool_call_detail_endpoint_returns_full_payload(client, monkeypatch):
+    calls = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_list_tags",
+                    "type": "function",
+                    "function": {"name": "list_tags", "arguments": "{}"},
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": "Done.",
+        },
+    ]
+    patch_model(monkeypatch, lambda _messages: calls.pop(0))
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "List current tags.")
+    tool_call_id = run["tool_calls"][0]["id"]
+
+    response = client.get(f"/api/v1/agent/tool-calls/{tool_call_id}")
+    response.raise_for_status()
+    payload = response.json()
+
+    assert payload["id"] == tool_call_id
+    assert payload["tool_name"] == "list_tags"
+    assert payload["has_full_payload"] is True
+    assert isinstance(payload["input_json"], dict)
+    assert isinstance(payload["output_json"], dict)
+    assert isinstance(payload["output_text"], str)
 
 
 def test_list_tags_tool_output_includes_tag_descriptions(client, monkeypatch):

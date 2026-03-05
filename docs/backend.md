@@ -240,8 +240,8 @@ Agent services:
 Thread detail behavior:
 
 - `GET /api/v1/agent/threads/{thread_id}` now returns `current_context_tokens`.
-- When a run is active, thread detail reuses the newest running run's `context_tokens` instead of recomputing on every poll.
-- When no run is active, thread detail recomputes prompt size from the current persisted conversation state and falls back to the newest stored run snapshot if token counting fails.
+- `current_context_tokens` uses persisted snapshots only: newest running run `context_tokens` first, then newest non-null run snapshot.
+- Thread detail run snapshots return compact tool-call records (`has_full_payload=false`; payload fields null) to keep timeline loads fast on tool-heavy threads.
 
 ## Routers
 
@@ -273,6 +273,7 @@ Agent router:
   - `POST /api/v1/agent/threads/{thread_id}/messages` (multipart text + image/PDF attachments)
   - `POST /api/v1/agent/threads/{thread_id}/messages/stream` (multipart text + image/PDF attachments, SSE response)
   - `GET /api/v1/agent/runs/{run_id}`
+  - `GET /api/v1/agent/tool-calls/{tool_call_id}`
   - `POST /api/v1/agent/runs/{run_id}/interrupt`
   - `POST /api/v1/agent/change-items/{item_id}/approve`
   - `POST /api/v1/agent/change-items/{item_id}/reject`
@@ -323,6 +324,7 @@ Test modules:
 - `backend/tests/test_entries.py`
 - `backend/tests/test_finance.py`
 - `backend/tests/test_agent.py`
+- `backend/tests/test_agent_performance.py`
 - `backend/tests/test_agent_model_client.py`
 - `backend/tests/test_agent_pricing.py`
 - `backend/tests/test_taxonomies.py`
@@ -364,7 +366,12 @@ Test modules:
 - stream divergence guard across retries
 - LiteLLM environment-validation behavior (including indeterminate-validation fallback)
 
-Current baseline for `backend/tests/test_agent.py`: `70 passed`.
+`test_agent_performance.py` covers:
+
+- tool-heavy thread detail runtime/payload guardrails (median latency + payload bytes budget)
+- on-demand tool-call detail runtime guardrail and full-payload contract (`has_full_payload=true`)
+
+Current baseline for `backend/tests/test_agent.py`: `76 passed`.
 
 ## Operational Impact
 
@@ -383,6 +390,7 @@ Current baseline for `backend/tests/test_agent.py`: `70 passed`.
 - the next user turn after an interruption carries an explicit interruption note in model input (while preserving normal conversation history)
 - model requests include observability payload (`user`, `session_id=thread.id`, trace metadata) with LiteLLM metadata mapping for Langfuse grouping; one trace per thread (`trace_id=thread.id`), per-step generation names (`agent_turn_run_N_step_M`), and `existing_trace_id` for continuation steps or subsequent runs in the same thread so Langfuse displays one trace per conversation
 - each run snapshot includes persisted `events`, lifecycle-aware `tool_calls`, and change-item audit data
+- thread detail snapshots intentionally return compact tool calls; full tool payloads are fetched on demand via `GET /api/v1/agent/tool-calls/{tool_call_id}`
 - non-intermediate tool rows are created in `queued` state as soon as the model turn resolves, before tool execution begins
 - persisted tool calls now store both structured payload (`output_json`) and exact model-visible text (`output_text`)
 - attachment-bearing user turns now reach the model as ordered content parts instead of one concatenated text blob: attachment-derived text first, then attachment images, then the user prompt

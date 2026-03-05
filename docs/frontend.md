@@ -322,7 +322,7 @@ Timeline features:
 - reasoning notes (`reasoning_update`) and individual tool lifecycle rows are interleaved in sequence order
 - tool rows appear as soon as `tool_call_queued` arrives, then update in place through `Running`, `Completed`, `Failed`, or `Cancelled`
 - `run.tool_calls` now act only as metadata snapshots for those event-driven rows; the client no longer synthesizes standalone activity rows from tool snapshots that do not have matching `run.events`
-- if a live tool lifecycle event arrives before `run.tool_calls` is present in the selected thread snapshot, the client performs a one-off `GET /agent/runs/{run_id}` hydration fetch so the row can render the actual tool name and arguments during the same stream
+- thread snapshots now return compact tool-call records (`has_full_payload=false`, payload fields null); expanding a tool row triggers on-demand hydration via `GET /agent/tool-calls/{tool_call_id}`
 - while a response is streaming, transient assistant text is rendered inside the same collapsible Assistant/update bubble used for live activity (not as a separate plain-text pending answer)
 - if a tool-calling turn emitted assistant text before its tool calls, that buffered text is cleared as soon as the matching `reasoning_update` with `source="assistant_content"` arrives, so the persisted update row cleanly replaces the transient version instead of duplicating it
 - the live Assistant/update bubble is visible as soon as `run_started` arrives, even if no visible tool/update rows exist yet; whitespace-only early `text_delta` chunks render the same block-cursor placeholder (`▍`) instead of being hidden by whitespace trimming
@@ -342,7 +342,7 @@ Timeline features:
 - cumulative thread usage/cost bar is shown once above the composer:
   - `Context`, `Total input`, `Output`, `Cache read`, `Cache hit rate`
   - token counters use compact `x.xxK` formatting
-  - `Context` comes from backend-computed `current_context_tokens` (best-effort current prompt size); `Total input` remains cumulative billed input usage across runs
+  - `Context` comes from backend persisted run snapshots (`current_context_tokens`); `Total input` remains cumulative billed input usage across runs
   - rightmost `Total cost` (USD; computed from backend LiteLLM pricing fields)
 - run-level proposal summary cards:
   - pending copy (`N proposed changes pending review`)

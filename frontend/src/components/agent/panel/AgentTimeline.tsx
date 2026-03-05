@@ -28,6 +28,8 @@ interface AgentTimelineProps {
   optimisticToolCallsByRunId: Record<string, AgentToolCall[]>;
   activeOptimisticEvents: AgentRunEvent[];
   activeOptimisticToolCalls: AgentToolCall[];
+  onHydrateToolCall: (runId: string, toolCallId: string) => void;
+  hydratingToolCallIds: ReadonlySet<string>;
   onReviewRun: (runId: string | null) => void;
   isAtBottom: boolean;
   scrollToBottom: () => void;
@@ -53,6 +55,8 @@ export function AgentTimeline(props: AgentTimelineProps) {
     optimisticToolCallsByRunId = {},
     activeOptimisticEvents = [],
     activeOptimisticToolCalls = [],
+    onHydrateToolCall,
+    hydratingToolCallIds,
     onReviewRun,
     isAtBottom,
     scrollToBottom
@@ -98,6 +102,8 @@ export function AgentTimeline(props: AgentTimelineProps) {
                           run={run}
                           isMutating={isMutating}
                           onReviewRun={onReviewRun}
+                          onHydrateToolCall={onHydrateToolCall}
+                          hydratingToolCallIds={hydratingToolCallIds}
                           mode="activity"
                           optimisticEvents={optimisticRunEventsByRunId[run.id] ?? []}
                           optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
@@ -149,6 +155,8 @@ export function AgentTimeline(props: AgentTimelineProps) {
                           run={run}
                           isMutating={isMutating}
                           onReviewRun={onReviewRun}
+                          onHydrateToolCall={onHydrateToolCall}
+                          hydratingToolCallIds={hydratingToolCallIds}
                           mode="summary"
                           optimisticEvents={optimisticRunEventsByRunId[run.id] ?? []}
                           optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
@@ -177,6 +185,8 @@ export function AgentTimeline(props: AgentTimelineProps) {
                             run={run}
                             isMutating={isMutating}
                             onReviewRun={onReviewRun}
+                            onHydrateToolCall={onHydrateToolCall}
+                            hydratingToolCallIds={hydratingToolCallIds}
                             mode="activity"
                             optimisticEvents={optimisticEvents}
                             optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
@@ -228,6 +238,8 @@ export function AgentTimeline(props: AgentTimelineProps) {
                   run={pendingRunAttachedToOptimisticMessage}
                   isMutating={isMutating}
                   onReviewRun={onReviewRun}
+                  onHydrateToolCall={onHydrateToolCall}
+                  hydratingToolCallIds={hydratingToolCallIds}
                   mode="activity"
                   optimisticEvents={activeOptimisticEvents}
                   optimisticToolCalls={activeOptimisticToolCalls}
@@ -237,6 +249,8 @@ export function AgentTimeline(props: AgentTimelineProps) {
                 <PendingAssistantActivityBlock
                   events={activeOptimisticEvents}
                   toolCalls={activeOptimisticToolCalls}
+                  onHydrateToolCall={onHydrateToolCall}
+                  hydratingToolCallIds={hydratingToolCallIds}
                   streamingAssistantText={activeStreamText}
                 />
               ) : null}
@@ -273,6 +287,8 @@ export function AgentTimeline(props: AgentTimelineProps) {
                   run={run}
                   isMutating={isMutating}
                   onReviewRun={onReviewRun}
+                  onHydrateToolCall={onHydrateToolCall}
+                  hydratingToolCallIds={hydratingToolCallIds}
                   optimisticEvents={optimisticEvents}
                   optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
                 />

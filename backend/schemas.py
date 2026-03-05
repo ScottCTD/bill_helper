@@ -563,9 +563,10 @@ class AgentToolCallRead(BaseModel):
     run_id: str
     llm_tool_call_id: str | None = None
     tool_name: str
-    input_json: dict[str, Any]
-    output_json: dict[str, Any]
-    output_text: str
+    input_json: dict[str, Any] | None = None
+    output_json: dict[str, Any] | None = None
+    output_text: str | None = None
+    has_full_payload: bool = False
     status: AgentToolCallStatus
     created_at: datetime
     started_at: datetime | None = None

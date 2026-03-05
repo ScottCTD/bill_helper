@@ -246,6 +246,13 @@ cd /path/to/bill_helper
 uv run --extra dev pytest
 ```
 
+Backend performance guard tests:
+
+```bash
+cd /path/to/bill_helper
+uv run --extra dev pytest backend/tests/test_agent_performance.py
+```
+
 Frontend build:
 
 ```bash

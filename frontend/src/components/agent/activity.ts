@@ -20,6 +20,7 @@ type ToolLifecycleEventType =
 interface RunActivityToolCallItem {
   type: "tool_call";
   key: string;
+  runId: string;
   toolCallId: string;
   toolCall: RunToolCall | null;
   lifecycleEventType: ToolLifecycleEventType;
@@ -227,6 +228,7 @@ export function buildRunTimelineFromEvents(events: AgentRunEvent[], toolCalls: R
     const item: RunActivityToolCallItem = {
       type: "tool_call",
       key: event.tool_call_id,
+      runId: event.run_id,
       toolCallId: event.tool_call_id,
       toolCall: toolCallById.get(event.tool_call_id) ?? null,
       lifecycleEventType: event.event_type,

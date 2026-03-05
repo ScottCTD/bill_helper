@@ -106,6 +106,48 @@ describe("AgentRunBlock", () => {
     expect(screen.getByText("Arguments")).toBeInTheDocument();
   });
 
+  it("hydrates compact tool call payloads when the row is expanded", async () => {
+    const onHydrateToolCall = vi.fn();
+    const toolCall = buildToolCall({
+      id: "tool-compact",
+      run_id: "run-compact",
+      tool_name: "list_tags",
+      has_full_payload: false,
+      input_json: null,
+      output_json: null,
+      output_text: null
+    });
+    const run = buildRun({
+      id: "run-compact",
+      status: "running",
+      events: [
+        buildRunEvent({
+          id: "event-1",
+          run_id: "run-compact",
+          sequence_index: 1,
+          event_type: "tool_call_started",
+          tool_call_id: "tool-compact"
+        })
+      ],
+      tool_calls: [toolCall]
+    });
+
+    render(
+      <AgentRunBlock
+        run={run}
+        isMutating={false}
+        onReviewRun={() => undefined}
+        onHydrateToolCall={onHydrateToolCall}
+        mode="activity"
+      />
+    );
+
+    await userEvent.click(screen.getByText("list_tags"));
+
+    expect(onHydrateToolCall).toHaveBeenCalledWith("run-compact", "tool-compact");
+    expect(screen.getByText("Tool details")).toBeInTheDocument();
+  });
+
   it("renders transient streaming assistant text inside the activity bubble", () => {
     const run = buildRun({
       id: "run-streaming",

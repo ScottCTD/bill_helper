@@ -55,6 +55,8 @@ function renderTimeline(
     optimisticToolCallsByRunId: {},
     activeOptimisticEvents: [],
     activeOptimisticToolCalls: [],
+    onHydrateToolCall: () => undefined,
+    hydratingToolCallIds: new Set<string>(),
     onReviewRun: () => undefined,
     isAtBottom: true,
     scrollToBottom: () => undefined,

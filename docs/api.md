@@ -471,9 +471,9 @@ Response: `AgentThreadDetailRead` with:
 
 - `thread`
 - `messages` (with attachment metadata)
-- `runs` (with tool calls + change items + review actions)
+- `runs` (with compact tool-call snapshots + change items + review actions)
 - `configured_model_name` (current resolved runtime model from `/settings` override or env default)
-- `current_context_tokens` (best-effort prompt size for the selected thread using the current configured model; prefers the newest running run snapshot when available)
+- `current_context_tokens` (latest persisted run context snapshot; prefers the newest running run with a non-null `context_tokens`, then falls back to the newest run with non-null `context_tokens`)
 - each run also includes nullable context/usage counters:
   - `context_tokens`
   - `input_tokens`
@@ -484,9 +484,9 @@ Response: `AgentThreadDetailRead` with:
   - `input_cost_usd`
   - `output_cost_usd`
   - `total_cost_usd`
-- each tool call in a run includes both:
-  - `output_json` (structured payload)
-  - `output_text` (exact model-visible tool result text persisted from runtime)
+- each tool call in a run is compact by default:
+  - `has_full_payload=false`
+  - `input_json`, `output_json`, `output_text` are `null`
 - each tool call in a run also includes lifecycle metadata:
   - `llm_tool_call_id`
   - `started_at`
@@ -590,9 +590,25 @@ Response: `AgentRunRead`
 Returned run payload includes:
 
 - run lifecycle metadata (`status`, `model_name`, `error_text`, `context_tokens`)
-- tool calls (including `output_text` + `output_json`) and change items
+- full tool calls (`has_full_payload=true`, includes `input_json`, `output_json`, `output_text`) and change items
 - usage counters (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`)
 - derived pricing fields (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
+
+## `GET /agent/tool-calls/{tool_call_id}`
+
+Get full payload for one tool call.
+
+Response: `AgentToolCallRead`
+
+Returned tool-call payload includes:
+
+- lifecycle metadata (`id`, `run_id`, `tool_name`, `status`, timestamps)
+- `has_full_payload=true`
+- full payload fields (`input_json`, `output_json`, `output_text`)
+
+Errors:
+
+- `404` tool call not found
 
 ## `POST /agent/runs/{run_id}/interrupt`
 

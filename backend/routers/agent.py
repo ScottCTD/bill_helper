@@ -10,7 +10,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, load_only, selectinload
 
 from backend.config import get_settings
 from backend.database import SessionLocal, get_db
@@ -21,12 +21,14 @@ from backend.models import (
     AgentMessageAttachment,
     AgentRun,
     AgentThread,
+    AgentToolCall,
 )
 from backend.schemas import (
     AgentChangeItemApproveRequest,
     AgentChangeItemRead,
     AgentChangeItemRejectRequest,
     AgentRunRead,
+    AgentToolCallRead,
     AgentThreadCreate,
     AgentThreadDetailRead,
     AgentThreadRead,
@@ -42,16 +44,14 @@ from backend.services.agent import (
     run_existing_agent_run_stream,
     start_agent_run,
 )
-from backend.services.agent.context_tokens import count_context_tokens
-from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.serializers import (
     change_item_to_schema,
     message_to_schema,
     run_to_schema,
+    tool_call_to_schema,
     thread_summary_to_schema,
     thread_to_schema,
 )
-from backend.services.agent.tools import build_openai_tool_schemas
 from backend.services.runtime_settings import resolve_runtime_settings
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -91,15 +91,6 @@ def _current_context_tokens_for_thread(
     for run in runs_by_newest:
         if run.status == AgentRunStatus.RUNNING and run.context_tokens is not None:
             return run.context_tokens
-
-    current_messages = build_llm_messages(db, thread.id, current_user_message_id=None)
-    current_context_tokens = count_context_tokens(
-        model_name=model_name,
-        messages=current_messages,
-        tools=build_openai_tool_schemas(),
-    )
-    if current_context_tokens is not None:
-        return current_context_tokens
 
     for run in runs_by_newest:
         if run.context_tokens is not None:
@@ -324,7 +315,20 @@ def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThr
         .options(
             selectinload(AgentThread.messages).selectinload(AgentMessage.attachments),
             selectinload(AgentThread.runs).selectinload(AgentRun.events),
-            selectinload(AgentThread.runs).selectinload(AgentRun.tool_calls),
+            selectinload(AgentThread.runs)
+            .selectinload(AgentRun.tool_calls)
+            .options(
+                load_only(
+                    AgentToolCall.id,
+                    AgentToolCall.run_id,
+                    AgentToolCall.llm_tool_call_id,
+                    AgentToolCall.tool_name,
+                    AgentToolCall.status,
+                    AgentToolCall.created_at,
+                    AgentToolCall.started_at,
+                    AgentToolCall.completed_at,
+                )
+            ),
             selectinload(AgentThread.runs)
             .selectinload(AgentRun.change_items)
             .selectinload(AgentChangeItem.review_actions),
@@ -336,7 +340,7 @@ def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThr
     return AgentThreadDetailRead(
         thread=thread_to_schema(thread),
         messages=[message_to_schema(message, api_prefix=settings.api_prefix) for message in thread.messages],
-        runs=[run_to_schema(run) for run in thread.runs],
+        runs=[run_to_schema(run, include_tool_payload=False) for run in thread.runs],
         configured_model_name=settings.agent_model,
         current_context_tokens=_current_context_tokens_for_thread(
             db,
@@ -415,6 +419,14 @@ def get_run(run_id: str, db: Session = Depends(get_db)) -> AgentRunRead:
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
     return run_to_schema(run)
+
+
+@router.get("/tool-calls/{tool_call_id}", response_model=AgentToolCallRead)
+def get_tool_call(tool_call_id: str, db: Session = Depends(get_db)) -> AgentToolCallRead:
+    tool_call = db.get(AgentToolCall, tool_call_id)
+    if tool_call is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tool call not found")
+    return tool_call_to_schema(tool_call, include_payload=True)
 
 
 @router.post("/runs/{run_id}/interrupt", response_model=AgentRunRead)

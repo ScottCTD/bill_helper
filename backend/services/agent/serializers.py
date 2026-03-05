@@ -46,15 +46,16 @@ def message_to_schema(message: AgentMessage, *, api_prefix: str) -> AgentMessage
     )
 
 
-def tool_call_to_schema(tool_call: AgentToolCall) -> AgentToolCallRead:
+def tool_call_to_schema(tool_call: AgentToolCall, *, include_payload: bool = True) -> AgentToolCallRead:
     return AgentToolCallRead(
         id=tool_call.id,
         run_id=tool_call.run_id,
         llm_tool_call_id=tool_call.llm_tool_call_id,
         tool_name=tool_call.tool_name,
-        input_json=tool_call.input_json,
-        output_json=tool_call.output_json,
-        output_text=tool_call.output_text,
+        input_json=tool_call.input_json if include_payload else None,
+        output_json=tool_call.output_json if include_payload else None,
+        output_text=tool_call.output_text if include_payload else None,
+        has_full_payload=include_payload,
         status=tool_call.status,
         created_at=tool_call.created_at,
         started_at=tool_call.started_at,
@@ -103,7 +104,7 @@ def change_item_to_schema(item: AgentChangeItem) -> AgentChangeItemRead:
     )
 
 
-def run_to_schema(run: AgentRun) -> AgentRunRead:
+def run_to_schema(run: AgentRun, *, include_tool_payload: bool = True) -> AgentRunRead:
     costs = calculate_usage_costs(
         model_name=run.model_name,
         input_tokens=run.input_tokens,
@@ -128,7 +129,7 @@ def run_to_schema(run: AgentRun) -> AgentRunRead:
         created_at=run.created_at,
         completed_at=run.completed_at,
         events=[run_event_to_schema(event) for event in run.events],
-        tool_calls=[tool_call_to_schema(call) for call in run.tool_calls],
+        tool_calls=[tool_call_to_schema(call, include_payload=include_tool_payload) for call in run.tool_calls],
         change_items=[change_item_to_schema(item) for item in run.change_items],
     )
 

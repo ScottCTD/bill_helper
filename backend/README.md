@@ -147,9 +147,11 @@ uv run python scripts/check_docs_sync.py
   - async start + polling: `POST /api/v1/agent/threads/{thread_id}/messages`
   - SSE token stream: `POST /api/v1/agent/threads/{thread_id}/messages/stream`
 - SSE streams now use `text_delta` plus `run_event`; `run_event.event_type` covers run start/finish, reasoning updates, and per-tool lifecycle transitions.
-- Run tool-call payloads now include lifecycle metadata (`llm_tool_call_id`, `started_at`, `completed_at`) in addition to exact model-visible tool text (`output_text`) and structured `output_json`.
+- Run tool-call payloads include lifecycle metadata (`llm_tool_call_id`, `started_at`, `completed_at`) plus a `has_full_payload` marker.
+- `GET /api/v1/agent/threads/{thread_id}` now returns compact tool-call snapshots (`has_full_payload=false`; payload fields null) for faster timeline loads.
+- Full tool payloads are available on demand via `GET /api/v1/agent/tool-calls/{tool_call_id}` (`has_full_payload=true`).
 - Usage normalization maps provider-specific cache fields (`cached_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`) into run-level `cache_read_tokens` / `cache_write_tokens`.
-- Agent runs now persist nullable `context_tokens`, a best-effort prompt-size snapshot for the model-visible context (messages plus tool schemas), and thread detail computes `current_context_tokens` for the selected conversation.
+- Agent runs persist nullable `context_tokens`; thread detail `current_context_tokens` now resolves from persisted run snapshots only (no load-time prompt rebuild/token recount).
 - Observability context (`user`, `session_id=AgentThread.id`, run trace metadata) is propagated on each model call.
 - When `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` are configured, LiteLLM `langfuse` success/failure callbacks are enabled and trace metadata is sent through LiteLLM `metadata`.
 - Dashboard currency defaults to runtime settings (`/settings` override, else `BILL_HELPER_DASHBOARD_CURRENCY_CODE` / `CAD`).

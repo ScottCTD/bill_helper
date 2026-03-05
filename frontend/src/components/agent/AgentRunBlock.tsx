@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 
 import type { AgentRun, AgentRunEvent, AgentToolCall } from "../../lib/types";
@@ -23,6 +23,8 @@ interface AgentRunBlockProps {
   run: AgentRun;
   isMutating: boolean;
   onReviewRun: (runId: string) => void;
+  onHydrateToolCall?: (runId: string, toolCallId: string) => void;
+  hydratingToolCallIds?: ReadonlySet<string>;
   mode?: "activity" | "summary" | "all";
   optimisticEvents?: AgentRunEvent[];
   optimisticToolCalls?: AgentToolCall[];
@@ -70,18 +72,39 @@ function CollapsibleReasoningUpdate({
 
 function ToolCallTimelineRow({
   item,
-  defaultOpen
+  defaultOpen,
+  onHydrateToolCall,
+  isHydrating = false
 }: {
   item: Extract<RunActivityItem, { type: "tool_call" }>;
   defaultOpen?: boolean;
+  onHydrateToolCall?: (runId: string, toolCallId: string) => void;
+  isHydrating?: boolean;
 }) {
+  const [isOpen, setIsOpen] = useState(Boolean(defaultOpen));
   const toolCall = item.toolCall;
   const lifecycleLabel = toolLifecycleLabel(item.lifecycleEventType);
-  const hasDetails = toolCall !== null;
-  const showTerminalOutput = toolCall !== null && isToolLifecycleTerminal(item.lifecycleEventType);
+  const hasSnapshot = toolCall !== null;
+  const hasFullPayload = Boolean(toolCall?.has_full_payload);
+  const shouldHydrate = isOpen && !hasFullPayload;
+  const showTerminalOutput = hasFullPayload && isToolLifecycleTerminal(item.lifecycleEventType);
+
+  useEffect(() => {
+    if (!shouldHydrate) {
+      return;
+    }
+    if (!onHydrateToolCall) {
+      return;
+    }
+    onHydrateToolCall(item.runId, item.toolCallId);
+  }, [item.runId, item.toolCallId, onHydrateToolCall, shouldHydrate]);
 
   return (
-    <details className={cn("agent-tool-call", !hasDetails && "agent-tool-call-static")} open={defaultOpen}>
+    <details
+      className={cn("agent-tool-call", !hasSnapshot && "agent-tool-call-static")}
+      open={defaultOpen}
+      onToggle={(event) => setIsOpen((event.currentTarget as HTMLDetailsElement).open)}
+    >
       <summary>
         <ChevronRight className="agent-tool-call-chevron" />
         <span className="agent-tool-call-name">{toolCall?.tool_name ?? "Tool call"}</span>
@@ -90,32 +113,44 @@ function ToolCallTimelineRow({
           {prettyDateTime(item.createdAt)}
         </span>
       </summary>
-      <div className="agent-tool-call-details">
-        {toolCall ? (
-          <>
-            <p className="agent-tool-call-details-label">Arguments</p>
-            <pre className="agent-tool-call-arguments">{JSON.stringify(toolCall.input_json, null, 2)}</pre>
-            {showTerminalOutput ? (
-              <>
-                <p className="agent-tool-call-details-label">Model-visible tool result</p>
-                <pre className="agent-tool-call-output">{toolCall.output_text || "(empty)"}</pre>
-                <details>
-                  <summary className="agent-tool-call-details-label">Structured output (debug)</summary>
-                  <pre>{JSON.stringify(toolCall.output_json, null, 2)}</pre>
-                </details>
-              </>
-            ) : (
-              <p className="muted agent-tool-call-pending-detail">Waiting for tool result...</p>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="agent-tool-call-details-label">Tool</p>
-            <p className="muted agent-tool-call-pending-detail">Waiting for tool snapshot...</p>
-            <pre>{JSON.stringify({ tool_call_id: item.toolCallId }, null, 2)}</pre>
-          </>
-        )}
-      </div>
+      {isOpen ? (
+        <div className="agent-tool-call-details">
+          {!hasSnapshot ? (
+            <>
+              <p className="agent-tool-call-details-label">Tool</p>
+              <p className="muted agent-tool-call-pending-detail">
+                {isHydrating ? "Loading tool snapshot..." : "Waiting for tool snapshot..."}
+              </p>
+              <pre>{JSON.stringify({ tool_call_id: item.toolCallId }, null, 2)}</pre>
+            </>
+          ) : !hasFullPayload ? (
+            <>
+              <p className="agent-tool-call-details-label">Tool details</p>
+              <p className="muted agent-tool-call-pending-detail">
+                {isHydrating ? "Loading tool call details..." : "Loading on demand..."}
+              </p>
+              <pre>{JSON.stringify({ tool_call_id: item.toolCallId }, null, 2)}</pre>
+            </>
+          ) : (
+            <>
+              <p className="agent-tool-call-details-label">Arguments</p>
+              <pre className="agent-tool-call-arguments">{JSON.stringify(toolCall.input_json, null, 2)}</pre>
+              {showTerminalOutput ? (
+                <>
+                  <p className="agent-tool-call-details-label">Model-visible tool result</p>
+                  <pre className="agent-tool-call-output">{toolCall.output_text || "(empty)"}</pre>
+                  <details>
+                    <summary className="agent-tool-call-details-label">Structured output (debug)</summary>
+                    <pre>{JSON.stringify(toolCall.output_json, null, 2)}</pre>
+                  </details>
+                </>
+              ) : (
+                <p className="muted agent-tool-call-pending-detail">Waiting for tool result...</p>
+              )}
+            </>
+          )}
+        </div>
+      ) : null}
     </details>
   );
 }
@@ -123,11 +158,15 @@ function ToolCallTimelineRow({
 function ActivityTimeline({
   items,
   isRunning,
+  onHydrateToolCall,
+  hydratingToolCallIds,
   streamingAssistantText = "",
   showStreamingAssistantPlaceholder = false
 }: {
   items: RunActivityItem[];
   isRunning: boolean;
+  onHydrateToolCall?: (runId: string, toolCallId: string) => void;
+  hydratingToolCallIds?: ReadonlySet<string>;
   streamingAssistantText?: string;
   showStreamingAssistantPlaceholder?: boolean;
 }) {
@@ -158,7 +197,15 @@ function ActivityTimeline({
               />
             );
           }
-          return <ToolCallTimelineRow key={item.key} item={item} defaultOpen={false} />;
+          return (
+            <ToolCallTimelineRow
+              key={item.key}
+              item={item}
+              defaultOpen={false}
+              onHydrateToolCall={onHydrateToolCall}
+              isHydrating={Boolean(hydratingToolCallIds?.has(item.toolCallId))}
+            />
+          );
         })}
         {hasStreamingAssistantText ? (
           <CollapsibleReasoningUpdate
@@ -175,10 +222,14 @@ function ActivityTimeline({
 export function PendingAssistantActivityBlock({
   events,
   toolCalls = [],
+  onHydrateToolCall,
+  hydratingToolCallIds,
   streamingAssistantText = ""
 }: {
   events: AgentRunEvent[];
   toolCalls?: AgentToolCall[];
+  onHydrateToolCall?: (runId: string, toolCallId: string) => void;
+  hydratingToolCallIds?: ReadonlySet<string>;
   streamingAssistantText?: string;
 }) {
   const items = useMemo(() => buildRunTimelineFromEvents(events, toolCalls), [events, toolCalls]);
@@ -193,6 +244,8 @@ export function PendingAssistantActivityBlock({
     <ActivityTimeline
       items={items}
       isRunning={true}
+      onHydrateToolCall={onHydrateToolCall}
+      hydratingToolCallIds={hydratingToolCallIds}
       streamingAssistantText={streamingAssistantText}
       showStreamingAssistantPlaceholder={showStreamingAssistantPlaceholder}
     />
@@ -203,6 +256,8 @@ export function AgentRunBlock({
   run,
   isMutating,
   onReviewRun,
+  onHydrateToolCall,
+  hydratingToolCallIds,
   mode = "all",
   optimisticEvents = [],
   optimisticToolCalls = [],
@@ -245,6 +300,8 @@ export function AgentRunBlock({
             <ActivityTimeline
               items={activityTimeline}
               isRunning={isRunning}
+              onHydrateToolCall={onHydrateToolCall}
+              hydratingToolCallIds={hydratingToolCallIds}
               streamingAssistantText={streamingAssistantText}
               showStreamingAssistantPlaceholder={showStreamingAssistantPlaceholder}
             />
