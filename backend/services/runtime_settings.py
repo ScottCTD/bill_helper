@@ -1,60 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.config import get_settings
-from backend.models import RuntimeSettings as RuntimeSettingsRow
-from backend.schemas import RuntimeSettingsOverridesRead, RuntimeSettingsRead
+from backend.models_finance import RuntimeSettings as RuntimeSettingsRow
+from backend.schemas_finance import RuntimeSettingsOverridesRead, RuntimeSettingsRead, RuntimeSettingsUpdate
+from backend.services.runtime_settings_normalization import (
+    normalize_currency_code_or_none,
+    normalize_multiline_text_or_none,
+    normalize_secret_or_none,
+    normalize_text_or_none,
+    sanitize_float_at_least,
+    sanitize_int_at_least,
+)
 
 RUNTIME_SETTINGS_SCOPE = "default"
-
-
-def _normalize_optional_text(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = " ".join(value.split()).strip()
-    return normalized or None
-
-
-def _normalize_optional_multiline_text(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
-    normalized = "\n".join(line.rstrip() for line in normalized.split("\n")).strip()
-    return normalized or None
-
-
-def _normalize_optional_currency(value: str | None) -> str | None:
-    normalized = _normalize_optional_text(value)
-    if normalized is None:
-        return None
-    code = normalized.upper()
-    if len(code) != 3:
-        return None
-    return code
-
-
-def _normalize_optional_secret(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = value.strip()
-    return normalized or None
-
-
-def _sanitize_int(value: int, *, minimum: int, fallback: int) -> int:
-    if value < minimum:
-        return max(fallback, minimum)
-    return value
-
-
-def _sanitize_float(value: float, *, minimum: float, fallback: float) -> float:
-    if value < minimum:
-        return max(fallback, minimum)
-    return value
 
 
 @dataclass(slots=True, frozen=True)
@@ -98,10 +61,11 @@ def _ensure_runtime_settings_override(db: Session) -> RuntimeSettingsRow:
 
 
 def update_runtime_settings_override(
-    db: Session, updates: dict[str, Any]
+    db: Session,
+    updates: RuntimeSettingsUpdate,
 ) -> RuntimeSettingsRow:
     row = _ensure_runtime_settings_override(db)
-    for field_name, value in updates.items():
+    for field_name, value in updates.model_dump(exclude_unset=True).items():
         # Skip masked sentinel to prevent accidental overwrites of API key
         if field_name == "agent_api_key" and value == "***masked***":
             continue
@@ -116,93 +80,88 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
     override = get_runtime_settings_override(db)
 
     current_user_name = (
-        (
-            _normalize_optional_text(override.current_user_name)
-            if override is not None
-            else None
-        )
-        or _normalize_optional_text(defaults.current_user_name)
+        normalize_text_or_none(defaults.current_user_name)
         or "admin"
     )
     user_memory = (
-        _normalize_optional_multiline_text(override.user_memory)
+        normalize_multiline_text_or_none(override.user_memory)
         if override is not None
         else None
     )
     default_currency_code = (
         (
-            _normalize_optional_currency(override.default_currency_code)
+            normalize_currency_code_or_none(override.default_currency_code)
             if override is not None
             else None
         )
-        or _normalize_optional_currency(defaults.default_currency_code)
+        or normalize_currency_code_or_none(defaults.default_currency_code)
         or "CAD"
     )
     dashboard_currency_code = (
         (
-            _normalize_optional_currency(override.dashboard_currency_code)
+            normalize_currency_code_or_none(override.dashboard_currency_code)
             if override is not None
             else None
         )
-        or _normalize_optional_currency(defaults.dashboard_currency_code)
+        or normalize_currency_code_or_none(defaults.dashboard_currency_code)
         or "CAD"
     )
-    langfuse_public_key = _normalize_optional_secret(defaults.langfuse_public_key)
-    langfuse_secret_key = _normalize_optional_secret(defaults.langfuse_secret_key)
-    langfuse_host = _normalize_optional_text(defaults.langfuse_host)
+    langfuse_public_key = normalize_secret_or_none(defaults.langfuse_public_key)
+    langfuse_secret_key = normalize_secret_or_none(defaults.langfuse_secret_key)
+    langfuse_host = normalize_text_or_none(defaults.langfuse_host)
     agent_model = (
         (
-            _normalize_optional_text(override.agent_model)
+            normalize_text_or_none(override.agent_model)
             if override is not None
             else None
         )
-        or _normalize_optional_text(defaults.agent_model)
+        or normalize_text_or_none(defaults.agent_model)
         or "openrouter/qwen/qwen3.5-27b"
     )
 
-    agent_max_steps = _sanitize_int(
+    agent_max_steps = sanitize_int_at_least(
         override.agent_max_steps
         if override and override.agent_max_steps is not None
         else defaults.agent_max_steps,
         minimum=1,
         fallback=defaults.agent_max_steps,
     )
-    agent_retry_max_attempts = _sanitize_int(
+    agent_retry_max_attempts = sanitize_int_at_least(
         override.agent_retry_max_attempts
         if override and override.agent_retry_max_attempts is not None
         else defaults.agent_retry_max_attempts,
         minimum=1,
         fallback=defaults.agent_retry_max_attempts,
     )
-    agent_retry_initial_wait_seconds = _sanitize_float(
+    agent_retry_initial_wait_seconds = sanitize_float_at_least(
         override.agent_retry_initial_wait_seconds
         if override and override.agent_retry_initial_wait_seconds is not None
         else defaults.agent_retry_initial_wait_seconds,
         minimum=0.0,
         fallback=defaults.agent_retry_initial_wait_seconds,
     )
-    agent_retry_max_wait_seconds = _sanitize_float(
+    agent_retry_max_wait_seconds = sanitize_float_at_least(
         override.agent_retry_max_wait_seconds
         if override and override.agent_retry_max_wait_seconds is not None
         else defaults.agent_retry_max_wait_seconds,
         minimum=0.0,
         fallback=defaults.agent_retry_max_wait_seconds,
     )
-    agent_retry_backoff_multiplier = _sanitize_float(
+    agent_retry_backoff_multiplier = sanitize_float_at_least(
         override.agent_retry_backoff_multiplier
         if override and override.agent_retry_backoff_multiplier is not None
         else defaults.agent_retry_backoff_multiplier,
         minimum=1.0,
         fallback=defaults.agent_retry_backoff_multiplier,
     )
-    agent_max_image_size_bytes = _sanitize_int(
+    agent_max_image_size_bytes = sanitize_int_at_least(
         override.agent_max_image_size_bytes
         if override and override.agent_max_image_size_bytes is not None
         else defaults.agent_max_image_size_bytes,
         minimum=1024,
         fallback=defaults.agent_max_image_size_bytes,
     )
-    agent_max_images_per_message = _sanitize_int(
+    agent_max_images_per_message = sanitize_int_at_least(
         override.agent_max_images_per_message
         if override and override.agent_max_images_per_message is not None
         else defaults.agent_max_images_per_message,
@@ -210,11 +169,11 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         fallback=defaults.agent_max_images_per_message,
     )
     agent_base_url = (
-        _normalize_optional_text(override.agent_base_url if override else None)
-    ) or _normalize_optional_text(defaults.agent_base_url)
+        normalize_text_or_none(override.agent_base_url if override else None)
+    ) or normalize_text_or_none(defaults.agent_base_url)
     agent_api_key = (
-        _normalize_optional_secret(override.agent_api_key if override else None)
-    ) or _normalize_optional_secret(defaults.agent_api_key)
+        normalize_secret_or_none(override.agent_api_key if override else None)
+    ) or normalize_secret_or_none(defaults.agent_api_key)
 
     return ResolvedRuntimeSettings(
         api_prefix=defaults.api_prefix,
@@ -238,12 +197,16 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
     )
 
 
-def build_runtime_settings_read(db: Session) -> RuntimeSettingsRead:
+def build_runtime_settings_read(
+    db: Session,
+    *,
+    principal_name: str | None = None,
+) -> RuntimeSettingsRead:
     override = get_runtime_settings_override(db)
     resolved = resolve_runtime_settings(db)
 
     return RuntimeSettingsRead(
-        current_user_name=resolved.current_user_name,
+        current_user_name=normalize_text_or_none(principal_name) or resolved.current_user_name,
         user_memory=resolved.user_memory,
         default_currency_code=resolved.default_currency_code,
         dashboard_currency_code=resolved.dashboard_currency_code,
@@ -258,23 +221,20 @@ def build_runtime_settings_read(db: Session) -> RuntimeSettingsRead:
         agent_base_url=resolved.agent_base_url,
         agent_api_key_configured=bool(resolved.agent_api_key),
         overrides=RuntimeSettingsOverridesRead(
-            current_user_name=_normalize_optional_text(override.current_user_name)
+            user_memory=normalize_multiline_text_or_none(override.user_memory)
             if override
             else None,
-            user_memory=_normalize_optional_multiline_text(override.user_memory)
-            if override
-            else None,
-            default_currency_code=_normalize_optional_currency(
+            default_currency_code=normalize_currency_code_or_none(
                 override.default_currency_code
             )
             if override
             else None,
-            dashboard_currency_code=_normalize_optional_currency(
+            dashboard_currency_code=normalize_currency_code_or_none(
                 override.dashboard_currency_code
             )
             if override
             else None,
-            agent_model=_normalize_optional_text(override.agent_model)
+            agent_model=normalize_text_or_none(override.agent_model)
             if override
             else None,
             agent_max_steps=override.agent_max_steps if override else None,
@@ -296,7 +256,7 @@ def build_runtime_settings_read(db: Session) -> RuntimeSettingsRead:
             agent_max_images_per_message=override.agent_max_images_per_message
             if override
             else None,
-            agent_base_url=_normalize_optional_text(override.agent_base_url)
+            agent_base_url=normalize_text_or_none(override.agent_base_url)
             if override
             else None,
             agent_api_key_configured=bool(override and override.agent_api_key),

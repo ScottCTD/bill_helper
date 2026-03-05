@@ -20,6 +20,13 @@ _env_files: tuple[str, ...] = (
     ".env",
     str(SHARED_ENV_FILE),
 )
+DEFAULT_CORS_SCHEME = "http"
+DEFAULT_CORS_HOST = "localhost"
+DEFAULT_CORS_PORT = 5173
+
+
+def _default_cors_origins() -> list[str]:
+    return [f"{DEFAULT_CORS_SCHEME}://{DEFAULT_CORS_HOST}:{DEFAULT_CORS_PORT}"]
 
 
 class Settings(BaseSettings):
@@ -27,7 +34,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     data_dir: Path = SHARED_DATA_DIR
     database_url: str = ""
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    cors_origins: list[str] = Field(default_factory=_default_cors_origins)
     current_user_name: str = "admin"
     current_user_timezone: str = Field(
         default="America/Toronto",

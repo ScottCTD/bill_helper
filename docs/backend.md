@@ -58,6 +58,7 @@ Runtime override behavior:
 - `runtime_settings` table stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`, including `user_memory`
 - effective runtime settings are resolved as `override -> env default` where applicable
 - `user_memory` is an optional DB-only text field used for persistent per-user agent context
+- identity is request-principal-based at API boundaries; `current_user_name` is read-only in `/settings` and no longer mutable as a runtime override
 - `agent_base_url` overrides are validated to allow only `http`/`https` URLs and block localhost domains plus non-public IP literals (loopback/private/link-local/reserved/multicast/unspecified)
 
 Behavior notes:
@@ -69,14 +70,26 @@ Behavior notes:
 - credential pre-validation is best-effort; if provider validation is indeterminate, the run proceeds and provider/model errors are surfaced at model-call time
 - env settings are cached by `get_settings()` (`lru_cache`)
 - runtime behavior consumers use `backend/services/runtime_settings.py` for resolved effective values
+- FastAPI app construction is factory-driven (`create_app()`); module import no longer eagerly constructs `app`
+- `backend.main` launches uvicorn with factory mode (`backend.main:create_app`) to avoid import-time bootstrap coupling
 
 ## Database Layer (`backend/database.py`)
 
-- shared SQLAlchemy engine/sessionmaker
-- SQLite uses `check_same_thread=False`
-- request-level session dependency: `get_db()`
+- side-effect-free metadata lives in `backend/db_meta.py` (`Base`)
+- `backend/database.py` now exposes explicit factories:
+  - `build_engine_for_url(database_url)`, `build_engine(settings)`, and `build_session_maker(engine)`
+  - cached runtime accessors `get_engine()` / `get_session_maker()`
+  - request-level dependency `get_db()` and helper `open_session()`
+- SQLite engines are still configured with `check_same_thread=False`
+- scripts/migrations/tests that need dedicated DB handles construct their own engine/session explicitly via the factories instead of importing runtime globals
 
 ## Domain Models (`backend/models.py`)
+
+`backend/models.py` is now a compatibility facade that re-exports split domain modules:
+
+- `backend/models_finance.py`: ledger/account/tag/entity/taxonomy/entry models
+- `backend/models_agent.py`: thread/run/tool-call/change-item/review models
+- `backend/models_shared.py`: shared timestamp/uuid helper defaults used by both model modules
 
 Core ledger models:
 
@@ -97,6 +110,11 @@ Agent models (review-gated mutation audit system):
 - `AgentReviewAction`
 
 ## Schemas (`backend/schemas.py`)
+
+`backend/schemas.py` is now a compatibility facade that re-exports split schema modules:
+
+- `backend/schemas_finance.py`: accounts/entries/links/groups/dashboard/settings contracts
+- `backend/schemas_agent.py`: thread/message/run/change-item/review API contracts
 
 Existing schemas cover accounts, entries, links, groups, dashboard, users/entities/tags/currencies.
 Group read models include:
@@ -123,6 +141,7 @@ Agent schemas add API contracts for:
 
 Core services:
 
+- `backend/services/accounts.py`
 - `backend/services/entries.py`
 - `backend/services/entities.py`
 - `backend/services/users.py`
@@ -136,6 +155,17 @@ Core services:
     - from/to/tag breakdowns
     - weekday distribution
     - current-month projection
+- `backend/services/crud_policy.py`
+  - shared CRUD policy primitives for required-name normalization, uniqueness/conflict checks, and standardized policy-violation translation
+  - used by routers to reduce repeated validate-and-translate scaffolding
+- `backend/services/access_scope.py`
+  - shared principal-scoped query/authorization helpers for user-owned resources
+  - provides canonical owner filters and `get_*_for_principal_or_404` helpers for accounts/entries/users
+  - centralizes admin bypass and assignment checks for owner-bound mutations
+- `backend/services/bootstrap.py`
+  - environment/bootstrap probes (`should_seed_demo_data`, `should_stamp_existing_schema`)
+  - canonical schema bootstrap contract (`run_schema_seed_and_stamp`) used by local reset/demo/snapshot scripts to enforce one flow: `create schema -> seed -> stamp -> teardown`
+  - shared Alembic stamp helpers (`stamp_alembic_head_for_database_url`, `stamp_alembic_head_for_sqlite_path`)
 - `backend/services/serializers.py`
 - `backend/services/taxonomy.py`
 
@@ -143,7 +173,9 @@ Agent services:
 
 - `backend/services/agent/runtime.py`
   - executes one run per user message
-  - orchestrates bounded tool-calling loop and run lifecycle persistence
+  - owns run persistence/event lifecycle and delegates step-by-step execution to shared orchestrator adapters
+  - stream/non-stream run entrypoints now share a single existing-run resolution path (`missing`, `replay`, `execute`, `failed_missing_thread`) to keep terminal/error parity consistent
+  - exposes stable execution seams (`call_model`, `call_model_stream`, `calculate_context_tokens`) for test/benchmark harnesses
   - supports both non-stream execution and SSE execution (`run_existing_agent_run_stream`) for incremental text delivery
   - persists a canonical ordered `agent_run_events` timeline (`run_started`, `reasoning_update`, per-tool lifecycle, terminal status) and streams those rows as `run_event` SSE messages
   - supports manual run interruption (`interrupt_agent_run`) and cooperative stop checks between model/tool steps
@@ -151,6 +183,18 @@ Agent services:
   - aggregates model usage metrics across all model calls in a run and persists totals on `agent_runs`
   - passes model observability context (`user`, `session_id=thread.id`, run-level `trace`) on each model request for conversation-level trace grouping
   - delegates message assembly and model calls to dedicated modules
+- `backend/services/agent/run_orchestrator.py`
+  - shared run-step state machine used by non-stream runtime, streaming runtime, and benchmark runner adapters
+  - centralizes loop control (`max_steps`, stop checks), usage accumulation, tool-turn sequencing, and terminalization/error flow
+  - supports pluggable adapters and optional stream payload emission (`text_delta`, run events) so wrappers stay thin
+- `backend/services/agent/protocol_helpers.py`
+  - shared helper layer for tool-call decoding and canonical usage-shape extraction/accumulation
+  - consumed by runtime, run orchestrator, and benchmark runner to keep helper semantics single-source
+- `backend/services/agent/protocol.py`
+  - compatibility facade that re-exports protocol helpers for existing imports
+- `backend/services/agent/error_policy.py`
+  - shared recoverable-error policy utilities (`RecoverableResult`, contextual fallback logging helpers)
+  - used by token-counting/pricing/model-client/message-history fallback paths for consistent metadata-rich recovery
 - `backend/services/agent/context_tokens.py`
   - wraps LiteLLM `token_counter` for best-effort prompt-size estimation
   - counts context with `use_default_image_token_count=True` and returns `None` when provider/model tokenization is unavailable
@@ -175,6 +219,7 @@ Agent services:
   - converts persisted thread history and attachments into model-ready messages
   - stores attachment-bearing user turns as ordered content parts: one text block per attachment (using the uploaded filename when available), any attachment images immediately after that attachment's text block, then the user's typed message as the final text block
   - parses PDF attachments with PyMuPDF first, then runs local Tesseract OCR only when native extraction returns no usable text; both paths normalize text per line (trim + collapse internal whitespace)
+  - OCR subprocess calls are bounded with explicit per-page timeouts; recoverable extraction/render failures now emit structured `failure_code` metadata in logs for predictable degradation diagnostics
   - checks LiteLLM model vision capability and, when supported, renders uploaded PDF pages to PNG data URLs (one page per image part) in the same attachment order used for text blocks
   - falls back to a local allow-list for known OpenRouter vision-model metadata gaps (currently `openrouter/qwen/qwen3.5-27b`) so PDF page-image inputs still reach multimodal models
   - builds account summaries for current user and injects them into the system prompt context
@@ -197,32 +242,84 @@ Agent services:
   - LiteLLM-backed usage pricing helper (`cost_per_token`)
   - pricing lookup uses the configured model name directly
   - periodic model-cost map refresh from LiteLLM URL with fallback to bundled map when remote fetch fails
-- `backend/services/agent/tools.py`
+- `backend/services/agent/tool_args.py`
+  - tool argument schemas and validation/normalization helpers
+  - includes nested JSON-object string normalization for entry selector/patch payloads
+- `backend/services/agent/tool_handlers_read.py`
   - read tools: `list_entries`, `list_tags`, `list_entities`, `get_dashboard_summary`
   - progress tool: `send_intermediate_update` (brief user-visible intermediate reasoning/progress note; first tool call when tool work is needed)
-  - entry proposal tools include explicit `markdown_notes` style guidance for human-readable, information-complete markdown
-  - entry create/update proposals can reference entities that already exist or that are already pending as `create_entity` proposals in the same thread
-  - entry update/delete arg validation tolerates nested JSON-object strings for selector/patch and normalizes them before schema validation
   - `list_entries` is the single entry query tool (date/name/from/to/tags/kind; exact-first then fuzzy ranking)
   - `list_tags` supports name+type query and includes both tag type and tag description in outputs; `list_entities` supports name+category and includes category in outputs
+- `backend/services/agent/tool_handlers_propose.py`
   - proposal tools cover CRUD:
     - entries: `propose_create_entry`, `propose_update_entry`, `propose_delete_entry`
     - tags: `propose_create_tag`, `propose_update_tag`, `propose_delete_tag`
     - entities: `propose_create_entity`, `propose_update_entity`, `propose_delete_entity`
-  - proposal mutation tool:
+  - proposal mutation tools:
     - `update_pending_proposal` (edit existing pending proposal payload by id + patch map)
     - `remove_pending_proposal` (remove existing pending proposal by id from current thread pending pool)
+  - entry proposal tools include explicit `markdown_notes` style guidance for human-readable, information-complete markdown
+  - entry create/update proposals can reference entities that already exist or that are already pending as `create_entity` proposals in the same thread
   - all model-facing tool interfaces avoid domain IDs (names/selectors only)
-  - proposal tools now return proposal ids (`proposal_id`, `proposal_short_id`) in tool outputs
+  - proposal tools return proposal ids (`proposal_id`, `proposal_short_id`) in tool outputs
   - pending proposals from prior runs no longer block new `propose_*` tool calls in the same thread
   - duplicate pending `propose_create_entity` proposals for the same normalized name are rejected within a thread
   - `propose_delete_tag` returns `ERROR` when the tag is still referenced by non-deleted entries (with count + sample context)
   - proposal tools only create `agent_change_items` (`PENDING_REVIEW`)
+- `backend/services/agent/proposal_patching.py`
+  - patch-map application helpers for pending proposal payload updates
+- `backend/services/agent/tool_runtime.py`
+  - central tool registry, OpenAI schema composition, and runtime execution/retry policy
+- `backend/services/agent/tools.py`
+  - thin composition facade that re-exports runtime interfaces (`TOOLS`, `build_openai_tool_schemas`, `execute_tool`)
+- `backend/services/agent/change_contracts.py`
+  - shared payload contracts for proposal and apply paths across tag/entity/entry change types
+  - centralizes payload normalization used by both model-facing proposal tools and apply-time execution
+  - centralizes entry selector/patch nested JSON-string parsing and patch-map root validation used by proposal mutation
+- `backend/services/agent/execution.py`
+  - execution-policy ownership for agent message intake/run start/background continuation/current-context token calculation
+  - stable execution facade for non-runtime callers (benchmark/test harnesses)
+  - wraps message assembly, model completion (sync/stream), tool-context construction, and tool execution behind one import surface
+- `backend/services/agent/attachments.py`
+  - owns attachment file lifecycle helpers (store uploaded bytes and delete per-thread upload directories)
+- `backend/services/agent/content_assembly/attachments.py`
+  - owns attachment IO parsing and model-content materialization (PDF text/OCR/image payload helpers and vision capability checks)
+- `backend/services/agent/content_assembly/user_context.py`
+  - owns current-user/account prompt-context normalization and truncation rules
+- `backend/services/agent/orchestration/runtime_state.py`
+  - owns run-event, tool-call, and terminal-state persistence helpers used by runtime orchestration
+- `backend/services/agent/benchmark_interface.py`
+  - benchmark-facing execution contract (`run_benchmark_case`) returning normalized predictions and trace payloads
+  - keeps benchmark runner decoupled from runtime loop/persistence internals
 - `backend/services/runtime_settings.py`
   - resolves effective runtime settings from `runtime_settings` overrides + env defaults where applicable
   - carries optional DB-backed `user_memory` text for agent prompt injection
   - exposes read-model payload for `/settings` API (`effective values + override metadata`)
-  - used by agent runtime, dashboard currency selection, current-user attribution defaults, and entry-currency fallback
+  - used by agent runtime, dashboard currency selection, and entry-currency fallback
+- `backend/services/runtime_settings_normalization.py`
+  - single-source normalization and validation helpers shared by API schema validators and runtime-settings resolution paths
+- service helper contract convention:
+  - `ensure_*` helpers are explicit mutating lookup/create paths and may write + `flush`
+  - `read_*` / `find_*` helpers are read-only and do not mutate persistence state
+  - entity-category reads now use `read_entity_category(...)` (taxonomy-first fallback to `entities.category`) with no implicit backfill writes
+- CRUD router policy convention:
+  - shared validation/conflict primitives live in `backend/services/crud_policy.py`
+  - routers translate `PolicyViolation` through one standardized hook (`translate_policy_violation(...)`)
+  - service `ValueError` mapping uses shared `map_value_error(...)` patterns instead of ad-hoc per-route string handling
+- package-entry convention:
+  - package `__init__.py` files are marker/doc-only modules (no barrel re-exports)
+  - agent runtime/review imports should use explicit module paths (`backend.services.agent.runtime`, `backend.services.agent.review`)
+  - `backend/tests/test_import_conventions.py` enforces this import convention in tests
+- domain-module import convention:
+  - application code should import domain modules directly (`backend.models_finance`, `backend.models_agent`, `backend.schemas_finance`, `backend.schemas_agent`, `backend.enums_finance`, `backend.enums_agent`)
+  - `backend.models` / `backend.schemas` / `backend.enums` remain compatibility facades only
+  - `backend/tests/test_import_conventions.py` blocks new imports from those facade modules across `backend/`, `benchmark/`, and `scripts/`
+- Agent run orchestration is centralized in `backend/services/agent/run_orchestrator.py`; sync runtime, streaming runtime, and `benchmark/runner.py` now use adapter wrappers over the same step state machine.
+- Tool-call decoding and usage-shape normalization are centralized in `backend/services/agent/protocol_helpers.py`; runtime and benchmark no longer maintain separate helper implementations.
+- Recoverable fallback paths in agent services now use `backend/services/agent/error_policy.py` to attach scope/context metadata and avoid context-free suppression.
+- Runtime orchestration helpers are split into `backend/services/agent/orchestration/runtime_state.py`, while `backend/services/agent/runtime.py` remains the execution coordinator and stable monkeypatch seam (`call_model`, `call_model_stream`).
+- Content assembly helpers are split into `backend/services/agent/content_assembly/*`, while `backend/services/agent/message_history.py` coordinates history/query flow and turn-level prefix composition.
+- Benchmark case execution is centralized in `backend/services/agent/benchmark_interface.py`, so `benchmark/runner.py` depends on a stable normalized contract instead of internal run-loop/tool-call persistence details.
 - `backend/services/agent/review.py`
   - per-item approve/reject workflow and state transitions
   - entry approvals now preflight entity dependencies, so entry/update proposals that reference a same-thread pending entity proposal stay `PENDING_REVIEW` until that dependency is approved or rejected
@@ -250,13 +347,18 @@ Core routers:
 - `accounts.py`
 - `entries.py`
 - `links.py`
+- account/entry/link handlers now use shared principal-scoped resource helpers (`backend/services/access_scope.py`) instead of raw ID lookups
+- non-admin principals are restricted to their own owned resources; admin principal retains cross-user visibility/mutation
 - `groups.py`
   - `GET /api/v1/groups`: list derived linked-group summaries (`entry_count >= 2`, `edge_count`, date range, latest entry name)
   - `GET /api/v1/groups/{group_id}`: fetch one group graph (`nodes` + `edges`)
+  - both group endpoints are principal-scoped by entry ownership visibility
 - `dashboard.py`
+  - analytics/reconciliation payloads are principal-scoped by account/entry ownership visibility
 - `users.py`
 - `entities.py`
 - `entities.py` category responses now resolve through taxonomy assignments during updates, so renamed taxonomy terms are reflected immediately
+- `entities.py`, `tags.py`, and `taxonomies.py` mutation routes (`POST`/`PATCH`) require admin principal
 - `tags.py`
 - `taxonomies.py`
 - `currencies.py`
@@ -264,7 +366,11 @@ Core routers:
 
 Agent router:
 
-- `backend/routers/agent.py`
+- `backend/routers/agent_api/routes.py`
+- delegates message validation + run lifecycle policy to `backend/services/agent/execution.py`
+- delegates attachment storage/cleanup ownership to `backend/services/agent/attachments.py`
+- starts background runs with an injected session factory (`get_session_maker`) instead of implicit module-global session bootstrap
+- all agent endpoints require admin principal (`require_admin_principal`) for role-based access control
 - endpoints:
   - `GET /api/v1/agent/threads`
   - `POST /api/v1/agent/threads`
@@ -401,7 +507,7 @@ Current baseline for `backend/tests/test_agent.py`: `76 passed`.
 - final assistant messages are sanitized to drop empty boilerplate footers (`Tools used ... Pending review item ids: []`) when no pending review items exist
 - runtime settings can be updated through `/api/v1/settings`; changes apply to subsequent requests/runs without restarting the app
 - dashboard currency and default entry currency are now runtime-configurable
-- current user attribution defaults (`owner`/review actor) now resolve from runtime settings rather than env-only config
+- owner/review attribution defaults at request boundaries resolve from authenticated request principal, not mutable runtime settings
 - account create/read/update schemas no longer expose `institution` and `account_type`
 - entry-ingestion prompts now require duplicate detection before any entry proposal, reducing duplicate proposal risk
 - duplicate-handling prompts now require checking for complementary new information and preferring `propose_update_entry` on the existing entry when appropriate

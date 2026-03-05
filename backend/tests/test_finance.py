@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-def create_account(client, name: str = "Checking") -> dict:
+def create_account(client, name: str = "Checking", *, headers: dict[str, str] | None = None) -> dict:
     response = client.post(
         "/api/v1/accounts",
         json={
@@ -9,6 +9,7 @@ def create_account(client, name: str = "Checking") -> dict:
             "currency_code": "CAD",
             "is_active": True,
         },
+        headers=headers,
     )
     response.raise_for_status()
     return response.json()
@@ -35,6 +36,7 @@ def create_entry(
     name: str | None = None,
     from_entity: str | None = None,
     to_entity: str | None = None,
+    headers: dict[str, str] | None = None,
 ):
     response = client.post(
         "/api/v1/entries",
@@ -49,6 +51,7 @@ def create_entry(
             "to_entity": to_entity,
             "tags": tags or [],
         },
+        headers=headers,
     )
     response.raise_for_status()
     return response.json()
@@ -209,3 +212,50 @@ def test_dashboard_excludes_account_category_transfers_without_linked_account_id
 
     assert payload["kpis"]["expense_total_minor"] == 0
     assert payload["spending_by_to"] == []
+
+
+def test_account_routes_are_scoped_by_principal(client):
+    account = create_account(client, name="Admin Account")
+
+    scoped_headers = {"X-Bill-Helper-Principal": "alice"}
+    list_response = client.get("/api/v1/accounts", headers=scoped_headers)
+    list_response.raise_for_status()
+    assert list_response.json() == []
+
+    reconciliation_response = client.get(
+        f"/api/v1/accounts/{account['id']}/reconciliation",
+        headers=scoped_headers,
+    )
+    assert reconciliation_response.status_code == 404
+
+
+def test_dashboard_is_scoped_by_principal(client):
+    create_account(client, name="Admin Account")
+    admin_account = create_account(client, name="Admin Ledger")
+    create_entry(
+        client,
+        admin_account["id"],
+        "EXPENSE",
+        2000,
+        "2026-01-10",
+        name="Admin-only expense",
+    )
+
+    alice_headers = {"X-Bill-Helper-Principal": "alice"}
+    alice_account = create_account(client, name="Alice Account", headers=alice_headers)
+    create_entry(
+        client,
+        alice_account["id"],
+        "EXPENSE",
+        700,
+        "2026-01-11",
+        name="Alice expense",
+        headers=alice_headers,
+    )
+
+    dashboard = client.get("/api/v1/dashboard", params={"month": "2026-01"}, headers=alice_headers)
+    dashboard.raise_for_status()
+    payload = dashboard.json()
+
+    assert payload["kpis"]["expense_total_minor"] == 700
+    assert all(item["name"] != "Admin-only expense" for item in payload["largest_expenses"])

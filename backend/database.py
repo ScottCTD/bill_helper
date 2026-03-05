@@ -1,28 +1,54 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from functools import lru_cache
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
-from backend.config import get_settings
-
-
-class Base(DeclarativeBase):
-    pass
+from backend.config import Settings, get_settings
+from backend.db_meta import Base
 
 
-settings = get_settings()
-connect_args: dict[str, object] = {}
-if settings.database_url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
+def _sqlite_connect_args(database_url: str) -> dict[str, object]:
+    if database_url.startswith("sqlite"):
+        return {"check_same_thread": False}
+    return {}
 
-engine = create_engine(settings.database_url, future=True, connect_args=connect_args)
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, class_=Session)
+
+def build_engine_for_url(database_url: str) -> Engine:
+    return create_engine(
+        database_url,
+        future=True,
+        connect_args=_sqlite_connect_args(database_url),
+    )
+
+
+def build_engine(settings: Settings | None = None) -> Engine:
+    resolved_settings = settings or get_settings()
+    return build_engine_for_url(resolved_settings.database_url)
+
+
+def build_session_maker(engine: Engine) -> sessionmaker[Session]:
+    return sessionmaker(bind=engine, autocommit=False, autoflush=False, class_=Session)
+
+
+@lru_cache(maxsize=1)
+def get_engine() -> Engine:
+    return build_engine()
+
+
+@lru_cache(maxsize=1)
+def get_session_maker() -> sessionmaker[Session]:
+    return build_session_maker(get_engine())
+
+
+def open_session() -> Session:
+    return get_session_maker()()
 
 
 def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
+    db = open_session()
     try:
         yield db
     finally:

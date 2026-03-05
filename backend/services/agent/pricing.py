@@ -9,10 +9,14 @@ from typing import Any
 import litellm
 from litellm.cost_calculator import cost_per_token
 
+from backend.services.agent.error_policy import recoverable_result
+
 
 MODEL_COST_MAP_SYNC_SECONDS = 60 * 60
 _MODEL_COST_MAP_LOCK = threading.Lock()
 _LAST_MODEL_COST_MAP_SYNC_AT: float | None = None
+MODEL_COST_MAP_REFRESH_EXCEPTIONS = (Exception,)
+COST_PER_TOKEN_EXCEPTIONS = (Exception,)
 
 
 @dataclass(frozen=True)
@@ -72,9 +76,14 @@ def _refresh_model_cost_map_if_due() -> None:
             return
         try:
             litellm.model_cost = litellm.get_model_cost_map(litellm.model_cost_map_url)
-        except Exception:
+        except MODEL_COST_MAP_REFRESH_EXCEPTIONS as exc:
             # LiteLLM already falls back to bundled pricing when remote fetch fails.
-            pass
+            recoverable_result(
+                scope="pricing.refresh_model_cost_map",
+                fallback=None,
+                error=exc,
+                context={"model_cost_map_url": str(litellm.model_cost_map_url)},
+            )
         finally:
             _LAST_MODEL_COST_MAP_SYNC_AT = monotonic()
 
@@ -100,7 +109,17 @@ def calculate_usage_costs(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
             )
-        except Exception:
+        except COST_PER_TOKEN_EXCEPTIONS as exc:
+            recoverable_result(
+                scope="pricing.cost_per_token",
+                fallback=None,
+                error=exc,
+                context={
+                    "model_name": candidate,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                },
+            )
             continue
 
         prompt_cost = _to_decimal(prompt_cost_raw) if input_tokens is not None else None

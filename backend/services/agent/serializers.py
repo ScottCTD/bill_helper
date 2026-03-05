@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.models import (
+from backend.models_agent import (
     AgentChangeItem,
     AgentMessage,
     AgentMessageAttachment,
@@ -10,7 +10,7 @@ from backend.models import (
     AgentThread,
     AgentToolCall,
 )
-from backend.schemas import (
+from backend.schemas_agent import (
     AgentChangeItemRead,
     AgentMessageAttachmentRead,
     AgentMessageRead,

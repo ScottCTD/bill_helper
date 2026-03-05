@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from backend.models import Taxonomy, TaxonomyAssignment, TaxonomyTerm
+from backend.models_finance import Taxonomy, TaxonomyAssignment, TaxonomyTerm
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +31,13 @@ DEFAULT_TAXONOMY_SPECS: dict[str, TaxonomySpec] = {
 
 def normalize_taxonomy_key(key: str) -> str:
     return "_".join(key.strip().lower().split())
+
+
+def normalize_required_taxonomy_key(key: str) -> str:
+    normalized = normalize_taxonomy_key(key)
+    if not normalized:
+        raise ValueError("Taxonomy key cannot be empty")
+    return normalized
 
 
 def normalize_term_name(name: str) -> str:
@@ -85,17 +92,19 @@ def ensure_default_taxonomies(db: Session) -> dict[str, Taxonomy]:
     return taxonomies
 
 
-def get_taxonomy_by_key(db: Session, key: str, *, create_default: bool = True) -> Taxonomy | None:
+def get_taxonomy_by_key(db: Session, key: str) -> Taxonomy | None:
     normalized_key = normalize_taxonomy_key(key)
-    taxonomy = db.scalar(select(Taxonomy).where(Taxonomy.key == normalized_key))
+    return db.scalar(select(Taxonomy).where(Taxonomy.key == normalized_key))
+
+
+def ensure_taxonomy_by_key(db: Session, key: str) -> Taxonomy:
+    normalized_key = normalize_required_taxonomy_key(key)
+    taxonomy = get_taxonomy_by_key(db, normalized_key)
     if taxonomy is not None:
         return taxonomy
-
     spec = DEFAULT_TAXONOMY_SPECS.get(normalized_key)
     if spec is None:
-        return None
-    if not create_default:
-        return None
+        raise ValueError(f"Unknown taxonomy '{normalized_key}'")
     return ensure_taxonomy(
         db,
         key=normalized_key,
@@ -105,7 +114,7 @@ def get_taxonomy_by_key(db: Session, key: str, *, create_default: bool = True) -
     )
 
 
-def get_or_create_term(db: Session, *, taxonomy: Taxonomy, name: str, parent_term_id: str | None = None) -> TaxonomyTerm:
+def ensure_term(db: Session, *, taxonomy: Taxonomy, name: str) -> TaxonomyTerm:
     normalized_name = normalize_term_name(name)
     if not normalized_name:
         raise ValueError("Term name cannot be empty")
@@ -123,7 +132,32 @@ def get_or_create_term(db: Session, *, taxonomy: Taxonomy, name: str, parent_ter
         taxonomy_id=taxonomy.id,
         name=normalized_name,
         normalized_name=normalized_name,
-        parent_term_id=parent_term_id,
+        parent_term_id=None,
+    )
+    db.add(term)
+    db.flush()
+    return term
+
+
+def create_term(db: Session, *, taxonomy: Taxonomy, name: str) -> TaxonomyTerm:
+    normalized_name = normalize_term_name(name)
+    if not normalized_name:
+        raise ValueError("Term name cannot be empty")
+
+    existing = db.scalar(
+        select(TaxonomyTerm).where(
+            TaxonomyTerm.taxonomy_id == taxonomy.id,
+            TaxonomyTerm.normalized_name == normalized_name,
+        )
+    )
+    if existing is not None:
+        raise ValueError("Term already exists")
+
+    term = TaxonomyTerm(
+        taxonomy_id=taxonomy.id,
+        name=normalized_name,
+        normalized_name=normalized_name,
+        parent_term_id=None,
     )
     db.add(term)
     db.flush()
@@ -159,9 +193,7 @@ def assign_single_term_by_name(
     subject_id: str | int,
     term_name: str | None,
 ) -> TaxonomyTerm | None:
-    taxonomy = get_taxonomy_by_key(db, taxonomy_key)
-    if taxonomy is None:
-        raise ValueError(f"Unknown taxonomy '{taxonomy_key}'")
+    taxonomy = ensure_taxonomy_by_key(db, taxonomy_key)
 
     normalized_term_name = normalize_term_name(term_name or "") if term_name is not None else ""
     subject_id_str = str(subject_id)
@@ -178,7 +210,7 @@ def assign_single_term_by_name(
         db.flush()
         return None
 
-    term = get_or_create_term(db, taxonomy=taxonomy, name=normalized_term_name)
+    term = ensure_term(db, taxonomy=taxonomy, name=normalized_term_name)
     assignment = TaxonomyAssignment(
         taxonomy_id=taxonomy.id,
         term_id=term.id,
@@ -191,7 +223,7 @@ def assign_single_term_by_name(
 
 
 def get_single_term_name(db: Session, *, taxonomy_key: str, subject_type: str, subject_id: str | int) -> str | None:
-    taxonomy = get_taxonomy_by_key(db, taxonomy_key, create_default=False)
+    taxonomy = get_taxonomy_by_key(db, taxonomy_key)
     if taxonomy is None:
         return None
 
@@ -215,7 +247,7 @@ def get_single_term_name_map(
     subject_type: str,
     subject_ids: list[str | int],
 ) -> dict[str, str]:
-    taxonomy = get_taxonomy_by_key(db, taxonomy_key, create_default=False)
+    taxonomy = get_taxonomy_by_key(db, taxonomy_key)
     if taxonomy is None:
         return {}
     if not subject_ids:
@@ -260,7 +292,7 @@ def list_term_name_description_pairs(
     *,
     taxonomy_key: str,
 ) -> list[tuple[str, str | None]]:
-    taxonomy = get_taxonomy_by_key(db, taxonomy_key, create_default=False)
+    taxonomy = get_taxonomy_by_key(db, taxonomy_key)
     if taxonomy is None:
         return []
 

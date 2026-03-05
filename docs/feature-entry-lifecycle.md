@@ -43,7 +43,9 @@ This doc is the fast path for understanding how entries are created, edited, lin
 
 ## Agent-Proposed Entry Flow
 
-1. Agent proposes `create_entry` / `update_entry` / `delete_entry` via `backend/services/agent/tools.py`.
+1. Agent proposes `create_entry` / `update_entry` / `delete_entry` via the split tool stack:
+   `backend/services/agent/tool_handlers_propose.py` + `backend/services/agent/tool_runtime.py`
+   (re-exported through `backend/services/agent/tools.py`).
 2. Proposal persisted as `agent_change_items` (`PENDING_REVIEW`).
 3. Human approves from frontend review UI:
    - `frontend/src/components/agent/review/AgentRunReviewModal.tsx`
@@ -63,6 +65,6 @@ This doc is the fast path for understanding how entries are created, edited, lin
 
 - Currency normalization occurs server-side (`currency_code.upper()`).
 - Agent create-entry proposals can omit `currency_code`; backend defaults to resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
-- Soft-delete removes entry links and triggers group recomputation.
+- Soft-delete removes entry links and triggers full active-entry group recomputation (connected components are rebuilt across all non-deleted entries).
 - Entries list date cells are rendered as no-wrap with a compact fixed width so `YYYY-MM-DD` values stay on one line.
 - Entries list name cells now render a compact secondary `from -> to` line under the primary name; long entity names are trimmed per side in `frontend/src/pages/EntriesPage.tsx` and styled by the `.entries-name-*` classes in `frontend/src/styles.css`.

@@ -1,21 +1,20 @@
 from __future__ import annotations
 
 import json
-import shutil
-from datetime import datetime, timezone
+from collections.abc import Iterator
 from pathlib import Path
 from threading import Thread
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, load_only, selectinload
 
+from backend.auth import RequestPrincipal, get_current_principal, require_admin_principal
 from backend.config import get_settings
-from backend.database import SessionLocal, get_db
-from backend.enums import AgentChangeStatus, AgentMessageRole, AgentRunStatus
-from backend.models import (
+from backend.database import get_db, get_session_maker
+from backend.enums_agent import AgentChangeStatus, AgentRunStatus
+from backend.models_agent import (
     AgentChangeItem,
     AgentMessage,
     AgentMessageAttachment,
@@ -23,7 +22,7 @@ from backend.models import (
     AgentThread,
     AgentToolCall,
 )
-from backend.schemas import (
+from backend.schemas_agent import (
     AgentChangeItemApproveRequest,
     AgentChangeItemRead,
     AgentChangeItemRejectRequest,
@@ -34,15 +33,21 @@ from backend.schemas import (
     AgentThreadRead,
     AgentThreadSummaryRead,
 )
-from backend.services.agent import (
+from backend.services.agent.attachments import (
+    delete_attachment_directories,
+    thread_attachment_directories,
+)
+from backend.services.agent.execution import (
+    AgentExecutionPolicyError,
+    create_user_message_and_start_run,
+    current_context_tokens_for_thread,
+    run_agent_in_background,
+)
+from backend.services.agent.review import approve_change_item, reject_change_item
+from backend.services.agent.runtime import (
     AgentRuntimeUnavailable,
-    approve_change_item,
-    ensure_agent_available,
     interrupt_agent_run,
-    reject_change_item,
-    run_existing_agent_run,
     run_existing_agent_run_stream,
-    start_agent_run,
 )
 from backend.services.agent.serializers import (
     change_item_to_schema,
@@ -54,48 +59,11 @@ from backend.services.agent.serializers import (
 )
 from backend.services.runtime_settings import resolve_runtime_settings
 
-router = APIRouter(prefix="/agent", tags=["agent"])
-
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _get_thread_or_404(db: Session, thread_id: str) -> AgentThread:
-    thread = db.get(AgentThread, thread_id)
-    if thread is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
-    return thread
-
-
-def _sanitize_title(content: str) -> str | None:
-    normalized = " ".join(content.split()).strip()
-    if not normalized:
-        return None
-    if len(normalized) <= 72:
-        return normalized
-    return f"{normalized[:69]}..."
-
-
-def _normalize_optional_text(value: str | None) -> str:
-    return (value or "").strip()
-
-
-def _current_context_tokens_for_thread(
-    db: Session,
-    *,
-    thread: AgentThread,
-    model_name: str,
-) -> int | None:
-    runs_by_newest = sorted(thread.runs, key=lambda run: run.created_at, reverse=True)
-    for run in runs_by_newest:
-        if run.status == AgentRunStatus.RUNNING and run.context_tokens is not None:
-            return run.context_tokens
-
-    for run in runs_by_newest:
-        if run.context_tokens is not None:
-            return run.context_tokens
-    return None
+router = APIRouter(
+    prefix="/agent",
+    tags=["agent"],
+    dependencies=[Depends(require_admin_principal)],
+)
 
 
 def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:
@@ -137,64 +105,19 @@ def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:
     return summaries
 
 
-def _thread_attachment_directories(thread: AgentThread) -> set[Path]:
-    upload_root = (get_settings().data_dir / "agent_uploads").resolve()
-    directories: set[Path] = set()
-    for message in thread.messages:
-        for attachment in message.attachments:
-            directory = Path(attachment.file_path).parent
-            resolved_directory = directory.resolve()
-            if resolved_directory == upload_root:
-                continue
-            if upload_root in resolved_directory.parents:
-                directories.add(resolved_directory)
-    return directories
-
-
-def _delete_attachment_directories(directories: set[Path]) -> None:
-    for directory in sorted(directories, key=lambda path: len(path.parts), reverse=True):
-        shutil.rmtree(directory, ignore_errors=True)
-
-
-def _store_attachment_bytes(
-    *,
-    message_id: str,
-    mime_type: str,
-    original_filename: str | None,
-    file_bytes: bytes,
-) -> str:
-    upload_root = get_settings().data_dir / "agent_uploads" / message_id
-    upload_root.mkdir(parents=True, exist_ok=True)
-    suffix = Path(original_filename or "").suffix
-    if not suffix:
-        if mime_type == "image/png":
-            suffix = ".png"
-        elif mime_type == "image/jpeg":
-            suffix = ".jpg"
-        elif mime_type == "image/webp":
-            suffix = ".webp"
-        elif mime_type == "application/pdf":
-            suffix = ".pdf"
-        else:
-            suffix = ".bin"
-    file_path = upload_root / f"{uuid4()}{suffix}"
-    file_path.write_bytes(file_bytes)
-    return str(file_path)
-
-
-def _run_agent_in_background(run_id: str) -> None:
-    db = SessionLocal()
-    try:
-        run_existing_agent_run(db, run_id)
-    finally:
-        db.close()
-
-
 def _sse_event(event_type: str, payload: dict[str, object]) -> str:
     return f"event: {event_type}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
 
 
-async def _create_user_message_and_start_run(
+def _agent_upload_root() -> Path:
+    return get_settings().data_dir / "agent_uploads"
+
+
+def _open_background_session() -> Session:
+    return get_session_maker()()
+
+
+async def _create_user_message_run_or_503(
     *,
     thread_id: str,
     content: str,
@@ -202,70 +125,17 @@ async def _create_user_message_and_start_run(
     db: Session,
 ) -> AgentRun:
     try:
-        # Fail fast before persisting uploads/messages when no model credentials are configured.
-        ensure_agent_available(db)
+        return await create_user_message_and_start_run(
+            thread_id=thread_id,
+            content=content,
+            files=files,
+            upload_root=_agent_upload_root(),
+            db=db,
+        )
     except AgentRuntimeUnavailable as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
-
-    settings = resolve_runtime_settings(db)
-    thread = _get_thread_or_404(db, thread_id)
-    clean_content = _normalize_optional_text(content)
-    if not clean_content and not files:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Message must include text or at least one attachment.",
-        )
-    if len(files) > settings.agent_max_images_per_message:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Too many attachments. Max allowed is {settings.agent_max_images_per_message}.",
-        )
-
-    user_message = AgentMessage(
-        thread_id=thread.id,
-        role=AgentMessageRole.USER,
-        content_markdown=clean_content,
-    )
-    db.add(user_message)
-    db.flush()
-
-    for upload in files:
-        mime_type = (upload.content_type or "").lower()
-        if not (mime_type.startswith("image/") or mime_type == "application/pdf"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only image and PDF attachments are supported.",
-            )
-        file_bytes = await upload.read()
-        if len(file_bytes) > settings.agent_max_image_size_bytes:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Attachment too large. Max bytes allowed is {settings.agent_max_image_size_bytes}.",
-            )
-        path = _store_attachment_bytes(
-            message_id=user_message.id,
-            mime_type=mime_type,
-            original_filename=upload.filename,
-            file_bytes=file_bytes,
-        )
-        db.add(
-            AgentMessageAttachment(
-                message_id=user_message.id,
-                mime_type=mime_type,
-                original_filename=upload.filename,
-                file_path=path,
-            )
-        )
-
-    if thread.title is None:
-        thread.title = _sanitize_title(clean_content) or f"Thread {thread.created_at.date().isoformat()}"
-    thread.updated_at = utc_now()
-    db.add(thread)
-    db.commit()
-    db.refresh(user_message)
-    db.refresh(user_message, attribute_names=["attachments"])
-
-    return start_agent_run(db, thread, user_message)
+    except AgentExecutionPolicyError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @router.get("/threads", response_model=list[AgentThreadSummaryRead])
@@ -301,10 +171,10 @@ def delete_thread(thread_id: str, db: Session = Depends(get_db)) -> None:
             detail="Cannot delete a thread while an agent run is still running.",
         )
 
-    attachment_directories = _thread_attachment_directories(thread)
+    attachment_directories = thread_attachment_directories(thread, upload_root=_agent_upload_root())
     db.delete(thread)
     db.commit()
-    _delete_attachment_directories(attachment_directories)
+    delete_attachment_directories(attachment_directories)
 
 
 @router.get("/threads/{thread_id}", response_model=AgentThreadDetailRead)
@@ -342,7 +212,7 @@ def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThr
         messages=[message_to_schema(message, api_prefix=settings.api_prefix) for message in thread.messages],
         runs=[run_to_schema(run, include_tool_payload=False) for run in thread.runs],
         configured_model_name=settings.agent_model,
-        current_context_tokens=_current_context_tokens_for_thread(
+        current_context_tokens=current_context_tokens_for_thread(
             db,
             thread=thread,
             model_name=settings.agent_model,
@@ -357,13 +227,17 @@ async def send_thread_message(
     files: list[UploadFile] = File(default_factory=list),
     db: Session = Depends(get_db),
 ) -> AgentRunRead:
-    run = await _create_user_message_and_start_run(
+    run = await _create_user_message_run_or_503(
         thread_id=thread_id,
         content=content,
         files=files,
         db=db,
     )
-    Thread(target=_run_agent_in_background, args=(run.id,), daemon=True).start()
+    Thread(
+        target=run_agent_in_background,
+        kwargs={"run_id": run.id, "session_factory": _open_background_session},
+        daemon=True,
+    ).start()
     return run_to_schema(run)
 
 
@@ -374,14 +248,14 @@ async def send_thread_message_stream(
     files: list[UploadFile] = File(default_factory=list),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
-    run = await _create_user_message_and_start_run(
+    run = await _create_user_message_run_or_503(
         thread_id=thread_id,
         content=content,
         files=files,
         db=db,
     )
 
-    def stream_events():
+    def stream_events() -> Iterator[str]:
         stream_finished = False
         try:
             for event in run_existing_agent_run_stream(db, run.id):
@@ -392,7 +266,11 @@ async def send_thread_message_stream(
         finally:
             # If the client disconnects mid-stream, continue the run in background.
             if not stream_finished:
-                Thread(target=_run_agent_in_background, args=(run.id,), daemon=True).start()
+                Thread(
+                    target=run_agent_in_background,
+                    kwargs={"run_id": run.id, "session_factory": _open_background_session},
+                    daemon=True,
+                ).start()
 
     return StreamingResponse(
         stream_events(),
@@ -442,13 +320,13 @@ def approve_item(
     item_id: str,
     payload: AgentChangeItemApproveRequest,
     db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> AgentChangeItemRead:
-    settings = resolve_runtime_settings(db)
     try:
         item = approve_change_item(
             db,
             item_id=item_id,
-            actor=settings.current_user_name,
+            actor=principal.user_name,
             note=payload.note,
             payload_override=payload.payload_override,
         )
@@ -469,10 +347,15 @@ def reject_item(
     item_id: str,
     payload: AgentChangeItemRejectRequest,
     db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> AgentChangeItemRead:
-    settings = resolve_runtime_settings(db)
     try:
-        item = reject_change_item(db, item_id=item_id, actor=settings.current_user_name, note=payload.note)
+        item = reject_change_item(
+            db,
+            item_id=item_id,
+            actor=principal.user_name,
+            note=payload.note,
+        )
     except ValueError as exc:
         detail = str(exc)
         if detail.startswith("Only PENDING_REVIEW"):

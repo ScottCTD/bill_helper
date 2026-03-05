@@ -1,26 +1,42 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date as DateValue
-from typing import Any, Callable
+from typing import Any, Callable, TypeVar
 
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from backend.enums import AgentChangeType, EntryKind
-from backend.models import Account, Entity, Entry, Tag
-from backend.services.entries import normalize_tag_name, set_entry_tags, soft_delete_entry
+from backend.enums_agent import AgentChangeType
+from backend.models_finance import Account, Entry, Tag
+from backend.services.agent.change_contracts import (
+    CreateEntryPayload,
+    CreateEntityPayload,
+    CreateTagPayload,
+    DeleteEntryPayload,
+    DeleteEntityPayload,
+    DeleteTagPayload,
+    EntrySelectorPayload,
+    UpdateEntryPayload,
+    UpdateEntityPayload,
+    UpdateTagPayload,
+    validate_change_payload,
+)
+from backend.services.entries import set_entry_tags, soft_delete_entry
 from backend.services.entities import (
+    ensure_entity_by_name,
     find_entity_by_name,
-    get_or_create_entity,
-    normalize_entity_category,
-    normalize_entity_name,
     set_entity_category,
 )
 from backend.services.groups import assign_initial_group, recompute_entry_groups
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.tags import resolve_tag_color
+from backend.services.taxonomy_constants import (
+    ENTITY_CATEGORY_SUBJECT_TYPE,
+    ENTITY_CATEGORY_TAXONOMY_KEY,
+    TAG_TYPE_SUBJECT_TYPE,
+    TAG_TYPE_TAXONOMY_KEY,
+)
 from backend.services.taxonomy import assign_single_term_by_name
 from backend.services.users import ensure_current_user
 
@@ -34,260 +50,22 @@ class AppliedResource:
 ChangeApplyHandler = Callable[[Session, dict[str, Any]], AppliedResource]
 
 
-TAG_TYPE_TAXONOMY_KEY = "tag_type"
-TAG_TYPE_SUBJECT_TYPE = "tag"
-ENTITY_CATEGORY_TAXONOMY_KEY = "entity_category"
-ENTITY_CATEGORY_SUBJECT_TYPE = "entity"
+TChangePayload = TypeVar("TChangePayload", bound=BaseModel)
 
 
-def _normalize_text(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = " ".join(value.split()).strip()
-    return normalized or None
-
-
-class CreateTagPayload(BaseModel):
-    name: str = Field(min_length=1, max_length=64)
-    type: str = Field(min_length=1, max_length=100)
-
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str) -> str:
-        normalized = normalize_tag_name(value)
-        if not normalized:
-            raise ValueError("Tag name cannot be empty")
-        return normalized
-
-    @field_validator("type")
-    @classmethod
-    def normalize_type(cls, value: str) -> str:
-        normalized = normalize_entity_category(value)
-        if normalized is None:
-            raise ValueError("Tag type cannot be empty")
-        return normalized
-
-
-class UpdateTagPatchPayload(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=64)
-    type: str | None = Field(default=None, max_length=100)
-
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = normalize_tag_name(value)
-        if not normalized:
-            raise ValueError("Tag name cannot be empty")
-        return normalized
-
-    @field_validator("type")
-    @classmethod
-    def normalize_type(cls, value: str | None) -> str | None:
-        return normalize_entity_category(value)
-
-    @model_validator(mode="after")
-    def ensure_any_field_set(self) -> UpdateTagPatchPayload:
-        if not self.model_fields_set:
-            raise ValueError("Tag patch must include at least one field")
-        return self
-
-
-class UpdateTagPayload(BaseModel):
-    name: str = Field(min_length=1, max_length=64)
-    patch: UpdateTagPatchPayload
-
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str) -> str:
-        normalized = normalize_tag_name(value)
-        if not normalized:
-            raise ValueError("Tag name cannot be empty")
-        return normalized
-
-
-class DeleteTagPayload(BaseModel):
-    name: str = Field(min_length=1, max_length=64)
-
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str) -> str:
-        normalized = normalize_tag_name(value)
-        if not normalized:
-            raise ValueError("Tag name cannot be empty")
-        return normalized
-
-
-class CreateEntityPayload(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
-    category: str = Field(min_length=1, max_length=100)
-
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str) -> str:
-        normalized = normalize_entity_name(value)
-        if not normalized:
-            raise ValueError("Entity name cannot be empty")
-        return normalized
-
-    @field_validator("category")
-    @classmethod
-    def normalize_category(cls, value: str) -> str:
-        normalized = normalize_entity_category(value)
-        if normalized is None:
-            raise ValueError("Entity category cannot be empty")
-        return normalized
-
-
-class UpdateEntityPatchPayload(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-    category: str | None = Field(default=None, max_length=100)
-
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = normalize_entity_name(value)
-        if not normalized:
-            raise ValueError("Entity name cannot be empty")
-        return normalized
-
-    @field_validator("category")
-    @classmethod
-    def normalize_category(cls, value: str | None) -> str | None:
-        return normalize_entity_category(value)
-
-    @model_validator(mode="after")
-    def ensure_any_field_set(self) -> UpdateEntityPatchPayload:
-        if not self.model_fields_set:
-            raise ValueError("Entity patch must include at least one field")
-        return self
-
-
-class UpdateEntityPayload(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
-    patch: UpdateEntityPatchPayload
-
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str) -> str:
-        normalized = normalize_entity_name(value)
-        if not normalized:
-            raise ValueError("Entity name cannot be empty")
-        return normalized
-
-
-class DeleteEntityPayload(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
-
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str) -> str:
-        normalized = normalize_entity_name(value)
-        if not normalized:
-            raise ValueError("Entity name cannot be empty")
-        return normalized
-
-
-class CreateEntryPayload(BaseModel):
-    kind: EntryKind
-    date: DateValue
-    name: str = Field(min_length=1, max_length=255)
-    amount_minor: int = Field(gt=0)
-    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
-    from_entity: str = Field(min_length=1, max_length=255)
-    to_entity: str = Field(min_length=1, max_length=255)
-    tags: list[str] = Field(default_factory=list)
-    markdown_notes: str | None = None
-
-    @field_validator("name", "from_entity", "to_entity")
-    @classmethod
-    def normalize_required_text(cls, value: str) -> str:
-        normalized = _normalize_text(value)
-        if normalized is None:
-            raise ValueError("Entry text fields cannot be empty")
-        return normalized
-
-    @field_validator("currency_code")
-    @classmethod
-    def normalize_currency(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return value.strip().upper()
-
-    @field_validator("tags")
-    @classmethod
-    def normalize_tags(cls, value: list[str]) -> list[str]:
-        return sorted({normalize_tag_name(tag) for tag in value if tag.strip()})
-
-
-class EntrySelectorPayload(BaseModel):
-    date: DateValue
-    amount_minor: int = Field(gt=0)
-    from_entity: str = Field(min_length=1, max_length=255)
-    to_entity: str = Field(min_length=1, max_length=255)
-    name: str = Field(min_length=1, max_length=255)
-
-    @field_validator("from_entity", "to_entity", "name")
-    @classmethod
-    def normalize_selector_text(cls, value: str) -> str:
-        normalized = _normalize_text(value)
-        if normalized is None:
-            raise ValueError("Entry selector fields cannot be empty")
-        return normalized
-
-
-class UpdateEntryPatchPayload(BaseModel):
-    kind: EntryKind | None = None
-    date: DateValue | None = None
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-    amount_minor: int | None = Field(default=None, gt=0)
-    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
-    from_entity: str | None = Field(default=None, min_length=1, max_length=255)
-    to_entity: str | None = Field(default=None, min_length=1, max_length=255)
-    tags: list[str] | None = None
-    markdown_notes: str | None = None
-
-    @field_validator("name", "from_entity", "to_entity")
-    @classmethod
-    def normalize_optional_text(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = _normalize_text(value)
-        if normalized is None:
-            raise ValueError("Entry patch text fields cannot be empty")
-        return normalized
-
-    @field_validator("currency_code")
-    @classmethod
-    def normalize_currency(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return value.strip().upper()
-
-    @field_validator("tags")
-    @classmethod
-    def normalize_tags(cls, value: list[str] | None) -> list[str] | None:
-        if value is None:
-            return None
-        return sorted({normalize_tag_name(tag) for tag in value if tag.strip()})
-
-    @model_validator(mode="after")
-    def ensure_any_field_set(self) -> UpdateEntryPatchPayload:
-        if not self.model_fields_set:
-            raise ValueError("Entry patch must include at least one field")
-        return self
-
-
-class UpdateEntryPayload(BaseModel):
-    selector: EntrySelectorPayload
-    patch: UpdateEntryPatchPayload
-
-
-class DeleteEntryPayload(BaseModel):
-    selector: EntrySelectorPayload
+def _parse_payload(
+    payload: dict[str, Any],
+    *,
+    change_type: AgentChangeType,
+    model_type: type[TChangePayload],
+) -> TChangePayload:
+    try:
+        parsed = validate_change_payload(change_type, payload)
+    except ValidationError as exc:
+        raise ValueError(str(exc)) from exc
+    if not isinstance(parsed, model_type):  # pragma: no cover - enum/model map guard
+        raise ValueError(f"Unexpected payload model for change type {change_type.value}")
+    return parsed
 
 
 def _find_entries_by_selector(db: Session, selector_payload: EntrySelectorPayload) -> list[Entry]:
@@ -325,10 +103,7 @@ def _find_unique_entry_by_selector(db: Session, selector_payload: EntrySelectorP
 
 
 def apply_create_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    try:
-        parsed = CreateTagPayload.model_validate(payload)
-    except ValidationError as exc:
-        raise ValueError(str(exc)) from exc
+    parsed = _parse_payload(payload, change_type=AgentChangeType.CREATE_TAG, model_type=CreateTagPayload)
 
     existing = db.scalar(select(Tag).where(Tag.name == parsed.name))
     if existing is not None:
@@ -348,10 +123,7 @@ def apply_create_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
 
 
 def apply_update_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    try:
-        parsed = UpdateTagPayload.model_validate(payload)
-    except ValidationError as exc:
-        raise ValueError(str(exc)) from exc
+    parsed = _parse_payload(payload, change_type=AgentChangeType.UPDATE_TAG, model_type=UpdateTagPayload)
 
     tag = db.scalar(select(Tag).where(Tag.name == parsed.name))
     if tag is None:
@@ -378,10 +150,7 @@ def apply_update_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
 
 
 def apply_delete_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    try:
-        parsed = DeleteTagPayload.model_validate(payload)
-    except ValidationError as exc:
-        raise ValueError(str(exc)) from exc
+    parsed = _parse_payload(payload, change_type=AgentChangeType.DELETE_TAG, model_type=DeleteTagPayload)
 
     tag = db.scalar(select(Tag).where(Tag.name == parsed.name))
     if tag is None:
@@ -413,21 +182,15 @@ def apply_delete_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
 
 
 def apply_create_entity(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    try:
-        parsed = CreateEntityPayload.model_validate(payload)
-    except ValidationError as exc:
-        raise ValueError(str(exc)) from exc
+    parsed = _parse_payload(payload, change_type=AgentChangeType.CREATE_ENTITY, model_type=CreateEntityPayload)
 
-    entity = get_or_create_entity(db, parsed.name, category=parsed.category)
+    entity = ensure_entity_by_name(db, parsed.name, category=parsed.category)
     db.flush()
     return AppliedResource(resource_type="entity", resource_id=entity.id)
 
 
 def apply_update_entity(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    try:
-        parsed = UpdateEntityPayload.model_validate(payload)
-    except ValidationError as exc:
-        raise ValueError(str(exc)) from exc
+    parsed = _parse_payload(payload, change_type=AgentChangeType.UPDATE_ENTITY, model_type=UpdateEntityPayload)
 
     entity = find_entity_by_name(db, parsed.name)
     if entity is None:
@@ -450,10 +213,7 @@ def apply_update_entity(db: Session, payload: dict[str, Any]) -> AppliedResource
 
 
 def apply_delete_entity(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    try:
-        parsed = DeleteEntityPayload.model_validate(payload)
-    except ValidationError as exc:
-        raise ValueError(str(exc)) from exc
+    parsed = _parse_payload(payload, change_type=AgentChangeType.DELETE_ENTITY, model_type=DeleteEntityPayload)
 
     entity = find_entity_by_name(db, parsed.name)
     if entity is None:
@@ -477,16 +237,13 @@ def apply_delete_entity(db: Session, payload: dict[str, Any]) -> AppliedResource
 
 
 def apply_create_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    try:
-        parsed = CreateEntryPayload.model_validate(payload)
-    except ValidationError as exc:
-        raise ValueError(str(exc)) from exc
+    parsed = _parse_payload(payload, change_type=AgentChangeType.CREATE_ENTRY, model_type=CreateEntryPayload)
 
     settings = resolve_runtime_settings(db)
     currency_code = (parsed.currency_code or settings.default_currency_code).strip().upper()
 
-    from_entity = get_or_create_entity(db, parsed.from_entity)
-    to_entity = get_or_create_entity(db, parsed.to_entity)
+    from_entity = ensure_entity_by_name(db, parsed.from_entity)
+    to_entity = ensure_entity_by_name(db, parsed.to_entity)
 
     owner_user = ensure_current_user(db, settings.current_user_name)
 
@@ -514,10 +271,7 @@ def apply_create_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
 
 
 def apply_update_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    try:
-        parsed = UpdateEntryPayload.model_validate(payload)
-    except ValidationError as exc:
-        raise ValueError(str(exc)) from exc
+    parsed = _parse_payload(payload, change_type=AgentChangeType.UPDATE_ENTRY, model_type=UpdateEntryPayload)
 
     entry = _find_unique_entry_by_selector(db, parsed.selector)
 
@@ -537,7 +291,7 @@ def apply_update_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
             entry.from_entity_id = None
             entry.from_entity = None
         else:
-            from_entity = get_or_create_entity(db, parsed.patch.from_entity)
+            from_entity = ensure_entity_by_name(db, parsed.patch.from_entity)
             entry.from_entity_id = from_entity.id
             entry.from_entity = from_entity.name
 
@@ -546,7 +300,7 @@ def apply_update_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
             entry.to_entity_id = None
             entry.to_entity = None
         else:
-            to_entity = get_or_create_entity(db, parsed.patch.to_entity)
+            to_entity = ensure_entity_by_name(db, parsed.patch.to_entity)
             entry.to_entity_id = to_entity.id
             entry.to_entity = to_entity.name
 
@@ -562,10 +316,7 @@ def apply_update_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
 
 
 def apply_delete_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    try:
-        parsed = DeleteEntryPayload.model_validate(payload)
-    except ValidationError as exc:
-        raise ValueError(str(exc)) from exc
+    parsed = _parse_payload(payload, change_type=AgentChangeType.DELETE_ENTRY, model_type=DeleteEntryPayload)
 
     entry = _find_unique_entry_by_selector(db, parsed.selector)
     soft_delete_entry(db, entry)

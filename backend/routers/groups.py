@@ -6,19 +6,27 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.auth import RequestPrincipal, get_current_principal
 from backend.database import get_db
-from backend.models import Entry, EntryLink
-from backend.schemas import GroupEdge, GroupGraphRead, GroupNode, GroupSummaryRead
+from backend.models_finance import Entry, EntryLink
+from backend.schemas_finance import GroupEdge, GroupGraphRead, GroupNode, GroupSummaryRead
+from backend.services.access_scope import entry_owner_filter
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
 
 @router.get("", response_model=list[GroupSummaryRead])
-def list_group_summaries(db: Session = Depends(get_db)) -> list[GroupSummaryRead]:
+def list_group_summaries(
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> list[GroupSummaryRead]:
     entries = list(
         db.scalars(
             select(Entry)
-            .where(Entry.is_deleted.is_(False))
+            .where(
+                Entry.is_deleted.is_(False),
+                entry_owner_filter(principal),
+            )
             .order_by(Entry.occurred_at.asc(), Entry.created_at.asc())
         )
     )
@@ -75,11 +83,19 @@ def list_group_summaries(db: Session = Depends(get_db)) -> list[GroupSummaryRead
 
 
 @router.get("/{group_id}", response_model=GroupGraphRead)
-def get_group_graph(group_id: str, db: Session = Depends(get_db)) -> GroupGraphRead:
+def get_group_graph(
+    group_id: str,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> GroupGraphRead:
     entries = list(
         db.scalars(
             select(Entry)
-            .where(Entry.group_id == group_id, Entry.is_deleted.is_(False))
+            .where(
+                Entry.group_id == group_id,
+                Entry.is_deleted.is_(False),
+                entry_owner_filter(principal),
+            )
             .order_by(Entry.occurred_at.asc(), Entry.created_at.asc())
         )
     )

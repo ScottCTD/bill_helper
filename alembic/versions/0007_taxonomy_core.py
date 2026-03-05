@@ -26,7 +26,7 @@ def _normalize_term_name(raw: str | None) -> str | None:
     return normalized or None
 
 
-def upgrade() -> None:
+def _create_taxonomy_tables() -> None:
     op.create_table(
         "taxonomies",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -85,47 +85,70 @@ def upgrade() -> None:
     op.create_index("ix_taxonomy_assignments_taxonomy_id", "taxonomy_assignments", ["taxonomy_id"], unique=False)
     op.create_index("ix_taxonomy_assignments_term_id", "taxonomy_assignments", ["term_id"], unique=False)
 
-    bind = op.get_bind()
-    now = datetime.now(timezone.utc)
 
+def _insert_taxonomy(
+    bind: sa.engine.Connection,
+    *,
+    taxonomy_id: str,
+    key: str,
+    applies_to: str,
+    cardinality: str,
+    display_name: str,
+    now: datetime,
+) -> None:
+    bind.execute(
+        sa.text(
+            """
+            INSERT INTO taxonomies (id, key, applies_to, cardinality, display_name, created_at, updated_at)
+            VALUES (:id, :key, :applies_to, :cardinality, :display_name, :created_at, :updated_at)
+            """
+        ),
+        {
+            "id": taxonomy_id,
+            "key": key,
+            "applies_to": applies_to,
+            "cardinality": cardinality,
+            "display_name": display_name,
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
+
+
+def _seed_default_taxonomies(
+    bind: sa.engine.Connection,
+    *,
+    now: datetime,
+) -> tuple[str, str]:
     entity_category_taxonomy_id = str(uuid4())
     tag_type_taxonomy_id = str(uuid4())
-
-    bind.execute(
-        sa.text(
-            """
-            INSERT INTO taxonomies (id, key, applies_to, cardinality, display_name, created_at, updated_at)
-            VALUES (:id, :key, :applies_to, :cardinality, :display_name, :created_at, :updated_at)
-            """
-        ),
-        {
-            "id": entity_category_taxonomy_id,
-            "key": "entity_category",
-            "applies_to": "entity",
-            "cardinality": "single",
-            "display_name": "Entity Categories",
-            "created_at": now,
-            "updated_at": now,
-        },
+    _insert_taxonomy(
+        bind,
+        taxonomy_id=entity_category_taxonomy_id,
+        key="entity_category",
+        applies_to="entity",
+        cardinality="single",
+        display_name="Entity Categories",
+        now=now,
     )
-    bind.execute(
-        sa.text(
-            """
-            INSERT INTO taxonomies (id, key, applies_to, cardinality, display_name, created_at, updated_at)
-            VALUES (:id, :key, :applies_to, :cardinality, :display_name, :created_at, :updated_at)
-            """
-        ),
-        {
-            "id": tag_type_taxonomy_id,
-            "key": "tag_type",
-            "applies_to": "tag",
-            "cardinality": "single",
-            "display_name": "Tag Types",
-            "created_at": now,
-            "updated_at": now,
-        },
+    _insert_taxonomy(
+        bind,
+        taxonomy_id=tag_type_taxonomy_id,
+        key="tag_type",
+        applies_to="tag",
+        cardinality="single",
+        display_name="Tag Types",
+        now=now,
     )
+    return entity_category_taxonomy_id, tag_type_taxonomy_id
 
+
+def _backfill_entity_category_assignments(
+    bind: sa.engine.Connection,
+    *,
+    entity_category_taxonomy_id: str,
+    now: datetime,
+) -> None:
     rows = bind.execute(
         sa.text("SELECT id, category FROM entities WHERE category IS NOT NULL")
     ).mappings()
@@ -177,6 +200,21 @@ def upgrade() -> None:
                 "updated_at": now,
             },
         )
+
+
+def upgrade() -> None:
+    _create_taxonomy_tables()
+    bind = op.get_bind()
+    now = datetime.now(timezone.utc)
+    entity_category_taxonomy_id, _ = _seed_default_taxonomies(
+        bind,
+        now=now,
+    )
+    _backfill_entity_category_assignments(
+        bind,
+        entity_category_taxonomy_id=entity_category_taxonomy_id,
+        now=now,
+    )
 
 
 def downgrade() -> None:

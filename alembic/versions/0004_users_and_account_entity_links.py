@@ -26,7 +26,7 @@ def _normalize_name(raw: str | None) -> str | None:
     return normalized or None
 
 
-def upgrade() -> None:
+def _create_user_and_owner_columns() -> None:
     op.create_table(
         "users",
         sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
@@ -67,51 +67,70 @@ def upgrade() -> None:
             ondelete="SET NULL",
         )
 
-    bind = op.get_bind()
-    now = datetime.now(timezone.utc)
 
+def _ensure_user_id(
+    bind: sa.engine.Connection,
+    *,
+    now: datetime,
+    user_id_by_name: dict[str, str],
+    name: str,
+) -> str:
+    key = name.lower()
+    existing = user_id_by_name.get(key)
+    if existing is not None:
+        return existing
+
+    found = bind.execute(
+        sa.text("SELECT id FROM users WHERE lower(name) = :name LIMIT 1"),
+        {"name": key},
+    ).scalar_one_or_none()
+    if found is not None:
+        user_id_by_name[key] = str(found)
+        return str(found)
+
+    user_id = str(uuid4())
+    bind.execute(
+        sa.text(
+            """
+            INSERT INTO users (id, name, created_at, updated_at)
+            VALUES (:id, :name, :created_at, :updated_at)
+            """
+        ),
+        {
+            "id": user_id,
+            "name": name,
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
+    user_id_by_name[key] = user_id
+    return user_id
+
+
+def _backfill_entries_with_users(
+    bind: sa.engine.Connection,
+    *,
+    now: datetime,
+) -> str:
     user_id_by_name: dict[str, str] = {}
-
-    def ensure_user_id(name: str) -> str:
-        key = name.lower()
-        existing = user_id_by_name.get(key)
-        if existing is not None:
-            return existing
-
-        found = bind.execute(
-            sa.text("SELECT id FROM users WHERE lower(name) = :name LIMIT 1"),
-            {"name": key},
-        ).scalar_one_or_none()
-        if found is not None:
-            user_id_by_name[key] = str(found)
-            return str(found)
-
-        user_id = str(uuid4())
-        bind.execute(
-            sa.text(
-                """
-                INSERT INTO users (id, name, created_at, updated_at)
-                VALUES (:id, :name, :created_at, :updated_at)
-                """
-            ),
-            {
-                "id": user_id,
-                "name": name,
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
-        user_id_by_name[key] = user_id
-        return user_id
-
     owner_rows = bind.execute(sa.text("SELECT DISTINCT owner FROM entries")).scalars()
     for owner in owner_rows:
         normalized_owner = _normalize_name(owner)
         if normalized_owner:
-            ensure_user_id(normalized_owner)
+            _ensure_user_id(
+                bind,
+                now=now,
+                user_id_by_name=user_id_by_name,
+                name=normalized_owner,
+            )
 
     current_user_name = "admin"
-    current_user_id = ensure_user_id(current_user_name)
+    current_user_id = _ensure_user_id(
+        bind,
+        now=now,
+        user_id_by_name=user_id_by_name,
+        name=current_user_name,
+    )
 
     entry_rows = bind.execute(
         sa.text("SELECT id, owner FROM entries")
@@ -119,7 +138,12 @@ def upgrade() -> None:
     for row in entry_rows:
         normalized_owner = _normalize_name(row["owner"])
         owner_name = normalized_owner or current_user_name
-        owner_user_id = ensure_user_id(owner_name)
+        owner_user_id = _ensure_user_id(
+            bind,
+            now=now,
+            user_id_by_name=user_id_by_name,
+            name=owner_name,
+        )
         bind.execute(
             sa.text(
                 """
@@ -135,54 +159,75 @@ def upgrade() -> None:
             },
         )
 
-    def ensure_account_entity_id(account_name: str, account_id: str) -> str:
-        normalized_name = _normalize_name(account_name) or f"account-{account_id[:8]}"
-        entity_row = bind.execute(
-            sa.text("SELECT id, category FROM entities WHERE lower(name) = :name LIMIT 1"),
-            {"name": normalized_name.lower()},
-        ).mappings().first()
-        if entity_row is not None:
-            category = entity_row["category"]
-            if category in (None, "account"):
-                bind.execute(
-                    sa.text("UPDATE entities SET category = 'account' WHERE id = :id"),
-                    {"id": entity_row["id"]},
-                )
-                return str(entity_row["id"])
+    return current_user_id
 
-        candidate = normalized_name
-        suffix = 1
-        while bind.execute(
-            sa.text("SELECT id FROM entities WHERE lower(name) = :name LIMIT 1"),
-            {"name": candidate.lower()},
-        ).scalar_one_or_none() is not None:
-            candidate = f"{normalized_name} account {suffix}"
-            suffix += 1
 
-        entity_id = str(uuid4())
-        bind.execute(
-            sa.text(
-                """
-                INSERT INTO entities (id, name, category, created_at, updated_at)
-                VALUES (:id, :name, :category, :created_at, :updated_at)
-                """
-            ),
-            {
-                "id": entity_id,
-                "name": candidate,
-                "category": "account",
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
-        return entity_id
+def _ensure_account_entity_id(
+    bind: sa.engine.Connection,
+    *,
+    now: datetime,
+    account_name: str,
+    account_id: str,
+) -> str:
+    normalized_name = _normalize_name(account_name) or f"account-{account_id[:8]}"
+    entity_row = bind.execute(
+        sa.text("SELECT id, category FROM entities WHERE lower(name) = :name LIMIT 1"),
+        {"name": normalized_name.lower()},
+    ).mappings().first()
+    if entity_row is not None:
+        category = entity_row["category"]
+        if category in (None, "account"):
+            bind.execute(
+                sa.text("UPDATE entities SET category = 'account' WHERE id = :id"),
+                {"id": entity_row["id"]},
+            )
+            return str(entity_row["id"])
 
+    candidate = normalized_name
+    suffix = 1
+    while bind.execute(
+        sa.text("SELECT id FROM entities WHERE lower(name) = :name LIMIT 1"),
+        {"name": candidate.lower()},
+    ).scalar_one_or_none() is not None:
+        candidate = f"{normalized_name} account {suffix}"
+        suffix += 1
+
+    entity_id = str(uuid4())
+    bind.execute(
+        sa.text(
+            """
+            INSERT INTO entities (id, name, category, created_at, updated_at)
+            VALUES (:id, :name, :category, :created_at, :updated_at)
+            """
+        ),
+        {
+            "id": entity_id,
+            "name": candidate,
+            "category": "account",
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
+    return entity_id
+
+
+def _backfill_accounts_with_owner_and_entity(
+    bind: sa.engine.Connection,
+    *,
+    now: datetime,
+    current_user_id: str,
+) -> None:
     account_rows = bind.execute(
         sa.text("SELECT id, name FROM accounts")
     ).mappings()
     for row in account_rows:
         normalized_account_name = _normalize_name(row["name"]) or f"account-{row['id'][:8]}"
-        entity_id = ensure_account_entity_id(normalized_account_name, row["id"])
+        entity_id = _ensure_account_entity_id(
+            bind,
+            now=now,
+            account_name=normalized_account_name,
+            account_id=row["id"],
+        )
         bind.execute(
             sa.text(
                 """
@@ -199,10 +244,25 @@ def upgrade() -> None:
             },
         )
 
+
+def _drop_legacy_entry_owner_entity_column() -> None:
     with op.batch_alter_table("entries") as batch_op:
         batch_op.drop_constraint("fk_entries_owner_entity_id_entities", type_="foreignkey")
         batch_op.drop_index("ix_entries_owner_entity_id")
         batch_op.drop_column("owner_entity_id")
+
+
+def upgrade() -> None:
+    _create_user_and_owner_columns()
+    bind = op.get_bind()
+    now = datetime.now(timezone.utc)
+    current_user_id = _backfill_entries_with_users(bind, now=now)
+    _backfill_accounts_with_owner_and_entity(
+        bind,
+        now=now,
+        current_user_id=current_user_id,
+    )
+    _drop_legacy_entry_owner_entity_column()
 
 
 def downgrade() -> None:

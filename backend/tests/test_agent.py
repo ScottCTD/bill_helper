@@ -2,152 +2,19 @@ from __future__ import annotations
 
 import json
 import time
-from inspect import signature
 from pathlib import Path
 from threading import Event
 
-import pymupdf
-
-
-def create_thread(client) -> dict:
-    response = client.post("/api/v1/agent/threads", json={})
-    response.raise_for_status()
-    return response.json()
-
-
-def send_message(
-    client,
-    thread_id: str,
-    content: str,
-    *,
-    files: list[tuple[str, bytes, str]] | None = None,
-    wait_for_completion: bool = True,
-    timeout_seconds: float = 2.0,
-) -> dict:
-    request_files = (
-        [("files", (filename, file_bytes, mime_type)) for filename, file_bytes, mime_type in files]
-        if files
-        else None
-    )
-    response = client.post(
-        f"/api/v1/agent/threads/{thread_id}/messages",
-        data={"content": content},
-        files=request_files,
-    )
-    response.raise_for_status()
-    run = response.json()
-    if not wait_for_completion or run.get("status") != "running":
-        return run
-
-    run_id = run["id"]
-    deadline = time.monotonic() + timeout_seconds
-    while time.monotonic() < deadline:
-        run_response = client.get(f"/api/v1/agent/runs/{run_id}")
-        run_response.raise_for_status()
-        run = run_response.json()
-        if run.get("status") != "running":
-            return run
-        time.sleep(0.01)
-
-    raise AssertionError("Timed out waiting for agent run to complete")
-
-
-def build_pdf_bytes(page_texts: list[str]) -> bytes:
-    document = pymupdf.open()
-    for text in page_texts:
-        page = document.new_page()
-        page.insert_text((72, 72), text)
-    pdf_bytes = document.tobytes()
-    document.close()
-    return pdf_bytes
-
-
-def create_entity(client, name: str, category: str | None = None) -> dict:
-    payload = {"name": name}
-    if category is not None:
-        payload["category"] = category
-    response = client.post("/api/v1/entities", json=payload)
-    response.raise_for_status()
-    return response.json()
-
-
-def create_tag(
-    client,
-    name: str,
-    *,
-    type_name: str | None = None,
-    description: str | None = None,
-) -> dict:
-    payload: dict[str, str] = {"name": name}
-    if type_name is not None:
-        payload["type"] = type_name
-    if description is not None:
-        payload["description"] = description
-    response = client.post("/api/v1/tags", json=payload)
-    response.raise_for_status()
-    return response.json()
-
-
-def flatten_user_content(content: object) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        text_parts = [part.get("text", "") for part in content if isinstance(part, dict) and part.get("type") == "text"]
-        return "\n\n".join(part for part in text_parts if part)
-    return ""
-
-
-def patch_model(monkeypatch, handler):
-    from backend.services.agent import runtime
-
-    handler_params = signature(handler).parameters
-    params = list(handler_params.values())
-    accepts_db = len(params) > 1 and params[1].kind in (
-        params[1].POSITIONAL_ONLY,
-        params[1].POSITIONAL_OR_KEYWORD,
-        params[1].VAR_POSITIONAL,
-    )
-    accepts_kwargs = any(param.kind == param.VAR_KEYWORD for param in handler_params.values())
-    accepts_observability = "observability" in handler_params
-
-    def wrapped(messages, db, **kwargs):
-        if accepts_db:
-            if accepts_kwargs or accepts_observability:
-                return handler(messages, db, **kwargs)
-            return handler(messages, db)
-        if accepts_kwargs or accepts_observability:
-            return handler(messages, **kwargs)
-        return handler(messages)
-
-    monkeypatch.setattr(runtime, "_call_model", wrapped)
-
-
-def collect_sse_events(client, thread_id: str, content: str) -> list[dict]:
-    with client.stream(
-        "POST",
-        f"/api/v1/agent/threads/{thread_id}/messages/stream",
-        data={"content": content},
-    ) as response:
-        response.raise_for_status()
-        raw = "".join(response.iter_text())
-
-    events: list[dict] = []
-    for block in raw.replace("\r\n", "\n").split("\n\n"):
-        lines = [line for line in block.split("\n") if line.strip()]
-        if not lines:
-            continue
-        event_type = ""
-        payload = None
-        for line in lines:
-            if line.startswith("event:"):
-                event_type = line.split(":", 1)[1].strip()
-            elif line.startswith("data:"):
-                payload = json.loads(line.split(":", 1)[1].strip())
-        if isinstance(payload, dict):
-            if event_type:
-                payload["event_name"] = event_type
-            events.append(payload)
-    return events
+from backend.tests.agent_test_utils import (
+    build_pdf_bytes,
+    collect_sse_events,
+    create_entity,
+    create_tag,
+    create_thread,
+    flatten_user_content,
+    patch_model,
+    send_message,
+)
 
 
 def test_thread_history_and_final_assistant_message(client, monkeypatch):
@@ -168,6 +35,15 @@ def test_thread_history_and_final_assistant_message(client, monkeypatch):
     assert [message["role"] for message in detail["messages"]] == ["user", "assistant"]
 
 
+def test_agent_routes_require_admin_principal(client):
+    response = client.get(
+        "/api/v1/agent/threads",
+        headers={"X-Bill-Helper-Principal": "alice"},
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only admin principal can access this resource."
+
+
 def test_thread_detail_includes_configured_model_name(client):
     from backend.config import get_settings
 
@@ -181,7 +57,7 @@ def test_thread_detail_includes_configured_model_name(client):
 
 def test_run_includes_context_tokens(client, monkeypatch):
     monkeypatch.setattr(
-        "backend.services.agent.runtime._calculate_context_tokens",
+        "backend.services.agent.runtime.calculate_context_tokens",
         lambda *, model_name, llm_messages: 321,
     )
     patch_model(
@@ -201,7 +77,7 @@ def test_run_includes_context_tokens(client, monkeypatch):
 
 def test_thread_detail_uses_persisted_context_tokens_for_idle_thread(client, monkeypatch):
     monkeypatch.setattr(
-        "backend.services.agent.runtime._calculate_context_tokens",
+        "backend.services.agent.runtime.calculate_context_tokens",
         lambda *, model_name, llm_messages: 123,
     )
     patch_model(
@@ -227,7 +103,7 @@ def test_thread_detail_prefers_running_run_context_tokens(client, monkeypatch):
     call_count = {"value": 0}
 
     monkeypatch.setattr(
-        "backend.services.agent.runtime._calculate_context_tokens",
+        "backend.services.agent.runtime.calculate_context_tokens",
         lambda *, model_name, llm_messages: len(llm_messages) * 100,
     )
     def multi_step_model(_messages):
@@ -711,17 +587,17 @@ def test_system_prompt_stages_first_proposal_before_parallel_batches():
 def test_system_prompt_includes_current_date_tag():
     from datetime import date
 
-    from backend.services.agent.prompts import system_prompt
+    from backend.services.agent.prompts import SystemPromptContext, system_prompt
 
-    prompt = system_prompt(current_date=date(2026, 2, 10))
+    prompt = system_prompt(SystemPromptContext(current_date=date(2026, 2, 10)))
     assert "## Current Date (User Timezone: America/Toronto)\n2026-02-10" in prompt
 
 
 def test_system_prompt_includes_user_memory_when_present():
-    from backend.services.agent.prompts import system_prompt
+    from backend.services.agent.prompts import SystemPromptContext, system_prompt
 
     memory_text = "Prefers terse answers.\nAlways mention CAD explicitly."
-    prompt = system_prompt(user_memory=memory_text)
+    prompt = system_prompt(SystemPromptContext(user_memory=memory_text))
 
     assert "### User Memory" in prompt
     assert memory_text in prompt
@@ -731,18 +607,28 @@ def test_system_prompt_includes_user_memory_when_present():
 def test_system_prompt_uses_requested_current_timezone_for_date_label():
     from datetime import date
 
-    from backend.services.agent.prompts import system_prompt
+    from backend.services.agent.prompts import SystemPromptContext, system_prompt
 
-    prompt = system_prompt(current_date=date(2026, 2, 10), current_timezone="America/Vancouver")
+    prompt = system_prompt(
+        SystemPromptContext(
+            current_date=date(2026, 2, 10),
+            current_timezone="America/Vancouver",
+        )
+    )
     assert "## Current Date (User Timezone: America/Vancouver)\n2026-02-10" in prompt
 
 
 def test_system_prompt_falls_back_to_toronto_for_invalid_timezone():
     from datetime import date
 
-    from backend.services.agent.prompts import system_prompt
+    from backend.services.agent.prompts import SystemPromptContext, system_prompt
 
-    prompt = system_prompt(current_date=date(2026, 2, 10), current_timezone="Not/AZone")
+    prompt = system_prompt(
+        SystemPromptContext(
+            current_date=date(2026, 2, 10),
+            current_timezone="Not/AZone",
+        )
+    )
     assert "## Current Date (User Timezone: America/Toronto)\n2026-02-10" in prompt
 
 
@@ -1196,7 +1082,7 @@ def test_stream_message_endpoint_emits_real_time_events(client, monkeypatch):
             },
         }
 
-    monkeypatch.setattr(runtime, "_call_model_stream", stream_model)
+    monkeypatch.setattr(runtime, "call_model_stream", stream_model)
 
     thread = create_thread(client)
     events = collect_sse_events(client, thread["id"], "say hello")
@@ -1255,7 +1141,7 @@ def test_stream_message_endpoint_emits_reasoning_update_events(client, monkeypat
         for event in stream_responses.pop(0):
             yield event
 
-    monkeypatch.setattr(runtime, "_call_model_stream", stream_model)
+    monkeypatch.setattr(runtime, "call_model_stream", stream_model)
 
     thread = create_thread(client)
     events = collect_sse_events(client, thread["id"], "process this import")
@@ -1330,7 +1216,7 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
         for event in stream_responses.pop(0):
             yield event
 
-    monkeypatch.setattr(runtime, "_call_model_stream", stream_model)
+    monkeypatch.setattr(runtime, "call_model_stream", stream_model)
 
     thread = create_thread(client)
     events = collect_sse_events(client, thread["id"], "process this import")
@@ -1371,6 +1257,8 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
 
 
 def test_model_observability_uses_thread_as_session_id(client, monkeypatch):
+    from backend.services.agent import runtime
+
     captured_observability: list[dict] = []
 
     def capture_model(_messages, _db, *, observability=None):
@@ -1378,7 +1266,7 @@ def test_model_observability_uses_thread_as_session_id(client, monkeypatch):
             captured_observability.append(observability)
         return {"role": "assistant", "content": "Done."}
 
-    patch_model(monkeypatch, capture_model)
+    monkeypatch.setattr(runtime, "call_model", capture_model)
     thread = create_thread(client)
     run = send_message(client, thread["id"], "hello")
 

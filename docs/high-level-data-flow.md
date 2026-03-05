@@ -96,8 +96,8 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `backend/routers/links.py`
   - `backend/routers/groups.py`
   - `backend/routers/dashboard.py`
-  - `backend/routers/accounts.py`
-  - `backend/routers/agent.py`
+  - `backend/routers/finance/accounts.py`
+  - `backend/routers/agent_api/routes.py`
   - `backend/routers/settings.py`
 - Core services:
   - `backend/services/groups.py`
@@ -109,7 +109,12 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `backend/services/finance.py`
 - Agent services:
   - `backend/services/agent/runtime.py`
-  - `backend/services/agent/tools.py`
+  - `backend/services/agent/tool_runtime.py`
+  - `backend/services/agent/tool_handlers_read.py`
+  - `backend/services/agent/tool_handlers_propose.py`
+  - `backend/services/agent/tool_args.py`
+  - `backend/services/agent/proposal_patching.py`
+  - `backend/services/agent/tools.py` (thin facade)
   - `backend/services/agent/review.py`
   - `backend/services/agent/change_apply.py`
 - Models/contracts:

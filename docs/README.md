@@ -13,6 +13,7 @@ This folder contains the source-of-truth documentation for the current MVP imple
 - `api.md`: REST API contract reference for `/api/v1`.
 - `data-model.md`: relational schema and domain modeling rules.
 - `development.md`: local setup, build/test commands, and contributor workflow.
+- `clean-architecture-standards.md`: anti-slop coding standards, architecture boundaries, and refactor fix log.
 - `documentation-system.md`: source-of-truth ownership matrix and anti-drift workflow.
 - `feature-entry-lifecycle.md`: focused entry-domain flow map.
 - `feature-dashboard-analytics.md`: focused dashboard analytics flow map.

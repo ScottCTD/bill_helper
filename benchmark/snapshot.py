@@ -16,9 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.config import get_settings
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SNAPSHOTS_DIR = REPO_ROOT / "benchmark" / "fixtures" / "snapshots"
+from benchmark.io_utils import atomic_write_json
+from benchmark.paths import SNAPSHOTS_DIR
 
 
 def _production_db_path() -> Path:
@@ -33,8 +32,7 @@ def _utc_now_iso() -> str:
 def create_snapshot(name: str, *, source_db: Path | None = None) -> Path:
     source = source_db or _production_db_path()
     if not source.exists():
-        print(f"Error: source database not found at {source}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"source database not found at {source}")
 
     snapshot_dir = SNAPSHOTS_DIR / name
     snapshot_dir.mkdir(parents=True, exist_ok=True)
@@ -48,7 +46,7 @@ def create_snapshot(name: str, *, source_db: Path | None = None) -> Path:
         "source_path": str(source),
         "size_bytes": dest.stat().st_size,
     }
-    (snapshot_dir / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    atomic_write_json(snapshot_dir / "metadata.json", metadata)
 
     print(f"Snapshot '{name}' created at {snapshot_dir}")
     print(f"  DB size: {metadata['size_bytes']:,} bytes")
@@ -85,8 +83,7 @@ def list_snapshots() -> list[dict]:
 def get_snapshot_db_path(name: str) -> Path:
     db_path = SNAPSHOTS_DIR / name / "db.sqlite3"
     if not db_path.exists():
-        print(f"Error: snapshot '{name}' DB not found at {db_path}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"snapshot '{name}' DB not found at {db_path}")
     return db_path
 
 
@@ -100,7 +97,7 @@ def restore_snapshot(name: str) -> None:
     print("WARNING: production DB has been overwritten. Restart the app to use it.")
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(description="Manage benchmark DB snapshots.")
     sub = parser.add_subparsers(dest="command")
 
@@ -114,16 +111,21 @@ def main() -> None:
     restore_p.add_argument("name", help="Snapshot name to restore")
 
     args = parser.parse_args()
-    if args.command == "create":
-        source = Path(args.source) if args.source else None
-        create_snapshot(args.name, source_db=source)
-    elif args.command == "list":
-        list_snapshots()
-    elif args.command == "restore":
-        restore_snapshot(args.name)
-    else:
-        parser.print_help()
+    try:
+        if args.command == "create":
+            source = Path(args.source) if args.source else None
+            create_snapshot(args.name, source_db=source)
+        elif args.command == "list":
+            list_snapshots()
+        elif args.command == "restore":
+            restore_snapshot(args.name)
+        else:
+            parser.print_help()
+        return 0
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

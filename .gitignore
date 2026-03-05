@@ -237,3 +237,7 @@ notebooks/
 benchmark/fixtures/
 benchmark/results/
 benchmark/reports/
+
+# Desloppify artifacts
+.desloppify/
+scorecard.png

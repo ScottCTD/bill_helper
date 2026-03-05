@@ -35,7 +35,7 @@ The as-of date defaults to the server's current day when the query parameter is 
 
 ## Backend Modules
 
-- `backend/routers/accounts.py`: account/snapshot/reconciliation routes.
+- `backend/routers/finance/accounts.py`: account/snapshot/reconciliation routes.
 - `backend/services/agent/message_history.py`: current-user account context assembly for agent system prompt (includes account notes).
 - `backend/services/finance.py`: ledger aggregation + latest-snapshot lookup.
 - `backend/schemas.py`: `Account*`, `Snapshot*`, and `ReconciliationRead` contracts.

@@ -1,91 +1,50 @@
 from __future__ import annotations
 
-import base64
-import re
-import shutil
-import subprocess
-import tempfile
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import litellm
-import pymupdf
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.enums import AgentMessageRole, AgentRunStatus
-from backend.models import (
-    Account,
+from backend.config import get_settings
+from backend.enums_agent import AgentMessageRole, AgentRunStatus
+from backend.models_agent import (
     AgentChangeItem,
     AgentMessage,
-    AgentMessageAttachment,
     AgentReviewAction,
     AgentRun,
     AgentToolCall,
-    User,
 )
-from backend.config import get_settings
-from backend.services.agent.prompts import system_prompt
+from backend.services.agent.content_assembly.attachments import (
+    AttachmentAssemblyOptions,
+    assemble_attachment_parts,
+    extract_pdf_text as _extract_pdf_text_impl,
+    extract_pdf_text_with_tesseract as _extract_pdf_text_with_tesseract_impl,
+    model_supports_vision,
+    pdf_page_image_data_urls as _pdf_page_image_data_urls,
+)
+from backend.services.agent.content_assembly.user_context import (
+    build_current_user_context as _build_current_user_context,
+)
+from backend.services.agent.prompts import SystemPromptContext, system_prompt
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.taxonomy import list_term_name_description_pairs
 
-MAX_ACCOUNT_MARKDOWN_CONTEXT_CHARS = 1_500
-MAX_ACCOUNT_MARKDOWN_CONTEXT_LINES = 40
-MAX_ACCOUNT_IMAGE_DATA_URL_CHARS = 120
-MARKDOWN_IMAGE_DATA_URL_PATTERN = re.compile(r"!\[([^\]]*)\]\((data:image[^)]+)\)", re.IGNORECASE)
-FORCED_VISION_MODEL_ALIASES = frozenset(
-    {
-        "openrouter/qwen/qwen3.5-27b",
-        "qwen/qwen3.5-27b",
-    }
-)
-PDF_OCR_RENDER_DPI = 300
-PDF_OCR_TESSERACT_PSM = 4
-PDF_OCR_TESSERACT_OEM = 3
-PDF_OCR_TESSERACT_LANG = "eng"
-
-
-def attachment_to_data_url(file_path: str, mime_type: str) -> str | None:
-    path = Path(file_path)
-    if not path.exists():
-        return None
-    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-    return f"data:{mime_type};base64,{encoded}"
-
-
-def _normalize_model_for_vision_check(model_name: str) -> str:
-    normalized = " ".join((model_name or "").split()).strip()
-    if normalized.lower().startswith("google/"):
-        suffix = normalized.split("/", 1)[1]
-        return f"gemini/{suffix}"
-    return normalized
-
 
 def _model_supports_vision(model_name: str) -> bool:
-    normalized = _normalize_model_for_vision_check(model_name)
-    if not normalized:
-        return False
-    candidates = [normalized]
-    raw = " ".join((model_name or "").split()).strip()
-    if raw and raw != normalized:
-        candidates.append(raw)
-    for candidate in candidates:
-        try:
-            if litellm.supports_vision(candidate):
-                return True
-        except Exception:
-            continue
-    if any(candidate.lower() in FORCED_VISION_MODEL_ALIASES for candidate in candidates):
-        return True
-    return False
+    return model_supports_vision(
+        model_name,
+        supports_vision=litellm.supports_vision,
+    )
 
 
-def _is_pdf_attachment(attachment: AgentMessageAttachment) -> bool:
-    mime_type = (attachment.mime_type or "").lower()
-    if mime_type == "application/pdf":
-        return True
-    return Path(attachment.file_path).suffix.lower() == ".pdf"
+def _extract_pdf_text(file_path: str) -> str | None:
+    return _extract_pdf_text_impl(file_path)
+
+
+def _extract_pdf_text_with_tesseract(file_path: str) -> str | None:
+    return _extract_pdf_text_with_tesseract_impl(file_path)
 
 
 def _normalize_pdf_text_lines(text: str) -> str:
@@ -93,55 +52,6 @@ def _normalize_pdf_text_lines(text: str) -> str:
     for line in text.splitlines():
         normalized_lines.append(" ".join(line.split()))
     return "\n".join(normalized_lines).strip()
-
-
-def _extract_pdf_text(file_path: str) -> str | None:
-    path = Path(file_path)
-    if not path.exists():
-        return None
-    try:
-        with pymupdf.open(path) as document:
-            page_texts = [_normalize_pdf_text_lines(page.get_text("text", sort=True)) for page in document]
-    except Exception:
-        return None
-    extracted = "\n\n".join(text for text in page_texts if text)
-    return extracted or None
-
-
-def _extract_pdf_text_with_tesseract(file_path: str) -> str | None:
-    path = Path(file_path)
-    if not path.exists() or shutil.which("tesseract") is None:
-        return None
-    try:
-        with tempfile.TemporaryDirectory() as temp_dir_name:
-            temp_dir = Path(temp_dir_name)
-            with pymupdf.open(path) as document:
-                page_texts: list[str] = []
-                for page_index, page in enumerate(document, start=1):
-                    image_path = temp_dir / f"page_{page_index:04d}.png"
-                    pixmap = page.get_pixmap(dpi=PDF_OCR_RENDER_DPI, alpha=False)
-                    pixmap.save(image_path)
-                    result = subprocess.run(
-                        [
-                            "tesseract",
-                            str(image_path),
-                            "stdout",
-                            "--psm",
-                            str(PDF_OCR_TESSERACT_PSM),
-                            "--oem",
-                            str(PDF_OCR_TESSERACT_OEM),
-                            "-l",
-                            PDF_OCR_TESSERACT_LANG,
-                        ],
-                        check=True,
-                        capture_output=True,
-                        text=True,
-                    )
-                    page_texts.append(_normalize_pdf_text_lines(result.stdout))
-    except Exception:
-        return None
-    extracted = "\n\n".join(text for text in page_texts if text)
-    return extracted or None
 
 
 def _extract_pdf_text_for_model(file_path: str) -> tuple[str | None, str | None]:
@@ -152,31 +62,6 @@ def _extract_pdf_text_for_model(file_path: str) -> tuple[str | None, str | None]
     if ocr_text:
         return ocr_text, "parsed with Tesseract OCR; expect imperfect text"
     return None, None
-
-
-def _attachment_display_name(attachment: AgentMessageAttachment) -> str:
-    original_name = " ".join((attachment.original_filename or "").split()).strip()
-    if original_name:
-        return Path(original_name).name or original_name
-    fallback_name = Path(attachment.file_path).name
-    return fallback_name or "attachment"
-
-
-def _pdf_page_image_data_urls(file_path: str) -> list[str]:
-    path = Path(file_path)
-    if not path.exists():
-        return []
-    try:
-        with pymupdf.open(path) as document:
-            data_urls: list[str] = []
-            for page in document:
-                pixmap = page.get_pixmap(alpha=False)
-                image_bytes = pixmap.tobytes("png")
-                encoded = base64.b64encode(image_bytes).decode("ascii")
-                data_urls.append(f"data:image/png;base64,{encoded}")
-            return data_urls
-    except Exception:
-        return []
 
 
 def _compose_user_feedback_text(
@@ -190,77 +75,6 @@ def _compose_user_feedback_text(
         return message.content_markdown
     feedback = message.content_markdown.strip() or "(none)"
     return f"{'\n\n'.join(prefixes)}\n\nUser feedback:\n{feedback}"
-
-
-def _truncate_markdown_image_data_urls(markdown: str) -> str:
-    def _replace(match: re.Match[str]) -> str:
-        alt = match.group(1)
-        url = match.group(2)
-        if len(url) <= MAX_ACCOUNT_IMAGE_DATA_URL_CHARS:
-            return match.group(0)
-        preview = f"{url[:MAX_ACCOUNT_IMAGE_DATA_URL_CHARS]}...(truncated)"
-        return f"![{alt}]({preview})"
-
-    return MARKDOWN_IMAGE_DATA_URL_PATTERN.sub(_replace, markdown)
-
-
-def _normalize_account_markdown_for_context(markdown: str | None) -> str | None:
-    if markdown is None:
-        return None
-    normalized = markdown.strip()
-    if not normalized:
-        return None
-
-    normalized = _truncate_markdown_image_data_urls(normalized)
-    lines = normalized.splitlines()
-    if len(lines) > MAX_ACCOUNT_MARKDOWN_CONTEXT_LINES:
-        normalized = "\n".join(lines[:MAX_ACCOUNT_MARKDOWN_CONTEXT_LINES]).rstrip()
-        normalized = f"{normalized}\n...(truncated)"
-
-    if len(normalized) > MAX_ACCOUNT_MARKDOWN_CONTEXT_CHARS:
-        normalized = normalized[:MAX_ACCOUNT_MARKDOWN_CONTEXT_CHARS].rstrip()
-        normalized = f"{normalized}\n...(truncated)"
-    return normalized
-
-
-def _build_current_user_context(db: Session) -> str:
-    settings = resolve_runtime_settings(db)
-    current_user_name = (settings.current_user_name or "").strip() or "(unknown)"
-    accounts = list(
-        db.scalars(
-            select(Account)
-            .join(User, User.id == Account.owner_user_id)
-            .where(func.lower(User.name) == current_user_name.lower())
-            .options(selectinload(Account.entity))
-            .order_by(Account.created_at.asc())
-        )
-    )
-
-    lines = [
-        f"user_name: {current_user_name}",
-        f"accounts_count: {len(accounts)}",
-        "accounts:",
-    ]
-    if not accounts:
-        lines.append("- (none)")
-        return "\n".join(lines)
-
-    max_accounts = 40
-    for index, account in enumerate(accounts[:max_accounts], start=1):
-        status = "active" if account.is_active else "inactive"
-        lines.append(
-            f"{index}. name={account.name}; currency={account.currency_code}; status={status}; "
-            f"entity={account.entity.name if account.entity is not None else '-'}"
-        )
-        notes_markdown = _normalize_account_markdown_for_context(account.markdown_body)
-        if notes_markdown:
-            lines.append("  notes_markdown:")
-            lines.extend(f"    {line}" for line in notes_markdown.splitlines())
-        else:
-            lines.append("  notes_markdown: (none)")
-    if len(accounts) > max_accounts:
-        lines.append(f"- ... (+{len(accounts) - max_accounts} more)")
-    return "\n".join(lines)
 
 
 def _build_entity_category_context(db: Session) -> str | None:
@@ -292,42 +106,14 @@ def build_user_content(
     if not message.attachments:
         return content_text
 
-    parts: list[dict[str, Any]] = []
-
-    for attachment in message.attachments:
-        attachment_name = _attachment_display_name(attachment)
-        if _is_pdf_attachment(attachment):
-            pdf_text, pdf_source = _extract_pdf_text_for_model(attachment.file_path)
-            if pdf_text:
-                parts.append(
-                    {
-                        "type": "text",
-                        "text": f"PDF file {attachment_name} ({pdf_source}):\n{pdf_text}",
-                    }
-                )
-            else:
-                parts.append(
-                    {
-                        "type": "text",
-                        "text": f"PDF file {attachment_name} was provided, but parsing returned no content.",
-                    }
-                )
-            if include_pdf_page_images:
-                for data_url in _pdf_page_image_data_urls(attachment.file_path):
-                    parts.append({"type": "image_url", "image_url": {"url": data_url}})
-            continue
-
-        data_url = attachment_to_data_url(attachment.file_path, attachment.mime_type)
-        if data_url is None:
-            parts.append(
-                {
-                    "type": "text",
-                    "text": f"Image file {attachment_name} was provided, but the file could not be loaded.",
-                }
-            )
-            continue
-        parts.append({"type": "text", "text": f"Image file {attachment_name}:"})
-        parts.append({"type": "image_url", "image_url": {"url": data_url}})
+    parts = assemble_attachment_parts(
+        message.attachments,
+        options=AttachmentAssemblyOptions(
+            include_pdf_page_images=include_pdf_page_images,
+            pdf_text_extractor=_extract_pdf_text_for_model,
+            pdf_page_image_renderer=_pdf_page_image_data_urls,
+        ),
+    )
 
     if content_text.strip():
         parts.append({"type": "text", "text": content_text})
@@ -609,10 +395,12 @@ def build_llm_messages(
         {
             "role": "system",
             "content": system_prompt(
-                current_user_context=_build_current_user_context(db),
-                entity_category_context=_build_entity_category_context(db),
-                user_memory=settings.user_memory,
-                current_timezone=get_settings().current_user_timezone,
+                SystemPromptContext(
+                    current_user_context=_build_current_user_context(db),
+                    entity_category_context=_build_entity_category_context(db),
+                    user_memory=settings.user_memory,
+                    current_timezone=get_settings().current_user_timezone,
+                )
             ),
         }
     ]

@@ -10,14 +10,18 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import subprocess
-import sys
-from pathlib import Path
+import logging
+from typing import TYPE_CHECKING, Any, Literal
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from backend.database import build_engine_for_url, build_session_maker
+
+logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from backend.models_finance import Account, Tag, TaxonomyTerm, User
 
 # ---------------------------------------------------------------------------
 # Default data
@@ -101,9 +105,9 @@ DEFAULT_ENTITY_CATEGORIES: list[dict[str, str]] = [
 # Seed functions
 # ---------------------------------------------------------------------------
 
-def seed_accounts(db: Session) -> tuple:
+def seed_accounts(db: Session) -> tuple["User", "Account", "Account"]:
     """Create admin user and Scotiabank Debit/Credit accounts. Returns (user, debit_account, credit_account)."""
-    from backend.models import Account, Entity, User
+    from backend.models_finance import Account, Entity, User
 
     user = User(name="admin")
     db.add(user)
@@ -146,9 +150,9 @@ def _tag_color(name: str) -> str:
     return f"hsl({h % 360} 62% 72%)"
 
 
-def seed_tags(db: Session, tags: list[dict[str, str]] | None = None) -> list:
+def seed_tags(db: Session, tags: list[dict[str, str]] | None = None) -> list["Tag"]:
     """Create tags and assign tag_type taxonomy. Returns list of Tag objects."""
-    from backend.models import Tag
+    from backend.models_finance import Tag
     from backend.services.taxonomy import assign_single_term_by_name
 
     tags = tags or DEFAULT_TAGS
@@ -172,9 +176,12 @@ def seed_tags(db: Session, tags: list[dict[str, str]] | None = None) -> list:
     return created
 
 
-def seed_entity_categories(db: Session, categories: list[dict[str, str]] | None = None) -> list:
+def seed_entity_categories(
+    db: Session,
+    categories: list[dict[str, str]] | None = None,
+) -> list["TaxonomyTerm"]:
     """Create entity_category taxonomy terms with descriptions. Returns list of TaxonomyTerm objects."""
-    from backend.services.taxonomy import get_or_create_term, get_taxonomy_by_key
+    from backend.services.taxonomy import ensure_term, get_taxonomy_by_key
 
     categories = categories or DEFAULT_ENTITY_CATEGORIES
     taxonomy = get_taxonomy_by_key(db, "entity_category")
@@ -183,7 +190,7 @@ def seed_entity_categories(db: Session, categories: list[dict[str, str]] | None 
 
     created = []
     for cat in categories:
-        term = get_or_create_term(db, taxonomy=taxonomy, name=cat["name"])
+        term = ensure_term(db, taxonomy=taxonomy, name=cat["name"])
         if cat.get("description"):
             term.metadata_json = {"description": cat["description"]}
             db.add(term)
@@ -192,9 +199,13 @@ def seed_entity_categories(db: Session, categories: list[dict[str, str]] | None 
     return created
 
 
-def seed_user_memory(db: Session) -> str | None:
+def seed_user_memory(
+    db: Session,
+    *,
+    on_error: Literal["best_effort", "fail_fast"] = "best_effort",
+) -> str | None:
     """Copy user_memory from the production DB into the given session's runtime_settings."""
-    from backend.models import RuntimeSettings
+    from backend.models_finance import RuntimeSettings
 
     from backend.config import get_settings
 
@@ -202,19 +213,25 @@ def seed_user_memory(db: Session) -> str | None:
     if not prod_db_path.exists():
         return None
 
-    prod_engine = create_engine(
-        f"sqlite:///{prod_db_path}",
-        future=True,
-        connect_args={"check_same_thread": False},
-    )
-    prod_session = sessionmaker(bind=prod_engine, class_=Session)()
+    prod_engine = build_engine_for_url(f"sqlite:///{prod_db_path}")
+    prod_session = build_session_maker(prod_engine)()
     try:
         from sqlalchemy import select
         row = prod_session.scalar(
             select(RuntimeSettings).where(RuntimeSettings.scope == "default")
         )
         memory = row.user_memory if row else None
-    except Exception:
+    except SQLAlchemyError as exc:
+        if on_error == "fail_fast":
+            raise RuntimeError(
+                f"Failed to read user_memory from production DB at {prod_db_path}"
+            ) from exc
+        logger.warning(
+            "seed_user_memory read failed; continuing best-effort. path=%s error_type=%s error=%s",
+            prod_db_path,
+            type(exc).__name__,
+            str(exc),
+        )
         memory = None
     finally:
         prod_session.close()
@@ -227,7 +244,12 @@ def seed_user_memory(db: Session) -> str | None:
     return memory
 
 
-def seed_all(db: Session, *, include_user_memory: bool = False) -> dict:
+def seed_all(
+    db: Session,
+    *,
+    include_user_memory: bool = False,
+    user_memory_on_error: Literal["best_effort", "fail_fast"] = "best_effort",
+) -> dict[str, Any]:
     """Run all seed functions. Returns a summary dict."""
     from backend.services.taxonomy import ensure_default_taxonomies
 
@@ -238,7 +260,7 @@ def seed_all(db: Session, *, include_user_memory: bool = False) -> dict:
 
     memory = None
     if include_user_memory:
-        memory = seed_user_memory(db)
+        memory = seed_user_memory(db, on_error=user_memory_on_error)
 
     db.commit()
     return {
@@ -256,10 +278,15 @@ def seed_all(db: Session, *, include_user_memory: bool = False) -> dict:
 
 def reset_local_db() -> None:
     """Drop all tables, recreate, seed defaults, stamp Alembic."""
-    import backend.models  # noqa: F401 — ensure all models are registered with Base
-    from backend.database import Base
+    import backend.models_agent  # noqa: F401
+    import backend.models_finance  # noqa: F401
+    from backend.db_meta import Base
 
     from backend.config import get_settings
+    from backend.services.bootstrap import (
+        run_schema_seed_and_stamp,
+        stamp_alembic_head_for_sqlite_path,
+    )
 
     settings = get_settings()
     db_path = settings.data_dir / "bill_helper.db"
@@ -269,22 +296,15 @@ def reset_local_db() -> None:
         db_path.unlink()
         print(f"Removed {db_path}")
 
-    engine = create_engine(
-        f"sqlite:///{db_path}",
-        future=True,
-        connect_args={"check_same_thread": False},
-    )
-    Base.metadata.create_all(bind=engine)
-
-    make_session = sessionmaker(bind=engine, autocommit=False, autoflush=False, class_=Session)
-    db = make_session()
-
-    result = seed_all(db)
-
-    subprocess.run(
-        ["uv", "run", "alembic", "stamp", "head"],
-        cwd=str(REPO_ROOT),
-        check=True,
+    engine = build_engine_for_url(f"sqlite:///{db_path}")
+    make_session = build_session_maker(engine)
+    result = run_schema_seed_and_stamp(
+        engine=engine,
+        metadata=Base.metadata,
+        make_session=make_session,
+        seed=seed_all,
+        recreate_schema=False,
+        stamp=lambda: stamp_alembic_head_for_sqlite_path(db_path),
     )
 
     print(f"Local DB reset at {db_path}")
@@ -292,10 +312,6 @@ def reset_local_db() -> None:
     print(f"  Accounts: {', '.join(result['accounts'])}")
     print(f"  Tags: {result['tags']}")
     print(f"  Entity categories: {result['entity_categories']}")
-
-    db.close()
-    engine.dispose()
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Reset local DB and seed defaults.")

@@ -44,7 +44,7 @@ trap on_interrupt INT TERM
 cd "$ROOT_DIR"
 
 echo "Checking migration metadata..."
-if uv run python -c "from backend.database import SessionLocal; from backend.services.bootstrap import should_stamp_existing_schema; db = SessionLocal(); should_stamp = should_stamp_existing_schema(db); db.close(); raise SystemExit(0 if should_stamp else 1)"; then
+if uv run python -c "from backend.database import build_engine, build_session_maker; from backend.services.bootstrap import should_stamp_existing_schema; eng = build_engine(); SessionLocal = build_session_maker(eng); db = SessionLocal(); should_stamp = should_stamp_existing_schema(db); db.close(); eng.dispose(); raise SystemExit(0 if should_stamp else 1)"; then
   echo "Detected existing schema without Alembic revision metadata. Stamping head..."
   uv run alembic stamp head
 fi
@@ -53,7 +53,7 @@ echo "Applying database migrations..."
 uv run alembic upgrade head
 
 echo "Checking whether demo seed is needed..."
-if uv run python -c "from backend.database import SessionLocal; from backend.services.bootstrap import should_seed_demo_data; db = SessionLocal(); should_seed = should_seed_demo_data(db); db.close(); raise SystemExit(0 if should_seed else 1)"; then
+if uv run python -c "from backend.database import build_engine, build_session_maker; from backend.services.bootstrap import should_seed_demo_data; eng = build_engine(); SessionLocal = build_session_maker(eng); db = SessionLocal(); should_seed = should_seed_demo_data(db); db.close(); eng.dispose(); raise SystemExit(0 if should_seed else 1)"; then
   if [[ -n "${BILL_HELPER_SEED_CREDIT_CSV:-}" ]]; then
     echo "No accounts found. Seeding demo data from $BILL_HELPER_SEED_CREDIT_CSV..."
     uv run python scripts/seed_demo.py "$BILL_HELPER_SEED_CREDIT_CSV"

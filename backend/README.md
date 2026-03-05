@@ -5,23 +5,56 @@ This module hosts the FastAPI app, SQLAlchemy models, Pydantic schemas, and doma
 ## Fast Entry Points
 
 - App startup: `backend/main.py`
+- Module launcher: `backend/__main__.py` (`python -m backend`)
 - API routers: `backend/routers/*`
+- DB metadata/runtime bootstrap: `backend/db_meta.py`, `backend/database.py`
 - Domain logic: `backend/services/*`
-- Persistence model: `backend/models.py`
-- API contracts: `backend/schemas.py`
+- Persistence model compatibility facade: `backend/models.py` (domain modules: `backend/models_finance.py`, `backend/models_agent.py`)
+- API contract compatibility facade: `backend/schemas.py` (domain modules: `backend/schemas_finance.py`, `backend/schemas_agent.py`)
+- Enum compatibility facade: `backend/enums.py` (domain modules: `backend/enums_finance.py`, `backend/enums_agent.py`)
 - Tests: `backend/tests/*`
+
+Initialization contract:
+
+- `backend.main` exposes `create_app()` as the explicit app factory.
+- Uvicorn runs with factory mode (`backend.main:create_app`) so app setup does not execute at module import time.
+- Agent background run threads receive an injected session factory (`get_session_maker`) instead of opening sessions through implicit module-global state.
 
 ## File Map
 
 - `backend/routers/entries.py`: entry CRUD, filters, link creation.
 - `backend/routers/groups.py`: derived group summaries and graph detail read models.
 - `backend/routers/dashboard.py`: monthly dashboard analytics endpoint.
-- `backend/routers/agent.py`: agent thread/run/review endpoints.
+- `backend/routers/agent_api/routes.py`: agent thread/run/review endpoints.
 - `backend/routers/settings.py`: runtime settings read/update endpoints.
 - `backend/services/finance.py`: reconciliation + dashboard aggregations/projection.
+- `backend/services/crud_policy.py`: shared router-side domain policy primitives (required-name normalization, uniqueness/conflict guards, and standardized policy-violation translation).
+- `backend/services/agent/change_contracts.py`: shared proposal/apply payload contract validation + normalization.
 - `backend/services/agent/change_apply.py`: apply approved proposals.
+- `backend/services/agent/attachments.py`: attachment lifecycle helpers (store upload bytes, derive per-thread attachment directories, and cleanup on thread delete).
+- `backend/services/agent/execution.py`: agent execution policy service (message validation, attachment persistence handoff, run start/background continuation, current-context token calculation) plus stable benchmark/test execution facade methods.
+- `backend/services/agent/content_assembly/*`: content-building helpers split by concern (`attachments.py` for PDF/image parsing + vision payloads, `user_context.py` for account/user context assembly).
+- `backend/services/agent/orchestration/runtime_state.py`: runtime event/tool-call persistence state helpers extracted from `runtime.py`.
+- `backend/services/agent/benchmark_interface.py`: stable benchmark-facing case execution contract that returns normalized predictions + trace metadata without exposing runner to runtime internals.
+- `backend/services/agent/run_orchestrator.py`: shared run-step state machine for sync runtime, streaming runtime, and benchmark execution adapters.
+- `backend/services/agent/protocol_helpers.py`: shared helper contracts for tool-call decoding and normalized usage extraction/accumulation across runtime and benchmark.
+- `backend/services/agent/protocol.py`: compatibility facade that re-exports protocol helper APIs.
+- `backend/services/agent/error_policy.py`: shared recoverable-error policy utilities (`RecoverableResult` + contextual fallback logging) for agent modules.
+- `backend/services/agent/tool_args.py`: tool argument schemas and normalization helpers.
+- `backend/services/agent/tool_handlers_read.py`: read-only and intermediate-update tool handlers.
+- `backend/services/agent/tool_handlers_propose.py`: proposal/update/remove handlers for review-gated mutations.
+- `backend/services/agent/proposal_patching.py`: pending-proposal patch-map application helpers.
+- `backend/services/agent/tool_runtime.py`: tool registry + runtime execution/retry policy.
+- `backend/services/agent/tools.py`: thin composition facade for tool runtime exports.
 - `backend/services/runtime_settings.py`: persisted override + env fallback resolver for runtime settings, plus DB-backed `user_memory`.
+- `backend/services/runtime_settings_normalization.py`: shared normalization/validation helpers used by runtime settings schemas and resolver.
+- `backend/services/accounts.py`: account create/update ownership + entity-resolution command workflows.
 - `backend/services/serializers.py`: ORM -> API schema conversion.
+- `backend/db_meta.py`: side-effect-free SQLAlchemy metadata root (`Base`).
+- `backend/database.py`: explicit engine/session factories + cached runtime accessors (`get_engine`, `get_session_maker`, `get_db`).
+- `backend/models_finance.py` / `backend/models_agent.py`: split ledger vs agent ORM contract modules.
+- `backend/schemas_finance.py` / `backend/schemas_agent.py`: split ledger/settings vs agent API schema modules.
+- `backend/tests/test_import_conventions.py`: enforces explicit domain-module imports (`*_finance` / `*_agent`) and blocks new imports from compatibility facades.
 
 ## Common Change Paths
 
@@ -30,7 +63,9 @@ This module hosts the FastAPI app, SQLAlchemy models, Pydantic schemas, and doma
 Touch together:
 
 - `backend/models.py`
+- `backend/models_finance.py`
 - `backend/schemas.py`
+- `backend/schemas_finance.py`
 - `backend/routers/entries.py`
 - `backend/services/serializers.py`
 - `backend/tests/test_entries.py`
@@ -62,6 +97,7 @@ Touch together:
 
 Touch together:
 
+- `backend/services/agent/change_contracts.py`
 - `backend/services/agent/change_apply.py`
 - `backend/services/agent/review.py`
 - `backend/services/agent/tools.py` (proposal/read outputs)
@@ -71,9 +107,13 @@ Touch together:
 
 Touch together:
 
-- `backend/routers/agent.py`
+- `backend/routers/agent_api/routes.py`
+- `backend/services/agent/attachments.py`
+- `backend/services/agent/execution.py`
 - `backend/services/agent/context_tokens.py`
 - `backend/services/agent/runtime.py`
+- `backend/services/agent/run_orchestrator.py`
+- `benchmark/runner.py` (if benchmark parity behavior changes)
 - `backend/tests/test_agent.py`
 
 ## 6) Runtime Settings Changes
@@ -84,6 +124,7 @@ Touch together:
 - `backend/services/runtime_settings.py`
 - runtime consumers (`backend/routers/*`, `backend/services/agent/*`) that depend on resolved settings
 - `backend/schemas.py`
+- `backend/schemas_finance.py`
 - `backend/tests/test_settings.py`
 - Alembic migration in `alembic/versions`
 
@@ -100,12 +141,19 @@ uv run python scripts/check_docs_sync.py
 - Account contracts include `name`, `markdown_body`, `currency_code`, and owner/active state; legacy `institution`/`account_type` fields were removed.
 - Agent current-user system context now includes per-account `notes_markdown` summaries, with truncation safeguards for oversized markdown/data-url image payloads.
 - Runtime settings include optional `user_memory` text that is injected into every agent system prompt.
+- `/api/v1/settings` reports `current_user_name` from request principal; identity is not mutable via runtime settings overrides.
 - Agent system prompt current-date context is rendered in `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` (default `America/Toronto`).
 - Entry-level `status` was removed; agent review state remains only on `agent_change_items`.
 - Entry groups are derived from entry-link connected components; `/groups` is read-model only (no group create/update/delete endpoints).
 - `GET /api/v1/groups` omits singleton components (`entry_count < 2`) to focus on linked groups.
+- `GET /api/v1/groups*` and `GET /api/v1/dashboard` are principal-scoped by owned-resource visibility.
+- `POST`/`PATCH` mutations on `entities`, `tags`, and taxonomy terms require admin principal.
 - Agent tool contracts are name/selector-based (no domain IDs in model-facing arguments/outputs).
 - Entry selector/patch tool args are resilient to accidental nested JSON-object string encoding and normalize to objects before validation.
+- Proposal and apply paths share a single payload contract layer in `backend/services/agent/change_contracts.py`; patch-map editable-root validation for `update_pending_proposal` also lives there.
+- Service helper naming now encodes mutation intent: `ensure_*` helpers may create/write+flush, while `read_*`/`find_*` helpers are side-effect free.
+- Agent service imports now use explicit module paths (`backend.services.agent.runtime` / `backend.services.agent.review`) instead of package-level re-export barrels; `backend/tests/test_import_conventions.py` enforces this in CI.
+- Database bootstrap now avoids import-time engine/session initialization; migrations/scripts/tests construct explicit engine/session handles via `build_engine` + `build_session_maker`.
 - Agent emits progress notes via `send_intermediate_update`; when a run needs tool calls, prompt policy requires it as the first tool call, and runtime persists them as `agent_run_events.reasoning_update` instead of fake tool-call rows.
 - Entry create proposals can omit currency and fall back to the resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
 - Proposal tool outputs include `proposal_id` + `proposal_short_id` for follow-up reference in later turns.
@@ -155,6 +203,7 @@ uv run python scripts/check_docs_sync.py
 - Observability context (`user`, `session_id=AgentThread.id`, run trace metadata) is propagated on each model call.
 - When `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` are configured, LiteLLM `langfuse` success/failure callbacks are enabled and trace metadata is sent through LiteLLM `metadata`.
 - Dashboard currency defaults to runtime settings (`/settings` override, else `BILL_HELPER_DASHBOARD_CURRENCY_CODE` / `CAD`).
+- Benchmark and seed scripts use shared DB engine/session builders from `backend/database.py` to avoid lifecycle drift.
 
 ## Related Docs
 

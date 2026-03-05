@@ -6,8 +6,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.enums import AgentChangeStatus, AgentChangeType, AgentReviewActionType
-from backend.models import AgentChangeItem, AgentReviewAction, AgentRun
+from backend.enums_agent import AgentChangeStatus, AgentChangeType, AgentReviewActionType
+from backend.models_agent import AgentChangeItem, AgentReviewAction, AgentRun
 from backend.services.agent.change_apply import apply_change_item_payload
 from backend.services.entities import find_entity_by_name, normalize_entity_name
 

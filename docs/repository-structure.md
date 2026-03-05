@@ -9,7 +9,6 @@
 - `AGENTS.md`: project-wide coding-agent rules and doc-update requirements.
 - `pyproject.toml`: Python package metadata, dependencies, scripts, pytest config.
 - `uv.lock`: locked Python dependency graph for `uv`.
-- `main.py`: thin launcher delegating to backend app entrypoint.
 - `alembic.ini`: Alembic runtime/logging configuration.
 - `.github/workflows/docs-consistency.yml`: CI docs drift checks.
 
@@ -46,16 +45,25 @@
 
 - `__init__.py`: package marker.
 - `config.py`: settings model and environment variable binding.
-- `database.py`: SQLAlchemy engine/session setup.
-- `enums.py`: domain enums (`EntryKind`, `LinkType`, agent enums).
-- `models.py`: SQLAlchemy ORM models.
-- `schemas.py`: Pydantic request/response schemas.
+- `__main__.py`: package-local launcher (`python -m backend`).
+- `db_meta.py`: side-effect-free SQLAlchemy metadata root (`Base`).
+- `database.py`: explicit SQLAlchemy engine/session factories plus cached runtime accessors/dependencies.
+- `enums.py`: compatibility facade for domain enum modules (application code imports `enums_finance.py` / `enums_agent.py` directly).
+- `enums_finance.py`: ledger enums (`EntryKind`, `LinkType`).
+- `enums_agent.py`: agent run/review/message enums.
+- `models.py`: compatibility facade for ORM contract modules (application code imports `models_finance.py` / `models_agent.py` directly).
+- `models_finance.py`: ledger/account/entity/tag/taxonomy/entry ORM models.
+- `models_agent.py`: agent thread/run/tool-call/change/review ORM models.
+- `models_shared.py`: shared model defaults (`utc_now`, `uuid_str`) used by both model domains.
+- `schemas.py`: compatibility facade for API schema modules (application code imports `schemas_finance.py` / `schemas_agent.py` directly).
+- `schemas_finance.py`: ledger/dashboard/settings request/response schemas.
+- `schemas_agent.py`: agent thread/message/run/review request/response schemas.
 - `main.py`: FastAPI app creation, routing, CORS, health check.
 - `README.md`: backend-local change map and operational commands.
 
 ### Backend Routers (`/backend/routers`)
 
-- `accounts.py`: accounts, snapshots, reconciliation endpoints.
+- `finance/accounts.py`: accounts, snapshots, reconciliation endpoints.
 - `users.py`: system-level user list/create/update endpoints.
 - `entries.py`: entry CRUD, filtering, link creation.
 - `entities.py`: entity list/create/update endpoints for entry selectors/properties.
@@ -65,28 +73,47 @@
 - `links.py`: link deletion endpoint.
 - `groups.py`: derived entry-group read models (`GET /groups` summary + `GET /groups/{id}` graph).
 - `dashboard.py`: monthly analytics endpoint.
-- `agent.py`: append-only agent thread/message/run/review endpoints.
+- `agent_api/routes.py`: append-only agent thread/message/run/review endpoints.
 - `settings.py`: runtime settings read/update endpoints for user overrides with env fallback where applicable and DB-backed `user_memory`.
+- non-admin principal scope applies to owned-resource routes (`accounts`, `entries`, `users`, `groups`, `dashboard`).
+- shared dictionary mutation routes (`entities`, `tags`, `taxonomies` POST/PATCH) require admin principal.
 
 ### Backend Services (`/backend/services`)
 
+- `accounts.py`: account create/update ownership/entity-resolution command workflows.
 - `entries.py`: tag handling and entry soft-delete helper.
 - `tags.py`: tag color helpers (normalization and random default color generation).
 - `entities.py`: entity normalization and lookup helpers.
 - `users.py`: user normalization, lookup, and current-user helpers.
 - `groups.py`: connected-component recomputation for `group_id`.
 - `finance.py`: reconciliation, CAD dashboard analytics, projections, and chart-ready breakdown aggregations.
+- `crud_policy.py`: shared CRUD validation/conflict policy primitives and standardized error-translation helpers.
 - `serializers.py`: ORM-to-schema mapping helpers.
 - `taxonomy.py`: shared taxonomy normalization, term assignment, and usage-count helpers.
 - `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, plus DB-backed `user_memory`.
+- `runtime_settings_normalization.py`: shared normalization/validation helpers used by runtime settings schemas + service resolver.
 - `agent/`: agent runtime, tool execution, prompt-size counting, serialization, prompt/model adapters, and review apply handlers.
+  - `protocol_helpers.py`: shared helper contracts for tool-call decoding and usage-shape normalization.
+  - `protocol.py`: compatibility facade re-exporting protocol helper APIs.
+  - `error_policy.py`: shared recoverable-error policy/result primitives and contextual fallback logging.
+  - `run_orchestrator.py`: shared run-step state machine used by runtime sync/stream adapters and benchmark runner.
+  - `execution.py`: agent execution-policy service (message intake/run lifecycle/context-token reads) plus benchmark/test execution facade methods.
+  - `attachments.py`: attachment lifecycle helpers for upload persistence and thread-level directory cleanup.
+  - `content_assembly/attachments.py`: attachment parsing, PDF text/OCR extraction, and vision payload helper functions.
+  - `content_assembly/user_context.py`: account/user prompt-context normalization and truncation helpers.
+  - `orchestration/runtime_state.py`: run-event/tool-call persistence helpers used by runtime coordinator.
+  - `benchmark_interface.py`: stable benchmark execution contract returning normalized predictions/trace data.
+  - `change_contracts.py`: shared payload contract validation/normalization for proposal + apply paths.
 
 ### Backend Tests (`/backend/tests`)
 
 - `conftest.py`: test app/client setup with isolated SQLite DB.
+- `agent_test_utils.py`: shared agent test harness helpers (model patching, thread/message flows, SSE parsing, PDF fixture builders).
 - `test_entries.py`: entry/link/group/delete behavior tests.
 - `test_finance.py`: reconciliation and dashboard aggregation tests.
 - `test_taxonomies.py`: taxonomy endpoints and tag/entity category assignment behavior tests.
+- `test_auth_boundaries.py`: app-level principal dependency boundary regression tests.
+- `test_benchmark_seed_workflows.py`: benchmark/seed workflow regression tests.
 
 ## Frontend (`/frontend`)
 
@@ -165,7 +192,7 @@
   - `feature-account-reconciliation.md`: account workspace + snapshot/reconciliation flow map.
   - `/adr`: architecture decision records.
 - `/skills/notion-grade-ui/SKILL.md`: project-local frontend UI quality skill for calm, tokenized, primitives-first design implementation.
-- `/scripts/seed_defaults.py`: reset local DB and seed default tags, entity categories, and accounts.
+- `/scripts/seed_defaults.py`: reset local DB and seed default tags, entity categories, and accounts; optional user-memory copy now has explicit error policy (`best_effort` default, optional `fail_fast`) and shared DB factory usage.
 - `/scripts/seed_demo.py`: local seed dataset generation.
 - `/scripts/setup_shared_env.sh`: copies `.env` (or `.env.example`) to `~/.config/bill-helper/.env` for cross-worktree secret sharing.
 - `/scripts/check_docs_sync.py`: docs consistency checks (migration refs + stale term detection + index links).

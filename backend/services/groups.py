@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
 from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import Entry, EntryGroup, EntryLink
+from backend.models_finance import Entry, EntryGroup, EntryLink
 
 
 def _new_group_id() -> str:
@@ -21,11 +20,9 @@ def assign_initial_group(db: Session, entry: Entry) -> None:
     entry.group_id = group.id
 
 
-def recompute_entry_groups(db: Session, candidate_entry_ids: Iterable[str] | None = None) -> None:
+def recompute_entry_groups(db: Session) -> None:
     """
-    Recompute connected components of active entries and reassign group IDs.
-
-    For MVP scale we recompute across all active entries for correctness simplicity.
+    Recompute connected components across all active entries and reassign group IDs.
     """
     entries = list(db.scalars(select(Entry).where(Entry.is_deleted.is_(False))))
     if not entries:

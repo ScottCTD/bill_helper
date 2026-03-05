@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -15,31 +16,34 @@ def _resolve_prompt_timezone(timezone_name: str | None) -> tuple[str, ZoneInfo]:
         return DEFAULT_USER_TIMEZONE, ZoneInfo(DEFAULT_USER_TIMEZONE)
 
 
-def system_prompt(
-    *,
-    current_user_context: str | None = None,
-    entity_category_context: str | None = None,
-    user_memory: str | None = None,
-    current_date: date | None = None,
-    current_timezone: str | None = None,
-) -> str:
+@dataclass(frozen=True, slots=True)
+class SystemPromptContext:
+    current_user_context: str | None = None
+    entity_category_context: str | None = None
+    user_memory: str | None = None
+    current_date: date | None = None
+    current_timezone: str | None = None
+
+
+def system_prompt(context: SystemPromptContext | None = None) -> str:
+    prompt_context = context or SystemPromptContext()
     account_context = (
-        current_user_context.strip()
-        if current_user_context is not None and current_user_context.strip()
+        prompt_context.current_user_context.strip()
+        if prompt_context.current_user_context is not None and prompt_context.current_user_context.strip()
         else "(none)"
     )
     user_memory_content = (
-        user_memory.strip()
-        if user_memory is not None and user_memory.strip()
+        prompt_context.user_memory.strip()
+        if prompt_context.user_memory is not None and prompt_context.user_memory.strip()
         else "(none)"
     )
     entity_category_content = (
-        entity_category_context.strip()
-        if entity_category_context is not None and entity_category_context.strip()
+        prompt_context.entity_category_context.strip()
+        if prompt_context.entity_category_context is not None and prompt_context.entity_category_context.strip()
         else "(none)"
     )
-    timezone_name, timezone_info = _resolve_prompt_timezone(current_timezone)
-    date_text = (current_date or datetime.now(timezone_info).date()).isoformat()
+    timezone_name, timezone_info = _resolve_prompt_timezone(prompt_context.current_timezone)
+    date_text = (prompt_context.current_date or datetime.now(timezone_info).date()).isoformat()
     return f"""## Identity
 You are an expert in personal finance and accounting. You always call the right tools with the right arguments.
 
