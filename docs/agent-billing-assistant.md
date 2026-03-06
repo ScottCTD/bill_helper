@@ -45,7 +45,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; parses PDF attachments to text via PyMuPDF (line-trimmed and internal-whitespace-normalized); when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` from `markdown_body` with truncation safeguards); prepends review outcomes and interruption prefix before current user feedback in the latest user message |
 | Tools | `backend/services/agent/tool_args.py`, `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_propose.py`, `backend/services/agent/proposal_patching.py`, `backend/services/agent/tool_runtime.py`, `backend/services/agent/tools.py` | Split tool contract/runtime stack: argument schemas + normalization, read/progress handlers, proposal/mutation handlers, patch-map helpers, execution/retry registry, and thin facade |
 | Review/apply | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py` | Approval/rejection, apply handlers for proposed CRUD changes |
-| API router | `backend/routers/agent_api/routes.py` | Threads/runs/send/review/attachment endpoints |
+| API router | `backend/routers/agent.py` | Threads/runs/send/review/attachment endpoints |
 
 ## Runtime Flow
 
@@ -573,4 +573,4 @@ In `change_apply.py`:
 | `backend/services/agent/message_history.py` | LLM message construction and review-result user-message augmentation |
 | `backend/services/agent/review.py` | Approve/reject logic |
 | `backend/services/agent/change_apply.py` | Apply handlers for approved changes |
-| `backend/routers/agent_api/routes.py` | Agent HTTP endpoints |
+| `backend/routers/agent.py` | Agent HTTP endpoints |

@@ -2,8 +2,8 @@ import type { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, KeyboardEvent, 
 import { FileText, Paperclip, SendHorizontal, Square, X } from "lucide-react";
 
 import { cn } from "../../../lib/utils";
-import { Button } from "../../ui/button";
-import { Textarea } from "../../ui/textarea";
+import { Button } from "../../../components/ui/button";
+import { Textarea } from "../../../components/ui/textarea";
 import type { DraftAttachmentPreview } from "./types";
 
 interface AgentComposerProps {

@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../../components/ui/dialog";
 import type { DraftAttachmentPreview } from "./types";
 
 interface AgentAttachmentPreviewDialogProps {

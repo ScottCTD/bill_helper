@@ -56,7 +56,7 @@ import {
 } from "./panel/types";
 import { AgentRunReviewModal } from "./review/AgentRunReviewModal";
 import { useResizablePanel } from "../../hooks/useResizablePanel";
-import { Button } from "../ui/button";
+import { Button } from "../../components/ui/button";
 
 interface AgentPanelProps {
   isOpen: boolean;

@@ -30,23 +30,25 @@ This module hosts the React app, route pages, UI primitives, and API/query clien
 - `frontend/src/features/accounts/AccountDialogs.tsx`: create/edit account dialog UI.
 - `frontend/src/pages/PropertiesPage.tsx`: thin page orchestrator for property catalogs.
 - `frontend/src/features/properties/usePropertiesPageModel.ts`: properties page coordinator that composes queries/state/mutations hooks.
+- `frontend/src/features/properties/PropertiesSectionNavigation.tsx`: section-switching navigation for the properties workspace.
+- `frontend/src/features/properties/PropertiesSectionContent.tsx`: active-section renderer that keeps the page file focused on composition.
 - `frontend/src/features/properties/usePropertiesQueries.ts`: properties queries + taxonomy display/option derivation.
 - `frontend/src/features/properties/usePropertiesSectionState.ts`: active section/search/create-dialog UI state.
 - `frontend/src/features/properties/usePropertiesFormState.ts`: properties CRUD form state.
 - `frontend/src/features/properties/usePropertiesFilteredData.ts`: section-scoped filtered lists.
 - `frontend/src/features/properties/sections/*.tsx`: section-specific UI for users/entities/tags/currencies/taxonomy terms.
 - `frontend/src/pages/SettingsPage.tsx`: runtime configuration workspace for user overrides, including persistent agent memory.
-- `frontend/src/components/agent/AgentPanel.tsx`: top-level coordinator for agent state/mutations and panel composition.
-- `frontend/src/components/agent/AgentRunBlock.tsx`: run activity and summary rendering.
-- `frontend/src/components/agent/activity.ts`: run/activity derivation helpers shared across agent UI.
-- `frontend/src/components/agent/panel/*.tsx`: panel presentation modules (thread list, timeline, composer, usage bar, attachment preview dialog).
-- `frontend/src/components/agent/panel/types.ts`: panel-local draft/optimistic message contracts.
-- `frontend/src/components/agent/panel/format.ts`: date/thread/usage formatting helpers for panel UI.
-- `frontend/src/components/agent/panel/useAgentDraftAttachments.ts`: attachment input/paste/drag-drop/preview state + handlers.
+- `frontend/src/features/agent/AgentPanel.tsx`: top-level coordinator for agent state/mutations and panel composition.
+- `frontend/src/features/agent/AgentRunBlock.tsx`: run activity and summary rendering.
+- `frontend/src/features/agent/activity.ts`: run/activity derivation helpers shared across agent UI.
+- `frontend/src/features/agent/panel/*.tsx`: panel presentation modules (thread list, timeline, composer, usage bar, attachment preview dialog).
+- `frontend/src/features/agent/panel/types.ts`: panel-local draft/optimistic message contracts.
+- `frontend/src/features/agent/panel/format.ts`: date/thread/usage formatting helpers for panel UI.
+- `frontend/src/features/agent/panel/useAgentDraftAttachments.ts`: attachment input/paste/drag-drop/preview state + handlers.
 - `frontend/src/hooks/useResizablePanel.ts`: shared drag-to-resize hook for persistent sidebar and thread-rail widths.
-- `frontend/src/components/agent/review/*`: run review modal and payload diff renderer.
-- `frontend/src/components/agent/*.test.tsx`: agent UI unit tests.
-- `frontend/src/components/agent/panel/AgentThreadList.test.tsx`: thread-list selection/delete interaction coverage.
+- `frontend/src/features/agent/review/*`: run review modal and payload diff renderer.
+- `frontend/src/features/agent/*.test.tsx`: agent UI unit tests.
+- `frontend/src/features/agent/panel/AgentThreadList.test.tsx`: thread-list selection/delete interaction coverage.
 - `frontend/src/pages/AccountsPage.test.tsx`, `frontend/src/pages/PropertiesPage.test.tsx`: page-level integration tests for workspace flows.
 - `frontend/src/test/renderWithQueryClient.tsx`: reusable query-client test renderer.
 - `frontend/src/test/factories/agent.ts`: shared typed test fixtures for agent domain models.
@@ -173,7 +175,7 @@ uv run python scripts/check_docs_sync.py
 - Agent review modal includes `Reject All` with confirmation; per-item `Approve & Next` is removed in favor of direct approve/reject + batch actions.
 - Expanded tool-call details prioritize model-visible tool output text and keep structured JSON as secondary debug output.
 - Agent home uses a dedicated right-pane timeline scroller while keeping the scrollbar at the panel edge (not beside message bubbles).
-- Timeline auto-follow is handled in `frontend/src/components/agent/panel/useStickToBottom.ts` with callback-ref binding to ensure the mounted timeline node is always tracked.
+- Timeline auto-follow is handled in `frontend/src/features/agent/panel/useStickToBottom.ts` with callback-ref binding to ensure the mounted timeline node is always tracked.
 - While the user is at/near bottom (24px threshold), incoming streaming tool/update rows auto-follow to the latest content; scrolling up detaches follow mode until the user scrolls back down or presses the down-arrow button.
 - The left thread rail is viewport-bounded with independent overflow scrolling and does not move when timeline content scrolls.
 - Thread rows in the left rail are fixed-height, non-shrinking list items so long thread lists overflow and scroll instead of compressing.

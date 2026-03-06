@@ -6,7 +6,7 @@
 - `.env.example`: env-var template with all supported variables (committed; no secrets).
 - `.python-version`: local Python version hint.
 - `README.md`: top-level guide and quickstart.
-- `AGENTS.md`: project-wide coding-agent rules and doc-update requirements.
+- `AGENTS.md`: project-wide coding-agent rules, doc-update requirements, and repo-local skill registration.
 - `pyproject.toml`: Python package metadata, dependencies, scripts, pytest config.
 - `uv.lock`: locked Python dependency graph for `uv`.
 - `alembic.ini`: Alembic runtime/logging configuration.
@@ -63,7 +63,7 @@
 
 ### Backend Routers (`/backend/routers`)
 
-- `finance/accounts.py`: accounts, snapshots, reconciliation endpoints.
+- `accounts.py`: accounts, snapshots, reconciliation endpoints.
 - `users.py`: system-level user list/create/update endpoints.
 - `entries.py`: entry CRUD, filtering, link creation.
 - `entities.py`: entity list/create/update endpoints for entry selectors/properties.
@@ -73,7 +73,7 @@
 - `links.py`: link deletion endpoint.
 - `groups.py`: derived entry-group read models (`GET /groups` summary + `GET /groups/{id}` graph).
 - `dashboard.py`: monthly analytics endpoint.
-- `agent_api/routes.py`: append-only agent thread/message/run/review endpoints.
+- `agent.py`: append-only agent thread/message/run/review endpoints.
 - `settings.py`: runtime settings read/update endpoints for user overrides with env fallback where applicable and DB-backed `user_memory`.
 - non-admin principal scope applies to owned-resource routes (`accounts`, `entries`, `users`, `groups`, `dashboard`).
 - shared dictionary mutation routes (`entities`, `tags`, `taxonomies` POST/PATCH) require admin principal.
@@ -99,9 +99,9 @@
   - `run_orchestrator.py`: shared run-step state machine used by runtime sync/stream adapters and benchmark runner.
   - `execution.py`: agent execution-policy service (message intake/run lifecycle/context-token reads) plus benchmark/test execution facade methods.
   - `attachments.py`: attachment lifecycle helpers for upload persistence and thread-level directory cleanup.
-  - `content_assembly/attachments.py`: attachment parsing, PDF text/OCR extraction, and vision payload helper functions.
-  - `content_assembly/user_context.py`: account/user prompt-context normalization and truncation helpers.
-  - `orchestration/runtime_state.py`: run-event/tool-call persistence helpers used by runtime coordinator.
+  - `attachment_content.py`: attachment parsing, PDF text/OCR extraction, and vision payload helper functions.
+  - `user_context.py`: account/user prompt-context normalization and truncation helpers.
+  - `runtime_state.py`: run-event/tool-call persistence helpers used by runtime coordinator.
   - `benchmark_interface.py`: stable benchmark execution contract returning normalized predictions/trace data.
   - `change_contracts.py`: shared payload contract validation/normalization for proposal + apply paths.
 
@@ -192,6 +192,7 @@
   - `feature-account-reconciliation.md`: account workspace + snapshot/reconciliation flow map.
   - `/adr`: architecture decision records.
 - `/skills/notion-grade-ui/SKILL.md`: project-local frontend UI quality skill for calm, tokenized, primitives-first design implementation.
+- `/skills/desloppify-maintenance/SKILL.md`: project-local desloppify workflow skill for exclude review, queue-driven fix loops, and standards-log updates during cleanup campaigns.
 - `/scripts/seed_defaults.py`: reset local DB and seed default tags, entity categories, and accounts; optional user-memory copy now has explicit error policy (`best_effort` default, optional `fail_fast`) and shared DB factory usage.
 - `/scripts/seed_demo.py`: local seed dataset generation.
 - `/scripts/setup_shared_env.sh`: copies `.env` (or `.env.example`) to `~/.config/bill-helper/.env` for cross-worktree secret sharing.

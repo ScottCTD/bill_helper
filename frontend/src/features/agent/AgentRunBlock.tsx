@@ -16,8 +16,8 @@ import {
   type ReasoningUpdateSource,
   type RunActivityItem
 } from "./activity";
-import { Button } from "../ui/button";
-import { MarkdownRenderer } from "../ui/MarkdownRenderer";
+import { Button } from "../../components/ui/button";
+import { MarkdownRenderer } from "../../components/ui/MarkdownRenderer";
 
 interface AgentRunBlockProps {
   run: AgentRun;

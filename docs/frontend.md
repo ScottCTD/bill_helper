@@ -203,6 +203,9 @@ Agent client methods:
 ## `PropertiesPage.tsx`
 
 - page is now a thin orchestrator; domain state/actions live in `frontend/src/features/properties/usePropertiesPageModel.ts`
+- page composition is further split into:
+  - `frontend/src/features/properties/PropertiesSectionNavigation.tsx`
+  - `frontend/src/features/properties/PropertiesSectionContent.tsx`
 - properties model internals are split into focused hooks:
   - `frontend/src/features/properties/usePropertiesQueries.ts` (queries + taxonomy option/label derivation)
   - `frontend/src/features/properties/usePropertiesSectionState.ts` (active section/search/create-dialog UI state)
@@ -272,25 +275,25 @@ Agent client methods:
 
 ## Agent UI
 
-## `frontend/src/components/agent/AgentPanel.tsx`
+## `frontend/src/features/agent/AgentPanel.tsx`
 
 Used as the primary AI page (`/`) via `frontend/src/pages/HomePage.tsx`.
 
 This file now acts as the stateful coordinator. Run activity rendering and derivation logic were extracted to:
 
-- `frontend/src/components/agent/AgentRunBlock.tsx`
-- `frontend/src/components/agent/activity.ts`
+- `frontend/src/features/agent/AgentRunBlock.tsx`
+- `frontend/src/features/agent/activity.ts`
 - panel rendering surfaces were further extracted to:
-  - `frontend/src/components/agent/panel/AgentThreadList.tsx`
-  - `frontend/src/components/agent/panel/AgentThreadPanel.tsx` — wrapper with collapse toggle button
-  - `frontend/src/components/agent/panel/AgentTimeline.tsx`
-  - `frontend/src/components/agent/panel/AgentComposer.tsx`
-  - `frontend/src/components/agent/panel/AgentThreadUsageBar.tsx`
-  - `frontend/src/components/agent/panel/AgentAttachmentPreviewDialog.tsx`
-  - `frontend/src/components/agent/panel/useAgentDraftAttachments.ts`
+  - `frontend/src/features/agent/panel/AgentThreadList.tsx`
+  - `frontend/src/features/agent/panel/AgentThreadPanel.tsx` — wrapper with collapse toggle button
+  - `frontend/src/features/agent/panel/AgentTimeline.tsx`
+  - `frontend/src/features/agent/panel/AgentComposer.tsx`
+  - `frontend/src/features/agent/panel/AgentThreadUsageBar.tsx`
+  - `frontend/src/features/agent/panel/AgentAttachmentPreviewDialog.tsx`
+  - `frontend/src/features/agent/panel/useAgentDraftAttachments.ts`
   - `frontend/src/hooks/useResizablePanel.ts` — shared horizontal drag-to-resize with localStorage persistence
-  - `frontend/src/components/agent/panel/types.ts`
-  - `frontend/src/components/agent/panel/format.ts`
+  - `frontend/src/features/agent/panel/types.ts`
+  - `frontend/src/features/agent/panel/format.ts`
 
 Timeline features:
 
@@ -312,7 +315,7 @@ Timeline features:
 - main chat timeline fills remaining space with centered max-width (max 896px / `max-w-4xl`)
 - conversation and composer occupy the left/main area; thread panel occupies the right
 - timeline scroll behavior is a dedicated scroll surface with scrollbar at panel edge
-- timeline auto-follow is managed by `useStickToBottom` (`frontend/src/components/agent/panel/useStickToBottom.ts`) with a callback ref so the hook reliably binds when the timeline scroller mounts
+- timeline auto-follow is managed by `useStickToBottom` (`frontend/src/features/agent/panel/useStickToBottom.ts`) with a callback ref so the hook reliably binds when the timeline scroller mounts
 - while the timeline is at/near bottom (24px threshold), streaming growth from new tool/update rows keeps snapping to the latest content; manual upward scroll detaches auto-follow until the user scrolls back down or presses the down-arrow button
 - desktop thread rail is viewport-bounded and keeps its own independent overflow scroll
 - thread-rail rows are fixed-height non-shrinking items so overflow stays scrollable instead of vertically compressing entries
@@ -354,11 +357,11 @@ Timeline features:
 
 Review actions:
 
-- handled in a dedicated run-scoped review modal (`frontend/src/components/agent/review/AgentRunReviewModal.tsx`)
+- handled in a dedicated run-scoped review modal (`frontend/src/features/agent/review/AgentRunReviewModal.tsx`)
 - modal behavior:
   - one scrollable column with stacked proposal blocks in run order
   - focused pending block is tracked by `IntersectionObserver`
-  - CRUD-aware field-level diff rendering (`frontend/src/components/agent/review/diff.ts`):
+  - CRUD-aware field-level diff rendering (`frontend/src/features/agent/review/diff.ts`):
     - create proposals render additive `+` field lines
     - update proposals render changed fields only (`-` old / `+` new)
     - delete proposals render removed `-` field lines for the target identity/resource payload

@@ -17,6 +17,7 @@ This document defines how to keep docs fast to navigate and hard to drift.
 | Backend architecture/operations | `docs/backend.md` | `backend/README.md`, `docs/development.md` |
 | Frontend architecture/operations | `docs/frontend.md` | `frontend/README.md`, `docs/development.md` |
 | Project setup/run | `README.md` | `docs/development.md` |
+| Agent workflow / repo-local skills | `AGENTS.md`, `skills/*.md` | `docs/development.md`, `docs/repository-structure.md` |
 | Feature deep dives | `docs/feature-*.md` | `docs/backend.md`, `docs/frontend.md` |
 | Structural decisions | `docs/adr/*.md` | `docs/architecture.md` |
 
@@ -32,6 +33,7 @@ Files in `docs/todo/` and `docs/completed/` must use a date prefix (YYYY-MM-DD).
 - Schema/migration change: update `docs/data-model.md` + `docs/backend.md` + migration list references.
 - UI behavior change: update `docs/frontend.md` + feature map.
 - Operational command change: update `README.md` + `docs/development.md`.
+- Agent workflow or local skill change: update `AGENTS.md` + affected `skills/*.md` + `docs/development.md` or `docs/repository-structure.md` when discovery/ownership changed.
 - Major design decision: add an ADR in `docs/adr/`.
 
 ## Drift Prevention

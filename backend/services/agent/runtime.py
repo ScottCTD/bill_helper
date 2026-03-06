@@ -27,7 +27,7 @@ from backend.services.agent.model_client import (
     LiteLLMModelClient,
     validate_litellm_environment,
 )
-from backend.services.agent.orchestration.runtime_state import (
+from backend.services.agent.runtime_state import (
     PreparedToolCall,
     apply_usage_totals_to_run as _apply_usage_totals_to_run,
     cancel_incomplete_tool_calls as _cancel_incomplete_tool_calls,

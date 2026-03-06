@@ -80,11 +80,11 @@ Contract notes:
 ## Agent Internal Boundaries (Refactor Baseline)
 
 - `runtime.py`: run lifecycle coordinator and stable model-call monkeypatch seam (`call_model`, `call_model_stream`)
-- `orchestration/runtime_state.py`: runtime event/tool-call/terminal-state persistence helpers
+- `runtime_state.py`: runtime event/tool-call/terminal-state persistence helpers
 - `run_orchestrator.py`: shared step-state machine used by runtime sync/stream flows and benchmark adapters
 - `message_history.py`: message-history query flow and turn-level review/interruption prefix composition
-- `content_assembly/attachments.py`: attachment parsing (PDF text/OCR, image payloads, vision capability checks)
-- `content_assembly/user_context.py`: current-user/account context normalization and truncation for prompt assembly
+- `attachment_content.py`: attachment parsing (PDF text/OCR, image payloads, vision capability checks)
+- `user_context.py`: current-user/account context normalization and truncation for prompt assembly
 - `model_client.py`: LiteLLM adapter and normalized model errors
 - `model_client.py`: tenacity retries for model completion calls
 - `change_apply.py`: change-type handler registry for review-time resource application
@@ -104,9 +104,10 @@ Agent state:
 - message send + approve/reject mutations
 - optimistic user/assistant message placeholders while runs are in-flight
 - panel-level UI split:
-  - coordinator: `frontend/src/components/agent/AgentPanel.tsx`
-  - presentation modules: `frontend/src/components/agent/panel/*`
-  - run rendering/derivation: `frontend/src/components/agent/AgentRunBlock.tsx`, `frontend/src/components/agent/activity.ts`
+  - coordinator: `frontend/src/features/agent/AgentPanel.tsx`
+  - presentation modules: `frontend/src/features/agent/panel/*`
+  - run rendering/derivation: `frontend/src/features/agent/AgentRunBlock.tsx`, `frontend/src/features/agent/activity.ts`
+  - feature-owned location keeps agent UI beside its tests/review/timeline helpers instead of under generic shared components
 
 Cross-page consistency:
 

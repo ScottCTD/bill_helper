@@ -48,7 +48,7 @@ This doc is the fast path for understanding how entries are created, edited, lin
    (re-exported through `backend/services/agent/tools.py`).
 2. Proposal persisted as `agent_change_items` (`PENDING_REVIEW`).
 3. Human approves from frontend review UI:
-   - `frontend/src/components/agent/review/AgentRunReviewModal.tsx`
+   - `frontend/src/features/agent/review/AgentRunReviewModal.tsx`
 4. Apply handler:
    - `backend/services/agent/review.py`
    - `backend/services/agent/change_apply.py`

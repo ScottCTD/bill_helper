@@ -53,19 +53,20 @@ export function useStickToBottom<T extends HTMLElement>() {
     if (!containerEl) {
       return;
     }
+    const container = containerEl;
     function handleScroll() {
       if (programmaticScroll.current) {
         return;
       }
-      const atBottom = distanceFromBottom(containerEl.scrollHeight, containerEl.scrollTop, containerEl.clientHeight) <= BOTTOM_THRESHOLD_PX;
+      const atBottom = distanceFromBottom(container.scrollHeight, container.scrollTop, container.clientHeight) <= BOTTOM_THRESHOLD_PX;
       if (atBottom) {
         stick();
       } else {
         unstick();
       }
     }
-    containerEl.addEventListener("scroll", handleScroll, { passive: true });
-    return () => containerEl.removeEventListener("scroll", handleScroll);
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
   }, [containerEl, stick, unstick]);
 
   // Poll scrollHeight via rAF — catches every kind of size change
@@ -74,20 +75,21 @@ export function useStickToBottom<T extends HTMLElement>() {
     if (!containerEl) {
       return;
     }
-    prevScrollHeight.current = containerEl.scrollHeight;
+    const container = containerEl;
+    prevScrollHeight.current = container.scrollHeight;
     let rafId: number;
 
     function tick() {
       const previousHeight = prevScrollHeight.current;
-      const newHeight = containerEl.scrollHeight;
+      const newHeight = container.scrollHeight;
       if (newHeight !== previousHeight) {
-        const distanceBeforeGrowth = distanceFromBottom(previousHeight, containerEl.scrollTop, containerEl.clientHeight);
+        const distanceBeforeGrowth = distanceFromBottom(previousHeight, container.scrollTop, container.clientHeight);
         prevScrollHeight.current = newHeight;
         if (stuckRef.current || distanceBeforeGrowth <= BOTTOM_THRESHOLD_PX) {
           stick();
           clearProgrammaticGuardTimer();
           programmaticScroll.current = true;
-          containerEl.scrollTop = newHeight;
+          container.scrollTop = newHeight;
           programmaticScroll.current = false;
         }
       }
