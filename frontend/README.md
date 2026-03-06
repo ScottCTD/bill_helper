@@ -166,6 +166,7 @@ uv run python scripts/check_docs_sync.py
 - `/api/v1/groups` omits singleton components (`entry_count < 2`), so the list focuses on linked groups.
 - On wide layouts, the left groups summary panel is viewport-bounded and scrolls internally so long group lists do not stretch overall page height.
 - Graph rendering uses `reactflow` (pan/zoom/controls/minimap) via `GroupGraphView`.
+- `GroupGraphView` suppresses React Flow warning `002` locally because it is a dev-only false positive in this view; other React Flow warnings still surface through the same handler.
 - Runtime settings are loaded from `/api/v1/settings` and affect default currency/model behavior across pages.
 - Runtime settings include an `Agent memory` textarea; when set, that text is attached to every backend agent system prompt.
 - Agent review timeline supports create/update/delete change items for entries, tags, and entities.

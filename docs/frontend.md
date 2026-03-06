@@ -169,6 +169,7 @@ Agent client methods:
 - dedicated derived-group workspace (`/groups`)
 - left summary list sourced from `GET /groups` (linked groups only; `entry_count >= 2`)
 - selected group graph detail sourced from `GET /groups/{group_id}`
+- `GroupGraphView.tsx` now filters React Flow error code `002` locally because the library emits it as a dev-only false positive for this graph; other React Flow warnings still log normally
 - link operation panel for group-shape mutations using existing link endpoints:
   - create: icon `+` action opens `LinkEditorModal`, submits `POST /entries/{entry_id}/links`
   - delete: `DELETE /links/{link_id}`
