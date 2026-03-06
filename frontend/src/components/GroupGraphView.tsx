@@ -17,6 +17,19 @@ interface GroupGraphViewProps {
   graph: GroupGraph;
 }
 
+const FLOW_FIT_VIEW_OPTIONS = { padding: 0.22 } as const;
+const FLOW_DEFAULT_EDGE_OPTIONS = { type: "smoothstep" } as const;
+const FLOW_PRO_OPTIONS = { hideAttribution: true } as const;
+
+function handleReactFlowError(code: string, message: string) {
+  // React Flow currently emits error 002 as a dev-only false positive for this view.
+  if (import.meta.env.DEV && code === "002") {
+    return;
+  }
+
+  console.warn(`[React Flow]: ${message} Help: https://reactflow.dev/error#${code}`);
+}
+
 export function GroupGraphView({ graph }: GroupGraphViewProps) {
   if (graph.nodes.length === 0) {
     return <p className="muted">No linked entries in this group.</p>;
@@ -107,14 +120,15 @@ export function GroupGraphView({ graph }: GroupGraphViewProps) {
         nodes={nodes}
         edges={edges}
         fitView
-        fitViewOptions={{ padding: 0.22 }}
-        defaultEdgeOptions={{ type: "smoothstep" }}
+        fitViewOptions={FLOW_FIT_VIEW_OPTIONS}
+        defaultEdgeOptions={FLOW_DEFAULT_EDGE_OPTIONS}
         nodesConnectable={false}
         nodesDraggable={false}
         elementsSelectable={false}
         minZoom={0.35}
         maxZoom={1.8}
-        proOptions={{ hideAttribution: true }}
+        proOptions={FLOW_PRO_OPTIONS}
+        onError={handleReactFlowError}
         className="group-flow-canvas"
       >
         <MiniMap className="group-flow-minimap" pannable={false} zoomable />

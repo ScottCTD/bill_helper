@@ -39,6 +39,7 @@ This doc is the fast path for understanding how entries are created, edited, lin
    - `frontend/src/pages/GroupsPage.tsx`
    - `frontend/src/components/LinkEditorModal.tsx` for modal link creation from `+` actions
    - `frontend/src/components/GroupGraphView.tsx` (React Flow renderer)
+   - `GroupGraphView.tsx` filters React Flow dev warning `002` locally because that warning is a false positive for this view; other graph warnings still surface
 5. Group-shape CRUD intent is link-driven only (no first-class group CRUD endpoints).
 
 ## Agent-Proposed Entry Flow
