@@ -124,7 +124,7 @@ export function AccountsTableSection(props: AccountsTableSectionProps) {
                           <Button
                             type="button"
                             size="sm"
-                            variant="destructive"
+                            variant="outline"
                             onClick={(event) => {
                               event.stopPropagation();
                               onDeleteAccount(account.id);

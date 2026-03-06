@@ -124,9 +124,6 @@ export function EntitiesSection(props: EntitiesSectionProps) {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Category</TableHead>
-                <TableHead>From</TableHead>
-                <TableHead>To</TableHead>
-                <TableHead>Accounts</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -135,16 +132,15 @@ export function EntitiesSection(props: EntitiesSectionProps) {
                 <TableRow key={entity.id}>
                   <TableCell>{entity.name}</TableCell>
                   <TableCell>{entity.category || "(none)"}</TableCell>
-                  <TableCell>{entity.from_count ?? 0}</TableCell>
-                  <TableCell>{entity.to_count ?? 0}</TableCell>
-                  <TableCell>{entity.account_count ?? 0}</TableCell>
                   <TableCell>
-                    <Button type="button" size="sm" variant="outline" onClick={() => onStartEditEntity(entity)}>
-                      Edit
-                    </Button>
-                    <Button type="button" size="sm" variant="destructive" onClick={() => onStartDeleteEntity(entity)}>
-                      Delete
-                    </Button>
+                    <div className="table-actions">
+                      <Button type="button" size="sm" variant="outline" onClick={() => onStartEditEntity(entity)}>
+                        Edit
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => onStartDeleteEntity(entity)}>
+                        Delete
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

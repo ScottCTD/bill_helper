@@ -160,12 +160,14 @@ export function TagsSection(props: TagsSectionProps) {
                   <TableCell>{tag.type || "(none)"}</TableCell>
                   <TableCell>{tag.description || "(none)"}</TableCell>
                   <TableCell>
-                    <Button type="button" size="sm" variant="outline" onClick={() => onStartEditTag(tag)}>
-                      Edit
-                    </Button>
-                    <Button type="button" size="sm" variant="destructive" onClick={() => onStartDeleteTag(tag)}>
-                      Delete
-                    </Button>
+                    <div className="table-actions">
+                      <Button type="button" size="sm" variant="outline" onClick={() => onStartEditTag(tag)}>
+                        Edit
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => onStartDeleteTag(tag)}>
+                        Delete
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

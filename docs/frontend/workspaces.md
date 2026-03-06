@@ -54,7 +54,9 @@
 - editable sections use modal-driven create and edit flows
 - taxonomy term tables expose `Entity Categories` and `Tag Types`
 - account-backed entities are hidden from the generic `Entities` table
+- the generic `Entities` table now stays compact and shows only `Name`, `Category`, and row actions
 - entities and tags have destructive confirmation dialogs
+- account, entity, and tag row delete controls use the subdued shared table action styling; destructive emphasis is reserved for confirmation
 - entity delete warns when preserved entry labels will become missing markers
 - tag delete warns when existing entry-tag associations will be removed
 - currencies remain read-only
