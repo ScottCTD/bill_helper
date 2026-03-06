@@ -1,1 +1,0 @@
-right now properties like accounts, entities, tags are not deletable from the frontend UI.
