@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AgentChangeItem, AgentChangeStatus, AgentRun } from "../../../lib/types";
 import { cn } from "../../../lib/utils";
-import { Badge } from "../../ui/badge";
-import { Button } from "../../ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../ui/dialog";
-import { Textarea } from "../../ui/textarea";
+import { Badge } from "../../../components/ui/badge";
+import { Button } from "../../../components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../../components/ui/dialog";
+import { Textarea } from "../../../components/ui/textarea";
 import { buildProposalDiff, jsonRecordsAreEquivalent } from "./diff";
 
 interface AgentRunReviewModalProps {

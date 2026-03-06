@@ -16,7 +16,7 @@ from backend.models_agent import (
     AgentRun,
     AgentToolCall,
 )
-from backend.services.agent.content_assembly.attachments import (
+from backend.services.agent.attachment_content import (
     AttachmentAssemblyOptions,
     assemble_attachment_parts,
     extract_pdf_text as _extract_pdf_text_impl,
@@ -24,7 +24,7 @@ from backend.services.agent.content_assembly.attachments import (
     model_supports_vision,
     pdf_page_image_data_urls as _pdf_page_image_data_urls,
 )
-from backend.services.agent.content_assembly.user_context import (
+from backend.services.agent.user_context import (
     build_current_user_context as _build_current_user_context,
 )
 from backend.services.agent.prompts import SystemPromptContext, system_prompt

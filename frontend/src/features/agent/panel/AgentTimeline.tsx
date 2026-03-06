@@ -5,7 +5,7 @@ import { withApiBase } from "../../../lib/api";
 import type { AgentMessage, AgentRun, AgentRunEvent, AgentToolCall } from "../../../lib/types";
 import { cn } from "../../../lib/utils";
 import { AgentRunBlock, PendingAssistantActivityBlock } from "../AgentRunBlock";
-import { MarkdownRenderer } from "../../ui/MarkdownRenderer";
+import { MarkdownRenderer } from "../../../components/ui/MarkdownRenderer";
 import { prettyDateTime } from "./format";
 import type { PendingAssistantMessage, PendingUserMessage } from "./types";
 

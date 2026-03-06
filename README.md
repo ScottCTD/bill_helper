@@ -146,12 +146,13 @@ backend/                  # FastAPI application
   schemas_finance.py      # Ledger/dashboard/settings request/response schemas
   schemas_agent.py        # Agent thread/run/review request/response schemas
 frontend/                 # React + Vite application
-  src/components/agent/   # Agent chat panel and review modal
-  src/features/           # Feature modules (accounts, properties)
+  src/features/agent/     # Agent workspace, timeline, and review feature
+  src/features/           # Feature modules (agent, accounts, properties)
   src/pages/              # Route pages
 alembic/                  # Database migrations
 scripts/                  # Dev and seed scripts
 docs/                     # Extended documentation
+skills/                   # Project-local Codex skills and maintenance workflows
 ```
 
 ## Testing

@@ -452,3 +452,5 @@ export function usePropertiesPageModel() {
     }
   };
 }
+
+export type PropertiesPageModel = ReturnType<typeof usePropertiesPageModel>;

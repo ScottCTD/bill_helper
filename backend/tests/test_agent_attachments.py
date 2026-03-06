@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 
 def test_extract_pdf_text_with_tesseract_uses_subprocess_timeout(monkeypatch, tmp_path):
-    from backend.services.agent.content_assembly import attachments
+    from backend.services.agent import attachment_content as attachments
 
     pdf_path = tmp_path / "scan.pdf"
     pdf_path.write_bytes(b"%PDF-1.4")
@@ -47,7 +47,7 @@ def test_extract_pdf_text_with_tesseract_uses_subprocess_timeout(monkeypatch, tm
 
 
 def test_extract_pdf_text_with_tesseract_records_timeout_failure_code(monkeypatch, tmp_path):
-    from backend.services.agent.content_assembly import attachments
+    from backend.services.agent import attachment_content as attachments
 
     pdf_path = tmp_path / "timeout.pdf"
     pdf_path.write_bytes(b"%PDF-1.4")

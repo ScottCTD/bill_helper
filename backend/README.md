@@ -25,7 +25,7 @@ Initialization contract:
 - `backend/routers/entries.py`: entry CRUD, filters, link creation.
 - `backend/routers/groups.py`: derived group summaries and graph detail read models.
 - `backend/routers/dashboard.py`: monthly dashboard analytics endpoint.
-- `backend/routers/agent_api/routes.py`: agent thread/run/review endpoints.
+- `backend/routers/agent.py`: agent thread/run/review endpoints.
 - `backend/routers/settings.py`: runtime settings read/update endpoints.
 - `backend/services/finance.py`: reconciliation + dashboard aggregations/projection.
 - `backend/services/crud_policy.py`: shared router-side domain policy primitives (required-name normalization, uniqueness/conflict guards, and standardized policy-violation translation).
@@ -33,8 +33,8 @@ Initialization contract:
 - `backend/services/agent/change_apply.py`: apply approved proposals.
 - `backend/services/agent/attachments.py`: attachment lifecycle helpers (store upload bytes, derive per-thread attachment directories, and cleanup on thread delete).
 - `backend/services/agent/execution.py`: agent execution policy service (message validation, attachment persistence handoff, run start/background continuation, current-context token calculation) plus stable benchmark/test execution facade methods.
-- `backend/services/agent/content_assembly/*`: content-building helpers split by concern (`attachments.py` for PDF/image parsing + vision payloads, `user_context.py` for account/user context assembly).
-- `backend/services/agent/orchestration/runtime_state.py`: runtime event/tool-call persistence state helpers extracted from `runtime.py`.
+- `backend/services/agent/attachment_content.py` + `backend/services/agent/user_context.py`: content-building helpers split by concern (attachment parsing/vision payloads vs account/user context assembly).
+- `backend/services/agent/runtime_state.py`: runtime event/tool-call persistence state helpers extracted from `runtime.py`.
 - `backend/services/agent/benchmark_interface.py`: stable benchmark-facing case execution contract that returns normalized predictions + trace metadata without exposing runner to runtime internals.
 - `backend/services/agent/run_orchestrator.py`: shared run-step state machine for sync runtime, streaming runtime, and benchmark execution adapters.
 - `backend/services/agent/protocol_helpers.py`: shared helper contracts for tool-call decoding and normalized usage extraction/accumulation across runtime and benchmark.
@@ -107,7 +107,7 @@ Touch together:
 
 Touch together:
 
-- `backend/routers/agent_api/routes.py`
+- `backend/routers/agent.py`
 - `backend/services/agent/attachments.py`
 - `backend/services/agent/execution.py`
 - `backend/services/agent/context_tokens.py`

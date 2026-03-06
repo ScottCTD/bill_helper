@@ -96,8 +96,8 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `backend/routers/links.py`
   - `backend/routers/groups.py`
   - `backend/routers/dashboard.py`
-  - `backend/routers/finance/accounts.py`
-  - `backend/routers/agent_api/routes.py`
+  - `backend/routers/accounts.py`
+  - `backend/routers/agent.py`
   - `backend/routers/settings.py`
 - Core services:
   - `backend/services/groups.py`
@@ -130,8 +130,8 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `frontend/src/features/accounts/*`
   - `frontend/src/pages/PropertiesPage.tsx`
   - `frontend/src/features/properties/*`
-  - `frontend/src/components/agent/AgentPanel.tsx`
-  - `frontend/src/components/agent/panel/*`
+  - `frontend/src/features/agent/AgentPanel.tsx`
+  - `frontend/src/features/agent/panel/*`
 
 ## Operational Impact
 

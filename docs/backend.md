@@ -282,11 +282,11 @@ Agent services:
   - wraps message assembly, model completion (sync/stream), tool-context construction, and tool execution behind one import surface
 - `backend/services/agent/attachments.py`
   - owns attachment file lifecycle helpers (store uploaded bytes and delete per-thread upload directories)
-- `backend/services/agent/content_assembly/attachments.py`
+- `backend/services/agent/attachment_content.py`
   - owns attachment IO parsing and model-content materialization (PDF text/OCR/image payload helpers and vision capability checks)
-- `backend/services/agent/content_assembly/user_context.py`
+- `backend/services/agent/user_context.py`
   - owns current-user/account prompt-context normalization and truncation rules
-- `backend/services/agent/orchestration/runtime_state.py`
+- `backend/services/agent/runtime_state.py`
   - owns run-event, tool-call, and terminal-state persistence helpers used by runtime orchestration
 - `backend/services/agent/benchmark_interface.py`
   - benchmark-facing execution contract (`run_benchmark_case`) returning normalized predictions and trace payloads
@@ -317,8 +317,8 @@ Agent services:
 - Agent run orchestration is centralized in `backend/services/agent/run_orchestrator.py`; sync runtime, streaming runtime, and `benchmark/runner.py` now use adapter wrappers over the same step state machine.
 - Tool-call decoding and usage-shape normalization are centralized in `backend/services/agent/protocol_helpers.py`; runtime and benchmark no longer maintain separate helper implementations.
 - Recoverable fallback paths in agent services now use `backend/services/agent/error_policy.py` to attach scope/context metadata and avoid context-free suppression.
-- Runtime orchestration helpers are split into `backend/services/agent/orchestration/runtime_state.py`, while `backend/services/agent/runtime.py` remains the execution coordinator and stable monkeypatch seam (`call_model`, `call_model_stream`).
-- Content assembly helpers are split into `backend/services/agent/content_assembly/*`, while `backend/services/agent/message_history.py` coordinates history/query flow and turn-level prefix composition.
+- Runtime orchestration helpers are split into `backend/services/agent/runtime_state.py`, while `backend/services/agent/runtime.py` remains the execution coordinator and stable monkeypatch seam (`call_model`, `call_model_stream`).
+- Content assembly helpers are split into `backend/services/agent/attachment_content.py` and `backend/services/agent/user_context.py`, while `backend/services/agent/message_history.py` coordinates history/query flow and turn-level prefix composition.
 - Benchmark case execution is centralized in `backend/services/agent/benchmark_interface.py`, so `benchmark/runner.py` depends on a stable normalized contract instead of internal run-loop/tool-call persistence details.
 - `backend/services/agent/review.py`
   - per-item approve/reject workflow and state transitions
@@ -366,7 +366,7 @@ Core routers:
 
 Agent router:
 
-- `backend/routers/agent_api/routes.py`
+- `backend/routers/agent.py`
 - delegates message validation + run lifecycle policy to `backend/services/agent/execution.py`
 - delegates attachment storage/cleanup ownership to `backend/services/agent/attachments.py`
 - starts background runs with an injected session factory (`get_session_maker`) instead of implicit module-global session bootstrap

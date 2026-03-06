@@ -303,13 +303,13 @@ uv run alembic upgrade head
 
 Backend agent modules:
 
-- `backend/routers/agent_api/routes.py`
+- `backend/routers/agent.py`
 - `backend/services/agent/runtime.py`
-- `backend/services/agent/orchestration/runtime_state.py`
+- `backend/services/agent/runtime_state.py`
 - `backend/services/agent/run_orchestrator.py`
 - `backend/services/agent/message_history.py`
-- `backend/services/agent/content_assembly/attachments.py`
-- `backend/services/agent/content_assembly/user_context.py`
+- `backend/services/agent/attachment_content.py`
+- `backend/services/agent/user_context.py`
 - `backend/services/agent/protocol_helpers.py`
 - `backend/services/agent/tool_args.py`
 - `backend/services/agent/tool_handlers_read.py`
@@ -326,11 +326,11 @@ Architecture quality baseline:
 
 Frontend agent modules:
 
-- coordinator: `frontend/src/components/agent/AgentPanel.tsx`
-- panel presentation + local hooks: `frontend/src/components/agent/panel/*`
-- run rendering: `frontend/src/components/agent/AgentRunBlock.tsx`
-- run activity derivation: `frontend/src/components/agent/activity.ts`
-- review modal and diff logic: `frontend/src/components/agent/review/*`
+- coordinator: `frontend/src/features/agent/AgentPanel.tsx`
+- panel presentation + local hooks: `frontend/src/features/agent/panel/*`
+- run rendering: `frontend/src/features/agent/AgentRunBlock.tsx`
+- run activity derivation: `frontend/src/features/agent/activity.ts`
+- review modal and diff logic: `frontend/src/features/agent/review/*`
 
 Frontend workspace modules:
 
@@ -340,7 +340,7 @@ Frontend workspace modules:
 Frontend test modules:
 
 - config/setup: `frontend/vitest.config.ts`, `frontend/src/test/setup.ts`, `frontend/src/test/renderWithQueryClient.tsx`
-- agent tests: `frontend/src/components/agent/activity.test.ts`, `frontend/src/components/agent/AgentRunBlock.test.tsx`, `frontend/src/components/agent/review/diff.test.ts`
+- agent tests: `frontend/src/features/agent/activity.test.ts`, `frontend/src/features/agent/AgentRunBlock.test.tsx`, `frontend/src/features/agent/review/diff.test.ts`
 - page integration tests: `frontend/src/pages/AccountsPage.test.tsx`, `frontend/src/pages/PropertiesPage.test.tsx`
 
 Behavioral checks:
@@ -377,6 +377,35 @@ Affected files/modules:
 Constraints:
 
 - If existing frontend structure differs from recommended paths in the skill, adapt while preserving the same token/primitives/accessibility rules.
+
+## Desloppify Skill Workflow
+
+Skill file:
+
+- `/path/to/bill_helper/skills/desloppify-maintenance/SKILL.md`
+
+Current behavior:
+
+- For explicit desloppify cleanup requests, agents should load and apply `desloppify-maintenance`.
+- The skill makes `uv run desloppify ...` the default entrypoint, keeps the tool queue as the source of truth, and requires updating `docs/clean-architecture-standards.md` after each durable fix batch.
+- It is not the default for ordinary feature work that does not use the desloppify workflow.
+
+Operational impact:
+
+- Before scanning, review generated/runtime/vendor/build directories and exclude only obvious non-source paths directly; questionable exclude candidates must be surfaced to the user first.
+- Typical commands are `uv run desloppify scan --path .`, `uv run desloppify next`, the printed `uv run desloppify resolve ...` command for each completed item, and periodic `uv run desloppify plan` / `scan` refreshes when the queue shifts.
+- Behavior, schema, or tooling fixes that come out of the queue must still pass the repository verification gates, including `OPENROUTER_API_KEY=test uv run --extra dev pytest backend/tests -q` and `uv run python scripts/check_docs_sync.py`.
+
+Affected files/modules:
+
+- `/path/to/bill_helper/AGENTS.md`
+- `/path/to/bill_helper/skills/desloppify-maintenance/SKILL.md`
+- `/path/to/bill_helper/docs/clean-architecture-standards.md`
+
+Constraints:
+
+- Do not treat desloppify as a cosmetic scoring game; resolve root causes, not just surface findings.
+- Keep local desloppify state such as `.desloppify/` and `scorecard.png` out of commits unless the user explicitly asks to track them.
 
 ## Agent Import Benchmark
 

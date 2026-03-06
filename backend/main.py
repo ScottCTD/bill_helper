@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.auth import get_current_principal
 from backend.config import get_settings
 from backend.routers import currencies, dashboard, entities, entries, groups, links, settings, tags, taxonomies, users
-from backend.routers.agent_api.routes import router as agent_router
-from backend.routers.finance.accounts import router as accounts_router
+from backend.routers.agent import router as agent_router
+from backend.routers.accounts import router as accounts_router
 
 
 def create_app() -> FastAPI:
