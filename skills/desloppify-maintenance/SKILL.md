@@ -1,6 +1,6 @@
 ---
 name: desloppify-maintenance
-description: Run this repository's desloppify-driven code health workflow when the user explicitly asks to use desloppify, improve the strict/objective score, work through `desloppify next`, or run a debt-reduction/refactor campaign. Use `uv run desloppify ...`, review excludes before applying them, follow scan/next instructions as the source of truth, update `docs/clean-architecture-standards.md` after each durable fix batch, and rerun the repo verification gates.
+description: Run this repository's desloppify-driven code health workflow when the user explicitly asks to use desloppify, improve the strict/objective score, work through `desloppify next`, or run a debt-reduction/refactor campaign. Use `uv run desloppify ...`, review excludes before applying them, follow scan/next instructions as the source of truth, record durable fix batches in dated fix-log docs under `docs/exec-plans/completed/`, and rerun the repo verification gates.
 ---
 
 # Objective
@@ -13,7 +13,7 @@ Improve the codebase honestly through the repo's desloppify workflow. The tool's
 2. Ask before excluding questionable directories. Only exclude obvious generated/runtime/vendor/build output on your own.
 3. Use `scan` and `next` as the primary loop. If scan says review/plan work is required, do that first.
 4. Fix root causes, not scores. Avoid mass `wontfix` or cosmetic churn.
-5. After each durable fix batch, update `docs/clean-architecture-standards.md` with the finding, concrete fix, and prevention rule.
+5. After each durable fix batch, record the finding, concrete fix, and prevention rule in a dated fix-log doc under `docs/exec-plans/completed/`.
 
 # Setup
 

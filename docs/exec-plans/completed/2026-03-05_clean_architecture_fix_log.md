@@ -1,60 +1,10 @@
-# Clean Architecture Standards (Anti-Slop)
+# Clean Architecture Fix Log
 
-This document is the enforcement baseline for keeping the codebase maintainable while iterating quickly.
+This file archives the durable fix batches that were previously tracked alongside the clean-architecture rules. The live standards now live in `AGENTS.md`.
 
-## Why This Exists
+When recording future desloppify or architecture-fix work, create a new dated fix-log doc under `docs/exec-plans/completed/` instead of appending policy text here.
 
-- Prevent ownership blur (routers/services/tools doing everything).
-- Keep modules small enough to reason about and test.
-- Standardize how refactors are implemented, verified, and documented.
-- Keep desloppify-driven fixes durable instead of one-off cleanup.
-
-## Mandatory Standards
-
-### 1) Clear Ownership Boundaries
-
-- Routers own HTTP translation only (request parsing, response mapping, status codes).
-- Services own domain policy and orchestration.
-- Storage/file lifecycle logic must live in dedicated service modules, not routers.
-- Tool interfaces are thin registries + handlers, not monolithic switch modules.
-
-### 2) Module Decomposition Rules
-
-- Split mixed-responsibility modules into focused modules; add a subpackage only when multiple durable siblings justify the extra depth.
-- Avoid singleton subpackages. Prefer direct module paths like `routers/agent.py`, `services/agent/runtime_state.py`, or `features/agent/*` until more structure is warranted.
-- Keep one coordinator per execution mode; move persistence/event helpers to supporting modules.
-- Avoid cross-layer helper duplication; promote shared helpers to one canonical module.
-
-### 3) Error and Fallback Policy
-
-- No silent broad `except Exception` without contextual logging.
-- Recoverable fallbacks must emit scope + context metadata.
-- CLI worker functions return status codes from `main()`; business logic raises exceptions.
-
-### 4) Testability Requirements
-
-- Tests should target stable service seams, not router-private helpers.
-- Keep monkeypatch points on public/stable callsites.
-- For each architectural refactor, run targeted tests + full backend suite.
-
-### 5) Documentation and Verification Gates
-
-- Every behavior/architecture change updates docs in the same work item.
-- Required checks before finishing:
-  - `uv run --extra dev python -m py_compile ...` on touched Python modules
-  - `OPENROUTER_API_KEY=test uv run --extra dev pytest backend/tests -q`
-  - `uv run python scripts/check_docs_sync.py`
-
-## Refactor Playbook
-
-1. Capture the slop finding and root cause.
-2. Move ownership to the correct layer/package.
-3. Keep compatibility seams for tests where needed.
-4. Update docs + this standards file (Fix Log below).
-5. Run compile/tests/docs-sync gates.
-6. Resolve the desloppify finding with concrete attestation.
-
-## Fix Log (Update After Every Fix)
+## Archived Fix Log
 
 | Date (America/Toronto) | Finding ID | Problem | Concrete Fix | Prevention Rule |
 |---|---|---|---|---|

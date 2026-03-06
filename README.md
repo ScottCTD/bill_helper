@@ -19,9 +19,9 @@ The goal is an all-in-one place to view and analyze personal finances — a cent
 
 **Finance Tracking**
 - Manual entry ledger with income/expense tracking, counterparty entities, and tags
-- Accounts workspace with optional markdown notes and reconciliation snapshots
+- Accounts workspace with entity-root account records, optional markdown notes, reconciliation snapshots, and destructive delete flow that preserves ledger history labels
 - Dashboard analytics with interactive charts (daily spend, breakdowns, projections)
-- Taxonomy system for categorizing entities and tags
+- Taxonomy system for categorizing entities and tags, including delete flows for non-account entities and tags
 - Entry grouping with link-driven graph visualization (React Flow)
 
 **Developer Experience**
@@ -172,14 +172,19 @@ cd frontend && npm run build
 
 Extended docs live in [`docs/`](docs/):
 
+- [Docs Index](docs/README.md)
 - [Architecture](docs/architecture.md)
+- [Repository Structure](docs/repository-structure.md)
 - [Backend](docs/backend.md)
 - [Frontend](docs/frontend.md)
 - [API](docs/api.md)
 - [Data Model](docs/data-model.md)
 - [Development Guide](docs/development.md)
-- [Clean Architecture Standards](docs/clean-architecture-standards.md)
+- [Documentation System](docs/documentation-system.md)
+- [Execution Plans](docs/exec-plans/README.md)
 - [Agent Billing Assistant](docs/agent-billing-assistant.md)
+
+Package-local `backend/README.md` and `frontend/README.md` are intentionally thin navigation docs that point back to these canonical references.
 
 ## License
 

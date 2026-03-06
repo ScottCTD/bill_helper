@@ -322,7 +322,7 @@ Backend agent modules:
 
 Architecture quality baseline:
 
-- follow `docs/clean-architecture-standards.md` for anti-slop ownership boundaries and required refactor/test/doc gates
+- follow `AGENTS.md` for anti-slop ownership boundaries and required refactor/test/doc gates
 
 Frontend agent modules:
 
@@ -387,7 +387,7 @@ Skill file:
 Current behavior:
 
 - For explicit desloppify cleanup requests, agents should load and apply `desloppify-maintenance`.
-- The skill makes `uv run desloppify ...` the default entrypoint, keeps the tool queue as the source of truth, and requires updating `docs/clean-architecture-standards.md` after each durable fix batch.
+- The skill makes `uv run desloppify ...` the default entrypoint, keeps the tool queue as the source of truth, and requires recording durable fix batches in dated fix-log docs under `docs/exec-plans/completed/`.
 - It is not the default for ordinary feature work that does not use the desloppify workflow.
 
 Operational impact:
@@ -400,7 +400,7 @@ Affected files/modules:
 
 - `/path/to/bill_helper/AGENTS.md`
 - `/path/to/bill_helper/skills/desloppify-maintenance/SKILL.md`
-- `/path/to/bill_helper/docs/clean-architecture-standards.md`
+- `/path/to/bill_helper/docs/exec-plans/completed/2026-03-05_clean_architecture_fix_log.md`
 
 Constraints:
 
@@ -460,10 +460,16 @@ uv run alembic stamp head
 
 ## Documentation Policy
 
-Any behavior/schema/API/tooling/UI change must update:
+Use the layered doc system:
 
-- `README.md`
-- relevant files under `/docs`
+- `README.md` for onboarding and the dev loop.
+- `AGENTS.md` for short agent instructions and doc pointers.
+- `docs/*.md` for stable index docs and cross-cutting reference docs.
+- `docs/backend/*.md`, `docs/frontend/*.md`, and `docs/api/*.md` for focused subsystem reference docs.
+- `docs/exec-plans/active/*.md` for active implementation plans and temporary caveats.
+- `docs/exec-plans/completed/*.md` for archived plans and retrospectives.
+
+Any behavior, schema, API, tooling, or UI change must update the relevant stable docs in the canonical docs tree. Use execution plans for work tracking, not as the final source of truth.
 
 Recommended before merging:
 

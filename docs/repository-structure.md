@@ -5,12 +5,11 @@
 - `.gitignore`: ignores venv, build outputs, runtime data, test cache.
 - `.env.example`: env-var template with all supported variables (committed; no secrets).
 - `.python-version`: local Python version hint.
-- `README.md`: top-level guide and quickstart.
-- `AGENTS.md`: project-wide coding-agent rules, doc-update requirements, and repo-local skill registration.
+- `README.md`: top-level onboarding, setup, and dev loop.
+- `AGENTS.md`: short coding-agent working agreement plus links to canonical docs.
 - `pyproject.toml`: Python package metadata, dependencies, scripts, pytest config.
 - `uv.lock`: locked Python dependency graph for `uv`.
 - `alembic.ini`: Alembic runtime/logging configuration.
-- `.github/workflows/docs-consistency.yml`: CI docs drift checks.
 
 ## Migration Layer (`/alembic`)
 
@@ -39,6 +38,7 @@
 - `versions/0021_add_agent_run_context_tokens.py`: adds nullable prompt-size snapshots for agent runs (`agent_runs.context_tokens`) and safely no-ops if the column already exists.
 - `versions/0022_agent_run_events_and_tool_lifecycle.py`: adds persisted run-event timeline rows (`agent_run_events`) and expands `agent_tool_calls` with lifecycle metadata (`llm_tool_call_id`, `started_at`, `completed_at`, queued/running/cancelled states).
 - `versions/0023_add_agent_provider_config.py`: adds custom provider configuration fields to runtime settings (`agent_base_url`, `agent_api_key`).
+- `versions/0024_entity_root_accounts.py`: rebuilds accounts as entity-root records by rekeying `accounts.id` to shared `entities.id` values and updating dependent account references.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
@@ -59,15 +59,15 @@
 - `schemas_finance.py`: ledger/dashboard/settings request/response schemas.
 - `schemas_agent.py`: agent thread/message/run/review request/response schemas.
 - `main.py`: FastAPI app creation, routing, CORS, health check.
-- `README.md`: backend-local change map and operational commands.
+- `README.md`: thin backend-local navigation doc that points to canonical docs.
 
 ### Backend Routers (`/backend/routers`)
 
-- `accounts.py`: accounts, snapshots, reconciliation endpoints.
+- `accounts.py`: accounts, account deletion, snapshots, reconciliation endpoints.
 - `users.py`: system-level user list/create/update endpoints.
 - `entries.py`: entry CRUD, filtering, link creation.
-- `entities.py`: entity list/create/update endpoints for entry selectors/properties.
-- `tags.py`: tag list/create/update endpoints for property/tag selectors.
+- `entities.py`: entity list/create/update/delete endpoints for entry selectors/properties.
+- `tags.py`: tag list/create/update/delete endpoints for property/tag selectors.
 - `taxonomies.py`: taxonomy/term list and term create/rename endpoints.
 - `currencies.py`: currency catalog placeholder endpoint for selector/property tables.
 - `links.py`: link deletion endpoint.
@@ -76,14 +76,14 @@
 - `agent.py`: append-only agent thread/message/run/review endpoints.
 - `settings.py`: runtime settings read/update endpoints for user overrides with env fallback where applicable and DB-backed `user_memory`.
 - non-admin principal scope applies to owned-resource routes (`accounts`, `entries`, `users`, `groups`, `dashboard`).
-- shared dictionary mutation routes (`entities`, `tags`, `taxonomies` POST/PATCH) require admin principal.
+- shared dictionary mutation routes (`entities`, `tags`, `taxonomies` POST/PATCH, plus entity and tag DELETE) require admin principal.
 
 ### Backend Services (`/backend/services`)
 
-- `accounts.py`: account create/update ownership/entity-resolution command workflows.
+- `accounts.py`: account create/update/delete workflows for shared account/entity roots.
 - `entries.py`: tag handling and entry soft-delete helper.
-- `tags.py`: tag color helpers (normalization and random default color generation).
-- `entities.py`: entity normalization and lookup helpers.
+- `tags.py`: tag CRUD helpers, taxonomy cleanup, and random default color generation.
+- `entities.py`: entity normalization, account-backed guards, and preserve-label delete helpers.
 - `users.py`: user normalization, lookup, and current-user helpers.
 - `groups.py`: connected-component recomputation for `group_id`.
 - `finance.py`: reconciliation, CAD dashboard analytics, projections, and chart-ready breakdown aggregations.
@@ -123,7 +123,7 @@
 - `vitest.config.ts`: frontend unit test runner configuration (`jsdom` + RTL setup).
 - `tsconfig.json`: TypeScript compiler settings.
 - `index.html`: Vite app shell.
-- `README.md`: frontend-local change map and UI workflow notes.
+- `README.md`: thin frontend-local navigation doc that points to canonical docs.
 
 ### Frontend Source (`/frontend/src`)
 
@@ -139,6 +139,7 @@
 - `LineChart.tsx`: legacy SVG daily expense chart helper (dashboard now uses Recharts).
 - `GroupGraphView.tsx`: React Flow-based graph rendering for entry groups.
 - `TagMultiSelect.tsx`: Notion-style chip/dropdown multi-select for entry tags.
+- `DeleteConfirmDialog.tsx`: shared destructive confirmation dialog for account, entity, and tag deletes.
 - `EntryEditorModal.tsx`: shared popup for entry create/edit.
 - `MarkdownBlockEditor.tsx`: BlockNote wrapper for markdown + pasted images.
 - `agent/AgentRunBlock.tsx`: extracted run activity/summary renderer used by `AgentPanel`.
@@ -154,8 +155,10 @@
 - `GroupsPage.tsx`: derived group workspace (group list, graph detail, and link-driven topology edits).
 - `AccountsPage.tsx`: thin page orchestrator that composes accounts feature modules.
 - `PropertiesPage.tsx`: thin page orchestrator that composes properties feature modules.
-- `AccountsPage.test.tsx`: page-level integration tests for account create/snapshot flows.
-- `PropertiesPage.test.tsx`: page-level integration tests for users/taxonomy flows.
+- `AccountsPage.test.tsx`: page-level integration tests for account create, snapshot, and delete flows.
+- `EntriesPage.test.tsx`: page-level integration tests for missing-entity markers in the entries table.
+- `EntryDetailPage.test.tsx`: page-level integration tests for missing-entity markers in entry detail.
+- `PropertiesPage.test.tsx`: page-level integration tests for users, taxonomy, and property delete flows.
 
 #### Feature Modules (`/frontend/src/features`)
 
@@ -178,15 +181,19 @@
 #### Frontend Lib (`/frontend/src/lib`)
 
 - `types.ts`: shared TS API/data types.
-- `api.ts`: fetch wrappers and API request functions.
+- `api.ts`: fetch wrappers and API request functions, including account/entity/tag delete helpers.
 - `format.ts`: money formatting and date helpers.
 - `queryKeys.ts`: centralized TanStack Query key factory for all domains.
-- `queryInvalidation.ts`: shared cache invalidation rules after mutations/review actions.
+- `queryInvalidation.ts`: shared cache invalidation rules after mutations/review actions, including delete-driven property and entry refresh.
 
 ## Supporting Directories
 
 - `/docs`: architecture and engineering documentation.
+  - `README.md`: canonical index for the docs tree.
+  - `backend.md`, `frontend.md`, `api.md`: subsystem index docs.
+  - `/backend`, `/frontend`, `/api`: focused subsystem topic docs.
   - `documentation-system.md`: source-of-truth matrix + anti-drift workflow.
+  - `/exec-plans`: active and completed implementation plans.
   - `feature-entry-lifecycle.md`: entry-domain flow map.
   - `feature-dashboard-analytics.md`: dashboard flow map.
   - `feature-account-reconciliation.md`: account workspace + snapshot/reconciliation flow map.

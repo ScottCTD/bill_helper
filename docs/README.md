@@ -1,42 +1,51 @@
 # Documentation Index
 
-This folder contains the source-of-truth documentation for the current MVP implementation.
+This directory is the canonical human-facing knowledge base for the current system.
 
-## Contents
+Use the docs in layers:
 
-- `architecture.md`: system architecture, runtime flow, and design decisions.
-- `agent-billing-assistant.md`: billing assistant agent architecture, prompts, and tools (descriptions, arguments, expected outputs).
-- `high-level-data-flow.md`: system-level graph model, storage layout, and end-to-end data flows.
-- `repository-structure.md`: directory and file-level map of the current codebase.
-- `backend.md`: backend package responsibilities and behavior.
-- `frontend.md`: frontend package responsibilities and behavior.
-- `api.md`: REST API contract reference for `/api/v1`.
-- `data-model.md`: relational schema and domain modeling rules.
-- `development.md`: local setup, build/test commands, and contributor workflow.
-- `clean-architecture-standards.md`: anti-slop coding standards, architecture boundaries, and refactor fix log.
-- `documentation-system.md`: source-of-truth ownership matrix and anti-drift workflow.
+1. `README.md` for onboarding and the dev loop.
+2. `docs/architecture.md` for the system mental model.
+3. `docs/repository-structure.md` for the filesystem map.
+4. `docs/backend.md`, `docs/frontend.md`, `docs/api.md`, and `docs/data-model.md` for subsystem entry points.
+5. `docs/backend/`, `docs/frontend/`, and `docs/api/` for focused subsystem docs.
+6. `docs/exec-plans/` for active implementation plans and archived retrospectives.
+
+## Stable Reference Docs
+
+- `architecture.md`: system topology, boundaries, and major design choices.
+- `repository-structure.md`: filesystem map and ownership boundaries.
+- `backend.md`: backend index linking to focused backend docs under `backend/`.
+- `backend/README.md`: backend topic map.
+- `frontend.md`: frontend index linking to focused frontend docs under `frontend/`.
+- `frontend/README.md`: frontend topic map.
+- `api.md`: API index for `/api/v1`.
+- `api/README.md`: API route-family topic map.
+- `data-model.md`: schema and domain-model rules.
+- `development.md`: setup, commands, and contributor workflow.
+- `documentation-system.md`: doc ownership rules and anti-drift process.
 - `feature-entry-lifecycle.md`: focused entry-domain flow map.
 - `feature-dashboard-analytics.md`: focused dashboard analytics flow map.
-- `feature-account-reconciliation.md`: account table workflow, snapshot checkpointing, and reconciliation semantics.
-- `adr/README.md`: architecture decision record process and index.
-- `adr/0003-xdg-shared-config-and-data.md`: shared config/data directory design for worktree support.
-- `../benchmark/README.md`: agent import benchmark framework for evaluating LLMs on statement-to-entry extraction.
+- `feature-account-reconciliation.md`: focused account reconciliation flow map.
+- `agent-billing-assistant.md`: billing assistant prompt/tool design notes.
+- `adr/README.md`: ADR index and process.
 
-Historical implementation docs:
+## Execution Plans
 
-- `completed/*.md`: closed implementation plans and migration notes. These are archival and not source-of-truth for current behavior.
-- `todo/*.md`: active/planned proposal notes that are not source-of-truth behavior docs.
+- `exec-plans/README.md`: how to use active and completed plan docs.
+- `exec-plans/active/*.md`: active proposals, migration notes, and temporary caveats.
+- `exec-plans/completed/*.md`: archived implementation plans and retrospectives.
+- `exec-plans/completed/2026-03-05_clean_architecture_fix_log.md`: archived desloppify and refactor fix log.
 
-**Naming rule**: Files in `todo/` and `completed/` must use a date prefix (YYYY-MM-DD). When creating a new todo or completed doc, name it `YYYY-MM-DD_slug.md` (e.g. `2026-03-05_feature_proposal.md`).
+Execution plans are not source-of-truth for current behavior. Promote stable conclusions back into the canonical docs above.
 
-- `completed/2026-03-03_xdg_shared_config_and_data.md`: XDG-based shared config/data design — env cascade, data directory, Docker readiness.
-- `completed/2026-02-20_entry_group_graph_workspace.md`: graph-first entry group workspace where group CRUD intent is handled through link operations (no first-class group CRUD).
+## Local Pointer Docs
 
-## How To Use
+- `../backend/README.md`: backend-local navigation and change checklist.
+- `../frontend/README.md`: frontend-local navigation and change checklist.
 
-1. Read `architecture.md` first for mental model.
-2. Use `backend.md`, `frontend.md`, and `api.md` for implementation details.
-3. Use `feature-*.md` for quickest path to high-change workflows.
-4. Use `development.md` for setup and operational commands.
-5. Run `uv run python scripts/check_docs_sync.py` before finalizing behavior/schema changes.
-6. Keep this docs set updated whenever behavior, schema, routes, or UX changes.
+These package READMEs intentionally stay thin and point back to canonical docs instead of duplicating architecture.
+
+## Naming Rule
+
+Execution-plan files must use a date prefix: `YYYY-MM-DD_slug.md`.

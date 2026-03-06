@@ -1,132 +1,106 @@
 # AGENTS.md
 
-## Project Agent Rules
-
 These rules apply to any coding agent working in this repository.
 
-## Prototype-First Policy
+## Working Style
 
-This project is a prototype. Optimize for fast, elegant iteration over compatibility preservation.
+- This project is a prototype. Prefer simplification and replacement over compatibility shims.
+- Use `uv` for Python dependency management, scripts, tests, and tooling.
+- Keep docs synchronized with code changes in the same work item.
 
-- Prefer simplifying and replacing outdated paths over layering compatibility shims.
-- Do not retain old behavior, old fields, or old endpoints solely for backward compatibility unless explicitly requested.
-- When a direction changes, remove deprecated code and stale abstractions instead of keeping dual paths.
+## Architecture Standards
 
-## Python Tooling
+### Ownership Boundaries
 
-For any Python-related work in this repository, use `uv` by default.
+- Routers own HTTP translation only: request parsing, response mapping, and status codes.
+- Services own domain policy and orchestration.
+- Storage and file lifecycle logic belongs in dedicated service modules, not routers.
+- Tool interfaces should stay thin: registries plus focused handlers, not monolithic switch modules.
 
-- Use `uv` to manage dependencies and environments.
-- Use `uv run` to execute Python commands, scripts, tests, and tools.
-- Prefer `uv` workflows over `pip`, `python -m venv`, or direct `python` execution unless explicitly required.
+### Module Decomposition
 
-## Documentation Is Mandatory
+- Split mixed-responsibility modules into focused modules.
+- Add a subpackage only when multiple durable siblings justify the extra depth.
+- Avoid singleton subpackages when a direct module path is clearer.
+- Keep one coordinator per execution mode and move persistence or event helpers into support modules.
+- Promote shared helpers into one canonical module instead of duplicating them across layers.
 
-When implementing any feature, bug fix, refactor, schema change, API change, build/tooling change, or behavior change, the agent must update documentation in the same work item.
+### Errors and Fallbacks
 
-Minimum required doc updates:
+- Do not use silent broad `except Exception` handlers without contextual logging.
+- Recoverable fallbacks must emit scope and context metadata.
+- CLI entrypoints should return status codes from `main()`; business logic should raise exceptions.
 
-- `README.md` if setup, run commands, architecture summary, or project status changed.
-- one or more files under `/docs` that describe the changed area.
+### Testability and Refactors
 
-If a change introduces a new subsystem/module/page/service, create a new documentation file under `/docs` when existing docs are insufficient.
+- Tests should target stable service seams, not router-private helpers.
+- Keep monkeypatch points on public or otherwise stable callsites.
+- For architectural refactors, run targeted tests plus the full backend suite.
+- Use this refactor playbook: capture the finding and root cause, move ownership to the correct layer, keep compatibility seams only when they are still needed, update docs in the same work item, and rerun the verification gates.
+- For explicit desloppify campaigns, record durable fix batches in a dated fix-log doc under `docs/exec-plans/completed/`.
 
-## Documentation Quality Bar
+### Architecture Verification Gates
 
-Documentation updates must include:
+- `uv run --extra dev python -m py_compile ...` on touched Python modules
+- `OPENROUTER_API_KEY=test uv run --extra dev pytest backend/tests -q`
+- `uv run python scripts/check_docs_sync.py`
 
-- current behavior (not planned behavior)
-- affected files/modules
-- operational impact (commands, env vars, migrations, tests)
-- constraints/known limitations where relevant
+## Documentation
 
-## Keep Docs and Code Synchronized
+### System
 
-Do not leave docs stale after implementation.
+- `README.md`: onboarding, setup, dev loop, and links only.
+- `docs/README.md`: canonical index into the human-facing docs tree.
+- `docs/*.md`: stable index docs and cross-cutting reference docs.
+- `docs/backend/*.md`, `docs/frontend/*.md`, and `docs/api/*.md`: focused subsystem source-of-truth docs.
+- `docs/exec-plans/active/*.md`: active implementation plans, temporary caveats, and migration checklists.
+- `docs/exec-plans/completed/*.md`: completed plans and retrospectives kept for history.
+- `backend/README.md` and `frontend/README.md`: thin local pointer docs, not subsystem source-of-truth.
+- Add nested `AGENTS.md` files only when a subtree has genuinely different editing rules. Do not use nested agent files as architecture docs.
 
-If code and docs conflict, update docs before finishing.
+### Required Doc Updates
 
-## Documentation Synchronization Protocol (Required)
+- API contract changes: update the relevant `/docs/api/*.md` files and keep `/docs/api.md` current when the route-family map changes.
+- Data model or migration changes: update `/docs/data-model.md`, `/docs/backend.md`, the relevant `/docs/backend/*.md` files, and `/docs/repository-structure.md` when file maps or migration lists changed.
+- Backend behavior changes: update the relevant `/docs/backend/*.md` files and any affected `/docs/feature-*.md`.
+- Frontend behavior changes: update the relevant `/docs/frontend/*.md` files and any affected `/docs/feature-*.md`.
+- Cross-cutting workflow or tooling changes: update `/README.md`, `/docs/development.md`, and `/docs/documentation-system.md`.
+- Major architectural decisions: add or update an ADR under `/docs/adr/`.
+- When introducing or removing docs, keep `/docs/README.md` current.
 
-Treat docs as a maintained system, not ad-hoc notes.
+### Quality Bar
 
-When code changes, update the right source-of-truth docs in the same work item:
+- Document current behavior, not planned behavior.
+- Include affected files or modules, operational impact, and constraints where relevant.
+- Stable docs explain how the system works now.
+- Temporary implementation notes belong in `docs/exec-plans/`, not in stable reference pages.
 
-- API contract changes:
-  - `/docs/api.md`
-- Data model / migration / persistence changes:
-  - `/docs/data-model.md`
-  - `/docs/backend.md`
-  - `/docs/repository-structure.md` (if file map or migration list changed)
-- Backend behavior/flow changes:
-  - `/backend/README.md`
-  - `/docs/backend.md`
-  - relevant feature map under `/docs/feature-*.md`
-- Frontend behavior/UX changes:
-  - `/frontend/README.md`
-  - `/docs/frontend.md`
-  - relevant feature map under `/docs/feature-*.md`
-- Cross-cutting workflow/setup changes:
-  - `/README.md`
-  - `/docs/development.md`
-  - `/docs/documentation-system.md` (if process/rules changed)
-- Major architectural decisions:
-  - add/update ADR under `/docs/adr/`
+### Required Verification
 
-Also keep the docs index current when introducing new docs:
-
-- `/docs/README.md`
-
-### Required Verification Before Finishing
-
-For any behavior/schema/API/tooling/UI change, run:
+For any behavior, schema, API, tooling, or UI change, run:
 
 ```bash
 uv run python scripts/check_docs_sync.py
 ```
 
-If it fails, fix docs before finalizing.
+If it fails, fix the docs before finishing.
 
-## Feature Requests from docs/todo
+### Feature Requests from Active Exec Plans
 
-When the user requests a feature from `docs/todo`, after implementing the feature according to the user, the agent must ask whether to move the feature request to `docs/completed`.
-
-## Suggested Documentation Targets
-
-- Architecture: `/docs/architecture.md`
-- Repository map: `/docs/repository-structure.md`
-- Backend details: `/docs/backend.md`
-- Frontend details: `/docs/frontend.md`
-- API contract: `/docs/api.md`
-- Data model: `/docs/data-model.md`
-- Dev workflow: `/docs/development.md`
+When the user requests a feature from `docs/exec-plans/active`, ask whether to move that plan to `docs/exec-plans/completed` after implementation.
 
 ## Before Committing
 
-Before committing anything, check `git diff` and ensure there is no sensitive or private information in the changes.
-
-- Review all staged and unstaged changes.
-- Remove or redact API keys, secrets, tokens, credentials, PII, local paths (e.g. paths containing usernames), banking or financial data, and other confidential data.
-- Do not proceed with the commit until the diff is clean.
+- Review `git diff` for secrets, tokens, credentials, local paths, financial data, or other sensitive material.
+- Do not commit until the diff is clean.
 
 ## Commit Messages
 
-When asked to write a commit message for the current changes, use this format:
+- First line: overall change in imperative mood.
+- Following lines: bullet points summarizing concrete changes in the diff.
+- Do not invent details.
 
-- first line: overall change in imperative mood
-- following lines: bullet points summarizing other changes
-- do not invent details; only include what exists in the diff
+## Repo-Local Skills
 
-## Skills
-
-### Available skills
-
-- notion-grade-ui: Enforces a calm, content-first, Notion-like frontend system with tokenized styling, primitives-first implementation, subtle interactions, and accessibility checks. Use for any UI/page/component/layout/control changes in `frontend`. (file: `skills/notion-grade-ui/SKILL.md`)
-- desloppify-maintenance: Repository-specific desloppify workflow for code-health campaigns, including exclude review, `scan`/`next` execution, fix-log updates, and verification gates. Use when the user explicitly asks to run desloppify, improve a quality score, or work through a desloppify queue. (file: `skills/desloppify-maintenance/SKILL.md`)
-
-### How to use skills
-
-- Trigger the `notion-grade-ui` skill for frontend tasks that add or modify UI surface area.
-- Trigger the `desloppify-maintenance` skill for explicit desloppify/code-health requests.
-- Skip `notion-grade-ui` for pure backend-only changes or explicitly labeled design-system bypass experiments.
-- Skip `desloppify-maintenance` unless the user explicitly wants the desloppify workflow or score-driven cleanup loop.
+- `notion-grade-ui`: use for frontend UI work in `frontend/`.
+- `desloppify-maintenance`: use only for explicit desloppify or score-driven cleanup requests.
