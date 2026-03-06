@@ -20,6 +20,8 @@ def link_to_schema(link: EntryLink) -> LinkRead:
 
 
 def entry_to_schema(entry: Entry) -> EntryRead:
+    from_entity_missing = bool(entry.from_entity and entry.from_entity_id is None)
+    to_entity_missing = bool(entry.to_entity and entry.to_entity_id is None)
     return EntryRead(
         id=entry.id,
         group_id=entry.group_id,
@@ -33,7 +35,9 @@ def entry_to_schema(entry: Entry) -> EntryRead:
         to_entity_id=entry.to_entity_id,
         owner_user_id=entry.owner_user_id,
         from_entity=entry.from_entity,
+        from_entity_missing=from_entity_missing,
         to_entity=entry.to_entity,
+        to_entity_missing=to_entity_missing,
         owner=entry.owner,
         markdown_body=entry.markdown_body,
         created_at=entry.created_at,

@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./queryKeys";
 
 const ENTITY_CATEGORY_TAXONOMY_KEY = "entity_category";
-const TAG_CATEGORY_TAXONOMY_KEY = "tag_category";
+const TAG_TYPE_TAXONOMY_KEY = "tag_type";
 
 export function invalidateEntryReadModels(queryClient: QueryClient, entryId?: string): void {
   queryClient.invalidateQueries({ queryKey: queryKeys.entries.all });
@@ -70,7 +70,7 @@ export function invalidateEntityReadModels(queryClient: QueryClient): void {
 
 export function invalidateTagReadModels(queryClient: QueryClient): void {
   queryClient.invalidateQueries({ queryKey: queryKeys.properties.tags });
-  queryClient.invalidateQueries({ queryKey: queryKeys.properties.taxonomyTerms(TAG_CATEGORY_TAXONOMY_KEY) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.properties.taxonomyTerms(TAG_TYPE_TAXONOMY_KEY) });
   queryClient.invalidateQueries({ queryKey: queryKeys.entries.all });
   queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
 }
@@ -95,7 +95,7 @@ export function invalidateTaxonomyReadModels(queryClient: QueryClient, taxonomyK
     return;
   }
 
-  if (taxonomyKey === TAG_CATEGORY_TAXONOMY_KEY) {
+  if (taxonomyKey === TAG_TYPE_TAXONOMY_KEY) {
     queryClient.invalidateQueries({ queryKey: queryKeys.properties.tags });
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.entries.all });

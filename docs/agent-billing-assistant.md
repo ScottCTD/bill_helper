@@ -164,8 +164,8 @@ You are an expert in personal finance and accounting. You always call the right 
 
 ### Tag Deletion Workflow
 - Check whether entries still reference the tag.
-- If referenced, propose update_entry changes first to remove/replace that tag on affected entries.
-- Only propose delete_tag after references are cleared.
+- If referenced, surface the impact clearly in the proposal preview so the reviewer can see which entries will lose the tag association.
+- `delete_tag` is still allowed while referenced; apply removes the tag and its entry junction rows without deleting entries.
 
 ### Pending Proposal Lifecycle
 - If the user asks to revise an existing pending proposal, prefer update_pending_proposal
@@ -371,7 +371,7 @@ tags: name (type or untyped), ...
 
 #### `propose_delete_tag` (proposal)
 
-**Description:** Create a review-gated proposal to delete a tag only when the tag has no active entry references.
+**Description:** Create a review-gated proposal to delete a tag. Referenced entries do not block the proposal; impact is reported in the preview.
 
 **Arguments:**
 
@@ -379,7 +379,7 @@ tags: name (type or untyped), ...
 |-----------|------|----------|-------------|
 | `name` | string | yes | 1–64 chars, existing tag name |
 
-**Expected output:** `OK` with status and preview when the tag is unreferenced. Returns `ERROR` if tag not found or still referenced by entries.
+**Expected output:** `OK` with status and preview, including referenced-entry counts when applicable. Returns `ERROR` only if tag not found.
 
 ---
 
@@ -387,7 +387,7 @@ tags: name (type or untyped), ...
 
 #### `list_entities` (read)
 
-**Description:** List/query entities by name and category. Exact matches are ranked higher than substring matches. Use category='account' when looking for account entities. This tool is read-only.
+**Description:** List/query entities by name and category. Exact matches are ranked higher than substring matches. Account-backed rows are flagged in the returned records. This tool is read-only.
 
 **Arguments:**
 
@@ -443,7 +443,7 @@ entities: name (category or uncategorized); ...
 
 #### `propose_delete_entity` (proposal)
 
-**Description:** Create a review-gated proposal to delete an entity. Delete behavior detaches nullable references from entries/accounts; it does not delete entries/accounts.
+**Description:** Create a review-gated proposal to delete a generic entity. Delete behavior detaches nullable entry references while preserving visible labels. Account-backed roots are rejected and must be managed from Accounts.
 
 **Arguments:**
 
@@ -451,7 +451,7 @@ entities: name (category or uncategorized); ...
 |-----------|------|----------|-------------|
 | `name` | string | yes | 1–255 chars, existing entity name |
 
-**Expected output:** `OK` with status and preview (impacted entries/accounts). Returns `ERROR` if entity not found.
+**Expected output:** `OK` with status and preview for non-account entities. Returns `ERROR` if entity not found or if the target is account-backed.
 
 ---
 
@@ -552,10 +552,10 @@ In `change_apply.py`:
 - `delete_entry`: soft-delete uniquely-selected entry
 - `create_tag`: create/reuse normalized tag + assign type
 - `update_tag`: rename and/or update type
-- `delete_tag`: delete only if unreferenced by non-deleted entries; otherwise apply fails with validation error
+- `delete_tag`: delete tag, clear taxonomy-backed type assignment, and remove entry junction rows by cascade
 - `create_entity`: create/reuse normalized entity + category
 - `update_entity`: rename and/or update category (sync denormalized entry labels)
-- `delete_entity`: null/detach references from entries/accounts then delete entity
+- `delete_entity`: detach `from_entity_id` / `to_entity_id` while preserving denormalized labels, then delete the entity; account-backed roots are rejected
 
 ## Affected Files
 

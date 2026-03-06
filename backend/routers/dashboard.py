@@ -4,11 +4,11 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from backend.auth import RequestPrincipal, get_current_principal
 from backend.database import get_db
-from backend.models_finance import Account
+from backend.models_finance import Account, Entity
 from backend.schemas_finance import DashboardRead
 from backend.services.access_scope import account_owner_filter, entry_owner_filter
 from backend.services.finance import (
@@ -51,12 +51,14 @@ def get_dashboard(
     accounts = list(
         db.scalars(
             select(Account)
+            .join(Entity, Entity.id == Account.id)
             .where(
                 Account.is_active.is_(True),
                 Account.currency_code == dashboard_currency_code,
                 account_owner_filter(principal),
             )
-            .order_by(Account.name.asc())
+            .options(selectinload(Account.entity))
+            .order_by(Entity.name.asc())
         )
     )
     reconciliation = [build_reconciliation(db, account, as_of) for account in accounts]

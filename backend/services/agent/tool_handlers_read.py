@@ -214,7 +214,13 @@ def list_tags(context: ToolContext, args: ListTagsArgs) -> ToolExecutionResult:
 
 
 def list_entities(context: ToolContext, args: ListEntitiesArgs) -> ToolExecutionResult:
-    entities = list(context.db.scalars(select(Entity).order_by(func.lower(Entity.name).asc())))
+    entities = list(
+        context.db.scalars(
+            select(Entity)
+            .options(selectinload(Entity.account))
+            .order_by(func.lower(Entity.name).asc())
+        )
+    )
     category_by_entity_id = get_single_term_name_map(
         context.db,
         taxonomy_key="entity_category",
@@ -229,14 +235,15 @@ def list_entities(context: ToolContext, args: ListEntitiesArgs) -> ToolExecution
         category_rank, category_ok = string_match_rank(category, args.category)
         if not (name_ok and category_ok):
             continue
-        record = {"name": entity.name, "category": category}
+        record = {"name": entity.name, "category": category, "is_account": entity.account is not None}
         ranked.append(((name_rank, category_rank, entity.name.lower()), record))
 
     ranked.sort(key=lambda pair: pair[0])
     total_available = len(ranked)
     records = [record for _, record in ranked[: args.limit]]
     entities_text = "; ".join(
-        f"{entity['name']} ({entity['category'] or 'uncategorized'})" for entity in records
+        f"{entity['name']} ({'account; ' if entity['is_account'] else ''}{entity['category'] or 'uncategorized'})"
+        for entity in records
     ) if records else "(none)"
     output_json = {
         "status": "OK",
@@ -306,4 +313,3 @@ def send_intermediate_update(_: ToolContext, args: SendIntermediateUpdateArgs) -
         output_json=payload,
         status="ok",
     )
-

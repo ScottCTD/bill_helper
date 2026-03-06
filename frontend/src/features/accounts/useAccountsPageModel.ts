@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createAccount,
   createSnapshot,
+  deleteAccount,
   getRuntimeSettings,
   getReconciliation,
   listAccounts,
@@ -30,6 +31,7 @@ export function useAccountsPageModel() {
   const [accountSearch, setAccountSearch] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<AccountFormState>(ACCOUNT_FORM_DEFAULTS);
   const [editForm, setEditForm] = useState<AccountFormState>(ACCOUNT_FORM_DEFAULTS);
   const [snapshotForm, setSnapshotForm] = useState<SnapshotFormState>({
@@ -42,6 +44,7 @@ export function useAccountsPageModel() {
 
   const selectedAccount = accountsQuery.data?.find((account) => account.id === selectedAccountId) ?? null;
   const editingAccount = accountsQuery.data?.find((account) => account.id === editingAccountId) ?? null;
+  const deletingAccount = accountsQuery.data?.find((account) => account.id === deletingAccountId) ?? null;
   const currentUserId = usersQuery.data?.find((user) => user.is_current_user)?.id ?? "";
   const defaultCurrencyCode = (runtimeSettingsQuery.data?.default_currency_code ?? "CAD").toUpperCase();
 
@@ -164,6 +167,20 @@ export function useAccountsPageModel() {
     }
   });
 
+  const deleteAccountMutation = useMutation({
+    mutationFn: deleteAccount,
+    onSuccess: (_data, deletedAccountId) => {
+      invalidateAccountReadModels(queryClient, deletedAccountId);
+      if (selectedAccountId === deletedAccountId) {
+        setSelectedAccountId("");
+      }
+      if (editingAccountId === deletedAccountId) {
+        setEditingAccountId(null);
+      }
+      setDeletingAccountId(null);
+    }
+  });
+
   function onCreateAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     createAccountMutation.mutate({
@@ -241,6 +258,24 @@ export function useAccountsPageModel() {
     }
   }
 
+  function openDeleteDialog(accountId: string) {
+    setDeletingAccountId(accountId);
+  }
+
+  function onDeleteDialogOpenChange(open: boolean) {
+    if (!open) {
+      setDeletingAccountId(null);
+      deleteAccountMutation.reset();
+    }
+  }
+
+  function confirmDeleteAccount() {
+    if (!deletingAccountId) {
+      return;
+    }
+    deleteAccountMutation.mutate(deletingAccountId);
+  }
+
   return {
     selectedAccountId,
     selectedAccount,
@@ -251,6 +286,8 @@ export function useAccountsPageModel() {
     setCreateDialogOpen,
     editingAccountId,
     editingAccount,
+    deletingAccountId,
+    deletingAccount,
     createForm,
     setCreateForm,
     editForm,
@@ -271,7 +308,8 @@ export function useAccountsPageModel() {
     mutations: {
       createAccountMutation,
       updateAccountMutation,
-      createSnapshotMutation
+      createSnapshotMutation,
+      deleteAccountMutation
     },
     actions: {
       onCreateAccount,
@@ -279,7 +317,10 @@ export function useAccountsPageModel() {
       onCreateSnapshot,
       openCreateDialog,
       editAccount,
-      onEditDialogOpenChange
+      onEditDialogOpenChange,
+      openDeleteDialog,
+      onDeleteDialogOpenChange,
+      confirmDeleteAccount
     }
   };
 }

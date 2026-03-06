@@ -29,6 +29,7 @@ import { queryKeys } from "../lib/queryKeys";
 type EditorState = { mode: "create" } | { mode: "edit"; entryId: string } | null;
 const ENTRY_FLOW_LABEL_MAX_LENGTH = 18;
 const MISSING_ENTITY_LABEL = "(unspecified)";
+const MISSING_ENTITY_MARKER_LABEL = "Missing entity";
 
 function kindSymbol(kind: string) {
   if (kind === "INCOME") return "+";
@@ -302,6 +303,11 @@ export function EntriesPage() {
                             {flowLabel ? (
                               <span className="entries-name-flow" title={flowLabel.full}>
                                 {flowLabel.display}
+                              </span>
+                            ) : null}
+                            {entry.from_entity_missing || entry.to_entity_missing ? (
+                              <span>
+                                <Badge variant="outline">{MISSING_ENTITY_MARKER_LABEL}</Badge>
                               </span>
                             ) : null}
                           </div>

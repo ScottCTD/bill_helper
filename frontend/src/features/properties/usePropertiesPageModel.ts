@@ -6,6 +6,8 @@ import {
   createTag,
   createTaxonomyTerm,
   createUser,
+  deleteEntity,
+  deleteTag,
   updateEntity,
   updateTag,
   updateTaxonomyTerm,
@@ -32,6 +34,8 @@ export function usePropertiesPageModel() {
 
   const { queries, options } = queryState;
   const { entityCategoriesLabel, tagTypesLabel } = queryState.labels;
+  const deletingEntity = (queries.entitiesQuery.data ?? []).find((entity) => entity.id === forms.deletingEntityId) ?? null;
+  const deletingTag = (queries.tagsQuery.data ?? []).find((tag) => tag.id === forms.deletingTagId) ?? null;
 
   const filtered = usePropertiesFilteredData({
     sectionSearch: sectionState.sectionSearch,
@@ -60,6 +64,19 @@ export function usePropertiesPageModel() {
       forms.setEditingEntityId("");
       forms.setEditingEntityName("");
       forms.setEditingEntityCategory("");
+      invalidateEntityReadModels(queryClient);
+    }
+  });
+
+  const deleteEntityMutation = useMutation({
+    mutationFn: deleteEntity,
+    onSuccess: (_data, deletedEntityId) => {
+      if (forms.editingEntityId === deletedEntityId) {
+        forms.setEditingEntityId("");
+        forms.setEditingEntityName("");
+        forms.setEditingEntityCategory("");
+      }
+      forms.setDeletingEntityId("");
       invalidateEntityReadModels(queryClient);
     }
   });
@@ -96,6 +113,21 @@ export function usePropertiesPageModel() {
       forms.setEditingTagType("");
       forms.setEditingTagColor("");
       forms.setEditingTagDescription("");
+      invalidateTagReadModels(queryClient);
+    }
+  });
+
+  const deleteTagMutation = useMutation({
+    mutationFn: deleteTag,
+    onSuccess: (_data, deletedTagId) => {
+      if (forms.editingTagId === deletedTagId) {
+        forms.setEditingTagId(null);
+        forms.setEditingTagName("");
+        forms.setEditingTagType("");
+        forms.setEditingTagColor("");
+        forms.setEditingTagDescription("");
+      }
+      forms.setDeletingTagId(null);
       invalidateTagReadModels(queryClient);
     }
   });
@@ -260,6 +292,23 @@ export function usePropertiesPageModel() {
     forms.setEditingEntityCategory("");
   }
 
+  function startDeleteEntity(entity: Entity) {
+    forms.setDeletingEntityId(entity.id);
+    deleteEntityMutation.reset();
+  }
+
+  function cancelDeleteEntity() {
+    forms.setDeletingEntityId("");
+    deleteEntityMutation.reset();
+  }
+
+  function confirmDeleteEntity() {
+    if (!forms.deletingEntityId) {
+      return;
+    }
+    deleteEntityMutation.mutate(forms.deletingEntityId);
+  }
+
   function saveTag(tagId: number) {
     const name = forms.editingTagName.trim();
     if (!name) {
@@ -288,6 +337,23 @@ export function usePropertiesPageModel() {
     forms.setEditingTagType("");
     forms.setEditingTagColor("");
     forms.setEditingTagDescription("");
+  }
+
+  function startDeleteTag(tag: Tag) {
+    forms.setDeletingTagId(tag.id);
+    deleteTagMutation.reset();
+  }
+
+  function cancelDeleteTag() {
+    forms.setDeletingTagId(null);
+    deleteTagMutation.reset();
+  }
+
+  function confirmDeleteTag() {
+    if (forms.deletingTagId === null) {
+      return;
+    }
+    deleteTagMutation.mutate(forms.deletingTagId);
   }
 
   function saveEntityCategoryTerm(termId: string) {
@@ -372,6 +438,7 @@ export function usePropertiesPageModel() {
       setEditingEntityName: forms.setEditingEntityName,
       editingEntityCategory: forms.editingEntityCategory,
       setEditingEntityCategory: forms.setEditingEntityCategory,
+      deletingEntityId: forms.deletingEntityId,
       newTagName: forms.newTagName,
       setNewTagName: forms.setNewTagName,
       newTagType: forms.newTagType,
@@ -389,6 +456,7 @@ export function usePropertiesPageModel() {
       setEditingTagColor: forms.setEditingTagColor,
       editingTagDescription: forms.editingTagDescription,
       setEditingTagDescription: forms.setEditingTagDescription,
+      deletingTagId: forms.deletingTagId,
       newUserName: forms.newUserName,
       setNewUserName: forms.setNewUserName,
       editingUserId: forms.editingUserId,
@@ -428,9 +496,15 @@ export function usePropertiesPageModel() {
       saveEntity,
       startEditEntity,
       cancelEditEntity,
+      startDeleteEntity,
+      cancelDeleteEntity,
+      confirmDeleteEntity,
       saveTag,
       startEditTag,
       cancelEditTag,
+      startDeleteTag,
+      cancelDeleteTag,
+      confirmDeleteTag,
       saveEntityCategoryTerm,
       startEditEntityCategoryTerm,
       cancelEditEntityCategoryTerm,
@@ -441,14 +515,20 @@ export function usePropertiesPageModel() {
     mutations: {
       createEntityMutation,
       updateEntityMutation,
+      deleteEntityMutation,
       createTagMutation,
       updateTagMutation,
+      deleteTagMutation,
       createUserMutation,
       updateUserMutation,
       createEntityCategoryTermMutation,
       updateEntityCategoryTermMutation,
       createTagTypeTermMutation,
       updateTagTypeTermMutation
+    },
+    deleteTargets: {
+      entity: deletingEntity,
+      tag: deletingTag
     }
   };
 }

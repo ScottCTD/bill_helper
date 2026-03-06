@@ -63,17 +63,23 @@ export function PropertiesSectionContent({ model }: PropertiesSectionContentProp
           onStartEditEntity={model.actions.startEditEntity}
           onCancelEditEntity={model.actions.cancelEditEntity}
           onSaveEntity={model.actions.saveEntity}
+          onStartDeleteEntity={model.actions.startDeleteEntity}
+          onCancelDeleteEntity={model.actions.cancelDeleteEntity}
+          onConfirmDeleteEntity={model.actions.confirmDeleteEntity}
           onCreateEntitySubmit={model.actions.onCreateEntity}
           entities={model.filtered.entities}
-          hasAnyEntities={(model.queries.entitiesQuery.data ?? []).length > 0}
+          deletingEntity={model.deleteTargets.entity}
+          hasAnyEntities={(model.queries.entitiesQuery.data ?? []).some((entity) => !entity.is_account)}
           entityCategoryOptions={model.options.entityCategoryOptions}
           isLoading={model.queries.entitiesQuery.isLoading}
           isError={model.queries.entitiesQuery.isError}
           queryErrorMessage={queryErrorMessage(model.queries.entitiesQuery.error)}
           createErrorMessage={queryErrorMessage(model.mutations.createEntityMutation.error)}
           updateErrorMessage={queryErrorMessage(model.mutations.updateEntityMutation.error)}
+          deleteErrorMessage={queryErrorMessage(model.mutations.deleteEntityMutation.error)}
           isCreating={model.mutations.createEntityMutation.isPending}
           isUpdating={model.mutations.updateEntityMutation.isPending}
+          isDeleting={model.mutations.deleteEntityMutation.isPending}
         />
       );
     case "tags":
@@ -104,8 +110,12 @@ export function PropertiesSectionContent({ model }: PropertiesSectionContentProp
           onStartEditTag={model.actions.startEditTag}
           onCancelEditTag={model.actions.cancelEditTag}
           onSaveTag={model.actions.saveTag}
+          onStartDeleteTag={model.actions.startDeleteTag}
+          onCancelDeleteTag={model.actions.cancelDeleteTag}
+          onConfirmDeleteTag={model.actions.confirmDeleteTag}
           onCreateTagSubmit={model.actions.onCreateTag}
           tags={model.filtered.tags}
+          deletingTag={model.deleteTargets.tag}
           hasAnyTags={(model.queries.tagsQuery.data ?? []).length > 0}
           tagTypeOptions={model.options.tagTypeOptions}
           isLoading={model.queries.tagsQuery.isLoading}
@@ -113,8 +123,10 @@ export function PropertiesSectionContent({ model }: PropertiesSectionContentProp
           queryErrorMessage={queryErrorMessage(model.queries.tagsQuery.error)}
           createErrorMessage={queryErrorMessage(model.mutations.createTagMutation.error)}
           updateErrorMessage={queryErrorMessage(model.mutations.updateTagMutation.error)}
+          deleteErrorMessage={queryErrorMessage(model.mutations.deleteTagMutation.error)}
           isCreating={model.mutations.createTagMutation.isPending}
           isUpdating={model.mutations.updateTagMutation.isPending}
+          isDeleting={model.mutations.deleteTagMutation.isPending}
         />
       );
     case "currencies":

@@ -37,7 +37,11 @@ from backend.services.agent.tool_handlers_read import (
     format_lines,
 )
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
-from backend.services.entities import find_entity_by_name, normalize_entity_name
+from backend.services.entities import (
+    find_entity_by_name,
+    is_account_entity,
+    normalize_entity_name,
+)
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.taxonomy import get_single_term_name_map
 
@@ -413,25 +417,16 @@ def propose_delete_tag(context: ToolContext, args: ProposeDeleteTagArgs) -> Tool
         )
         or 0
     )
-    if referenced_entry_count > 0:
-        sample_entries = list(
-            context.db.scalars(
-                select(Entry)
-                .join(Entry.tags)
-                .where(Tag.id == existing.id, Entry.is_deleted.is_(False))
-                .options(selectinload(Entry.tags))
-                .order_by(Entry.occurred_at.desc(), Entry.created_at.desc())
-                .limit(5)
-            )
+    sample_entries = list(
+        context.db.scalars(
+            select(Entry)
+            .join(Entry.tags)
+            .where(Tag.id == existing.id, Entry.is_deleted.is_(False))
+            .options(selectinload(Entry.tags))
+            .order_by(Entry.occurred_at.desc(), Entry.created_at.desc())
+            .limit(5)
         )
-        return error_result(
-            "cannot delete tag while it is referenced by entries",
-            details={
-                "name": args.name,
-                "referenced_entry_count": referenced_entry_count,
-                "sample_entries": [entry_to_public_record(entry) for entry in sample_entries],
-            },
-        )
+    ) if referenced_entry_count > 0 else []
 
     payload = {"name": args.name}
     item = create_change_item(
@@ -440,7 +435,11 @@ def propose_delete_tag(context: ToolContext, args: ProposeDeleteTagArgs) -> Tool
         payload=payload,
         rationale_text="Agent proposed deleting a tag.",
     )
-    preview = {"name": args.name}
+    preview = {
+        "name": args.name,
+        "referenced_entry_count": referenced_entry_count,
+        "sample_entries": [entry_to_public_record(entry) for entry in sample_entries],
+    }
     return proposal_result("proposed tag deletion", preview=preview, item=item)
 
 
@@ -468,6 +467,11 @@ def propose_update_entity(context: ToolContext, args: ProposeUpdateEntityArgs) -
     existing = find_entity_by_name(context.db, args.name)
     if existing is None:
         return error_result("entity not found", details={"name": args.name})
+    if is_account_entity(existing):
+        return error_result(
+            "account-backed entities must be managed from Accounts",
+            details={"name": args.name},
+        )
 
     patch = args.patch.model_dump(exclude_unset=True)
     target_name = patch.get("name")
@@ -498,6 +502,11 @@ def propose_delete_entity(context: ToolContext, args: ProposeDeleteEntityArgs) -
     existing = find_entity_by_name(context.db, args.name)
     if existing is None:
         return error_result("entity not found", details={"name": args.name})
+    if is_account_entity(existing):
+        return error_result(
+            "account-backed entities must be managed from Accounts",
+            details={"name": args.name},
+        )
 
     impacted_entries = list(
         context.db.scalars(
@@ -512,7 +521,7 @@ def propose_delete_entity(context: ToolContext, args: ProposeDeleteEntityArgs) -
     )
     impact_records = [entry_to_public_record(entry) for entry in impacted_entries]
     impacted_account_count = int(
-        context.db.scalar(select(func.count(Account.id)).where(Account.entity_id == existing.id))
+        context.db.scalar(select(func.count(Account.id)).where(Account.id == existing.id))
         or 0
     )
 

@@ -24,8 +24,11 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 - migration-first DB lifecycle via Alembic
 - integer minor-unit money representation
 - entry graph model with explicit link edges and derived group IDs
+- `Entity` is the root identity model; `Account` is a shared-primary-key subtype table (`accounts.id == entities.id`)
+- account semantics are determined by subtype membership in `accounts`, not by `entities.category`
 - soft-delete entries with link cleanup
 - AI boundary is append-only proposal creation plus explicit human review apply/reject
+- direct API deletes and agent-applied deletes use the same canonical semantics for tag/entity/account removal
 
 ## Backend Layering
 
@@ -112,6 +115,7 @@ Agent state:
 Cross-page consistency:
 
 - approving change items invalidates ledger queries (`entries`, `tags`, `entities`, `users`, `dashboard`, `currencies`)
+- deleting an account/entity preserves denormalized entry labels and surfaces missing-entity markers instead of erasing history text
 
 ## Data Flow Summary
 

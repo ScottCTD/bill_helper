@@ -189,7 +189,7 @@ def test_dashboard_monthly_aggregations(client):
     assert payload["largest_expenses"][0]["is_daily"] is True
 
 
-def test_dashboard_excludes_account_category_transfers_without_linked_account_ids(client):
+def test_dashboard_keeps_generic_entities_even_when_categorized_as_account(client):
     account = create_account(client)
     create_entity(client, "Legacy Debit", category="account")
     create_entity(client, "Legacy Credit", category="account")
@@ -210,8 +210,8 @@ def test_dashboard_excludes_account_category_transfers_without_linked_account_id
     dashboard.raise_for_status()
     payload = dashboard.json()
 
-    assert payload["kpis"]["expense_total_minor"] == 0
-    assert payload["spending_by_to"] == []
+    assert payload["kpis"]["expense_total_minor"] == 500
+    assert any(item["label"] == "Legacy Credit" and item["total_minor"] == 500 for item in payload["spending_by_to"])
 
 
 def test_account_routes_are_scoped_by_principal(client):

@@ -110,14 +110,13 @@ class RuntimeSettings(Base):
 class Account(Base):
     __tablename__ = "accounts"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    id: Mapped[str] = mapped_column(
+        ForeignKey("entities.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
     owner_user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    entity_id: Mapped[str | None] = mapped_column(
-        ForeignKey("entities.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     markdown_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -136,7 +135,17 @@ class Account(Base):
     )
     entries: Mapped[list[Entry]] = relationship(back_populates="account")
     owner_user: Mapped[User | None] = relationship(back_populates="accounts")
-    entity: Mapped[Entity | None] = relationship(back_populates="accounts")
+    entity: Mapped[Entity] = relationship(back_populates="account")
+
+    @property
+    def name(self) -> str:
+        return self.entity.name if self.entity is not None else ""
+
+    @name.setter
+    def name(self, value: str) -> None:
+        if self.entity is None:
+            raise AttributeError("Account entity must be loaded before setting name")
+        self.entity.name = value
 
 
 class AccountSnapshot(Base):
@@ -212,7 +221,7 @@ class Entity(Base):
         back_populates="to_entity_ref",
         foreign_keys="Entry.to_entity_id",
     )
-    accounts: Mapped[list[Account]] = relationship(back_populates="entity")
+    account: Mapped[Account | None] = relationship(back_populates="entity", uselist=False)
 
 
 class Taxonomy(Base):

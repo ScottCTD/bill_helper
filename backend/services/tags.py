@@ -120,3 +120,15 @@ def count_entries_for_tag(db: Session, *, tag_id: int) -> int:
         )
         or 0
     )
+
+
+def delete_tag(db: Session, *, tag: Tag) -> None:
+    assign_single_term_by_name(
+        db,
+        taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
+        subject_type=TAG_TYPE_SUBJECT_TYPE,
+        subject_id=tag.id,
+        term_name=None,
+    )
+    db.delete(tag)
+    db.flush()

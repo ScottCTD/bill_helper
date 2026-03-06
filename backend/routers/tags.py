@@ -17,6 +17,7 @@ from backend.services.tags import (
     TAG_TYPE_TAXONOMY_KEY,
     count_entries_for_tag,
     create_tag_from_payload,
+    delete_tag,
     update_tag_from_payload,
 )
 from backend.services.taxonomy import get_single_term_name, get_single_term_name_map
@@ -120,3 +121,17 @@ def update_tag(
         ),
         entry_count=entry_count,
     )
+
+
+@router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_tag_route(
+    tag_id: int,
+    db: Session = Depends(get_db),
+    _: RequestPrincipal = Depends(require_admin_principal),
+) -> None:
+    tag = db.get(Tag, tag_id)
+    if tag is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
+
+    delete_tag(db, tag=tag)
+    db.commit()

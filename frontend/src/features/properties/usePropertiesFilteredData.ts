@@ -31,7 +31,9 @@ export function usePropertiesFilteredData(args: PropertiesFilteredDataArgs) {
 
   const filteredEntities = useMemo(() => {
     return (entities ?? []).filter(
-      (entity) => includesFilter(entity.name, sectionSearch.entities) || includesFilter(entity.category, sectionSearch.entities)
+      (entity) =>
+        !entity.is_account &&
+        (includesFilter(entity.name, sectionSearch.entities) || includesFilter(entity.category, sectionSearch.entities))
     );
   }, [entities, sectionSearch.entities]);
 

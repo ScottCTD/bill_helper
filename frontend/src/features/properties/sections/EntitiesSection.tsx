@@ -2,6 +2,7 @@ import type { FormEvent } from "react";
 import { Plus } from "lucide-react";
 
 import type { Entity } from "../../../lib/types";
+import { DeleteConfirmDialog } from "../../../components/DeleteConfirmDialog";
 import { CreatableSingleSelect } from "../../../components/CreatableSingleSelect";
 import { Button } from "../../../components/ui/button";
 import {
@@ -34,8 +35,12 @@ interface EntitiesSectionProps {
   onStartEditEntity: (entity: Entity) => void;
   onCancelEditEntity: () => void;
   onSaveEntity: (entityId: string) => void;
+  onStartDeleteEntity: (entity: Entity) => void;
+  onCancelDeleteEntity: () => void;
+  onConfirmDeleteEntity: () => void;
   onCreateEntitySubmit: (event: FormEvent<HTMLFormElement>) => void;
   entities: Entity[] | undefined;
+  deletingEntity: Entity | null;
   hasAnyEntities: boolean;
   entityCategoryOptions: string[];
   isLoading: boolean;
@@ -43,8 +48,10 @@ interface EntitiesSectionProps {
   queryErrorMessage: string | null;
   createErrorMessage: string | null;
   updateErrorMessage: string | null;
+  deleteErrorMessage: string | null;
   isCreating: boolean;
   isUpdating: boolean;
+  isDeleting: boolean;
 }
 
 export function EntitiesSection(props: EntitiesSectionProps) {
@@ -66,8 +73,12 @@ export function EntitiesSection(props: EntitiesSectionProps) {
     onStartEditEntity,
     onCancelEditEntity,
     onSaveEntity,
+    onStartDeleteEntity,
+    onCancelDeleteEntity,
+    onConfirmDeleteEntity,
     onCreateEntitySubmit,
     entities,
+    deletingEntity,
     hasAnyEntities,
     entityCategoryOptions,
     isLoading,
@@ -75,8 +86,10 @@ export function EntitiesSection(props: EntitiesSectionProps) {
     queryErrorMessage,
     createErrorMessage,
     updateErrorMessage,
+    deleteErrorMessage,
     isCreating,
-    isUpdating
+    isUpdating,
+    isDeleting
   } = props;
 
   return (
@@ -128,6 +141,9 @@ export function EntitiesSection(props: EntitiesSectionProps) {
                   <TableCell>
                     <Button type="button" size="sm" variant="outline" onClick={() => onStartEditEntity(entity)}>
                       Edit
+                    </Button>
+                    <Button type="button" size="sm" variant="destructive" onClick={() => onStartDeleteEntity(entity)}>
+                      Delete
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -229,6 +245,27 @@ export function EntitiesSection(props: EntitiesSectionProps) {
           </form>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmDialog
+        open={Boolean(deletingEntity)}
+        onOpenChange={(open) => {
+          if (!open) {
+            onCancelDeleteEntity();
+          }
+        }}
+        title={deletingEntity ? `Delete ${deletingEntity.name}?` : "Delete entity?"}
+        description="This removes the entity record. Existing entries keep the visible label text, but the linked entity becomes missing."
+        confirmLabel="Delete entity"
+        isPending={isDeleting}
+        errorMessage={deleteErrorMessage}
+        blockMessage={deletingEntity && (deletingEntity.account_count ?? 0) > 0 ? "Account-backed entities are managed from Accounts." : null}
+        warnings={
+          deletingEntity && (deletingEntity.entry_count ?? 0) > 0
+            ? ["Entries that reference this entity stay in the ledger and show a missing-entity marker with the preserved label."]
+            : []
+        }
+        onConfirm={onConfirmDeleteEntity}
+      />
     </div>
   );
 }

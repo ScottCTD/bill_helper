@@ -8,6 +8,7 @@ import type { RuntimeSettings } from "../lib/types";
 import {
   createAccount,
   createSnapshot,
+  deleteAccount,
   getReconciliation,
   getRuntimeSettings,
   listAccounts,
@@ -29,7 +30,8 @@ vi.mock("../lib/api", async () => {
     getReconciliation: vi.fn(),
     createAccount: vi.fn(),
     updateAccount: vi.fn(),
-    createSnapshot: vi.fn()
+    createSnapshot: vi.fn(),
+    deleteAccount: vi.fn()
   };
 });
 
@@ -76,7 +78,6 @@ describe("AccountsPage", () => {
       {
         id: "acc-1",
         owner_user_id: "user-1",
-        entity_id: null,
         name: "Main",
         markdown_body: null,
         currency_code: "CAD",
@@ -102,7 +103,6 @@ describe("AccountsPage", () => {
     vi.mocked(createAccount).mockResolvedValue({
       id: "acc-2",
       owner_user_id: "user-1",
-      entity_id: null,
       name: "Travel Card",
       markdown_body: null,
       currency_code: "CAD",
@@ -113,7 +113,6 @@ describe("AccountsPage", () => {
     vi.mocked(updateAccount).mockResolvedValue({
       id: "acc-1",
       owner_user_id: "user-1",
-      entity_id: null,
       name: "Main",
       markdown_body: null,
       currency_code: "CAD",
@@ -158,7 +157,6 @@ describe("AccountsPage", () => {
       {
         id: "acc-1",
         owner_user_id: "user-1",
-        entity_id: null,
         name: "Main",
         markdown_body: null,
         currency_code: "CAD",
@@ -184,7 +182,6 @@ describe("AccountsPage", () => {
     vi.mocked(createAccount).mockResolvedValue({
       id: "acc-2",
       owner_user_id: "user-1",
-      entity_id: null,
       name: "Travel Card",
       markdown_body: null,
       currency_code: "CAD",
@@ -195,7 +192,6 @@ describe("AccountsPage", () => {
     vi.mocked(updateAccount).mockResolvedValue({
       id: "acc-1",
       owner_user_id: "user-1",
-      entity_id: null,
       name: "Main",
       markdown_body: null,
       currency_code: "CAD",
@@ -226,5 +222,77 @@ describe("AccountsPage", () => {
     });
     expect(vi.mocked(createSnapshot).mock.calls[0]?.[0]).toBe("acc-1");
     expect(vi.mocked(createSnapshot).mock.calls[0]?.[1]).toEqual(expect.objectContaining({ balance_minor: 12345, note: "manual" }));
+  });
+
+  it("deletes an account from the confirmation dialog", async () => {
+    vi.mocked(listAccounts).mockResolvedValue([
+      {
+        id: "acc-1",
+        owner_user_id: "user-1",
+        name: "Main",
+        markdown_body: null,
+        currency_code: "CAD",
+        is_active: true,
+        created_at: "2026-02-15T00:00:00Z",
+        updated_at: "2026-02-15T00:00:00Z"
+      }
+    ]);
+    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
+    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true, account_count: 1, entry_count: 0 }]);
+    vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
+    vi.mocked(listSnapshots).mockResolvedValue([]);
+    vi.mocked(getReconciliation).mockResolvedValue({
+      account_id: "acc-1",
+      account_name: "Main",
+      currency_code: "CAD",
+      as_of: "2026-02-15",
+      ledger_balance_minor: 100_00,
+      snapshot_balance_minor: 100_00,
+      snapshot_at: "2026-02-15",
+      delta_minor: 0
+    });
+    vi.mocked(createAccount).mockResolvedValue({
+      id: "acc-2",
+      owner_user_id: "user-1",
+      name: "Travel Card",
+      markdown_body: null,
+      currency_code: "CAD",
+      is_active: true,
+      created_at: "2026-02-15T00:00:00Z",
+      updated_at: "2026-02-15T00:00:00Z"
+    });
+    vi.mocked(updateAccount).mockResolvedValue({
+      id: "acc-1",
+      owner_user_id: "user-1",
+      name: "Main",
+      markdown_body: null,
+      currency_code: "CAD",
+      is_active: true,
+      created_at: "2026-02-15T00:00:00Z",
+      updated_at: "2026-02-15T00:00:00Z"
+    });
+    vi.mocked(createSnapshot).mockResolvedValue({
+      id: "snap-1",
+      account_id: "acc-1",
+      snapshot_at: "2026-02-15",
+      balance_minor: 100_00,
+      note: null,
+      created_at: "2026-02-15T00:00:00Z"
+    });
+    vi.mocked(deleteAccount).mockResolvedValue(undefined);
+
+    renderWithQueryClient(<AccountsPage />);
+
+    await screen.findByText("Main");
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    const deleteDialog = await screen.findByRole("dialog", { name: "Delete Main?" });
+    expect(within(deleteDialog).getByText(/snapshot history for this account is deleted/i)).toBeInTheDocument();
+
+    await userEvent.click(within(deleteDialog).getByRole("button", { name: "Delete account" }));
+
+    await waitFor(() => {
+      expect(vi.mocked(deleteAccount).mock.calls[0]?.[0]).toBe("acc-1");
+    });
   });
 });

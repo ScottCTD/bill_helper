@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 from fastapi import HTTPException, status
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from backend.auth import RequestPrincipal
-from backend.models_finance import Account, Entity, User
+from backend.models_finance import Account, Entity, User, Entry
 from backend.schemas_finance import AccountCreate, AccountUpdate
 from backend.services.access_scope import ensure_principal_can_assign_user
+from backend.services.crud_policy import assert_unique_name
 from backend.services.entities import (
-    ensure_entity_by_name,
+    clear_entity_category,
+    detach_entity_references_preserve_labels,
     find_entity_by_name,
     normalize_entity_name,
-    read_entity_category,
-    set_entity_category,
+    rename_entity_and_sync_entry_labels,
 )
 
 
@@ -31,51 +33,6 @@ def resolve_owner_user_id(
     return principal.user_id
 
 
-def resolve_account_entity_id(
-    db: Session,
-    *,
-    account_name: str,
-    existing_entity_id: str | None = None,
-) -> str:
-    normalized_name = normalize_entity_name(account_name)
-    if not normalized_name:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Account name cannot be empty")
-
-    existing_by_name = find_entity_by_name(db, normalized_name)
-    existing_by_name_category = read_entity_category(db, existing_by_name) if existing_by_name is not None else None
-    if existing_entity_id is not None:
-        entity = db.get(Entity, existing_entity_id)
-        if entity is None and existing_by_name is not None:
-            if existing_by_name_category not in (None, "account"):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Entity name already used by a non-account entity",
-                )
-            entity = existing_by_name
-        if entity is None:
-            entity = ensure_entity_by_name(db, normalized_name, category="account")
-            return entity.id
-
-        if existing_by_name is not None and existing_by_name.id != entity.id:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Entity name already exists")
-
-        entity.name = normalized_name
-        set_entity_category(db, entity, "account")
-        return entity.id
-
-    if existing_by_name is not None:
-        if existing_by_name_category not in (None, "account"):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Entity name already used by a non-account entity",
-            )
-        if existing_by_name_category is None:
-            set_entity_category(db, existing_by_name, "account")
-        return existing_by_name.id
-
-    return ensure_entity_by_name(db, normalized_name, category="account").id
-
-
 def create_account_from_payload(
     db: Session,
     *,
@@ -83,20 +40,31 @@ def create_account_from_payload(
     principal: RequestPrincipal,
 ) -> Account:
     normalized_name = normalize_entity_name(payload.name)
+    if not normalized_name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Account name cannot be empty")
+
+    existing_entity = find_entity_by_name(db, normalized_name)
+    if existing_entity is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Entity name already exists")
+
+    entity = Entity(name=normalized_name, category=None)
+    db.add(entity)
+    db.flush()
+
     account = Account(
+        id=entity.id,
         owner_user_id=resolve_owner_user_id(
             db,
             owner_user_id=payload.owner_user_id,
             principal=principal,
         ),
-        entity_id=resolve_account_entity_id(db, account_name=normalized_name),
-        name=normalized_name,
         markdown_body=payload.markdown_body,
         currency_code=payload.currency_code.upper(),
         is_active=payload.is_active,
     )
     db.add(account)
     db.flush()
+    db.refresh(account, attribute_names=["entity"])
     return account
 
 
@@ -117,12 +85,21 @@ def update_account_from_payload(
             principal=principal,
         )
     if "name" in update_data and update_data["name"] is not None:
-        normalized_name = normalize_entity_name(update_data["name"])
-        update_data["name"] = normalized_name
-        account.entity_id = resolve_account_entity_id(
+        if account.entity is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account entity not found")
+        target_name = normalize_entity_name(update_data.pop("name"))
+        if not target_name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Account name cannot be empty")
+        existing_entity = find_entity_by_name(db, target_name)
+        assert_unique_name(
+            existing_id=existing_entity.id if existing_entity is not None else None,
+            current_id=account.id,
+            conflict_detail="Entity name already exists",
+        )
+        rename_entity_and_sync_entry_labels(
             db,
-            account_name=normalized_name,
-            existing_entity_id=account.entity_id,
+            entity=account.entity,
+            raw_name=target_name,
         )
 
     for field, value in update_data.items():
@@ -131,3 +108,19 @@ def update_account_from_payload(
     db.add(account)
     db.flush()
     return account
+
+
+def delete_account_and_entity_root(db: Session, *, account: Account) -> None:
+    if account.entity is None:
+        raise ValueError("Account entity not found")
+
+    db.execute(
+        update(Entry)
+        .where(Entry.account_id == account.id)
+        .values(account_id=None)
+    )
+    detach_entity_references_preserve_labels(db, entity=account.entity)
+    clear_entity_category(db, account.entity)
+    db.delete(account)
+    db.delete(account.entity)
+    db.flush()

@@ -7,6 +7,7 @@ import { EntryEditorModal, type EntryEditorSubmitPayload } from "../components/E
 import { GroupGraphView } from "../components/GroupGraphView";
 import { LinkEditorModal } from "../components/LinkEditorModal";
 import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import {
   createLink,
@@ -152,6 +153,33 @@ export function EntryDetailPage() {
             </Button>
           </div>
         </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Entry Details</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 text-sm">
+          <div>
+            <strong>From:</strong> {entry.from_entity || "(unspecified)"}
+            {entry.from_entity_missing ? (
+              <span className="ml-2">
+                <Badge variant="outline">Missing entity</Badge>
+              </span>
+            ) : null}
+          </div>
+          <div>
+            <strong>To:</strong> {entry.to_entity || "(unspecified)"}
+            {entry.to_entity_missing ? (
+              <span className="ml-2">
+                <Badge variant="outline">Missing entity</Badge>
+              </span>
+            ) : null}
+          </div>
+          <div>
+            <strong>Owner:</strong> {entry.owner || "(none)"}
+          </div>
+        </CardContent>
       </Card>
 
       <Card>

@@ -6,6 +6,7 @@ export function usePropertiesFormState() {
   const [editingEntityId, setEditingEntityId] = useState("");
   const [editingEntityName, setEditingEntityName] = useState("");
   const [editingEntityCategory, setEditingEntityCategory] = useState("");
+  const [deletingEntityId, setDeletingEntityId] = useState("");
 
   const [newTagName, setNewTagName] = useState("");
   const [newTagType, setNewTagType] = useState("");
@@ -16,6 +17,7 @@ export function usePropertiesFormState() {
   const [editingTagType, setEditingTagType] = useState("");
   const [editingTagColor, setEditingTagColor] = useState("");
   const [editingTagDescription, setEditingTagDescription] = useState("");
+  const [deletingTagId, setDeletingTagId] = useState<number | null>(null);
 
   const [newUserName, setNewUserName] = useState("");
   const [editingUserId, setEditingUserId] = useState("");
@@ -44,6 +46,8 @@ export function usePropertiesFormState() {
     setEditingEntityName,
     editingEntityCategory,
     setEditingEntityCategory,
+    deletingEntityId,
+    setDeletingEntityId,
     newTagName,
     setNewTagName,
     newTagType,
@@ -62,6 +66,8 @@ export function usePropertiesFormState() {
     setEditingTagColor,
     editingTagDescription,
     setEditingTagDescription,
+    deletingTagId,
+    setDeletingTagId,
     newUserName,
     setNewUserName,
     editingUserId,

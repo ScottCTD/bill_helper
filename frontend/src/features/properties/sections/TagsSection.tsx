@@ -2,6 +2,7 @@ import type { FormEvent } from "react";
 import { Plus } from "lucide-react";
 
 import type { Tag } from "../../../lib/types";
+import { DeleteConfirmDialog } from "../../../components/DeleteConfirmDialog";
 import { CreatableSingleSelect } from "../../../components/CreatableSingleSelect";
 import { Button } from "../../../components/ui/button";
 import {
@@ -42,8 +43,12 @@ interface TagsSectionProps {
   onStartEditTag: (tag: Tag) => void;
   onCancelEditTag: () => void;
   onSaveTag: (tagId: number) => void;
+  onStartDeleteTag: (tag: Tag) => void;
+  onCancelDeleteTag: () => void;
+  onConfirmDeleteTag: () => void;
   onCreateTagSubmit: (event: FormEvent<HTMLFormElement>) => void;
   tags: Tag[] | undefined;
+  deletingTag: Tag | null;
   hasAnyTags: boolean;
   tagTypeOptions: string[];
   isLoading: boolean;
@@ -51,8 +56,10 @@ interface TagsSectionProps {
   queryErrorMessage: string | null;
   createErrorMessage: string | null;
   updateErrorMessage: string | null;
+  deleteErrorMessage: string | null;
   isCreating: boolean;
   isUpdating: boolean;
+  isDeleting: boolean;
 }
 
 export function TagsSection(props: TagsSectionProps) {
@@ -82,8 +89,12 @@ export function TagsSection(props: TagsSectionProps) {
     onStartEditTag,
     onCancelEditTag,
     onSaveTag,
+    onStartDeleteTag,
+    onCancelDeleteTag,
+    onConfirmDeleteTag,
     onCreateTagSubmit,
     tags,
+    deletingTag,
     hasAnyTags,
     tagTypeOptions,
     isLoading,
@@ -91,8 +102,10 @@ export function TagsSection(props: TagsSectionProps) {
     queryErrorMessage,
     createErrorMessage,
     updateErrorMessage,
+    deleteErrorMessage,
     isCreating,
-    isUpdating
+    isUpdating,
+    isDeleting
   } = props;
 
   return (
@@ -149,6 +162,9 @@ export function TagsSection(props: TagsSectionProps) {
                   <TableCell>
                     <Button type="button" size="sm" variant="outline" onClick={() => onStartEditTag(tag)}>
                       Edit
+                    </Button>
+                    <Button type="button" size="sm" variant="destructive" onClick={() => onStartDeleteTag(tag)}>
+                      Delete
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -270,6 +286,26 @@ export function TagsSection(props: TagsSectionProps) {
           </form>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmDialog
+        open={deletingTag !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            onCancelDeleteTag();
+          }
+        }}
+        title={deletingTag ? `Delete ${deletingTag.name}?` : "Delete tag?"}
+        description="This removes the tag record and detaches it from any entries that still reference it."
+        confirmLabel="Delete tag"
+        isPending={isDeleting}
+        errorMessage={deleteErrorMessage}
+        warnings={
+          deletingTag && (deletingTag.entry_count ?? 0) > 0
+            ? ["Entries keep their ledger history, but this tag will be removed from those entries."]
+            : []
+        }
+        onConfirm={onConfirmDeleteTag}
+      />
     </div>
   );
 }

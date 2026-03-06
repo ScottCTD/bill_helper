@@ -14,6 +14,7 @@ export interface Entity {
   id: string;
   name: string;
   category: string | null;
+  is_account: boolean;
   from_count?: number | null;
   to_count?: number | null;
   account_count?: number | null;
@@ -56,7 +57,6 @@ export interface TaxonomyTerm {
 export interface Account {
   id: string;
   owner_user_id: string | null;
-  entity_id: string | null;
   name: string;
   markdown_body: string | null;
   currency_code: string;
@@ -107,7 +107,9 @@ export interface Entry {
   to_entity_id: string | null;
   owner_user_id: string | null;
   from_entity: string | null;
+  from_entity_missing: boolean;
   to_entity: string | null;
+  to_entity_missing: boolean;
   owner: string | null;
   markdown_body: string | null;
   created_at: string;

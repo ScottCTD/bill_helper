@@ -412,32 +412,39 @@ export function EntryEditorModal({
 
             <div className="entry-property-line entry-property-line-group">
               <span className="entry-property-label">From:</span>
-              <div className="entry-property-group entry-property-group-from-to">
-                <CreatableSingleSelect
-                  ariaLabel="From"
-                  options={entityOptionNames}
-                  placeholder="Select or create entity..."
-                  createLabelPrefix="Create entity"
-                  value={formState.from_entity_value}
-                  disabled={isSaving}
-                  onCreateOption={(createdValue) =>
-                    setCreatedEntityOptionNames((current) => uniqueNormalizedEntityNames([...current, createdValue]))
-                  }
-                  onChange={(nextValue) => setFormState((state) => ({ ...state, from_entity_value: nextValue }))}
-                />
-                <span className="entry-property-inline-label">To:</span>
-                <CreatableSingleSelect
-                  ariaLabel="To"
-                  options={entityOptionNames}
-                  placeholder="Select or create entity..."
-                  createLabelPrefix="Create entity"
-                  value={formState.to_entity_value}
-                  disabled={isSaving}
-                  onCreateOption={(createdValue) =>
-                    setCreatedEntityOptionNames((current) => uniqueNormalizedEntityNames([...current, createdValue]))
-                  }
-                  onChange={(nextValue) => setFormState((state) => ({ ...state, to_entity_value: nextValue }))}
-                />
+              <div className="grid gap-2">
+                <div className="entry-property-group entry-property-group-from-to">
+                  <CreatableSingleSelect
+                    ariaLabel="From"
+                    options={entityOptionNames}
+                    placeholder="Select or create entity..."
+                    createLabelPrefix="Create entity"
+                    value={formState.from_entity_value}
+                    disabled={isSaving}
+                    onCreateOption={(createdValue) =>
+                      setCreatedEntityOptionNames((current) => uniqueNormalizedEntityNames([...current, createdValue]))
+                    }
+                    onChange={(nextValue) => setFormState((state) => ({ ...state, from_entity_value: nextValue }))}
+                  />
+                  <span className="entry-property-inline-label">To:</span>
+                  <CreatableSingleSelect
+                    ariaLabel="To"
+                    options={entityOptionNames}
+                    placeholder="Select or create entity..."
+                    createLabelPrefix="Create entity"
+                    value={formState.to_entity_value}
+                    disabled={isSaving}
+                    onCreateOption={(createdValue) =>
+                      setCreatedEntityOptionNames((current) => uniqueNormalizedEntityNames([...current, createdValue]))
+                    }
+                    onChange={(nextValue) => setFormState((state) => ({ ...state, to_entity_value: nextValue }))}
+                  />
+                </div>
+                {entry?.from_entity_missing || entry?.to_entity_missing ? (
+                  <p className="text-xs text-muted-foreground">
+                    Missing entity marker: preserved labels remain visible because the original entity no longer exists.
+                  </p>
+                ) : null}
               </div>
             </div>
 

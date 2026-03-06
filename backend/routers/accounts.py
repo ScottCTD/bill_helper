@@ -4,11 +4,11 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from backend.auth import RequestPrincipal, get_current_principal
 from backend.database import get_db
-from backend.models_finance import Account, AccountSnapshot
+from backend.models_finance import Account, AccountSnapshot, Entity
 from backend.schemas_finance import (
     AccountCreate,
     AccountRead,
@@ -23,6 +23,7 @@ from backend.services.access_scope import (
 )
 from backend.services.accounts import (
     create_account_from_payload,
+    delete_account_and_entity_root,
     update_account_from_payload,
 )
 from backend.services.finance import build_reconciliation
@@ -43,6 +44,7 @@ def create_account(
     )
     db.commit()
     db.refresh(account)
+    db.refresh(account, attribute_names=["entity"])
     return AccountRead.model_validate(account)
 
 
@@ -54,8 +56,10 @@ def list_accounts(
     accounts = list(
         db.scalars(
             select(Account)
+            .join(Entity, Entity.id == Account.id)
             .where(account_owner_filter(principal))
-            .order_by(Account.created_at.asc())
+            .options(selectinload(Account.entity))
+            .order_by(Entity.name.asc(), Account.created_at.asc())
         )
     )
     return [AccountRead.model_validate(account) for account in accounts]
@@ -77,7 +81,19 @@ def update_account(
     )
     db.commit()
     db.refresh(account)
+    db.refresh(account, attribute_names=["entity"])
     return AccountRead.model_validate(account)
+
+
+@router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(
+    account_id: str,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> None:
+    account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
+    delete_account_and_entity_root(db, account=account)
+    db.commit()
 
 
 @router.post("/{account_id}/snapshots", response_model=SnapshotRead, status_code=status.HTTP_201_CREATED)

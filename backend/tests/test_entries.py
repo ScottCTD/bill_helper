@@ -3,11 +3,11 @@ from __future__ import annotations
 import re
 
 
-def create_account(client, *, headers: dict[str, str] | None = None) -> str:
+def create_account(client, name: str = "Checking", *, headers: dict[str, str] | None = None) -> str:
     response = client.post(
         "/api/v1/accounts",
         json={
-            "name": "Checking",
+            "name": name,
             "currency_code": "USD",
             "is_active": True,
         },
@@ -170,7 +170,7 @@ def test_group_routes_are_scoped_by_principal(client):
     admin_link.raise_for_status()
 
     alice_headers = {"X-Bill-Helper-Principal": "alice"}
-    alice_account_id = create_account(client, headers=alice_headers)
+    alice_account_id = create_account(client, name="Alice Checking", headers=alice_headers)
     alice_first = create_entry(client, alice_account_id, "Alice Entry 1", headers=alice_headers)
     alice_second = create_entry(
         client,
@@ -379,9 +379,137 @@ def test_accounts_are_entities_linked_to_users(client):
     entity_names = {entity["name"] for entity in entities}
     assert "Checking" in entity_names
     matching = next(entity for entity in entities if entity["name"] == "Checking")
-    assert matching["category"] == "account"
-    assert account["entity_id"] == matching["id"]
+    assert matching["category"] is None
+    assert matching["is_account"] is True
+    assert account["id"] == matching["id"]
+    assert "entity_id" not in account
     assert account["owner_user_id"] is not None
+
+
+def test_delete_entity_preserves_denormalized_entry_labels(client):
+    account_id = create_account(client)
+    from_entity = create_entity(client, "Landlord", category="merchant")
+    to_entity = create_entity(client, "Apartment")
+
+    create_response = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-12",
+            "name": "Rent",
+            "amount_minor": 200000,
+            "currency_code": "USD",
+            "from_entity_id": from_entity["id"],
+            "to_entity_id": to_entity["id"],
+            "tags": ["housing"],
+        },
+    )
+    create_response.raise_for_status()
+    entry = create_response.json()
+
+    delete_response = client.delete(f"/api/v1/entities/{from_entity['id']}")
+    assert delete_response.status_code == 204
+
+    detail_response = client.get(f"/api/v1/entries/{entry['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    assert detail["from_entity"] == "Landlord"
+    assert detail["from_entity_id"] is None
+    assert detail["from_entity_missing"] is True
+    assert detail["to_entity"] == "Apartment"
+    assert detail["to_entity_id"] == to_entity["id"]
+    assert detail["to_entity_missing"] is False
+
+    entities = client.get("/api/v1/entities").json()
+    assert all(entity["id"] != from_entity["id"] for entity in entities)
+
+
+def test_delete_entity_rejects_account_backed_roots(client):
+    account_id = create_account(client)
+
+    response = client.delete(f"/api/v1/entities/{account_id}")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Account-backed entities must be managed from Accounts"
+
+
+def test_delete_account_preserves_entries_and_deletes_snapshots(client):
+    account_id = create_account(client)
+    destination = create_entity(client, "Broker")
+
+    create_response = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": account_id,
+            "kind": "TRANSFER",
+            "occurred_at": "2026-01-13",
+            "name": "Move funds",
+            "amount_minor": 50000,
+            "currency_code": "USD",
+            "from_entity_id": account_id,
+            "to_entity_id": destination["id"],
+            "tags": ["transfer"],
+        },
+    )
+    create_response.raise_for_status()
+    entry = create_response.json()
+
+    snapshot_response = client.post(
+        f"/api/v1/accounts/{account_id}/snapshots",
+        json={
+            "snapshot_at": "2026-01-13",
+            "balance_minor": 50000,
+            "note": "baseline",
+        },
+    )
+    snapshot_response.raise_for_status()
+
+    delete_response = client.delete(f"/api/v1/accounts/{account_id}")
+    assert delete_response.status_code == 204
+
+    detail_response = client.get(f"/api/v1/entries/{entry['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    assert detail["account_id"] is None
+    assert detail["from_entity"] == "Checking"
+    assert detail["from_entity_id"] is None
+    assert detail["from_entity_missing"] is True
+    assert detail["to_entity"] == "Broker"
+    assert detail["to_entity_id"] == destination["id"]
+    assert detail["to_entity_missing"] is False
+
+    accounts = client.get("/api/v1/accounts")
+    accounts.raise_for_status()
+    assert accounts.json() == []
+
+    snapshots = client.get(f"/api/v1/accounts/{account_id}/snapshots")
+    assert snapshots.status_code == 404
+
+    entities = client.get("/api/v1/entities")
+    entities.raise_for_status()
+    assert all(entity["id"] != account_id for entity in entities.json())
+
+
+def test_delete_tag_detaches_existing_entry_links(client):
+    account_id = create_account(client)
+    entry = create_entry(client, account_id, "Coffee")
+
+    tags_response = client.get("/api/v1/tags")
+    tags_response.raise_for_status()
+    tag = next(tag for tag in tags_response.json() if tag["name"] == "food")
+    assert tag["entry_count"] == 1
+
+    delete_response = client.delete(f"/api/v1/tags/{tag['id']}")
+    assert delete_response.status_code == 204
+
+    detail_response = client.get(f"/api/v1/entries/{entry['id']}")
+    detail_response.raise_for_status()
+    assert detail_response.json()["tags"] == []
+
+    refreshed_tags = client.get("/api/v1/tags")
+    refreshed_tags.raise_for_status()
+    assert all(existing["id"] != tag["id"] for existing in refreshed_tags.json())
 
 
 def test_tag_management_and_currency_catalog(client):

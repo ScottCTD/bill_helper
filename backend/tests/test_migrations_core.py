@@ -246,3 +246,233 @@ def test_migration_chain_reaches_head_from_empty_database(tmp_path):
         ).scalar_one_or_none()
         assert isinstance(version_num, str)
         assert version_num
+
+
+def test_migration_0024_rewrites_account_ids_to_entity_roots(tmp_path):
+    database_url = _sqlite_url(tmp_path, "migration_0024.sqlite")
+    cfg = _build_alembic_config(database_url)
+    command.upgrade(cfg, "0023_add_agent_provider_config")
+
+    engine = create_engine(database_url, future=True)
+    now = datetime.now(timezone.utc)
+    old_account_id = str(uuid4())
+    account_entity_id = str(uuid4())
+    group_id = str(uuid4())
+    entry_id = str(uuid4())
+    snapshot_id = str(uuid4())
+    term_id = str(uuid4())
+    assignment_id = str(uuid4())
+
+    with engine.begin() as connection:
+        taxonomy_id = connection.execute(
+            text("SELECT id FROM taxonomies WHERE key = 'entity_category' LIMIT 1")
+        ).scalar_one()
+        connection.execute(
+            text(
+                """
+                INSERT INTO entities (id, name, category, created_at, updated_at)
+                VALUES (:id, :name, :category, :created_at, :updated_at)
+                """
+            ),
+            {
+                "id": account_entity_id,
+                "name": "Primary Checking",
+                "category": "cash account",
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO taxonomy_terms
+                  (id, taxonomy_id, name, normalized_name, parent_term_id, metadata_json, created_at, updated_at)
+                VALUES
+                  (:id, :taxonomy_id, :name, :normalized_name, NULL, NULL, :created_at, :updated_at)
+                """
+            ),
+            {
+                "id": term_id,
+                "taxonomy_id": taxonomy_id,
+                "name": "cash account",
+                "normalized_name": "cash account",
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO taxonomy_assignments
+                  (id, taxonomy_id, term_id, subject_type, subject_id, position, created_at, updated_at)
+                VALUES
+                  (:id, :taxonomy_id, :term_id, 'entity', :subject_id, 0, :created_at, :updated_at)
+                """
+            ),
+            {
+                "id": assignment_id,
+                "taxonomy_id": taxonomy_id,
+                "term_id": term_id,
+                "subject_id": account_entity_id,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO accounts
+                  (id, name, owner_user_id, entity_id, markdown_body, currency_code, is_active, created_at, updated_at)
+                VALUES
+                  (:id, :name, NULL, :entity_id, :markdown_body, :currency_code, :is_active, :created_at, :updated_at)
+                """
+            ),
+            {
+                "id": old_account_id,
+                "name": "Primary Checking",
+                "entity_id": account_entity_id,
+                "markdown_body": "shared root migration",
+                "currency_code": "USD",
+                "is_active": 1,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO entry_groups (id, created_at, updated_at)
+                VALUES (:id, :created_at, :updated_at)
+                """
+            ),
+            {
+                "id": group_id,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO entries
+                  (
+                    id,
+                    group_id,
+                    account_id,
+                    kind,
+                    occurred_at,
+                    name,
+                    amount_minor,
+                    currency_code,
+                    from_entity_id,
+                    to_entity_id,
+                    owner_user_id,
+                    from_entity,
+                    to_entity,
+                    owner,
+                    markdown_body,
+                    is_deleted,
+                    deleted_at,
+                    created_at,
+                    updated_at
+                  )
+                VALUES
+                  (
+                    :id,
+                    :group_id,
+                    :account_id,
+                    :kind,
+                    :occurred_at,
+                    :name,
+                    :amount_minor,
+                    :currency_code,
+                    :from_entity_id,
+                    NULL,
+                    NULL,
+                    :from_entity,
+                    NULL,
+                    'admin',
+                    NULL,
+                    0,
+                    NULL,
+                    :created_at,
+                    :updated_at
+                  )
+                """
+            ),
+            {
+                "id": entry_id,
+                "group_id": group_id,
+                "account_id": old_account_id,
+                "kind": "EXPENSE",
+                "occurred_at": "2026-03-01",
+                "name": "Migrated rent",
+                "amount_minor": 125000,
+                "currency_code": "USD",
+                "from_entity_id": account_entity_id,
+                "from_entity": "Primary Checking",
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO account_snapshots
+                  (id, account_id, snapshot_at, balance_minor, note, created_at)
+                VALUES
+                  (:id, :account_id, :snapshot_at, :balance_minor, :note, :created_at)
+                """
+            ),
+            {
+                "id": snapshot_id,
+                "account_id": old_account_id,
+                "snapshot_at": "2026-03-01",
+                "balance_minor": 125000,
+                "note": "pre-migration",
+                "created_at": now,
+            },
+        )
+
+    command.upgrade(cfg, "0024_entity_root_accounts")
+
+    inspector = inspect(engine)
+    account_columns = {column["name"] for column in inspector.get_columns("accounts")}
+    assert "entity_id" not in account_columns
+    assert "name" not in account_columns
+
+    with engine.begin() as connection:
+        account_row = connection.execute(
+            text("SELECT id, markdown_body, currency_code, is_active FROM accounts LIMIT 1")
+        ).mappings().one()
+        entry_account_id = connection.execute(
+            text("SELECT account_id FROM entries WHERE id = :id"),
+            {"id": entry_id},
+        ).scalar_one()
+        snapshot_account_id = connection.execute(
+            text("SELECT account_id FROM account_snapshots WHERE id = :id"),
+            {"id": snapshot_id},
+        ).scalar_one()
+        entity_category = connection.execute(
+            text("SELECT category FROM entities WHERE id = :id"),
+            {"id": account_entity_id},
+        ).scalar_one()
+        assignment_count = connection.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM taxonomy_assignments
+                WHERE subject_type = 'entity' AND subject_id = :subject_id
+                """
+            ),
+            {"subject_id": account_entity_id},
+        ).scalar_one()
+
+        assert str(account_row["id"]) == account_entity_id
+        assert str(entry_account_id) == account_entity_id
+        assert str(snapshot_account_id) == account_entity_id
+        assert str(account_row["markdown_body"]) == "shared root migration"
+        assert str(account_row["currency_code"]) == "USD"
+        assert int(account_row["is_active"]) == 1
+        assert entity_category is None
+        assert int(assignment_count) == 0

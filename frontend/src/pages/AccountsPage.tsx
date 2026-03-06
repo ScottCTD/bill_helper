@@ -3,6 +3,7 @@ import { AccountsTableSection } from "../features/accounts/AccountsTableSection"
 import { ReconciliationSection } from "../features/accounts/ReconciliationSection";
 import { SnapshotsSection } from "../features/accounts/SnapshotsSection";
 import { useAccountsPageModel } from "../features/accounts/useAccountsPageModel";
+import { DeleteConfirmDialog } from "../components/DeleteConfirmDialog";
 
 export function AccountsPage() {
   const model = useAccountsPageModel();
@@ -29,6 +30,7 @@ export function AccountsPage() {
         selectedAccountId={model.selectedAccountId}
         onSelectAccount={model.setSelectedAccountId}
         onEditAccount={model.actions.editAccount}
+        onDeleteAccount={model.actions.openDeleteDialog}
         ownerNameForId={model.ownerNameForId}
         isLoading={model.queries.accountsQuery.isLoading}
         errorMessage={accountTableError}
@@ -76,6 +78,22 @@ export function AccountsPage() {
         isUpdating={model.mutations.updateAccountMutation.isPending}
         onResetCreateMutationError={() => model.mutations.createAccountMutation.reset()}
         onResetUpdateMutationError={() => model.mutations.updateAccountMutation.reset()}
+      />
+
+      <DeleteConfirmDialog
+        open={Boolean(model.deletingAccountId)}
+        onOpenChange={model.actions.onDeleteDialogOpenChange}
+        title={model.deletingAccount ? `Delete ${model.deletingAccount.name}?` : "Delete account?"}
+        description="This removes the account root. Snapshots are deleted, and existing entries stay in the ledger with a missing-entity marker where preserved labels remain."
+        confirmLabel="Delete account"
+        isPending={model.mutations.deleteAccountMutation.isPending}
+        errorMessage={model.mutations.deleteAccountMutation.isError ? (model.mutations.deleteAccountMutation.error as Error).message : null}
+        warnings={[
+          "Ledger entries are preserved; their account link is cleared.",
+          "If the account name appears in from/to fields, the visible label stays but is marked as missing.",
+          "Snapshot history for this account is deleted."
+        ]}
+        onConfirm={model.actions.confirmDeleteAccount}
       />
     </div>
   );

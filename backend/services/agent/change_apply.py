@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from typing import Any, Callable, TypeVar
 
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from backend.enums_agent import AgentChangeType
-from backend.models_finance import Account, Entry, Tag
+from backend.models_finance import Entry, Tag
 from backend.services.agent.change_contracts import (
     CreateEntryPayload,
     CreateEntityPayload,
@@ -22,12 +22,16 @@ from backend.services.agent.change_contracts import (
     UpdateTagPayload,
     validate_change_payload,
 )
+from backend.services.crud_policy import PolicyViolation
 from backend.services.entries import set_entry_tags, soft_delete_entry
 from backend.services.entities import (
+    delete_entity_and_preserve_labels,
     ensure_entity_by_name,
+    ensure_entity_is_not_account_backed,
     find_entity_by_name,
     set_entity_category,
 )
+from backend.services.tags import delete_tag
 from backend.services.groups import assign_initial_group, recompute_entry_groups
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.tags import resolve_tag_color
@@ -156,28 +160,8 @@ def apply_delete_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
     if tag is None:
         raise ValueError("Tag not found")
 
-    referenced_entry_count = int(
-        db.scalar(
-            select(func.count(Entry.id))
-            .join(Entry.tags)
-            .where(Tag.id == tag.id, Entry.is_deleted.is_(False))
-        )
-        or 0
-    )
-    if referenced_entry_count > 0:
-        noun = "entry" if referenced_entry_count == 1 else "entries"
-        raise ValueError(f"Tag cannot be deleted because it is referenced by {referenced_entry_count} {noun}")
-
-    assign_single_term_by_name(
-        db,
-        taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
-        subject_type=TAG_TYPE_SUBJECT_TYPE,
-        subject_id=tag.id,
-        term_name=None,
-    )
     resource_id = str(tag.id)
-    db.delete(tag)
-    db.flush()
+    delete_tag(db, tag=tag)
     return AppliedResource(resource_type="tag", resource_id=resource_id)
 
 
@@ -195,6 +179,10 @@ def apply_update_entity(db: Session, payload: dict[str, Any]) -> AppliedResource
     entity = find_entity_by_name(db, parsed.name)
     if entity is None:
         raise ValueError("Entity not found")
+    try:
+        ensure_entity_is_not_account_backed(entity)
+    except PolicyViolation as exc:
+        raise ValueError(exc.detail) from exc
 
     if "name" in parsed.patch.model_fields_set and parsed.patch.name is not None:
         existing = find_entity_by_name(db, parsed.patch.name)
@@ -219,20 +207,11 @@ def apply_delete_entity(db: Session, payload: dict[str, Any]) -> AppliedResource
     if entity is None:
         raise ValueError("Entity not found")
 
-    db.execute(update(Entry).where(Entry.from_entity_id == entity.id).values(from_entity_id=None, from_entity=None))
-    db.execute(update(Entry).where(Entry.to_entity_id == entity.id).values(to_entity_id=None, to_entity=None))
-    db.execute(update(Account).where(Account.entity_id == entity.id).values(entity_id=None))
-    assign_single_term_by_name(
-        db,
-        taxonomy_key=ENTITY_CATEGORY_TAXONOMY_KEY,
-        subject_type=ENTITY_CATEGORY_SUBJECT_TYPE,
-        subject_id=entity.id,
-        term_name=None,
-    )
-
     resource_id = entity.id
-    db.delete(entity)
-    db.flush()
+    try:
+        delete_entity_and_preserve_labels(db, entity=entity)
+    except PolicyViolation as exc:
+        raise ValueError(exc.detail) from exc
     return AppliedResource(resource_type="entity", resource_id=resource_id)
 
 

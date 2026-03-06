@@ -7,6 +7,7 @@ This doc is the fast path for understanding account management UX, snapshot chec
 - `GET /api/v1/accounts`
 - `POST /api/v1/accounts`
 - `PATCH /api/v1/accounts/{account_id}`
+- `DELETE /api/v1/accounts/{account_id}`
 - `POST /api/v1/accounts/{account_id}/snapshots`
 - `GET /api/v1/accounts/{account_id}/snapshots`
 - `GET /api/v1/accounts/{account_id}/reconciliation`
@@ -15,13 +16,21 @@ This doc is the fast path for understanding account management UX, snapshot chec
 ## Current Frontend Behavior
 
 - Accounts are displayed in a table workspace (search + row selection + row-level edit action).
+- Accounts are entity-root records; each account id is also the backing entity id.
 - Account creation is handled by the icon-only `+` action, which opens a modal.
 - Account edits are handled by the `Edit` button in each row, which opens a modal.
+- Account deletion is handled by a row-level confirmation dialog.
 - Account metadata now excludes legacy `institution` and `type`; dialogs focus on owner/name/currency/notes/active state.
 - Account create/edit modals include optional markdown notes (`markdown_body`) for richer account-level context.
 - Snapshot and reconciliation panels are bound to the currently selected table row.
 - Snapshot creation is append-only in the UI (no snapshot edit/delete controls).
 - Reconciliation and snapshot panels include plain-language term definitions directly in the page so users can understand fields without leaving the workflow.
+
+Delete semantics:
+
+- deleting an account removes the shared account/entity root
+- account snapshots are deleted
+- linked ledger entries keep their denormalized `from` / `to` text, but account/entity FK references are cleared and the UI shows missing-entity markers
 
 ## Reconciliation Semantics
 
@@ -35,8 +44,9 @@ The as-of date defaults to the server's current day when the query parameter is 
 
 ## Backend Modules
 
-- `backend/routers/accounts.py`: account/snapshot/reconciliation routes.
+- `backend/routers/accounts.py`: account create/update/delete plus snapshot/reconciliation routes.
 - `backend/services/agent/message_history.py`: current-user account context assembly for agent system prompt (includes account notes).
+- `backend/services/accounts.py`: shared account/entity-root create, update, and delete behavior.
 - `backend/services/finance.py`: ledger aggregation + latest-snapshot lookup.
 - `backend/schemas.py`: `Account*`, `Snapshot*`, and `ReconciliationRead` contracts.
 
@@ -48,10 +58,11 @@ The as-of date defaults to the server's current day when the query parameter is 
 - `frontend/src/features/accounts/ReconciliationSection.tsx`: reconciliation summary UI.
 - `frontend/src/features/accounts/SnapshotsSection.tsx`: snapshot create/history UI.
 - `frontend/src/features/accounts/AccountDialogs.tsx`: create/edit dialog UI.
+- `frontend/src/components/DeleteConfirmDialog.tsx`: shared destructive confirmation dialog primitive.
 - `frontend/src/lib/api.ts`: account/snapshot/reconciliation client methods.
 - `frontend/src/lib/queryKeys.ts`: account query keys (`accounts`, `snapshots`, `reconciliation`).
 - `frontend/src/lib/queryInvalidation.ts`: `invalidateAccountReadModels` after account/snapshot writes.
-- `frontend/src/pages/AccountsPage.test.tsx`: integration tests for create-account and create-snapshot flows.
+- `frontend/src/pages/AccountsPage.test.tsx`: integration tests for create-account, create-snapshot, and delete-account flows.
 
 ## Operational Notes and Constraints
 

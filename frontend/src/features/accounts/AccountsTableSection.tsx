@@ -17,6 +17,7 @@ interface AccountsTableSectionProps {
   selectedAccountId: string;
   onSelectAccount: (accountId: string) => void;
   onEditAccount: (accountId: string) => void;
+  onDeleteAccount: (accountId: string) => void;
   ownerNameForId: (ownerUserId: string | null) => string;
   isLoading: boolean;
   errorMessage: string | null;
@@ -32,6 +33,7 @@ export function AccountsTableSection(props: AccountsTableSectionProps) {
     selectedAccountId,
     onSelectAccount,
     onEditAccount,
+    onDeleteAccount,
     ownerNameForId,
     isLoading,
     errorMessage
@@ -118,6 +120,17 @@ export function AccountsTableSection(props: AccountsTableSectionProps) {
                             }}
                           >
                             Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onDeleteAccount(account.id);
+                            }}
+                          >
+                            Delete
                           </Button>
                         </div>
                       </TableCell>

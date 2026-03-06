@@ -25,11 +25,16 @@ Agent:
 
 ## `accounts`
 
-- `id` (PK UUID string)
+- `id` (PK UUID string, FK -> `entities.id`)
 - `owner_user_id` (nullable FK -> `users.id`)
-- `entity_id` (nullable FK -> `entities.id`)
-- `name`, `markdown_body`, `currency_code`, `is_active`
+- `markdown_body`, `currency_code`, `is_active`
 - `created_at`, `updated_at`
+
+Operational rules:
+
+- `accounts` is a subtype table for `entities`; every account is an entity root with the same id.
+- Account identity is determined by the presence of a row in `accounts`, not by `entities.category = 'account'`.
+- `AccountRead.id` is the only public account identifier; `entity_id` is no longer exposed.
 
 ## `account_snapshots`
 
@@ -82,6 +87,12 @@ Purpose:
 - `category` (nullable normalized lowercase, compatibility mirror of taxonomy assignment)
 - `created_at`, `updated_at`
 
+Operational rules:
+
+- generic counterparties live only in `entities`
+- account-backed entities are the rows whose id also exists in `accounts`
+- legacy generic entities may still have `category = 'account'`, but that category no longer grants account semantics
+
 ## `entries`
 
 - `id` (PK)
@@ -94,6 +105,13 @@ Purpose:
 - `markdown_body`
 - `is_deleted`, `deleted_at`
 - `created_at`, `updated_at`
+
+Deletion semantics:
+
+- `account_id` uses `ON DELETE SET NULL`
+- `from_entity_id` / `to_entity_id` use `ON DELETE SET NULL`
+- when an entity or account root is deleted, the denormalized `from_entity` / `to_entity` text is intentionally preserved so historical labels remain visible
+- API serializers derive `from_entity_missing` / `to_entity_missing` when preserved text remains but the linked entity FK is now `NULL`
 
 ## `entry_links`
 
@@ -167,6 +185,16 @@ Current seeded taxonomies:
 
 - `entry_id` (PK/FK -> `entries.id`)
 - `tag_id` (PK/FK -> `tags.id`)
+
+Deletion semantics:
+
+- deleting a tag removes junction rows through `entry_tags.tag_id ON DELETE CASCADE`
+
+## Current Delete Rules
+
+- deleting an account deletes the shared account/entity root, cascades account snapshots, sets `entries.account_id = NULL`, and detaches `from_entity_id` / `to_entity_id` references that pointed at that root while preserving label text
+- deleting a generic entity detaches `from_entity_id` / `to_entity_id` and preserves label text
+- deleting an account-backed entity through generic entity routes is blocked; account-backed roots are managed through `/accounts`
 
 ## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`, `0020_add_agent_message_attachment_original_filename`, `0021_add_agent_run_context_tokens`, `0022_agent_run_events_and_tool_lifecycle`)
 

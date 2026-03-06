@@ -141,7 +141,8 @@ TOOLS: dict[str, AgentToolDefinition] = {
     "propose_delete_tag": AgentToolDefinition(
         name="propose_delete_tag",
         description=(
-            "Create a review-gated proposal to delete a tag only when the tag has no active entry references. "
+            "Create a review-gated proposal to delete a tag. "
+            "Delete behavior removes tag links from affected entries; it does not delete entries. "
             "This does not mutate tags immediately; it creates a pending review item only."
         ),
         args_model=ProposeDeleteTagArgs,
@@ -169,7 +170,8 @@ TOOLS: dict[str, AgentToolDefinition] = {
         name="propose_delete_entity",
         description=(
             "Create a review-gated proposal to delete an entity. "
-            "Delete behavior detaches nullable references from entries/accounts; it does not delete entries/accounts."
+            "Delete behavior preserves denormalized entry labels while detaching nullable references; "
+            "account-backed entities must be managed from Accounts."
         ),
         args_model=ProposeDeleteEntityArgs,
         handler=propose_delete_entity,
@@ -266,4 +268,3 @@ def execute_tool(name: str, arguments: dict[str, Any], context: ToolContext) -> 
         return error_result("tool execution failed", details=str(exc))
     except Exception as exc:  # pragma: no cover - guarded for runtime resilience
         return error_result("tool execution failed", details=str(exc))
-

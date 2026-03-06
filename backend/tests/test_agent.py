@@ -1883,7 +1883,7 @@ def test_reject_flow(client, monkeypatch):
     assert all(entity["name"] != "Temp Vendor" for entity in entities)
 
 
-def test_propose_delete_tag_is_blocked_when_tag_is_referenced(client, monkeypatch):
+def test_propose_delete_tag_reports_references_but_still_creates_proposal(client, monkeypatch):
     create_entry_response = client.post(
         "/api/v1/entries",
         json={
@@ -1922,17 +1922,17 @@ def test_propose_delete_tag_is_blocked_when_tag_is_referenced(client, monkeypatc
     run = send_message(client, thread["id"], "Delete the groceries tag")
 
     assert run["status"] == "completed"
-    assert run["change_items"] == []
+    assert len(run["change_items"]) == 1
     assert len(run["tool_calls"]) == 1
     tool_output = run["tool_calls"][0]["output_json"]
-    assert tool_output["status"] == "ERROR"
-    assert "cannot delete tag while it is referenced" in tool_output["summary"]
-    details = tool_output["details"]
-    assert details["name"] == "groceries"
-    assert details["referenced_entry_count"] == 1
+    assert tool_output["status"] == "OK"
+    preview = tool_output["preview"]
+    assert preview["name"] == "groceries"
+    assert preview["referenced_entry_count"] == 1
+    assert len(preview["sample_entries"]) == 1
 
 
-def test_delete_tag_apply_fails_if_tag_becomes_referenced_before_approval(client, monkeypatch):
+def test_delete_tag_apply_succeeds_even_if_tag_becomes_referenced_before_approval(client, monkeypatch):
     create_tag_response = client.post("/api/v1/tags", json={"name": "stale-tag", "type": "misc"})
     create_tag_response.raise_for_status()
 
@@ -1975,14 +1975,64 @@ def test_delete_tag_apply_fails_if_tag_becomes_referenced_before_approval(client
     create_entry_response.raise_for_status()
 
     approve_response = client.post(f"/api/v1/agent/change-items/{item_id}/approve", json={})
-    assert approve_response.status_code == 422
-    assert "cannot be deleted because it is referenced" in approve_response.text
+    approve_response.raise_for_status()
+    assert approve_response.json()["status"] == "APPLIED"
 
     run_detail = client.get(f"/api/v1/agent/runs/{run['id']}")
     run_detail.raise_for_status()
     refreshed_item = next(item for item in run_detail.json()["change_items"] if item["id"] == item_id)
-    assert refreshed_item["status"] == "APPLY_FAILED"
-    assert "cannot be deleted because it is referenced" in (refreshed_item["review_note"] or "")
+    assert refreshed_item["status"] == "APPLIED"
+
+    tags_response = client.get("/api/v1/tags")
+    tags_response.raise_for_status()
+    assert all(tag["name"] != "stale-tag" for tag in tags_response.json())
+
+    entries_response = client.get("/api/v1/entries", params={"source": "Late tag link"})
+    entries_response.raise_for_status()
+    payload = entries_response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["tags"] == []
+
+
+def test_propose_delete_entity_rejects_account_backed_entity_roots(client, monkeypatch):
+    create_account_response = client.post(
+        "/api/v1/accounts",
+        json={
+            "name": "Main Checking",
+            "currency_code": "USD",
+            "is_active": True,
+        },
+    )
+    create_account_response.raise_for_status()
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Entity delete is blocked."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_delete_entity",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_delete_entity",
+                        "arguments": json.dumps({"name": "Main Checking"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Delete Main Checking")
+
+    assert run["status"] == "completed"
+    assert run["change_items"] == []
+    assert len(run["tool_calls"]) == 1
+    tool_output = run["tool_calls"][0]["output_json"]
+    assert tool_output["status"] == "ERROR"
+    assert "managed from Accounts" in tool_output["summary"]
 
 
 def test_entry_approve_applies_entry_and_allows_override(client, monkeypatch):

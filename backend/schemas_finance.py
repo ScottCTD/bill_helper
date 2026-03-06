@@ -44,6 +44,7 @@ class EntityRead(BaseModel):
     id: str
     name: str
     category: str | None = None
+    is_account: bool = False
     from_count: int | None = None
     to_count: int | None = None
     account_count: int | None = None
@@ -144,7 +145,6 @@ class AccountUpdate(BaseModel):
 class AccountRead(AccountBase):
     id: str
     owner_user_id: str | None = None
-    entity_id: str | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -247,7 +247,9 @@ class EntryRead(BaseModel):
     to_entity_id: str | None = None
     owner_user_id: str | None = None
     from_entity: str | None = None
+    from_entity_missing: bool = False
     to_entity: str | None = None
+    to_entity_missing: bool = False
     owner: str | None = None
     markdown_body: str | None = None
     created_at: datetime

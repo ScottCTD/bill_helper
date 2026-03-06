@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from backend.enums_finance import EntryKind
-from backend.models_finance import Account, AccountSnapshot, Entity, Entry, EntryTag, Tag
+from backend.models_finance import Account, AccountSnapshot, Entry, EntryTag, Tag
 from backend.schemas_finance import (
     DailyExpensePoint,
     DashboardBreakdownItem,
@@ -134,14 +134,10 @@ def _account_entity_ids(
     *,
     account_filter: DashboardFilter | None = None,
 ) -> set[str]:
-    linked_accounts_stmt = select(Account.entity_id)
+    linked_accounts_stmt = select(Account.id)
     if account_filter is not None:
         linked_accounts_stmt = linked_accounts_stmt.where(account_filter)
-    linked_account_entity_ids = {entity_id for entity_id in db.scalars(linked_accounts_stmt).all() if entity_id}
-
-    categorized_accounts_stmt = select(Entity.id).where(Entity.category == "account")
-    categorized_account_entity_ids = {entity_id for entity_id in db.scalars(categorized_accounts_stmt).all() if entity_id}
-    return linked_account_entity_ids | categorized_account_entity_ids
+    return {entity_id for entity_id in db.scalars(linked_accounts_stmt).all() if entity_id}
 
 
 def _is_internal_account_transfer(entry: Entry, account_entity_ids: set[str]) -> bool:

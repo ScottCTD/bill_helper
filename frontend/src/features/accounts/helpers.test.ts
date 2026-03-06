@@ -18,7 +18,6 @@ describe("accounts helpers", () => {
     const account: Account = {
       id: "acc-1",
       owner_user_id: null,
-      entity_id: null,
       name: "Main account",
       markdown_body: "## Notes",
       currency_code: "CAD",

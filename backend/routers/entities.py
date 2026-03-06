@@ -15,6 +15,7 @@ from backend.services.crud_policy import (
 )
 from backend.services.entities import (
     create_entity_from_payload,
+    delete_entity_and_preserve_labels,
     list_entities_with_usage,
     read_entity_category,
     update_entity_from_payload,
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/entities", tags=["entities"])
 
 @dataclass(frozen=True, slots=True)
 class _EntityUsageCounts:
+    is_account: bool = False
     from_count: int | None = None
     to_count: int | None = None
     account_count: int | None = None
@@ -43,6 +45,7 @@ def _to_schema(
         id=entity.id,
         name=entity.name,
         category=category if category is not None else entity.category,
+        is_account=usage_counts.is_account,
         from_count=usage_counts.from_count,
         to_count=usage_counts.to_count,
         account_count=usage_counts.account_count,
@@ -64,6 +67,7 @@ def list_entities(db: Session = Depends(get_db)) -> list[EntityRead]:
             row.entity,
             category=category_by_entity_id.get(row.entity.id) or row.entity.category,
             usage=_EntityUsageCounts(
+                is_account=row.is_account,
                 from_count=row.from_count,
                 to_count=row.to_count,
                 account_count=row.account_count,
@@ -80,11 +84,32 @@ def create_entity(
     db: Session = Depends(get_db),
     _: RequestPrincipal = Depends(require_admin_principal),
 ) -> EntityRead:
-    entity = create_entity_from_payload(db, payload=payload)
+    try:
+        entity = create_entity_from_payload(db, payload=payload)
+    except PolicyViolation as exc:
+        raise translate_policy_violation(exc) from exc
     category = read_entity_category(db, entity)
     db.commit()
     db.refresh(entity)
     return _to_schema(entity, category=category)
+
+
+@router.delete("/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_entity(
+    entity_id: str,
+    db: Session = Depends(get_db),
+    _: RequestPrincipal = Depends(require_admin_principal),
+) -> None:
+    entity = db.get(Entity, entity_id)
+    if entity is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found")
+
+    try:
+        delete_entity_and_preserve_labels(db, entity=entity)
+    except PolicyViolation as exc:
+        raise translate_policy_violation(exc) from exc
+
+    db.commit()
 
 
 @router.patch("/{entity_id}", response_model=EntityRead)

@@ -131,6 +131,12 @@ export function updateEntity(entityId: string, payload: { name?: string; categor
   });
 }
 
+export function deleteEntity(entityId: string): Promise<void> {
+  return request<void>(`/api/v1/entities/${entityId}`, {
+    method: "DELETE"
+  });
+}
+
 export function listTags(): Promise<Tag[]> {
   return request<Tag[]>("/api/v1/tags");
 }
@@ -172,6 +178,12 @@ export function updateTag(
   return request<Tag>(`/api/v1/tags/${tagId}`, {
     method: "PATCH",
     body: JSON.stringify(payload)
+  });
+}
+
+export function deleteTag(tagId: number): Promise<void> {
+  return request<void>(`/api/v1/tags/${tagId}`, {
+    method: "DELETE"
   });
 }
 
@@ -225,6 +237,12 @@ export function updateAccount(accountId: string, payload: Partial<Account>): Pro
   return request<Account>(`/api/v1/accounts/${accountId}`, {
     method: "PATCH",
     body: JSON.stringify(payload)
+  });
+}
+
+export function deleteAccount(accountId: string): Promise<void> {
+  return request<void>(`/api/v1/accounts/${accountId}`, {
+    method: "DELETE"
   });
 }
 
