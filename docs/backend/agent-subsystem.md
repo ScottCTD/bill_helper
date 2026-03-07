@@ -17,7 +17,7 @@
 - `backend/services/agent/message_history.py`
   - persisted thread history to model-ready messages, including attachment ordering and interruption context
 - `backend/services/agent/model_client.py`
-  - LiteLLM adapter, retry policy, stream handling, usage normalization, and observability metadata
+  - LiteLLM adapter, retry policy, stream handling, and usage normalization
 - `backend/services/agent/pricing.py`
   - LiteLLM-backed pricing helper
 - `backend/services/agent/tool_args.py`
@@ -92,6 +92,7 @@ Endpoints:
 - thread detail returns compact tool-call snapshots by default (`has_full_payload=false`)
 - full tool payloads are fetched through `GET /api/v1/agent/tool-calls/{tool_call_id}`
 - runs persist ordered `events[]` rows for replayable timeline activity
+- runs also carry their `change_items`; the frontend flattens those per-run proposal lists into one thread review model
 - run snapshots aggregate usage metrics and derived USD pricing
 
 ## Current Agent Execution Behavior
@@ -104,6 +105,14 @@ Endpoints:
 - PDFs use PyMuPDF first and then local Tesseract OCR only when native text extraction fails
 - interruption marks runs as `failed` and injects interruption context into the next turn
 - pending proposals can be updated or removed in later turns while still `PENDING_REVIEW`
+- reviewed proposal context now includes reviewer override values when `payload_override` changed the approved payload, so later turns can see concrete edited values instead of only changed field names
+
+## Review And Apply Behavior
+
+- `backend/services/agent/review.py` accepts reviewer `payload_override` for create/update entry, tag, and entity proposals while keeping the approve endpoint contract unchanged
+- `backend/services/agent/change_apply.py` still owns the actual domain mutation after approval
+- `backend/services/agent/message_history.py` prepends compact review outcome lines before the next user feedback message and includes `review_override=...` when reviewer edits changed the applied payload
+- `backend/services/agent/tool_handlers_read.py` includes `markdown_notes` in public entry snapshots so thread review editors can initialize full merged entry forms for update proposals
 
 ## Related Docs
 

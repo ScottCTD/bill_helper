@@ -11,9 +11,6 @@ from backend.services.agent.model_client import AgentModelError, LiteLLMModelCli
 def _build_model_client(
     *,
     retry_max_attempts: int = 3,
-    langfuse_public_key: str | None = None,
-    langfuse_secret_key: str | None = None,
-    langfuse_host: str | None = None,
 ) -> LiteLLMModelClient:
     return LiteLLMModelClient(
         model_name="google/gemini-3-flash-preview",
@@ -22,9 +19,6 @@ def _build_model_client(
         retry_initial_wait_seconds=0.0,
         retry_max_wait_seconds=0.0,
         retry_backoff_multiplier=2.0,
-        langfuse_public_key=langfuse_public_key,
-        langfuse_secret_key=langfuse_secret_key,
-        langfuse_host=langfuse_host,
     )
 
 
@@ -120,6 +114,68 @@ def test_complete_stream_emits_reasoning_delta_events(monkeypatch):
     assert events[2]["delta"] == "Done."
     assert events[3]["message"]["reasoning"] == "Checking entities"
     assert events[3]["message"]["content"] == "Done."
+
+
+def test_complete_stream_merges_cumulative_tool_call_deltas_without_corrupting_arguments(monkeypatch):
+    client = _build_model_client(retry_max_attempts=1)
+
+    def fake_completion(**_kwargs):
+        return iter(
+            [
+                {
+                    "choices": [
+                        {
+                            "delta": {
+                                "tool_calls": [
+                                    {
+                                        "index": 0,
+                                        "id": "call_1",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "propose_",
+                                            "arguments": '{"kind":"EXP',
+                                        },
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "choices": [
+                        {
+                            "delta": {
+                                "tool_calls": [
+                                    {
+                                        "index": 0,
+                                        "function": {
+                                            "name": "propose_create_entry",
+                                            "arguments": '{"kind":"EXPENSE","date":"2026-03-02"}',
+                                        },
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {"choices": [{"delta": {}}], "usage": {"input_tokens": 2, "output_tokens": 1}},
+            ]
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    events = list(client.complete_stream([{"role": "user", "content": "hi"}]))
+
+    assert [event["type"] for event in events] == ["done"]
+    assert events[0]["message"]["tool_calls"] == [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+                "name": "propose_create_entry",
+                "arguments": '{"kind":"EXPENSE","date":"2026-03-02"}',
+            },
+        }
+    ]
 
 
 def test_complete_retries_before_failing(monkeypatch):
@@ -330,13 +386,9 @@ def test_complete_normalizes_top_level_prompt_cache_usage_fields(monkeypatch):
     assert response["usage"]["cache_write_tokens"] == 20
 
 
-def test_complete_includes_langfuse_metadata(monkeypatch):
+def test_complete_omits_observability_fields(monkeypatch):
     captured_request: dict[str, object] = {}
-    client = _build_model_client(
-        langfuse_public_key="pk-test",
-        langfuse_secret_key="sk-test",
-        langfuse_host="https://cloud.langfuse.com/",
-    )
+    client = _build_model_client()
 
     def fake_completion(**kwargs):
         captured_request.update(kwargs)
@@ -353,142 +405,14 @@ def test_complete_includes_langfuse_metadata(monkeypatch):
         )
 
     monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
-    response = client.complete(
-        [{"role": "user", "content": "hello"}],
-        observability={
-            "user": "admin",
-            "session_id": "thread-1",
-            "trace": {
-                "trace_id": "run-1",
-                "trace_name": "Bill Helper Agent Run",
-                "generation_name": "agent_turn",
-                "thread_id": "thread-1",
-                "run_id": "run-1",
-            },
-        },
-    )
+    response = client.complete([{"role": "user", "content": "hello"}])
 
-    metadata = captured_request.get("metadata")
-    assert isinstance(metadata, dict)
-    assert metadata["trace_user_id"] == "admin"
-    assert metadata["session_id"] == "thread-1"
-    assert metadata["trace_id"] == "run-1"
-    assert metadata["generation_name"] == "agent_turn"
-    assert metadata["trace_metadata"] == {"thread_id": "thread-1", "run_id": "run-1"}
-    assert captured_request["langfuse_public_key"] == "pk-test"
-    assert captured_request["langfuse_secret_key"] == "sk-test"
-    assert captured_request["langfuse_host"] == "https://cloud.langfuse.com"
+    assert "metadata" not in captured_request
+    assert "extra_body" not in captured_request
+    assert "langfuse_public_key" not in captured_request
+    assert "langfuse_secret_key" not in captured_request
+    assert "langfuse_host" not in captured_request
     assert response["content"] == "Hello"
-
-
-def test_complete_uses_step_based_generation_name_and_existing_trace_id(monkeypatch):
-    """Thread-scoped trace: one trace per thread, per-run generation names, existing_trace_id for step>1 or subsequent runs."""
-    captured_request: dict[str, object] = {}
-    client = _build_model_client(
-        langfuse_public_key="pk-test",
-        langfuse_secret_key="sk-test",
-    )
-
-    def fake_completion(**kwargs):
-        captured_request.clear()
-        captured_request.update(kwargs)
-        return SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    message=SimpleNamespace(
-                        content="Hello",
-                        tool_calls=[],
-                    )
-                )
-            ],
-            usage={"input_tokens": 3, "output_tokens": 2},
-        )
-
-    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
-
-    # First run in thread, step 1: trace_id=thread_id creates trace
-    client.complete(
-        [{"role": "user", "content": "hello"}],
-        observability={
-            "user": "u1",
-            "session_id": "t1",
-            "trace": {
-                "trace_id": "t1",
-                "trace_name": "Bill Helper Agent",
-                "thread_id": "t1",
-                "run_id": "run-1",
-                "step": 1,
-                "is_first_run_in_thread": True,
-                "run_index": 1,
-            },
-        },
-    )
-    meta = captured_request.get("metadata")
-    assert isinstance(meta, dict)
-    assert meta.get("trace_id") == "t1"
-    assert "existing_trace_id" not in meta
-    assert meta.get("generation_name") == "agent_turn_run_1_step_1"
-
-    # First run, step 2: existing_trace_id continues within same run
-    client.complete(
-        [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "Hi"}],
-        observability={
-            "user": "u1",
-            "session_id": "t1",
-            "trace": {
-                "trace_id": "t1",
-                "trace_name": "Bill Helper Agent",
-                "thread_id": "t1",
-                "run_id": "run-1",
-                "step": 2,
-                "is_first_run_in_thread": True,
-                "run_index": 1,
-            },
-        },
-    )
-    meta = captured_request.get("metadata")
-    assert isinstance(meta, dict)
-    assert meta.get("existing_trace_id") == "t1"
-    assert meta.get("generation_name") == "agent_turn_run_1_step_2"
-
-    # Second run in thread, step 1: existing_trace_id continues trace from prior run
-    client.complete(
-        [{"role": "user", "content": "follow-up"}],
-        observability={
-            "user": "u1",
-            "session_id": "t1",
-            "trace": {
-                "trace_id": "t1",
-                "trace_name": "Bill Helper Agent",
-                "thread_id": "t1",
-                "run_id": "run-2",
-                "step": 1,
-                "is_first_run_in_thread": False,
-                "run_index": 2,
-            },
-        },
-    )
-    meta = captured_request.get("metadata")
-    assert isinstance(meta, dict)
-    assert meta.get("existing_trace_id") == "t1"
-    assert meta.get("generation_name") == "agent_turn_run_2_step_1"
-
-
-def test_langfuse_callbacks_are_enabled_with_langfuse_credentials(monkeypatch):
-    monkeypatch.setattr(litellm, "success_callback", [], raising=False)
-    monkeypatch.setattr(litellm, "failure_callback", [], raising=False)
-
-    _build_model_client(
-        langfuse_public_key="pk-test",
-        langfuse_secret_key="sk-test",
-    )
-    _build_model_client(
-        langfuse_public_key="pk-test",
-        langfuse_secret_key="sk-test",
-    )
-
-    assert litellm.success_callback.count("langfuse") == 1
-    assert litellm.failure_callback.count("langfuse") == 1
 
 
 def test_complete_stream_retries_after_partial_text_delta_without_duplicate_output(monkeypatch):
@@ -610,3 +534,48 @@ def test_validate_litellm_environment_allows_indeterminate_validation(monkeypatc
     assert has_credentials is True
     assert missing_keys == []
     assert request_model == "openai/gpt-4.1-mini"
+
+
+def test_validate_litellm_environment_accepts_bedrock_bearer_token(monkeypatch):
+    monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "ABSK-test-token")
+    monkeypatch.setattr(
+        litellm,
+        "validate_environment",
+        lambda **_kwargs: {
+            "keys_in_environment": False,
+            "missing_keys": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+        },
+    )
+
+    has_credentials, missing_keys, request_model = validate_litellm_environment(
+        model_name="bedrock/anthropic.claude-sonnet-4-6",
+    )
+
+    assert has_credentials is True
+    assert missing_keys == []
+    assert request_model == "bedrock/anthropic.claude-sonnet-4-6"
+
+
+def test_validate_litellm_environment_reports_bedrock_bearer_token_alternative(
+    monkeypatch,
+):
+    monkeypatch.delenv("AWS_BEARER_TOKEN_BEDROCK", raising=False)
+    monkeypatch.setattr(
+        litellm,
+        "validate_environment",
+        lambda **_kwargs: {
+            "keys_in_environment": False,
+            "missing_keys": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+        },
+    )
+
+    has_credentials, missing_keys, _request_model = validate_litellm_environment(
+        model_name="bedrock/anthropic.claude-sonnet-4-6",
+    )
+
+    assert has_credentials is False
+    assert missing_keys == [
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_BEARER_TOKEN_BEDROCK",
+    ]

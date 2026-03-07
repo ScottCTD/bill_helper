@@ -69,4 +69,3 @@ Current baseline noted in docs: `backend/tests/test_agent.py` was at `76 passed`
 - streaming uses SSE only; there is no websocket transport
 - no autonomous or scheduled agent runs
 - taxonomy assignment storage uses string `subject_id` values without cross-table FK enforcement
-- Langfuse integration remains constrained to `<3` because LiteLLM still uses the legacy callback interface

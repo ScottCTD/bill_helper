@@ -18,12 +18,14 @@ This document describes the architecture, prompts, tools, and usage workflow of 
    - Cumulative thread usage bar above the composer: `Context`, `Total input`, `Output`, `Cache read`, `Cache hit rate`, `Total cost`.
    - `Context` is the best-effort current prompt size for the selected thread; `Total input` remains the cumulative billed input usage across completed and in-flight runs.
    - Run-level proposal summary cards with pending counts.
-6. Open the run review modal and process proposals:
-   - Entry proposals support JSON edit-before-approve with unified payload diff.
+6. Open the thread review modal from the persistent header `Review` button and process proposals:
+   - Pending items appear first, with reviewed and failed items kept in a secondary audit section.
+   - Entry proposals support structured edit-before-approve with unified payload diff.
+   - Tag proposals edit only `name` and `type`; entity proposals edit only `name` and `category`.
    - Review diff rows use friendly field labels/order and human-readable amount values.
-   - Use `Approve & Next` for focused step-through review.
-   - Use `Approve All` for deterministic sequential batch apply (with partial-failure summary and jump links).
-   - Use `Reject` or `Reject All` to discard proposals.
+   - Use `Approve`, `Reject`, or `Skip` for focused step-through review.
+   - Use `Approve All` for deterministic sequential batch apply with saved reviewer edits reused automatically.
+   - Use `Reject All` to discard all remaining pending proposals.
 
 ## Overview
 
@@ -81,9 +83,6 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 
 | Setting | Env | Default | Notes |
 |---------|-----|---------|-------|
-| `langfuse_public_key` | `LANGFUSE_PUBLIC_KEY` / `BILL_HELPER_LANGFUSE_PUBLIC_KEY` | `None` | Enables LiteLLM Langfuse callbacks when paired with `langfuse_secret_key` |
-| `langfuse_secret_key` | `LANGFUSE_SECRET_KEY` / `BILL_HELPER_LANGFUSE_SECRET_KEY` | `None` | Enables LiteLLM Langfuse callbacks when paired with `langfuse_public_key` |
-| `langfuse_host` | `LANGFUSE_HOST` / `BILL_HELPER_LANGFUSE_HOST` | `None` | Optional Langfuse host (defaults to Langfuse cloud host if omitted) |
 | `agent_model` | `BILL_HELPER_AGENT_MODEL` | `openrouter/qwen/qwen3.5-27b` | Model name; runtime override supported via `/api/v1/settings` |
 | `agent_max_steps` | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool loop iterations |
 | `current_user_timezone` | `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` | `America/Toronto` | User-local date basis for the system-prompt current-date section |
@@ -528,9 +527,9 @@ Pending proposals can be revised or removed by id in later turns without forcing
 - `POST /api/v1/agent/change-items/{item_id}/approve`
 - `POST /api/v1/agent/change-items/{item_id}/reject`
 
-`payload_override` is supported for `create_entry` and `update_entry`. On apply failure, item transitions to `APPLY_FAILED` with failure detail in review note.
+`payload_override` is supported for `create_entry`, `update_entry`, `create_tag`, `update_tag`, `create_entity`, and `update_entity`. On apply failure, item transitions to `APPLY_FAILED` with failure detail in review note.
 
-**Continuation context:** For follow-up turns, `message_history.py` prepends before the latest user feedback message text: (1) a compact review block per item: `tool_name proposal_id=... proposal_short_id=... review_action=... review_item_status=... review_note=...`, and (2) when the previous run was interrupted, an interruption note describing the interrupted request. Review context remains outside dynamic system-injected text; account context is intentionally included in system prompt.
+**Continuation context:** For follow-up turns, `message_history.py` prepends before the latest user feedback message text: (1) a compact review block per item: `tool_name proposal_id=... proposal_short_id=... review_action=... review_item_status=... review_note=... review_override=...`, and (2) when the previous run was interrupted, an interruption note describing the interrupted request. Review context remains outside dynamic system-injected text; account context is intentionally included in system prompt.
 
 **Example review block the agent sees:**
 
@@ -538,6 +537,7 @@ Pending proposals can be revised or removed by id in later turns without forcing
 Review results from your previous proposals:
 1. propose_update_entry proposal_id=ed279837-1911-448b-bdf8-221b55a80a8b proposal_short_id=ed279837 review_action=approve review_item_status=APPLIED review_note=(none)
 2. propose_create_tag proposal_id=a1b2c3d4-5678-90ab-cdef-1234567890ab proposal_short_id=a1b2c3d4 review_action=reject review_item_status=REJECTED review_note=Use type recurring instead
+3. propose_create_tag proposal_id=b2c3d4e5-6789-01ab-cdef-2345678901bc proposal_short_id=b2c3d4e5 review_action=approve review_item_status=APPLIED review_note=payload_override: name='streaming'; type='media' review_override=name='streaming'; type='media'
 
 User feedback:
 Try again with the right type

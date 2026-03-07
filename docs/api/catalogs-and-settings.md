@@ -168,8 +168,8 @@ Behavior:
 
 - `user_memory` is DB-backed only
 - `agent_api_key` is never returned
-- effective agent provider fields resolve as stored runtime override, then server env, then app/provider defaults
-- `agent_api_key_configured` reports whether an effective key is available; `overrides.agent_api_key_configured` reports only whether a stored runtime override exists
+- `agent_base_url` reflects only an explicit custom override from runtime settings or `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL`
+- `agent_api_key_configured` reports whether an explicit override key exists or LiteLLM can resolve provider credentials for the selected model; `overrides.agent_api_key_configured` reports only whether a stored runtime override exists
 
 ### `PATCH /settings`
 

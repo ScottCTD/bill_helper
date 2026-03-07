@@ -28,6 +28,26 @@ describe("proposal diff", () => {
     expect(diff.metadata.some((item) => item.label === "Selector")).toBe(true);
   });
 
+  it("uses reviewer overrides for update proposal previews", () => {
+    const diff = buildProposalDiff(
+      "update_entity",
+      {
+        name: "Molly Tea",
+        current: { name: "Molly Tea", category: "merchant" },
+        patch: { category: "cafe" }
+      },
+      {
+        name: "Molly Tea",
+        patch: { category: "restaurant" }
+      }
+    );
+
+    expect(diff.mode).toBe("update");
+    expect(diff.note).toContain("reviewer-edited payload");
+    expect(diff.lines.some((line) => line.value === "restaurant")).toBe(true);
+    expect(diff.metadata.some((item) => item.label === "Patch fields" && item.value === "1")).toBe(true);
+  });
+
   it("builds delete diff from target snapshot", () => {
     const diff = buildProposalDiff("delete_tag", {
       name: "groceries",

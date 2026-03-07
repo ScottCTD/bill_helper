@@ -11,11 +11,10 @@ The goal is an all-in-one place to view and analyze personal finances — a cent
 **AI Chat Assistant**
 - Natural language interface for managing entries, tags, and entities
 - Review-gated proposals — the agent proposes changes, you approve or reject each one
-- Real-time token streaming with persisted per-tool lifecycle observability
+- Real-time token streaming with persisted per-tool lifecycle events
 - Live thread usage metrics, including current context-window size and cumulative token/cost totals
 - Image and PDF attachment support (bank statements, receipts)
 - Provider-agnostic model routing via LiteLLM (OpenAI, Anthropic, Google, OpenRouter, etc.)
-- Optional Langfuse tracing for observability
 
 **Finance Tracking**
 - Manual entry ledger with income/expense tracking, counterparty entities, and tags
@@ -72,18 +71,14 @@ At minimum, set the API key for your chosen model provider:
 ```env
 # Pick one provider credential for the agent model:
 OPENROUTER_API_KEY=your-key-here          # default model uses OpenRouter
-# OPENROUTER_BASE_URL=https://openrouter.ai/api/v1  # optional OpenRouter-compatible override
 # OPENAI_API_KEY=your-key-here            # if using openai/* models
 # ANTHROPIC_API_KEY=your-key-here         # if using anthropic/* models
+# AWS_BEARER_TOKEN_BEDROCK=ABSK...        # if using bedrock/* bearer-token auth
 
 # Optional: change the model (default: openrouter/qwen/qwen3.5-27b)
 # BILL_HELPER_AGENT_MODEL=openai/gpt-4.1-mini
-# BILL_HELPER_AGENT_API_KEY=provider-key   # optional app-level override for custom endpoints
+# BILL_HELPER_AGENT_API_KEY=provider-key   # explicit app-level override for a custom endpoint
 # BILL_HELPER_AGENT_BASE_URL=https://api.example.com/v1
-
-# Optional: Langfuse observability
-# LANGFUSE_PUBLIC_KEY=pk-lf-...
-# LANGFUSE_SECRET_KEY=sk-lf-...
 ```
 
 See `.env.example` for all available variables. Configuration cascades: real env vars → `.env` in CWD → `~/.config/bill-helper/.env` → defaults. See `docs/adr/0003-xdg-shared-config-and-data.md` for the full design.

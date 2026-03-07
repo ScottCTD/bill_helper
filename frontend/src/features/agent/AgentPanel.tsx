@@ -54,8 +54,9 @@ import {
   type PendingAssistantMessage,
   type PendingUserMessage
 } from "./panel/types";
-import { AgentRunReviewModal } from "./review/AgentRunReviewModal";
+import { AgentThreadReviewModal } from "./review/AgentThreadReviewModal";
 import { useResizablePanel } from "../../hooks/useResizablePanel";
+import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 
 interface AgentPanelProps {
@@ -78,7 +79,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null);
   const [pendingAssistantMessage, setPendingAssistantMessage] = useState<PendingAssistantMessage | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [reviewRunId, setReviewRunId] = useState<string | null>(null);
+  const [isThreadReviewOpen, setIsThreadReviewOpen] = useState(false);
   const [optimisticRunningThreadId, setOptimisticRunningThreadId] = useState<string | null>(null);
   const { containerRef: timelineScrollRef, isAtBottom, scrollToBottom, snapToBottom } = useStickToBottom<HTMLDivElement>();
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -213,7 +214,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       setSelectedThreadId((currentSelectedThreadId) =>
         currentSelectedThreadId === deletedThreadId ? (remainingThreads[0]?.id ?? "") : currentSelectedThreadId
       );
-      setReviewRunId(null);
+      setIsThreadReviewOpen(false);
       setPendingUserMessage(null);
       setPendingAssistantMessage(null);
       resetOptimisticRunState();
@@ -318,12 +319,18 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
     return optimisticToolCallsByRunId[activeStreamRunId] ?? [];
   }, [activeStreamRunId, optimisticToolCallsByRunId]);
-  const selectedRunForReview = useMemo(() => {
-    if (!reviewRunId) {
-      return null;
-    }
-    return (threadQuery.data?.runs ?? []).find((run) => run.id === reviewRunId) ?? null;
-  }, [reviewRunId, threadQuery.data?.runs]);
+  const reviewProposalCount = useMemo(
+    () => (threadQuery.data?.runs ?? []).reduce((total, run) => total + run.change_items.length, 0),
+    [threadQuery.data?.runs]
+  );
+  const pendingReviewCount = useMemo(
+    () =>
+      (threadQuery.data?.runs ?? []).reduce(
+        (total, run) => total + run.change_items.filter((item) => item.status === "PENDING_REVIEW").length,
+        0
+      ),
+    [threadQuery.data?.runs]
+  );
 
   useEffect(() => {
     if (!pendingUserMessage) {
@@ -401,7 +408,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   }, []);
 
   useEffect(() => {
-    setReviewRunId(null);
+    setIsThreadReviewOpen(false);
     setPendingAssistantMessage(null);
     resetOptimisticRunState();
     setIsStreamHealthy(false);
@@ -420,16 +427,6 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       setIsStreamHealthy(false);
     }
   }, [isRunInFlight, pendingAssistantMessage, pendingUserMessage, resetOptimisticRunState, selectedThreadId]);
-
-  useEffect(() => {
-    if (!reviewRunId) {
-      return;
-    }
-    if (selectedRunForReview) {
-      return;
-    }
-    setReviewRunId(null);
-  }, [reviewRunId, selectedRunForReview]);
 
   async function handleCreateThread() {
     setActionError(null);
@@ -530,10 +527,11 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   function handleAgentStreamEvent(threadId: string, event: AgentStreamEvent) {
     if (event.type === "run_event") {
       setActiveStreamRunId((current) => current || event.run_id);
-      if (event.tool_call) {
+      const toolCall = event.tool_call;
+      if (toolCall) {
         setOptimisticToolCallsByRunId((current) => ({
           ...current,
-          [event.run_id]: mergeRunToolCalls(current[event.run_id] ?? [], [event.tool_call])
+          [event.run_id]: mergeRunToolCalls(current[event.run_id] ?? [], [toolCall])
         }));
       }
       setOptimisticRunEventsByRunId((current) => {
@@ -758,6 +756,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         payload_override: payload.payloadOverride
       });
     } catch (error) {
+      invalidateAgentThreadData(queryClient, selectedThreadId || undefined);
       setActionError((error as Error).message);
       throw error;
     }
@@ -784,6 +783,21 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
           <div className="agent-panel-header-top">
             <h2>{`Agent (${activeModelName})`}</h2>
             <div className="agent-panel-header-actions">
+              <Button
+                type="button"
+                variant={pendingReviewCount > 0 ? "default" : "secondary"}
+                size="sm"
+                onClick={() => setIsThreadReviewOpen(true)}
+                disabled={!selectedThreadId || reviewProposalCount === 0 || isMutating}
+                className="agent-panel-review-button"
+              >
+                <span>Review</span>
+                {pendingReviewCount > 0 ? (
+                  <Badge variant="outline" className="agent-panel-review-badge">
+                    {pendingReviewCount}
+                  </Badge>
+                ) : null}
+              </Button>
               <Button
                 type="button"
                 variant="secondary"
@@ -833,7 +847,6 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               activeOptimisticToolCalls={activeOptimisticToolCalls}
               onHydrateToolCall={hydrateToolCallDetails}
               hydratingToolCallIds={hydratingToolCallIds}
-              onReviewRun={setReviewRunId}
               isAtBottom={isAtBottom}
               scrollToBottom={scrollToBottom}
             />
@@ -898,14 +911,10 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
           </div>
         </div>
 
-        <AgentRunReviewModal
-          open={Boolean(selectedRunForReview)}
-          run={selectedRunForReview}
-          onOpenChange={(nextOpen) => {
-            if (!nextOpen) {
-              setReviewRunId(null);
-            }
-          }}
+        <AgentThreadReviewModal
+          open={isThreadReviewOpen}
+          runs={threadQuery.data?.runs ?? []}
+          onOpenChange={setIsThreadReviewOpen}
           onApproveItem={handleApproveItem}
           onRejectItem={handleRejectItem}
           isBusy={isMutating}

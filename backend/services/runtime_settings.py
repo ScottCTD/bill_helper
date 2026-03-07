@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from backend.config import get_settings
 from backend.models_finance import RuntimeSettings as RuntimeSettingsRow
 from backend.schemas_finance import RuntimeSettingsOverridesRead, RuntimeSettingsRead, RuntimeSettingsUpdate
+from backend.services.agent.model_client import validate_litellm_environment
 from backend.services.runtime_settings_normalization import (
     normalize_currency_code_or_none,
     normalize_multiline_text_or_none,
@@ -27,9 +28,6 @@ class ResolvedRuntimeSettings:
     user_memory: str | None
     default_currency_code: str
     dashboard_currency_code: str
-    langfuse_public_key: str | None
-    langfuse_secret_key: str | None
-    langfuse_host: str | None
     agent_model: str
     agent_max_steps: int
     agent_retry_max_attempts: int
@@ -106,9 +104,6 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         or normalize_currency_code_or_none(defaults.dashboard_currency_code)
         or "CAD"
     )
-    langfuse_public_key = normalize_secret_or_none(defaults.langfuse_public_key)
-    langfuse_secret_key = normalize_secret_or_none(defaults.langfuse_secret_key)
-    langfuse_host = normalize_text_or_none(defaults.langfuse_host)
     agent_model = (
         (
             normalize_text_or_none(override.agent_model)
@@ -181,9 +176,6 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         user_memory=user_memory,
         default_currency_code=default_currency_code,
         dashboard_currency_code=dashboard_currency_code,
-        langfuse_public_key=langfuse_public_key,
-        langfuse_secret_key=langfuse_secret_key,
-        langfuse_host=langfuse_host,
         agent_model=agent_model,
         agent_max_steps=agent_max_steps,
         agent_retry_max_attempts=agent_retry_max_attempts,
@@ -204,6 +196,9 @@ def build_runtime_settings_read(
 ) -> RuntimeSettingsRead:
     override = get_runtime_settings_override(db)
     resolved = resolve_runtime_settings(db)
+    has_provider_credentials, _, _ = validate_litellm_environment(
+        model_name=resolved.agent_model
+    )
 
     return RuntimeSettingsRead(
         current_user_name=normalize_text_or_none(principal_name) or resolved.current_user_name,
@@ -219,7 +214,7 @@ def build_runtime_settings_read(
         agent_max_image_size_bytes=resolved.agent_max_image_size_bytes,
         agent_max_images_per_message=resolved.agent_max_images_per_message,
         agent_base_url=resolved.agent_base_url,
-        agent_api_key_configured=bool(resolved.agent_api_key),
+        agent_api_key_configured=bool(resolved.agent_api_key) or has_provider_credentials,
         overrides=RuntimeSettingsOverridesRead(
             user_memory=normalize_multiline_text_or_none(override.user_memory)
             if override

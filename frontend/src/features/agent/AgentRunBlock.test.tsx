@@ -6,19 +6,16 @@ import { AgentRunBlock } from "./AgentRunBlock";
 import { buildChangeItem, buildRun, buildRunEvent, buildToolCall } from "../../test/factories/agent";
 
 describe("AgentRunBlock", () => {
-  it("renders summary mode and forwards review actions", async () => {
-    const onReviewRun = vi.fn();
+  it("renders summary mode without a per-run review button", () => {
     const run = buildRun({
       id: "run-summary",
       change_items: [buildChangeItem({ id: "change-1", status: "PENDING_REVIEW", change_type: "create_entry" })]
     });
 
-    render(<AgentRunBlock run={run} isMutating={false} onReviewRun={onReviewRun} mode="summary" />);
+    render(<AgentRunBlock run={run} isMutating={false} mode="summary" />);
 
     expect(screen.getByText("1 proposed changes pending review")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "Click to review proposed changes" }));
-    expect(onReviewRun).toHaveBeenCalledWith("run-summary");
+    expect(screen.getByText("Use the thread header Review button to process proposals.")).toBeInTheDocument();
   });
 
   it("renders interleaved activity timeline for reasoning updates", () => {
@@ -40,7 +37,7 @@ describe("AgentRunBlock", () => {
       tool_calls: [toolCall]
     });
 
-    render(<AgentRunBlock run={run} isMutating={false} onReviewRun={() => undefined} mode="activity" />);
+    render(<AgentRunBlock run={run} isMutating={false} mode="activity" />);
 
     expect(screen.getAllByText("Validating candidate entries").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("1 tool call, 1 update")).toBeInTheDocument();
@@ -64,7 +61,7 @@ describe("AgentRunBlock", () => {
       tool_calls: [toolCall]
     });
 
-    render(<AgentRunBlock run={run} isMutating={false} onReviewRun={() => undefined} mode="activity" />);
+    render(<AgentRunBlock run={run} isMutating={false} mode="activity" />);
 
     await userEvent.click(screen.getByText("1 tool call"));
     await userEvent.click(screen.getByText("list_entries"));
@@ -90,7 +87,6 @@ describe("AgentRunBlock", () => {
       <AgentRunBlock
         run={run}
         isMutating={false}
-        onReviewRun={() => undefined}
         mode="activity"
         optimisticEvents={[
           buildRunEvent({ id: "event-1", sequence_index: 1, event_type: "tool_call_queued", tool_call_id: "tool-1" })
@@ -136,7 +132,6 @@ describe("AgentRunBlock", () => {
       <AgentRunBlock
         run={run}
         isMutating={false}
-        onReviewRun={() => undefined}
         onHydrateToolCall={onHydrateToolCall}
         mode="activity"
       />
@@ -169,7 +164,6 @@ describe("AgentRunBlock", () => {
       <AgentRunBlock
         run={run}
         isMutating={false}
-        onReviewRun={() => undefined}
         mode="activity"
         optimisticEvents={[
           buildRunEvent({
@@ -203,7 +197,6 @@ describe("AgentRunBlock", () => {
       <AgentRunBlock
         run={run}
         isMutating={false}
-        onReviewRun={() => undefined}
         mode="activity"
         streamingAssistantText={"Working through the next batch of entries."}
       />
@@ -220,7 +213,7 @@ describe("AgentRunBlock", () => {
       events: [buildRunEvent({ id: "event-1", sequence_index: 1, event_type: "run_started" })]
     });
 
-    render(<AgentRunBlock run={run} isMutating={false} onReviewRun={() => undefined} mode="activity" />);
+    render(<AgentRunBlock run={run} isMutating={false} mode="activity" />);
 
     expect(screen.getByText("1 update")).toBeInTheDocument();
     expect(screen.getAllByText("▍").length).toBeGreaterThanOrEqual(1);
@@ -237,7 +230,6 @@ describe("AgentRunBlock", () => {
       <AgentRunBlock
         run={run}
         isMutating={false}
-        onReviewRun={() => undefined}
         mode="activity"
         streamingAssistantText={"  "}
       />
@@ -256,7 +248,7 @@ describe("AgentRunBlock", () => {
       tool_calls: [toolCall]
     });
 
-    render(<AgentRunBlock run={run} isMutating={false} onReviewRun={() => undefined} mode="activity" />);
+    render(<AgentRunBlock run={run} isMutating={false} mode="activity" />);
 
     const toolDetails = screen.getByText("list_entries").closest("details");
     expect(toolDetails).not.toHaveAttribute("open");

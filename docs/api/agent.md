@@ -49,6 +49,7 @@ Includes:
 - `thread`
 - `messages`
 - `runs`
+- per-run `change_items` used by the frontend to build the thread-scoped review surface
 - `configured_model_name`
 - `current_context_tokens`
 - compact tool-call snapshots by default
@@ -172,7 +173,7 @@ Authorization: admin principal only.
 Body:
 
 - `note` (optional)
-- `payload_override` (optional; supported for `create_entry` and `update_entry`)
+- `payload_override` (optional; supported for `create_entry`, `update_entry`, `create_tag`, `update_tag`, `create_entity`, and `update_entity`)
 
 State rules:
 
@@ -185,6 +186,11 @@ Apply behavior covers:
 - entry create, update, and soft-delete
 - tag create, update, and delete
 - entity create, update, and delete
+
+Notes:
+
+- the endpoint shape is unchanged; reviewer edits are sent through `payload_override`
+- when reviewer edits are present, later agent turns receive a compact `review_override=...` summary in the prepended review-results context
 
 ### `POST /agent/change-items/{item_id}/reject`
 

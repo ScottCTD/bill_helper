@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 from backend.tests.agent_test_utils import create_thread, patch_model, send_message
 
@@ -83,14 +84,18 @@ def test_settings_endpoint_reports_openrouter_env_provider_config(client, monkey
     get_settings.cache_clear()
 
     try:
-        response = client.get("/api/v1/settings")
-        response.raise_for_status()
-        payload = response.json()
+        with patch(
+            "backend.services.runtime_settings.validate_litellm_environment",
+            return_value=(True, [], "openrouter/qwen/qwen3.5-27b"),
+        ):
+            response = client.get("/api/v1/settings")
+            response.raise_for_status()
+            payload = response.json()
     finally:
         get_settings.cache_clear()
 
     assert payload["agent_api_key_configured"] is True
-    assert payload["agent_base_url"] == "https://openrouter.ai/api/v1"
+    assert payload["agent_base_url"] is None
     assert payload["overrides"]["agent_api_key_configured"] is False
     assert payload["overrides"]["agent_base_url"] is None
 

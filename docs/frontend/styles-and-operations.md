@@ -13,7 +13,8 @@
 - `ui/MarkdownRenderer.tsx`
 - `agent/AgentRunBlock.tsx`
 - `agent/activity.ts`
-- `agent/review/AgentRunReviewModal.tsx`
+- `agent/review/AgentThreadReviewModal.tsx`
+- `agent/review/drafts.ts`
 - `agent/review/diff.ts`
 - `components/ui/*` for shared primitives
 
@@ -59,7 +60,8 @@ Includes:
 ## Constraints And Known Limitations
 
 - no pagination controls in the agent thread or timeline UI yet
-- entry edit-before-approve still uses raw JSON override instead of a structured form
+- thread review is the only review entry point; per-run timeline cards do not expose their own review CTA
+- entry/tag/entity edit-before-approve now uses structured review forms, but delete proposals remain read-only confirmation cards
 - `Approve All` and `Reject All` are sequential per-item calls
 - entry popup auto-save requires valid required fields
 - streaming bubbles render plain text deltas until the final persisted assistant message is refetched

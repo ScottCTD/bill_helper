@@ -58,7 +58,6 @@ function renderTimeline(
     activeOptimisticToolCalls: [],
     onHydrateToolCall: () => undefined,
     hydratingToolCallIds: new Set<string>(),
-    onReviewRun: () => undefined,
     isAtBottom: true,
     scrollToBottom: () => undefined,
     ...overrides

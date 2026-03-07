@@ -1,0 +1,214 @@
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { getRuntimeSettings, listCurrencies, listEntities, listTags } from "../../../lib/api";
+import { buildChangeItem, buildRun } from "../../../test/factories/agent";
+import { renderWithQueryClient } from "../../../test/renderWithQueryClient";
+import { AgentThreadReviewModal } from "./AgentThreadReviewModal";
+
+vi.mock("../../../lib/api", () => ({
+  listCurrencies: vi.fn(),
+  listEntities: vi.fn(),
+  listTags: vi.fn(),
+  getRuntimeSettings: vi.fn()
+}));
+
+describe("AgentThreadReviewModal", () => {
+  beforeEach(() => {
+    vi.mocked(getRuntimeSettings).mockResolvedValue({
+      current_user_name: "Admin",
+      user_memory: null,
+      default_currency_code: "USD",
+      dashboard_currency_code: "USD",
+      agent_model: "gpt-test",
+      agent_max_steps: 8,
+      agent_retry_max_attempts: 3,
+      agent_retry_initial_wait_seconds: 1,
+      agent_retry_max_wait_seconds: 10,
+      agent_retry_backoff_multiplier: 2,
+      agent_max_image_size_bytes: 1000000,
+      agent_max_images_per_message: 5,
+      agent_base_url: null,
+      agent_api_key_configured: true,
+      overrides: {
+        current_user_name: null,
+        user_memory: null,
+        default_currency_code: null,
+        dashboard_currency_code: null,
+        agent_model: null,
+        agent_max_steps: null,
+        agent_retry_max_attempts: null,
+        agent_retry_initial_wait_seconds: null,
+        agent_retry_max_wait_seconds: null,
+        agent_retry_backoff_multiplier: null,
+        agent_max_image_size_bytes: null,
+        agent_max_images_per_message: null,
+        agent_base_url: null,
+        agent_api_key_configured: true
+      }
+    });
+    vi.mocked(listCurrencies).mockResolvedValue([
+      { code: "USD", name: "US Dollar", entry_count: 1, is_placeholder: false }
+    ]);
+    vi.mocked(listEntities).mockResolvedValue([
+      { id: "entity-1", name: "Main Checking", category: "account", is_account: true },
+      { id: "entity-2", name: "Cafe", category: "merchant", is_account: false }
+    ]);
+    vi.mocked(listTags).mockResolvedValue([
+      { id: 1, name: "food", color: "#7fb069", type: "daily" }
+    ]);
+  });
+
+  it("renders pending and resolved sections and lets the user navigate from the toc", async () => {
+    const pendingRun = buildRun({
+      id: "run-pending",
+      created_at: "2026-03-06T10:00:00Z",
+      change_items: [
+        buildChangeItem({
+          id: "change-pending",
+          run_id: "run-pending",
+          change_type: "create_entry",
+          payload_json: {
+            kind: "EXPENSE",
+            date: "2026-03-05",
+            name: "Lunch",
+            amount_minor: 1200,
+            currency_code: "USD",
+            from_entity: "Main Checking",
+            to_entity: "Cafe",
+            tags: ["food"]
+          }
+        })
+      ]
+    });
+    const resolvedRun = buildRun({
+      id: "run-resolved",
+      created_at: "2026-03-06T10:05:00Z",
+      change_items: [
+        buildChangeItem({
+          id: "change-resolved",
+          run_id: "run-resolved",
+          change_type: "delete_tag",
+          status: "REJECTED",
+          payload_json: {
+            name: "groceries",
+            target: {
+              name: "groceries"
+            }
+          }
+        })
+      ]
+    });
+
+    renderWithQueryClient(
+      <AgentThreadReviewModal
+        open
+        runs={[pendingRun, resolvedRun]}
+        onOpenChange={() => undefined}
+        onApproveItem={vi.fn()}
+        onRejectItem={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByText("Thread review")).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.getByText("Reviewed / Failed")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create Entry: Lunch on 2026-03-05" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("Delete Tag: groceries"));
+
+    expect(screen.getByRole("heading", { name: "Delete Tag: groceries" })).toBeInTheDocument();
+    expect(screen.getAllByText("REJECTED").length).toBeGreaterThan(0);
+  });
+
+  it("auto-advances to the next pending proposal after approval", async () => {
+    const firstRun = buildRun({
+      id: "run-1",
+      created_at: "2026-03-06T10:00:00Z",
+      change_items: [
+        buildChangeItem({
+          id: "change-1",
+          run_id: "run-1",
+          change_type: "create_tag",
+          payload_json: {
+            name: "subscriptions",
+            type: "recurring"
+          }
+        }),
+        buildChangeItem({
+          id: "change-2",
+          run_id: "run-1",
+          change_type: "create_entity",
+          payload_json: {
+            name: "Molly Tea",
+            category: "merchant"
+          }
+        })
+      ]
+    });
+    const onApproveItem = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ...firstRun.change_items[0],
+        status: "APPLIED",
+        applied_resource_type: "tag",
+        applied_resource_id: "1"
+      });
+
+    renderWithQueryClient(
+      <AgentThreadReviewModal
+        open
+        runs={[firstRun]}
+        onOpenChange={() => undefined}
+        onApproveItem={onApproveItem}
+        onRejectItem={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByRole("heading", { name: "Create Tag: subscriptions" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Create Entity: Molly Tea" })).toBeInTheDocument());
+    expect(onApproveItem).toHaveBeenCalledWith({
+      itemId: "change-1",
+      payloadOverride: undefined
+    });
+  });
+
+  it("ignores keyboard approve shortcuts while focus is inside an editor field", async () => {
+    const run = buildRun({
+      id: "run-1",
+      created_at: "2026-03-06T10:00:00Z",
+      change_items: [
+        buildChangeItem({
+          id: "change-1",
+          run_id: "run-1",
+          change_type: "create_tag",
+          payload_json: {
+            name: "subscriptions",
+            type: "recurring"
+          }
+        })
+      ]
+    });
+    const onApproveItem = vi.fn();
+
+    renderWithQueryClient(
+      <AgentThreadReviewModal
+        open
+        runs={[run]}
+        onOpenChange={() => undefined}
+        onApproveItem={onApproveItem}
+        onRejectItem={vi.fn()}
+      />
+    );
+
+    const nameInput = await screen.findByLabelText("Name");
+    nameInput.focus();
+    await userEvent.keyboard("a");
+
+    expect(onApproveItem).not.toHaveBeenCalled();
+  });
+});

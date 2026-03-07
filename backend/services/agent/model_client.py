@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from threading import Lock
+import os
 from typing import Any
 
 import litellm
@@ -20,8 +20,6 @@ class AgentModelError(RuntimeError):
     pass
 
 
-_LANGFUSE_CALLBACK_NAME = "langfuse"
-_LANGFUSE_CALLBACK_LOCK = Lock()
 _TRANSIENT_SSL_BAD_RECORD_MAC_MARKERS = (
     "sslv3_alert_bad_record_mac",
     "sslv3 alert bad record mac",
@@ -42,6 +40,7 @@ ENV_VALIDATION_EXCEPTIONS = (
     TypeError,
     ValueError,
 )
+_BEDROCK_BEARER_TOKEN_ENV = "AWS_BEARER_TOKEN_BEDROCK"
 
 
 def _normalize_secret(value: Any) -> str | None:
@@ -58,25 +57,11 @@ def _normalize_host(value: Any) -> str | None:
     return normalized.rstrip("/")
 
 
-def _normalize_observability_text(value: Any, *, max_length: int = 128) -> str | None:
-    if not isinstance(value, str):
-        return None
-    normalized = value.strip()
-    if not normalized:
-        return None
-    return normalized[:max_length]
-
-
-def _normalize_callback_values(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, (list, tuple, set)):
-        normalized: list[str] = []
-        for item in value:
-            if isinstance(item, str):
-                normalized.append(item)
-        return normalized
-    return []
+def _provider_name_for_model(model_name: str) -> str:
+    normalized_model = (model_name or "").strip()
+    if not normalized_model:
+        return ""
+    return normalized_model.split("/", 1)[0].lower()
 
 
 def _is_transient_ssl_bad_record_mac_error(exc: Exception) -> bool:
@@ -137,114 +122,6 @@ def _cache_injection_points_for_messages(
         seen.add(key)
         unique_points.append(point)
     return unique_points[:_PROMPT_CACHE_INJECTION_POINTS_MAX]
-
-
-def _enable_langfuse_callbacks() -> None:
-    with _LANGFUSE_CALLBACK_LOCK:
-        for attribute_name in ("success_callback", "failure_callback"):
-            callbacks = _normalize_callback_values(
-                getattr(litellm, attribute_name, None)
-            )
-            if _LANGFUSE_CALLBACK_NAME not in callbacks:
-                callbacks.append(_LANGFUSE_CALLBACK_NAME)
-                setattr(litellm, attribute_name, callbacks)
-
-
-def _build_observability_extra_body(
-    observability: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    if not isinstance(observability, dict):
-        return None
-
-    payload: dict[str, Any] = {}
-    user = _normalize_observability_text(observability.get("user"))
-    session_id = _normalize_observability_text(observability.get("session_id"))
-    trace = observability.get("trace")
-
-    if user is not None:
-        payload["user"] = user
-    if session_id is not None:
-        payload["session_id"] = session_id
-    if isinstance(trace, dict) and trace:
-        payload["trace"] = trace
-
-    return payload or None
-
-
-def _coerce_step(value: Any) -> int | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float) and value.is_integer():
-        return int(value)
-    return None
-
-
-def _build_observability_metadata(
-    observability: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    if not isinstance(observability, dict):
-        return None
-
-    metadata: dict[str, Any] = {}
-    trace_metadata: dict[str, Any] = {}
-
-    user = _normalize_observability_text(observability.get("user"), max_length=256)
-    session_id = _normalize_observability_text(
-        observability.get("session_id"), max_length=256
-    )
-    trace = observability.get("trace")
-
-    if user is not None:
-        metadata["trace_user_id"] = user
-    if session_id is not None:
-        metadata["session_id"] = session_id
-
-    generation_name = "agent_turn"
-    if isinstance(trace, dict):
-        trace_id = _normalize_observability_text(trace.get("trace_id"), max_length=256)
-        trace_name = _normalize_observability_text(
-            trace.get("trace_name"), max_length=256
-        )
-        generation_name = _normalize_observability_text(
-            trace.get("generation_name"), max_length=128
-        )
-        thread_id = _normalize_observability_text(
-            trace.get("thread_id"), max_length=256
-        )
-        run_id = _normalize_observability_text(trace.get("run_id"), max_length=256)
-        step = _coerce_step(trace.get("step"))
-        is_first_run_in_thread = trace.get("is_first_run_in_thread", True)
-        run_index = _coerce_step(trace.get("run_index"))
-
-        if generation_name is None and run_index is not None and step is not None:
-            generation_name = f"agent_turn_run_{run_index}_step_{step}"
-        elif generation_name is None and step is not None:
-            generation_name = f"agent_turn_step_{step}"
-        elif generation_name is None:
-            generation_name = "agent_turn"
-
-        use_existing_trace = (step is not None and step > 1) or (
-            isinstance(is_first_run_in_thread, bool) and not is_first_run_in_thread
-        )
-        if trace_id is not None:
-            if use_existing_trace:
-                metadata["existing_trace_id"] = trace_id
-            else:
-                metadata["trace_id"] = trace_id
-        if trace_name is not None:
-            metadata["trace_name"] = trace_name
-        if thread_id is not None:
-            trace_metadata["thread_id"] = thread_id
-        if run_id is not None:
-            trace_metadata["run_id"] = run_id
-
-    metadata["generation_name"] = generation_name
-    if trace_metadata:
-        metadata["trace_metadata"] = trace_metadata
-
-    return metadata or None
 
 
 def _read_attr(source: Any, key: str) -> Any:
@@ -406,13 +283,29 @@ def _merge_tool_call_delta(
     delta_function = _read_attr(tool_call_delta, "function")
     delta_name = _coerce_text(_read_attr(delta_function, "name"))
     if delta_name is not None:
-        current["function"]["name"] = f"{current['function']['name']}{delta_name}"
+        current["function"]["name"] = _merge_streamed_tool_call_fragment(
+            current["function"]["name"],
+            delta_name,
+        )
 
     delta_arguments = _coerce_text(_read_attr(delta_function, "arguments"))
     if delta_arguments is not None:
-        current["function"]["arguments"] = (
-            f"{current['function']['arguments']}{delta_arguments}"
+        current["function"]["arguments"] = _merge_streamed_tool_call_fragment(
+            current["function"]["arguments"],
+            delta_arguments,
         )
+
+
+def _merge_streamed_tool_call_fragment(current: str, delta: str) -> str:
+    if not current:
+        return delta
+    if not delta:
+        return current
+    if delta.startswith(current):
+        return delta
+    if current.startswith(delta):
+        return current
+    return f"{current}{delta}"
 
 
 def _ordered_tool_calls(tool_calls_by_index: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -421,6 +314,7 @@ def _ordered_tool_calls(tool_calls_by_index: dict[int, dict[str, Any]]) -> list[
 
 def validate_litellm_environment(*, model_name: str) -> tuple[bool, list[str], str]:
     normalized_model = (model_name or "").strip() or "openrouter/qwen/qwen3.5-27b"
+    provider_name = _provider_name_for_model(normalized_model)
     try:
         validation = litellm.validate_environment(
             model=normalized_model,
@@ -447,6 +341,11 @@ def validate_litellm_environment(*, model_name: str) -> tuple[bool, list[str], s
         missing_keys = [str(value) for value in raw_missing if str(value).strip()]
     else:
         missing_keys = []
+    if provider_name == "bedrock":
+        if _normalize_secret(os.environ.get(_BEDROCK_BEARER_TOKEN_ENV)) is not None:
+            return True, [], normalized_model
+        if _BEDROCK_BEARER_TOKEN_ENV not in missing_keys:
+            missing_keys.append(_BEDROCK_BEARER_TOKEN_ENV)
     return bool(keys_in_environment), missing_keys, normalized_model
 
 
@@ -460,9 +359,6 @@ class LiteLLMModelClient:
         retry_initial_wait_seconds: float,
         retry_max_wait_seconds: float,
         retry_backoff_multiplier: float,
-        langfuse_public_key: str | None = None,
-        langfuse_secret_key: str | None = None,
-        langfuse_host: str | None = None,
         base_url: str | None = None,
         api_key: str | None = None,
     ) -> None:
@@ -472,23 +368,12 @@ class LiteLLMModelClient:
         self._retry_initial_wait_seconds = max(0.0, retry_initial_wait_seconds)
         self._retry_max_wait_seconds = max(0.0, retry_max_wait_seconds)
         self._retry_backoff_multiplier = max(1.0, retry_backoff_multiplier)
-        self._langfuse_public_key = _normalize_secret(langfuse_public_key)
-        self._langfuse_secret_key = _normalize_secret(langfuse_secret_key)
-        self._langfuse_host = _normalize_host(langfuse_host)
-        self._langfuse_enabled = (
-            self._langfuse_public_key is not None
-            and self._langfuse_secret_key is not None
-        )
         self._base_url = _normalize_host(base_url)
         self._api_key = _normalize_secret(api_key)
-        if self._langfuse_enabled:
-            _enable_langfuse_callbacks()
 
     def _base_request(
         self,
         messages: list[dict[str, Any]],
-        *,
-        observability: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         request: dict[str, Any] = {
             "model": self._model_name,
@@ -501,24 +386,10 @@ class LiteLLMModelClient:
             if injection_points:
                 request["cache_control_injection_points"] = injection_points
 
-        if self._langfuse_enabled:
-            request["langfuse_public_key"] = self._langfuse_public_key
-            request["langfuse_secret_key"] = self._langfuse_secret_key
-            if self._langfuse_host is not None:
-                request["langfuse_host"] = self._langfuse_host
-
         if self._base_url is not None:
             request["base_url"] = self._base_url
         if self._api_key is not None:
             request["api_key"] = self._api_key
-
-        metadata = _build_observability_metadata(observability)
-        if metadata is not None:
-            request["metadata"] = metadata
-
-        extra_body = _build_observability_extra_body(observability)
-        if extra_body is not None:
-            request["extra_body"] = extra_body
         return request
 
     def _to_model_error(self, exc: Exception) -> AgentModelError:
@@ -555,10 +426,8 @@ class LiteLLMModelClient:
     def _chat_completion_once(
         self,
         messages: list[dict[str, Any]],
-        *,
-        observability: dict[str, Any] | None = None,
     ) -> Any:
-        request = self._base_request(messages, observability=observability)
+        request = self._base_request(messages)
         try:
             return self._completion_with_transient_ssl_retry(request)
         except Exception as exc:
@@ -582,8 +451,6 @@ class LiteLLMModelClient:
     def complete(
         self,
         messages: list[dict[str, Any]],
-        *,
-        observability: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         retrying = Retrying(
             stop=stop_after_attempt(self._retry_max_attempts),
@@ -598,9 +465,7 @@ class LiteLLMModelClient:
         response = None
         for attempt in retrying:
             with attempt:
-                response = self._chat_completion_once(
-                    messages, observability=observability
-                )
+                response = self._chat_completion_once(messages)
         if response is None:  # pragma: no cover - defensive guard
             raise AgentModelError("model request failed: no response")
 
@@ -632,10 +497,8 @@ class LiteLLMModelClient:
     def complete_stream(
         self,
         messages: list[dict[str, Any]],
-        *,
-        observability: dict[str, Any] | None = None,
     ) -> Iterator[dict[str, Any]]:
-        request = self._base_request(messages, observability=observability)
+        request = self._base_request(messages)
         request["stream"] = True
         request["stream_options"] = {"include_usage": True}
 

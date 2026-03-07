@@ -19,7 +19,9 @@ Supporting modules include:
 - `frontend/src/features/agent/panel/useAgentDraftAttachments.ts`
 - `frontend/src/features/agent/panel/useStickToBottom.ts`
 - `frontend/src/hooks/useResizablePanel.ts`
-- `frontend/src/features/agent/review/AgentRunReviewModal.tsx`
+- `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`
+- `frontend/src/features/agent/review/drafts.ts`
+- `frontend/src/features/agent/review/model.ts`
 - `frontend/src/features/agent/review/diff.ts`
 
 ## Timeline Behavior
@@ -34,14 +36,15 @@ Supporting modules include:
 - assistant activity and transient SSE text render in the same assistant/update bubble
 - optimistic user and assistant placeholders reconcile against persisted timeline messages
 
-## Review Modal
+## Thread Review Surface
 
-- review actions are handled in `frontend/src/features/agent/review/AgentRunReviewModal.tsx`
-- proposals render CRUD-aware field-level diffs
-- focused pending blocks are tracked via `IntersectionObserver`
-- sticky action bar supports focused approve/reject plus `Approve All` and `Reject All`
-- `Approve All` and `Reject All` remain sequential per-item API workflows
-- apply failures surface inline with summary counts and jump links
+- review actions are handled in `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`
+- the header `Review` button is the only review entry point and opens one thread-scoped dialog for all proposal items across the selected thread
+- the dialog splits items into `Pending` and `Reviewed / Failed`, with a TOC on the left and one focused review card at a time
+- proposals render CRUD-aware field-level diffs, and reviewer overrides update the preview for create and update entry/tag/entity proposals
+- entry create/update review uses the same field model as `EntryEditorModal` through `frontend/src/features/agent/review/drafts.ts`; tag review edits only `name` and `type`, entity review edits only `name` and `category`
+- `Approve All` and `Reject All` remain sequential per-item API workflows and reuse any saved reviewer drafts
+- apply failures surface inline on the affected item; local editor validation stays client-side and does not synthesize `APPLY_FAILED`
 
 ## Composer
 

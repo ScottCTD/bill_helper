@@ -259,6 +259,15 @@ def _build_review_results_prefix_for_current_turn(
 
     lines = ["Review results from your previous proposals:"]
     ordinal = 1
+
+    def _payload_override_summary(note: str | None) -> str | None:
+        if not note:
+            return None
+        for segment in (part.strip() for part in note.split("|")):
+            if segment.startswith("payload_override:"):
+                return segment.removeprefix("payload_override:").strip() or None
+        return None
+
     for action in actions:
         item = action.change_item
         if item is None:
@@ -277,11 +286,13 @@ def _build_review_results_prefix_for_current_turn(
         proposal_id = source_output_json.get("proposal_id") or item.id
         short_id = proposal_id[:8]
         note = item.review_note or action.note
+        override_summary = _payload_override_summary(note)
         tool_name = _proposal_tool_name_for_change_type(item.change_type.value)
         lines.append(
             f"{ordinal}. {tool_name} proposal_id={proposal_id} proposal_short_id={short_id} "
             f"review_action={action.action.value} review_item_status={item.status.value} "
             f"review_note={note or '(none)'}"
+            + (f" review_override={override_summary}" if override_summary else "")
         )
         ordinal += 1
 

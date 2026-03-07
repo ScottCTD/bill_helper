@@ -820,6 +820,33 @@ def test_entry_proposal_tool_descriptions_define_markdown_notes_style():
     assert "ordered/unordered lists" in update_description
 
 
+def test_entry_tool_schemas_inline_local_refs():
+    from backend.services.agent.tools import build_openai_tool_schemas
+
+    tool_by_name = {
+        tool["function"]["name"]: tool["function"]
+        for tool in build_openai_tool_schemas()
+    }
+
+    def contains_ref(value):
+        if isinstance(value, dict):
+            if "$ref" in value:
+                return True
+            return any(contains_ref(item) for item in value.values())
+        if isinstance(value, list):
+            return any(contains_ref(item) for item in value)
+        return False
+
+    create_schema = tool_by_name["propose_create_entry"]["parameters"]
+    update_schema = tool_by_name["propose_update_entry"]["parameters"]
+    delete_schema = tool_by_name["propose_delete_entry"]["parameters"]
+
+    assert not contains_ref(create_schema)
+    assert not contains_ref(update_schema)
+    assert not contains_ref(delete_schema)
+    assert create_schema["properties"]["kind"]["enum"] == ["EXPENSE", "INCOME", "TRANSFER"]
+
+
 def test_run_persists_tool_calls(client, monkeypatch):
     calls = [
         {
@@ -1307,28 +1334,6 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
     assert reasoning_run_events[0]["source"] == "assistant_content"
 
 
-def test_model_observability_uses_thread_as_session_id(client, monkeypatch):
-    from backend.services.agent import runtime
-
-    captured_observability: list[dict] = []
-
-    def capture_model(_messages, _db, *, observability=None):
-        if isinstance(observability, dict):
-            captured_observability.append(observability)
-        return {"role": "assistant", "content": "Done."}
-
-    monkeypatch.setattr(runtime, "call_model", capture_model)
-    thread = create_thread(client)
-    run = send_message(client, thread["id"], "hello")
-
-    assert run["status"] == "completed"
-    assert captured_observability
-    context = captured_observability[0]
-    assert context["session_id"] == thread["id"]
-    assert context["trace"]["trace_id"] == thread["id"]
-    assert context["trace"]["run_id"] == run["id"]
-
-
 def test_interrupt_running_run_stops_background_processing(client, monkeypatch):
     def slow_model(_messages):
         time.sleep(0.35)
@@ -1618,6 +1623,49 @@ def test_proposal_creation_for_each_create_change_type(client, monkeypatch):
     assert "account_id" not in run_entry["change_items"][0]["payload_json"]
 
 
+def test_propose_create_entry_accepts_double_encoded_tool_arguments(client, monkeypatch):
+    entry_args = {
+        "kind": "EXPENSE",
+        "date": "2026-03-02",
+        "name": "Transit Fare",
+        "amount_minor": 325,
+        "from_entity": "TD Checking",
+        "to_entity": "Transit Agency",
+        "tags": ["transportation"],
+    }
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Entry proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entry",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entry",
+                        "arguments": json.dumps(json.dumps(entry_args)),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    create_entity(client, "TD Checking", category="account")
+    create_entity(client, "Transit Agency", category="merchant")
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Create transit entry")
+
+    assert run["status"] == "completed"
+    assert len(run["change_items"]) == 1
+    assert run["tool_calls"][0]["input_json"] == entry_args
+    assert run["tool_calls"][0]["output_json"]["status"] == "OK"
+    assert run["change_items"][0]["change_type"] == "create_entry"
+
+
 def test_entry_proposal_can_reference_pending_entity_in_same_turn(client, monkeypatch):
     def fake_model(messages):
         if messages[-1]["role"] == "tool":
@@ -1894,6 +1942,212 @@ def test_approve_and_reapprove_conflict(client, monkeypatch):
 
     second_approve = client.post(f"/api/v1/agent/change-items/{item_id}/approve", json={})
     assert second_approve.status_code == 409
+
+
+def test_create_tag_approval_accepts_payload_override(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Tag proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_tag",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_tag",
+                        "arguments": json.dumps(
+                            {
+                                "name": "subscriptions",
+                                "type": "recurring",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Propose tag subscriptions")
+    item_id = run["change_items"][0]["id"]
+
+    approve_response = client.post(
+        f"/api/v1/agent/change-items/{item_id}/approve",
+        json={
+            "payload_override": {
+                "name": "streaming",
+                "type": "media",
+            }
+        },
+    )
+    approve_response.raise_for_status()
+
+    approved = approve_response.json()
+    assert approved["status"] == "APPLIED"
+    assert "payload_override:" in (approved["review_note"] or "")
+    assert "name='streaming'" in (approved["review_note"] or "")
+    tags = client.get("/api/v1/tags").json()
+    assert any(tag["name"] == "streaming" and tag["type"] == "media" for tag in tags)
+    assert all(tag["name"] != "subscriptions" for tag in tags)
+
+
+def test_update_tag_approval_accepts_payload_override(client, monkeypatch):
+    create_tag(client, "subscriptions", type_name="recurring")
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Tag update proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_update_tag",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_tag",
+                        "arguments": json.dumps(
+                            {
+                                "name": "subscriptions",
+                                "patch": {
+                                    "name": "streaming",
+                                    "type": "media",
+                                },
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Rename subscriptions to streaming")
+    item_id = run["change_items"][0]["id"]
+
+    approve_response = client.post(
+        f"/api/v1/agent/change-items/{item_id}/approve",
+        json={
+            "payload_override": {
+                "name": "subscriptions",
+                "patch": {
+                    "name": "billing",
+                    "type": "monthly",
+                },
+            }
+        },
+    )
+    approve_response.raise_for_status()
+
+    approved = approve_response.json()
+    assert approved["status"] == "APPLIED"
+    tags = client.get("/api/v1/tags").json()
+    assert any(tag["name"] == "billing" and tag["type"] == "monthly" for tag in tags)
+    assert all(tag["name"] != "subscriptions" for tag in tags)
+
+
+def test_create_entity_approval_accepts_payload_override(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Entity proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entity",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entity",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Temp Vendor",
+                                "category": "merchant",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Propose entity Temp Vendor")
+    item_id = run["change_items"][0]["id"]
+
+    approve_response = client.post(
+        f"/api/v1/agent/change-items/{item_id}/approve",
+        json={
+            "payload_override": {
+                "name": "Temp Vendor Downtown",
+                "category": "cafe",
+            }
+        },
+    )
+    approve_response.raise_for_status()
+
+    approved = approve_response.json()
+    assert approved["status"] == "APPLIED"
+    entities = client.get("/api/v1/entities").json()
+    assert any(entity["name"] == "Temp Vendor Downtown" and entity["category"] == "cafe" for entity in entities)
+    assert all(entity["name"] != "Temp Vendor" for entity in entities)
+
+
+def test_update_entity_approval_accepts_payload_override(client, monkeypatch):
+    create_entity(client, "Temp Vendor", category="merchant")
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Entity update proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_update_entity",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_entity",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Temp Vendor",
+                                "patch": {
+                                    "name": "Temp Vendor Renamed",
+                                    "category": "services",
+                                },
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Rename Temp Vendor")
+    item_id = run["change_items"][0]["id"]
+
+    approve_response = client.post(
+        f"/api/v1/agent/change-items/{item_id}/approve",
+        json={
+            "payload_override": {
+                "name": "Temp Vendor",
+                "patch": {
+                    "name": "Temp Vendor Final",
+                    "category": "restaurant",
+                },
+            }
+        },
+    )
+    approve_response.raise_for_status()
+
+    approved = approve_response.json()
+    assert approved["status"] == "APPLIED"
+    entities = client.get("/api/v1/entities").json()
+    assert any(entity["name"] == "Temp Vendor Final" and entity["category"] == "restaurant" for entity in entities)
+    assert all(entity["name"] != "Temp Vendor" for entity in entities)
 
 
 def test_reject_flow(client, monkeypatch):
@@ -2397,6 +2651,67 @@ def test_reviewed_items_are_injected_into_followup_turn(client, monkeypatch):
     assert "Use type recurring instead" in followup_content
     assert followup_content.index("Review results from your previous proposals:") < followup_content.index("User feedback:")
     assert followup_content.index("User feedback:") < followup_content.index("Try again")
+
+
+def test_reviewed_item_prefix_includes_payload_override_values(client, monkeypatch):
+    def first_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Tag proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_tag",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_tag",
+                        "arguments": json.dumps(
+                            {
+                                "name": "subscriptions",
+                                "type": "recurring",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, first_model)
+    thread = create_thread(client)
+    first_run = send_message(client, thread["id"], "Create a temporary tag")
+    item_id = first_run["change_items"][0]["id"]
+
+    approve_response = client.post(
+        f"/api/v1/agent/change-items/{item_id}/approve",
+        json={
+            "payload_override": {
+                "name": "streaming",
+                "type": "media",
+            }
+        },
+    )
+    approve_response.raise_for_status()
+
+    captured_messages: list[list[dict]] = []
+
+    def second_model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "Acknowledged review feedback."}
+
+    patch_model(monkeypatch, second_model)
+    followup_run = send_message(client, thread["id"], "Try again")
+    assert followup_run["status"] == "completed"
+    assert captured_messages
+
+    history = captured_messages[-1]
+    followup_user_messages = [message for message in history if message.get("role") == "user"]
+    assert followup_user_messages
+    followup_user = followup_user_messages[-1]
+    followup_content = followup_user.get("content")
+    assert isinstance(followup_content, str)
+    assert "review_action=approve" in followup_content
+    assert "review_override=name='streaming'; type='media'" in followup_content
 
 
 def test_propose_tools_allowed_when_pending_reviews_exist(client, monkeypatch):

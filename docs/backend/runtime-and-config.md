@@ -42,17 +42,12 @@ Core app settings include:
 
 Agent settings include:
 
-- `LANGFUSE_PUBLIC_KEY` / `BILL_HELPER_LANGFUSE_PUBLIC_KEY`
-- `LANGFUSE_SECRET_KEY` / `BILL_HELPER_LANGFUSE_SECRET_KEY`
-- `LANGFUSE_HOST` / `BILL_HELPER_LANGFUSE_HOST`
 - `AGENT_MODEL` (default `openrouter/qwen/qwen3.5-27b`)
 - `AGENT_MAX_STEPS` (default `100`)
 - `AGENT_MAX_IMAGE_SIZE_BYTES` (default `5MB`)
 - `AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`)
 - `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL`
 - `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY`
-- `OPENROUTER_BASE_URL` / `BILL_HELPER_OPENROUTER_BASE_URL` (legacy-compatible aliases for OpenRouter-backed defaults)
-- `OPENROUTER_API_KEY` / `BILL_HELPER_OPENROUTER_API_KEY` (legacy-compatible aliases for OpenRouter-backed defaults)
 
 Runtime override behavior:
 
@@ -66,7 +61,8 @@ Behavior notes:
 
 - app startup succeeds even when provider credentials are missing
 - only agent execution is blocked (`503`) when LiteLLM cannot resolve credentials for the configured model target
-- provider credentials are resolved from standard environment variables for the configured model
+- provider credentials are resolved by LiteLLM from standard provider-specific environment variables for the configured model
+- `agent_base_url` and `agent_api_key` are explicit app-level overrides only; provider-native env vars are not forwarded through those fields
 - `get_settings()` caches environment settings with `lru_cache`
 - runtime behavior consumers should read through `backend/services/runtime_settings.py`
 - FastAPI app construction is factory-driven via `create_app()`

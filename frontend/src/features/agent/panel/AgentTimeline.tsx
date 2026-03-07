@@ -31,7 +31,6 @@ interface AgentTimelineProps {
   activeOptimisticToolCalls: AgentToolCall[];
   onHydrateToolCall: (runId: string, toolCallId: string) => void;
   hydratingToolCallIds: ReadonlySet<string>;
-  onReviewRun: (runId: string | null) => void;
   isAtBottom: boolean;
   scrollToBottom: () => void;
 }
@@ -59,7 +58,6 @@ export function AgentTimeline(props: AgentTimelineProps) {
     activeOptimisticToolCalls = [],
     onHydrateToolCall,
     hydratingToolCallIds,
-    onReviewRun,
     isAtBottom,
     scrollToBottom
   } = props;
@@ -103,7 +101,6 @@ export function AgentTimeline(props: AgentTimelineProps) {
                           key={`${run.id}-activity`}
                           run={run}
                           isMutating={isMutating}
-                          onReviewRun={onReviewRun}
                           onHydrateToolCall={onHydrateToolCall}
                           hydratingToolCallIds={hydratingToolCallIds}
                           mode="activity"
@@ -156,7 +153,6 @@ export function AgentTimeline(props: AgentTimelineProps) {
                           key={`${run.id}-summary`}
                           run={run}
                           isMutating={isMutating}
-                          onReviewRun={onReviewRun}
                           onHydrateToolCall={onHydrateToolCall}
                           hydratingToolCallIds={hydratingToolCallIds}
                           mode="summary"
@@ -186,7 +182,6 @@ export function AgentTimeline(props: AgentTimelineProps) {
                           <AgentRunBlock
                             run={run}
                             isMutating={isMutating}
-                            onReviewRun={onReviewRun}
                             onHydrateToolCall={onHydrateToolCall}
                             hydratingToolCallIds={hydratingToolCallIds}
                             mode="activity"
@@ -239,7 +234,6 @@ export function AgentTimeline(props: AgentTimelineProps) {
                 <AgentRunBlock
                   run={pendingRunAttachedToOptimisticMessage}
                   isMutating={isMutating}
-                  onReviewRun={onReviewRun}
                   onHydrateToolCall={onHydrateToolCall}
                   hydratingToolCallIds={hydratingToolCallIds}
                   mode="activity"
@@ -293,7 +287,6 @@ export function AgentTimeline(props: AgentTimelineProps) {
                 <AgentRunBlock
                   run={run}
                   isMutating={isMutating}
-                  onReviewRun={onReviewRun}
                   onHydrateToolCall={onHydrateToolCall}
                   hydratingToolCallIds={hydratingToolCallIds}
                   optimisticEvents={optimisticEvents}

@@ -184,20 +184,18 @@ def complete_model_once(
     db: Session,
     *,
     messages: list[dict[str, Any]],
-    observability: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Stable entrypoint for one non-stream model completion."""
-    return call_model(messages, db, observability=observability)
+    return call_model(messages, db)
 
 
 def complete_model_stream(
     db: Session,
     *,
     messages: list[dict[str, Any]],
-    observability: dict[str, Any] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Stable entrypoint for streaming model completion."""
-    return call_model_stream(messages, db, observability=observability)
+    return call_model_stream(messages, db)
 
 
 def build_tool_context(db: Session, *, run_id: str) -> ToolContext:

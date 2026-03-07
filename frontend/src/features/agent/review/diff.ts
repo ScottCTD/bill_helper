@@ -336,8 +336,14 @@ function buildCreateDiff(
   });
 }
 
-function buildUpdateDiff(payload: JsonRecord, metadata: DiffMetadata[]): ProposalDiff {
-  const patch = asRecord(payload.patch);
+function buildUpdateDiff(
+  payload: JsonRecord,
+  metadata: DiffMetadata[],
+  reviewerOverride?: JsonRecord
+): ProposalDiff {
+  const overridePatch = asRecord(reviewerOverride?.patch);
+  const hasReviewerEdits = Object.keys(overridePatch).length > 0 && !jsonRecordsAreEquivalent(payload, reviewerOverride ?? {});
+  const patch = hasReviewerEdits ? overridePatch : asRecord(payload.patch);
   const current = asRecord(payload.current);
   const target = asRecord(payload.target);
 
@@ -350,7 +356,12 @@ function buildUpdateDiff(payload: JsonRecord, metadata: DiffMetadata[]): Proposa
     title: "Changed fields",
     lines,
     metadata,
-    note: lines.length === 0 ? "Patch did not change any visible fields." : undefined
+    note:
+      lines.length === 0
+        ? "Patch did not change any visible fields."
+        : hasReviewerEdits
+          ? "Preview reflects reviewer-edited payload."
+          : undefined
   });
 }
 
@@ -385,6 +396,8 @@ export function buildProposalDiff(
   reviewerOverride?: JsonRecord
 ): ProposalDiff {
   const metadata: DiffMetadata[] = [];
+  const effectivePatch =
+    reviewerOverride && !jsonRecordsAreEquivalent(payload, reviewerOverride) ? asRecord(reviewerOverride.patch) : asRecord(payload.patch);
 
   if (hasField(payload, "name")) {
     pushMetadata(metadata, "Target", payload.name);
@@ -401,9 +414,8 @@ export function buildProposalDiff(
     pushMetadata(metadata, "Selector", selectorSummary(selector));
   }
 
-  const patch = asRecord(payload.patch);
-  if (Object.keys(patch).length > 0) {
-    pushMetadata(metadata, "Patch fields", Object.keys(patch).length);
+  if (Object.keys(effectivePatch).length > 0) {
+    pushMetadata(metadata, "Patch fields", Object.keys(effectivePatch).length);
   }
 
   const impactPreview = asRecord(payload.impact_preview);
@@ -426,7 +438,7 @@ export function buildProposalDiff(
     case "update_entry":
     case "update_tag":
     case "update_entity":
-      return buildUpdateDiff(payload, metadata);
+      return buildUpdateDiff(payload, metadata, reviewerOverride);
     case "delete_entry":
       return buildDeleteDiff(payload, metadata, selector);
     case "delete_tag":

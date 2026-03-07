@@ -48,6 +48,7 @@ def entry_to_public_record(entry: Entry) -> dict[str, Any]:
         "from_entity": entry.from_entity,
         "to_entity": entry.to_entity,
         "tags": tag_names,
+        "markdown_notes": entry.markdown_body,
     }
 
 

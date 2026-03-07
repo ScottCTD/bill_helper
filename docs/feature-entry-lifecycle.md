@@ -48,8 +48,9 @@ This doc is the fast path for understanding how entries are created, edited, lin
    `backend/services/agent/tool_handlers_propose.py` + `backend/services/agent/tool_runtime.py`
    (re-exported through `backend/services/agent/tools.py`).
 2. Proposal persisted as `agent_change_items` (`PENDING_REVIEW`).
-3. Human approves from frontend review UI:
-   - `frontend/src/features/agent/review/AgentRunReviewModal.tsx`
+3. Human reviews from the thread-scoped frontend review UI opened by the agent header `Review` button:
+   - `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`
+   - `frontend/src/features/agent/review/drafts.ts`
 4. Apply handler:
    - `backend/services/agent/review.py`
    - `backend/services/agent/change_apply.py`
@@ -66,6 +67,8 @@ This doc is the fast path for understanding how entries are created, edited, lin
 
 - Currency normalization occurs server-side (`currency_code.upper()`).
 - Agent create-entry proposals can omit `currency_code`; backend defaults to resolved runtime default currency (`/settings` override, else `BILL_HELPER_DEFAULT_CURRENCY_CODE`).
+- Thread review aggregates proposals across all runs in the selected thread; pending items are reviewed first while applied, rejected, and failed items remain visible for audit.
+- Reviewer edit-before-approve uses structured entry/tag/entity forms and serializes any approved edits back through `payload_override`.
 - Soft-delete removes entry links and triggers full active-entry group recomputation (connected components are rebuilt across all non-deleted entries).
 - Entries list date cells are rendered as no-wrap with a compact fixed width so `YYYY-MM-DD` values stay on one line.
 - Entries list name cells now render a compact secondary `from -> to` line under the primary name; long entity names are trimmed per side in `frontend/src/pages/EntriesPage.tsx` and styled by the `.entries-name-*` classes in `frontend/src/styles.css`.

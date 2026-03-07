@@ -111,27 +111,19 @@ uv sync --extra dev
 | `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` | `5242880` | Per-attachment size limit (5 MB) |
 | `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE` | `4` | Max image/PDF uploads per message |
 
-### Observability
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LANGFUSE_PUBLIC_KEY` | _(none)_ | Enables LiteLLM Langfuse callbacks (requires secret key) |
-| `LANGFUSE_SECRET_KEY` | _(none)_ | Enables LiteLLM Langfuse callbacks (requires public key) |
-| `LANGFUSE_HOST` | _(Langfuse cloud)_ | Custom Langfuse host URL |
-
 ### Provider Credentials
 
-LiteLLM resolves provider credentials from standard environment variables based on `BILL_HELPER_AGENT_MODEL`. Bill Helper also maps OpenRouter's legacy/env-standard names into runtime settings so clearing the UI override falls back cleanly:
+LiteLLM resolves provider credentials from standard environment variables based on `BILL_HELPER_AGENT_MODEL`. Bill Helper forwards only explicit app-level overrides through `AGENT_API_KEY` / `AGENT_BASE_URL` (or the matching runtime settings override fields).
 
 | Variable | Used when |
 |----------|-----------|
 | `OPENROUTER_API_KEY` | Model starts with `openrouter/` (default) |
-| `OPENROUTER_BASE_URL` | Optional OpenRouter-compatible base URL |
 | `OPENAI_API_KEY` | Model starts with `openai/` |
 | `ANTHROPIC_API_KEY` | Model starts with `anthropic/` |
+| `AWS_BEARER_TOKEN_BEDROCK` or standard AWS Bedrock credential env vars | Model starts with `bedrock/` |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Model starts with `gemini/` |
-| `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY` | Optional app-level provider override |
-| `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL` | Optional app-level base URL override |
+| `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY` | Explicit app-level credential override for a custom endpoint |
+| `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL` | Explicit app-level base URL override for a custom endpoint |
 
 ### Seed / Scripts
 
@@ -149,6 +141,7 @@ LiteLLM resolves provider credentials from standard environment variables based 
 
 - Backend boots normally when provider credentials are missing
 - Agent message execution endpoints return `503` when the configured model's provider credentials are missing
+- `GET /settings` reports `agent_api_key_configured=true` when either an explicit override key exists or LiteLLM can resolve provider credentials for the selected model; `agent_base_url` reflects only explicit overrides
 - Runtime settings from the database (`/api/v1/settings`) override env defaults for: current user name, default currency, dashboard currency, agent model, agent max steps, and retry parameters
 
 ## Database Setup
@@ -351,7 +344,7 @@ Behavioral checks:
 - user can open home agent workspace and create/select threads
 - message send persists timeline and run history
 - tool/reasoning traces appear in timeline while run is active
-- proposal items can be approved/rejected individually from review modal
+- proposal items can be approved/rejected individually from the thread review modal
 - accounts workspace supports create/edit/snapshot flows from split feature modules
 - properties workspace supports section-specific CRUD flows from split feature modules
 

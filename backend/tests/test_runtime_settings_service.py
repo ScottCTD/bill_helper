@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
+from backend.config import get_settings
 from backend.database import get_session_maker
 from backend.models_finance import RuntimeSettings
 from backend.services.runtime_settings import (
@@ -53,5 +56,42 @@ def test_build_runtime_settings_read_prefers_request_principal_name() -> None:
         assert payload.current_user_name == "alice"
         assert payload.agent_model == "openai/gpt-4.1-mini"
         assert payload.overrides.agent_model == "openai/gpt-4.1-mini"
+    finally:
+        db.close()
+
+
+def test_resolve_runtime_settings_does_not_treat_openrouter_env_as_custom_override(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("AGENT_API_KEY", raising=False)
+    monkeypatch.delenv("BILL_HELPER_AGENT_API_KEY", raising=False)
+    monkeypatch.delenv("AGENT_BASE_URL", raising=False)
+    monkeypatch.delenv("BILL_HELPER_AGENT_BASE_URL", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter-key")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    get_settings.cache_clear()
+
+    make_session = get_session_maker()
+    db = make_session()
+    try:
+        resolved = resolve_runtime_settings(db)
+        assert resolved.agent_api_key is None
+        assert resolved.agent_base_url is None
+    finally:
+        db.close()
+        get_settings.cache_clear()
+
+
+def test_build_runtime_settings_read_reports_provider_credentials_without_custom_override() -> None:
+    make_session = get_session_maker()
+    db = make_session()
+    try:
+        with patch(
+            "backend.services.runtime_settings.validate_litellm_environment",
+            return_value=(True, [], "openrouter/qwen/qwen3.5-27b"),
+        ):
+            payload = build_runtime_settings_read(db)
+        assert payload.agent_api_key_configured is True
+        assert payload.overrides.agent_api_key_configured is False
     finally:
         db.close()

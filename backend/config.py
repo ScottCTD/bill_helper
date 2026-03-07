@@ -54,22 +54,6 @@ class Settings(BaseSettings):
             "DASHBOARD_CURRENCY_CODE", "BILL_HELPER_DASHBOARD_CURRENCY_CODE"
         ),
     )
-    langfuse_public_key: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices(
-            "LANGFUSE_PUBLIC_KEY", "BILL_HELPER_LANGFUSE_PUBLIC_KEY"
-        ),
-    )
-    langfuse_secret_key: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices(
-            "LANGFUSE_SECRET_KEY", "BILL_HELPER_LANGFUSE_SECRET_KEY"
-        ),
-    )
-    langfuse_host: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("LANGFUSE_HOST", "BILL_HELPER_LANGFUSE_HOST"),
-    )
     agent_model: str = "openrouter/qwen/qwen3.5-27b"
     agent_max_steps: int = 100
     agent_retry_max_attempts: int = Field(default=3, ge=1, le=10)
@@ -83,8 +67,6 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices(
             "AGENT_BASE_URL",
             "BILL_HELPER_AGENT_BASE_URL",
-            "OPENROUTER_BASE_URL",
-            "BILL_HELPER_OPENROUTER_BASE_URL",
         ),
     )
     agent_api_key: str | None = Field(
@@ -92,8 +74,6 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices(
             "AGENT_API_KEY",
             "BILL_HELPER_AGENT_API_KEY",
-            "OPENROUTER_API_KEY",
-            "BILL_HELPER_OPENROUTER_API_KEY",
         ),
     )
 

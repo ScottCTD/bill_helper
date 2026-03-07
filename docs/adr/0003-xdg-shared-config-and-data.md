@@ -10,7 +10,7 @@ Bill Helper stores configuration (`.env`) and data (`.data/bill_helper.db`, agen
 
 This creates two problems:
 
-1. **Git worktrees don't share secrets.** Each worktree has its own working tree, so `.env` files with API keys (`OPENROUTER_API_KEY`, Langfuse credentials) don't carry over. New worktrees start without required credentials.
+1. **Git worktrees don't share secrets.** Each worktree has its own working tree, so `.env` files with provider API keys don't carry over. New worktrees start without required credentials.
 
 2. **Git worktrees don't share data.** The SQLite database at `./.data/bill_helper.db` is per-worktree. Every new worktree requires a full migration cycle and re-seeding, even when the developer wants to work against the same dataset.
 

@@ -16,13 +16,11 @@ import {
   type ReasoningUpdateSource,
   type RunActivityItem
 } from "./activity";
-import { Button } from "../../components/ui/button";
 import { MarkdownRenderer } from "../../components/ui/MarkdownRenderer";
 
 interface AgentRunBlockProps {
   run: AgentRun;
   isMutating: boolean;
-  onReviewRun: (runId: string) => void;
   onHydrateToolCall?: (runId: string, toolCallId: string) => void;
   hydratingToolCallIds?: ReadonlySet<string>;
   mode?: "activity" | "summary" | "all";
@@ -281,7 +279,6 @@ export function PendingAssistantActivityBlock({
 export function AgentRunBlock({
   run,
   isMutating,
-  onReviewRun,
   onHydrateToolCall,
   hydratingToolCallIds,
   mode = "all",
@@ -347,9 +344,9 @@ export function AgentRunBlock({
       {hasSummaryChanges ? (
         <div className="agent-run-changes-summary">
           <h4>{pendingCount > 0 ? `${pendingCount} proposed changes pending review` : "No pending changes in this run"}</h4>
-          <Button type="button" size="sm" onClick={() => onReviewRun(run.id)} disabled={isMutating}>
-            {pendingCount > 0 ? "Click to review proposed changes" : "View reviewed changes"}
-          </Button>
+          <p className="muted">
+            {pendingCount > 0 ? "Use the thread header Review button to process proposals." : "Reviewed changes remain available from the thread header Review button."}
+          </p>
           <div className="agent-run-change-chips">
             <span className="agent-run-change-chip">Entry x{typeSummary.entryCount}</span>
             <span className="agent-run-change-chip">Tag x{typeSummary.tagCount}</span>

@@ -5,7 +5,6 @@ from dataclasses import dataclass
 import re
 from typing import Any
 
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.enums_agent import (
@@ -107,9 +106,6 @@ def _build_model_client(db: Session) -> LiteLLMModelClient:
         retry_initial_wait_seconds=settings.agent_retry_initial_wait_seconds,
         retry_max_wait_seconds=settings.agent_retry_max_wait_seconds,
         retry_backoff_multiplier=settings.agent_retry_backoff_multiplier,
-        langfuse_public_key=settings.langfuse_public_key,
-        langfuse_secret_key=settings.langfuse_secret_key,
-        langfuse_host=settings.langfuse_host,
         base_url=settings.agent_base_url,
         api_key=settings.agent_api_key,
     )
@@ -118,49 +114,17 @@ def _build_model_client(db: Session) -> LiteLLMModelClient:
 def call_model(
     messages: list[dict[str, Any]],
     db: Session,
-    *,
-    observability: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     # Stable seam for tests/bench harnesses to inject model responses.
-    return _build_model_client(db).complete(messages, observability=observability)
+    return _build_model_client(db).complete(messages)
 
 
 def call_model_stream(
     messages: list[dict[str, Any]],
     db: Session,
-    *,
-    observability: dict[str, Any] | None = None,
 ) -> Iterator[dict[str, Any]]:
     # Stable seam for tests/bench harnesses to inject streaming model responses.
-    return _build_model_client(db).complete_stream(
-        messages, observability=observability
-    )
-
-
-def _model_observability_context(
-    *,
-    current_user_name: str,
-    thread_id: str,
-    run_id: str,
-    step: int | None = None,
-    is_first_run_in_thread: bool = True,
-    run_index: int = 1,
-) -> dict[str, Any]:
-    trace: dict[str, Any] = {
-        "trace_id": thread_id,
-        "trace_name": "Bill Helper Agent",
-        "thread_id": thread_id,
-        "run_id": run_id,
-        "is_first_run_in_thread": is_first_run_in_thread,
-        "run_index": run_index,
-    }
-    if step is not None:
-        trace["step"] = step
-    return {
-        "user": current_user_name,
-        "session_id": thread_id,
-        "trace": trace,
-    }
+    return _build_model_client(db).complete_stream(messages)
 
 
 def calculate_context_tokens(
@@ -359,26 +323,10 @@ class _RuntimeRunLoopAdapterBase(AgentRunLoopAdapter[PreparedToolCall]):
         self.settings = resolve_runtime_settings(db)
         self._max_steps = max(self.settings.agent_max_steps, 1)
         self.tool_context = ToolContext(db=db, run_id=run.id)
-        run_count = (
-            db.scalar(select(func.count(AgentRun.id)).where(AgentRun.thread_id == thread.id))
-            or 0
-        )
-        self.is_first_run_in_thread = run_count == 1
-        self.run_index = run_count
 
     @property
     def max_steps(self) -> int:
         return self._max_steps
-
-    def _model_observability(self, *, step_index: int) -> dict[str, Any]:
-        return _model_observability_context(
-            current_user_name=self.settings.current_user_name,
-            thread_id=self.thread.id,
-            run_id=self.run.id,
-            step=step_index,
-            is_first_run_in_thread=self.is_first_run_in_thread,
-            run_index=self.run_index,
-        )
 
     def _event_payload(self, event_row: AgentRunEvent) -> dict[str, Any] | None:
         return _emit_run_event(self.run, event_row)
@@ -594,11 +542,7 @@ class _RuntimeNonStreamRunLoopAdapter(_RuntimeRunLoopAdapterBase):
         step_index: int,
         llm_messages: list[dict[str, Any]],
     ) -> Generator[dict[str, Any], None, dict[str, Any]]:
-        assistant_message = call_model(
-            llm_messages,
-            self.db,
-            observability=self._model_observability(step_index=step_index),
-        )
+        assistant_message = call_model(llm_messages, self.db)
         return (yield from _empty_model_result(assistant_message))
 
 
@@ -632,11 +576,7 @@ class _RuntimeStreamRunLoopAdapter(_RuntimeRunLoopAdapterBase):
         llm_messages: list[dict[str, Any]],
     ) -> Generator[dict[str, Any], None, dict[str, Any]]:
         assistant_message: dict[str, Any] | None = None
-        for event in call_model_stream(
-            llm_messages,
-            self.db,
-            observability=self._model_observability(step_index=step_index),
-        ):
+        for event in call_model_stream(llm_messages, self.db):
             event_type = str(event.get("type") or "")
             if event_type == "reasoning_delta":
                 delta = str(event.get("delta") or "")
