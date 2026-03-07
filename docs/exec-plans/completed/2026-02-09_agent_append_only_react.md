@@ -171,28 +171,6 @@ Return format (string):
 2. `summary: found <n> active accounts`
 3. `accounts: <compact list of account id/name/currency>`
 
-### Read Tool: `get_dashboard_summary`
-
-Docstring text:
-
-```text
-Get a compact dashboard snapshot for the current month.
-Use this for high-level Q&A context.
-This tool is read-only.
-```
-
-Arguments:
-
-1. No arguments.
-
-Return format (string):
-
-1. `OK`
-2. `summary: dashboard snapshot for <YYYY-MM>`
-3. `expenses_by_currency: ...`
-4. `incomes_by_currency: ...`
-5. `top_tags: ...`
-
 ### Proposal Tool: `propose_create_tag`
 
 Docstring text:

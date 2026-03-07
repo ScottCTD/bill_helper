@@ -66,7 +66,7 @@ Read tools:
 - `list_entries`
 - `list_tags`
 - `list_entities`
-- `get_dashboard_summary`
+- `list_proposals`
 
 Proposal tools:
 

@@ -9,9 +9,9 @@ from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_expo
 
 from backend.services.agent.tool_args import (
     INTERMEDIATE_UPDATE_TOOL_NAME,
-    EmptyArgs,
     ListEntitiesArgs,
     ListEntriesArgs,
+    ListProposalsArgs,
     ListTagsArgs,
     ProposeCreateEntityArgs,
     ProposeCreateEntryArgs,
@@ -41,9 +41,9 @@ from backend.services.agent.tool_handlers_propose import (
 )
 from backend.services.agent.tool_handlers_read import (
     error_result,
-    get_dashboard_summary,
     list_entities,
     list_entries,
+    list_proposals,
     list_tags,
     send_intermediate_update,
 )
@@ -130,14 +130,15 @@ TOOLS: dict[str, AgentToolDefinition] = {
         args_model=ListEntitiesArgs,
         handler=list_entities,
     ),
-    "get_dashboard_summary": AgentToolDefinition(
-        name="get_dashboard_summary",
+    "list_proposals": AgentToolDefinition(
+        name="list_proposals",
         description=(
-            "Get a compact dashboard snapshot for the current month. "
-            "Use this for high-level Q&A context. This tool is read-only."
+            "List proposals in the current thread by proposal type, CRUD action, lifecycle status, "
+            "or optional proposal_id. Use this to inspect pending, rejected, applied, or failed proposals "
+            "before revising, removing, or explaining proposal history. This tool is read-only."
         ),
-        args_model=EmptyArgs,
-        handler=get_dashboard_summary,
+        args_model=ListProposalsArgs,
+        handler=list_proposals,
     ),
     INTERMEDIATE_UPDATE_TOOL_NAME: AgentToolDefinition(
         name=INTERMEDIATE_UPDATE_TOOL_NAME,

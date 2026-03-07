@@ -531,12 +531,14 @@ def test_system_prompt_guides_pending_proposal_revisions_and_removals():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
+    inspect_phrase = "Use list_proposals to inspect proposal history in the current thread"
     revise_phrase = "If the user asks to revise an existing pending proposal, prefer update_pending_proposal"
     remove_phrase = "If the user asks to discard/cancel/remove a pending proposal, use remove_pending_proposal"
 
+    assert inspect_phrase in prompt
     assert revise_phrase in prompt
     assert remove_phrase in prompt
-    assert prompt.index(revise_phrase) < prompt.index(remove_phrase)
+    assert prompt.index(inspect_phrase) < prompt.index(revise_phrase) < prompt.index(remove_phrase)
 
 
 def test_system_prompt_includes_error_recovery_and_core_identity():
@@ -591,6 +593,36 @@ def test_system_prompt_includes_current_date_tag():
 
     prompt = system_prompt(SystemPromptContext(current_date=date(2026, 2, 10)))
     assert "## Current Date (User Timezone: America/Toronto)\n2026-02-10" in prompt
+
+
+def test_system_prompt_renders_jinja_template_without_leaking_placeholders():
+    from datetime import date
+    from importlib.resources import files
+
+    from backend.services.agent.prompts import (
+        SYSTEM_PROMPT_TEMPLATE_NAME,
+        SystemPromptContext,
+        system_prompt,
+    )
+
+    template_path = files("backend.services.agent").joinpath(SYSTEM_PROMPT_TEMPLATE_NAME)
+    template_text = template_path.read_text(encoding="utf-8")
+
+    prompt = system_prompt(
+        SystemPromptContext(
+            current_date=date(2026, 2, 10),
+            current_timezone="America/Vancouver",
+            current_user_context="Primary checking",
+        )
+    )
+
+    assert template_path.name == "system_prompt.j2"
+    assert "## Identity" in template_text
+    assert "{{ timezone_name }}" in template_text
+    assert "{{" not in prompt
+    assert "{%" not in prompt
+    assert "Primary checking" in prompt
+    assert "## Current Date (User Timezone: America/Vancouver)\n2026-02-10" in prompt
 
 
 def test_system_prompt_includes_user_memory_when_present():
@@ -766,6 +798,7 @@ def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
     assert "list_accounts" not in names
     assert "search_entries" not in names
     assert "list_entries" in names
+    assert "list_proposals" in names
     assert "send_intermediate_update" in names
     assert "propose_update_entry" in names
     assert "propose_delete_entry" in names
@@ -798,6 +831,19 @@ def test_list_tags_tool_description_mentions_tag_descriptions():
     }
     description = str(tool_by_name["list_tags"]["description"])
     assert "tag descriptions" in description
+
+
+def test_list_proposals_tool_description_mentions_lifecycle_history():
+    from backend.services.agent.tools import build_openai_tool_schemas
+
+    tool_by_name = {
+        tool["function"]["name"]: tool["function"]
+        for tool in build_openai_tool_schemas()
+    }
+    description = str(tool_by_name["list_proposals"]["description"])
+    assert "current thread" in description
+    assert "proposal_id" in description
+    assert "pending, rejected, applied, or failed proposals" in description
 
 
 def test_entry_proposal_tool_descriptions_define_markdown_notes_style():
@@ -1053,7 +1099,7 @@ def test_final_message_strips_empty_pending_review_footer(client, monkeypatch):
             "role": "assistant",
             "content": (
                 "Here is your dashboard summary.\n\n"
-                "Tools used (high level): get_dashboard_summary (dashboard snapshot for 2026-02) "
+                "Tools used (high level): list_entries (checked matching entries) "
                 "Pending review item ids: []"
             ),
         },
@@ -3139,6 +3185,188 @@ def test_remove_pending_proposal_tool_removes_existing_item(client, monkeypatch)
     run_detail = client.get(f"/api/v1/agent/runs/{first_run['id']}")
     run_detail.raise_for_status()
     assert run_detail.json()["change_items"] == []
+
+
+def test_list_proposals_tool_filters_by_status_and_type_in_current_thread(client, monkeypatch):
+    def propose_entity_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Entity proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entity",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entity",
+                        "arguments": json.dumps({"name": "Rejected Merchant", "category": "merchant"}),
+                    },
+                }
+            ],
+        }
+
+    def propose_tag_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Tag proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_tag",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_tag",
+                        "arguments": json.dumps({"name": "Pending Tag", "type": "expense"}),
+                    },
+                }
+            ],
+        }
+
+    def list_rejected_entities_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_list_proposals",
+                    "type": "function",
+                    "function": {
+                        "name": "list_proposals",
+                        "arguments": json.dumps({"proposal_type": "entity", "proposal_status": "rejected"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_entity_model)
+    thread = create_thread(client)
+    rejected_run = send_message(client, thread["id"], "Create a merchant proposal")
+    rejected_item = rejected_run["change_items"][0]
+    reject_response = client.post(
+        f"/api/v1/agent/change-items/{rejected_item['id']}/reject",
+        json={"note": "Wrong merchant"},
+    )
+    reject_response.raise_for_status()
+
+    patch_model(monkeypatch, propose_tag_model)
+    pending_run = send_message(client, thread["id"], "Create a tag proposal")
+    assert pending_run["change_items"][0]["status"] == "PENDING_REVIEW"
+
+    patch_model(monkeypatch, propose_entity_model)
+    other_thread = create_thread(client)
+    other_run = send_message(client, other_thread["id"], "Create another merchant proposal")
+    other_item = other_run["change_items"][0]
+    other_reject = client.post(
+        f"/api/v1/agent/change-items/{other_item['id']}/reject",
+        json={"note": "Other thread"},
+    )
+    other_reject.raise_for_status()
+
+    patch_model(monkeypatch, list_rejected_entities_model)
+    list_run = send_message(client, thread["id"], "Show rejected entity proposals")
+
+    assert list_run["status"] == "completed"
+    assert list_run["change_items"] == []
+    output = list_run["tool_calls"][0]["output_json"]
+    assert output["status"] == "OK"
+    assert output["returned_count"] == 1
+    assert output["total_available"] == 1
+
+    proposal = output["proposals"][0]
+    assert proposal["proposal_id"] == rejected_item["id"]
+    assert proposal["proposal_type"] == "entity"
+    assert proposal["change_action"] == "create"
+    assert proposal["change_type"] == "create_entity"
+    assert proposal["status"] == "REJECTED"
+    assert proposal["payload"]["name"] == "Rejected Merchant"
+    assert proposal["review_note"] == "Wrong merchant"
+    assert proposal["review_actions"][0]["action"] == "reject"
+
+
+def test_list_proposals_tool_can_lookup_single_proposal_by_short_id(client, monkeypatch):
+    def propose_tag_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Tag proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_tag",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_tag",
+                        "arguments": json.dumps({"name": "Reviewed Tag", "type": "expense"}),
+                    },
+                }
+            ],
+        }
+
+    proposal_short_id: str | None = None
+    proposal_id: str | None = None
+
+    def list_single_proposal_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_list_proposal",
+                    "type": "function",
+                    "function": {
+                        "name": "list_proposals",
+                        "arguments": json.dumps({"proposal_id": proposal_short_id}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_tag_model)
+    thread = create_thread(client)
+    create_run = send_message(client, thread["id"], "Create a reviewed tag proposal")
+    created_item = create_run["change_items"][0]
+    proposal_id = created_item["id"]
+    proposal_short_id = proposal_id[:8]
+
+    approve_response = client.post(
+        f"/api/v1/agent/change-items/{proposal_id}/approve",
+        json={"note": "Looks good"},
+    )
+    approve_response.raise_for_status()
+
+    patch_model(monkeypatch, list_single_proposal_model)
+    list_run = send_message(client, thread["id"], "Show me that proposal")
+
+    assert list_run["status"] == "completed"
+    assert list_run["change_items"] == []
+    output = list_run["tool_calls"][0]["output_json"]
+    assert output["status"] == "OK"
+    assert output["returned_count"] == 1
+    assert output["total_available"] == 1
+
+    proposal = output["proposals"][0]
+    assert proposal["proposal_id"] == proposal_id
+    assert proposal["proposal_short_id"] == proposal_short_id
+    assert proposal["proposal_type"] == "tag"
+    assert proposal["change_action"] == "create"
+    assert proposal["change_type"] == "create_tag"
+    assert proposal["proposal_tool_name"] == "propose_create_tag"
+    assert proposal["status"] == "APPLIED"
+    assert proposal["payload"]["name"] == "reviewed tag"
+    assert proposal["rationale_text"] == "Agent proposed creating a tag."
+    assert proposal["review_note"] == "Looks good"
+    assert proposal["applied_resource_type"] == "tag"
+    assert proposal["applied_resource_id"]
+    assert len(proposal["review_actions"]) == 1
+    assert proposal["review_actions"][0]["action"] == "approve"
+    assert proposal["review_actions"][0]["note"] == "Looks good"
+    assert proposal["review_actions"][0]["actor"]
 
 
 def test_create_entry_uses_default_currency_when_omitted(client, monkeypatch):

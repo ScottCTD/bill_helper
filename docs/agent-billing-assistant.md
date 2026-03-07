@@ -4,29 +4,29 @@ This document describes the architecture, prompts, tools, and usage workflow of 
 
 ## Agent UX Quick Path
 
-1. Open the app and navigate to the **Home** route — this is the AI-native chat workspace.
+1. Open the app and navigate to the **Agent** route — this is the AI-native chat workspace.
 2. Use **Settings** to configure runtime defaults (currency, model, step limits) before running agent-heavy workflows if needed.
 3. Create or select a conversation thread.
 4. Send text and optional attachments (images or PDFs) via the composer.
 5. Review the timeline as the agent works:
-   - User/assistant messages render inline; assistant messages support markdown.
-   - In-flight tool-call progress and reasoning updates appear while the run is active.
-   - Run/tool context is shown alongside the assistant message.
-   - Removable attachment chips (image thumbnails + PDF file chips) appear above the composer before send.
-   - Paste (`Cmd/Ctrl+V`) and drag-drop ingestion for image/PDF attachments.
-   - Composer shortcut: `Cmd+Enter` (or `Ctrl+Enter`) sends the message.
-   - Cumulative thread usage bar above the composer: `Context`, `Total input`, `Output`, `Cache read`, `Cache hit rate`, `Total cost`.
-   - `Context` is the best-effort current prompt size for the selected thread; `Total input` remains the cumulative billed input usage across completed and in-flight runs.
-   - `Total cost` sums backend-derived run totals, so cache-aware prompt pricing is already reflected when providers report cache reads/writes; there are no separate cache-cost fields in the run API.
-   - Run-level proposal summary cards with pending counts.
+  - User/assistant messages render inline; assistant messages support markdown.
+  - In-flight tool-call progress and reasoning updates appear while the run is active.
+  - Run/tool context is shown alongside the assistant message.
+  - Removable attachment chips (image thumbnails + PDF file chips) appear above the composer before send.
+  - Paste (`Cmd/Ctrl+V`) and drag-drop ingestion for image/PDF attachments.
+  - Composer shortcut: `Cmd+Enter` (or `Ctrl+Enter`) sends the message.
+  - Cumulative thread usage bar above the composer: `Context`, `Total input`, `Output`, `Cache read`, `Cache hit rate`, `Total cost`.
+  - `Context` is the best-effort current prompt size for the selected thread; `Total input` remains the cumulative billed input usage across completed and in-flight runs.
+  - `Total cost` sums backend-derived run totals, so cache-aware prompt pricing is already reflected when providers report cache reads/writes; there are no separate cache-cost fields in the run API.
+  - Run-level proposal summary cards with pending counts.
 6. Open the thread review modal from the persistent header `Review` button and process proposals:
-   - Pending items appear first, with reviewed and failed items kept in a secondary audit section.
-   - Entry proposals support structured edit-before-approve with unified payload diff.
-   - Tag proposals edit only `name` and `type`; entity proposals edit only `name` and `category`.
-   - Review diff rows use friendly field labels/order and human-readable amount values.
-   - Use `Approve`, `Reject`, or `Skip` for focused step-through review.
-   - Use `Approve All` for deterministic sequential batch apply with saved reviewer edits reused automatically.
-   - Use `Reject All` to discard all remaining pending proposals.
+  - Pending items appear first, with reviewed and failed items kept in a secondary audit section.
+  - Entry proposals support structured edit-before-approve with unified payload diff.
+  - Tag proposals edit only `name` and `type`; entity proposals edit only `name` and `category`.
+  - Review diff rows use friendly field labels/order and human-readable amount values.
+  - Use `Approve`, `Reject`, or `Skip` for focused step-through review.
+  - Use `Approve All` for deterministic sequential batch apply with saved reviewer edits reused automatically.
+  - Use `Reject All` to discard all remaining pending proposals.
 
 ## Overview
 
@@ -40,27 +40,29 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 
 ## Core Components
 
-| Component | File | Responsibility |
-|-----------|------|----------------|
-| Runtime | `backend/services/agent/runtime.py` | Run lifecycle, bounded tool loop, persistence of tool calls and final assistant message |
-| Model client | `backend/services/agent/model_client.py` | LiteLLM adapter, tool wiring, retry-enabled model completion, explicit prompt-cache breakpoint injection (system + latest user anchors via negative index) for cache-capable models |
-| Prompts | `backend/services/agent/prompts.py` | Behavioral policy for duplicate checks (including duplicate enrichment via `propose_update_entry`), proposal ordering, explicit new entry/tag/entity specifications, canonical tag/entity normalization (including general tag examples and non-location/default anti-collision rules), error recovery, and current-user context section |
-| Message history | `backend/services/agent/message_history.py` | Converts thread + attachments to model messages; parses PDF attachments to text via PyMuPDF (line-trimmed and internal-whitespace-normalized); when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` from `markdown_body` with truncation safeguards); prepends review outcomes and interruption prefix before current user feedback in the latest user message |
-| Tools | `backend/services/agent/tool_args.py`, `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_propose.py`, `backend/services/agent/proposal_patching.py`, `backend/services/agent/tool_runtime.py`, `backend/services/agent/tools.py` | Split tool contract/runtime stack: argument schemas + normalization, read/progress handlers, proposal/mutation handlers, patch-map helpers, execution/retry registry, and thin facade |
-| Review/apply | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py` | Approval/rejection, apply handlers for proposed CRUD changes |
-| API router | `backend/routers/agent.py` | Threads/runs/send/review/attachment endpoints |
+
+| Component       | File                                                                                                                                                                                                                                                                 | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime         | `backend/services/agent/runtime.py`                                                                                                                                                                                                                                  | Run lifecycle, bounded tool loop, persistence of tool calls and final assistant message                                                                                                                                                                                                                                                                                                                                                                                       |
+| Model client    | `backend/services/agent/model_client.py`                                                                                                                                                                                                                             | LiteLLM adapter, tool wiring, retry-enabled model completion, explicit prompt-cache breakpoint injection (system + latest user anchors via negative index) for cache-capable models                                                                                                                                                                                                                                                                                           |
+| Prompts         | `backend/services/agent/prompts.py`                                                                                                                                                                                                                                  | Behavioral policy for duplicate checks (including duplicate enrichment via `propose_update_entry`), proposal ordering, explicit new entry/tag/entity specifications, canonical tag/entity normalization (including general tag examples and non-location/default anti-collision rules), error recovery, and current-user context section                                                                                                                                      |
+| Message history | `backend/services/agent/message_history.py`                                                                                                                                                                                                                          | Converts thread + attachments to model messages; parses PDF attachments to text via PyMuPDF (line-trimmed and internal-whitespace-normalized); when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` from `markdown_body` with truncation safeguards); prepends review outcomes and interruption prefix before current user feedback in the latest user message |
+| Tools           | `backend/services/agent/tool_args.py`, `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_propose.py`, `backend/services/agent/proposal_patching.py`, `backend/services/agent/tool_runtime.py`, `backend/services/agent/tools.py` | Split tool contract/runtime stack: argument schemas + normalization, read/progress handlers, proposal/mutation handlers, patch-map helpers, execution/retry registry, and thin facade                                                                                                                                                                                                                                                                                         |
+| Review/apply    | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py`                                                                                                                                                                                         | Approval/rejection, apply handlers for proposed CRUD changes                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| API router      | `backend/routers/agent.py`                                                                                                                                                                                                                                           | Threads/runs/send/review/attachment endpoints                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+
 
 ## Runtime Flow
 
 1. User sends message to `POST /api/v1/agent/threads/{thread_id}/messages` (non-streaming) or `POST /api/v1/agent/threads/{thread_id}/messages/stream` (SSE streaming).
 2. Backend persists user message/attachments and creates run (`running`).
 3. Runtime builds model messages:
-   - system prompt (including current-user account context; optional `## User Memory` when `user_memory` is set)
-   - current-user account context includes account markdown notes (`notes_markdown` from `markdown_body`) when present
-   - thread message history
-   - PDF attachments converted to normalized text via PyMuPDF (always)
-   - PDF page images appended to multimodal payloads when model vision is supported
-   - for the latest user turn only: review outcomes (if any) and interruption prefix (if the previous run was interrupted) prepended before that user feedback text
+  - system prompt (including current-user account context; optional `## User Memory` when `user_memory` is set)
+  - current-user account context includes account markdown notes (`notes_markdown` from `markdown_body`) when present
+  - thread message history
+  - PDF attachments converted to normalized text via PyMuPDF (always)
+  - PDF page images appended to multimodal payloads when model vision is supported
+  - for the latest user turn only: review outcomes (if any) and interruption prefix (if the previous run was interrupted) prepended before that user feedback text
 4. Runtime loops: model call → optional tool calls (including sparse `send_intermediate_update` progress notes) → tool results appended → repeat (bounded by `agent_max_steps`).
 5. Runtime persists final assistant message and marks run `completed` or `failed`.
 6. For streaming: SSE emits `text_delta` plus persisted `run_event` rows. `run_event` covers run start/finish, `reasoning_update`, and each tool lifecycle transition. `send_intermediate_update` is stored only as a reasoning event (not a fake tool row). On client disconnect mid-stream, the run continues in the background.
@@ -82,18 +84,20 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 
 ## Configuration
 
-| Setting | Env | Default | Notes |
-|---------|-----|---------|-------|
-| `agent_model` | `BILL_HELPER_AGENT_MODEL` | `openrouter/qwen/qwen3.5-27b` | Model name; runtime override supported via `/api/v1/settings` |
-| `agent_max_steps` | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool loop iterations |
-| `current_user_timezone` | `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` | `America/Toronto` | User-local date basis for the system-prompt current-date section |
-| `default_currency_code` | `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `CAD` | Fallback for entry proposals missing currency (`/settings` override first, env fallback second) |
-| `agent_retry_max_attempts` | `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS` | `3` | Model completion retry attempts |
-| `agent_retry_initial_wait_seconds` | `BILL_HELPER_AGENT_RETRY_INITIAL_WAIT_SECONDS` | `0.25` | Exponential backoff start |
-| `agent_retry_max_wait_seconds` | `BILL_HELPER_AGENT_RETRY_MAX_WAIT_SECONDS` | `4.0` | Exponential backoff cap |
-| `agent_retry_backoff_multiplier` | `BILL_HELPER_AGENT_RETRY_BACKOFF_MULTIPLIER` | `2.0` | Exponential growth factor |
-| `agent_max_images_per_message` | `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE` | `4` | Image/PDF attachment count limit |
-| `agent_max_image_size_bytes` | `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` | `5242880` | Per-attachment size limit for image/PDF uploads |
+
+| Setting                            | Env                                                           | Default                       | Notes                                                                                           |
+| ---------------------------------- | ------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------- |
+| `agent_model`                      | `BILL_HELPER_AGENT_MODEL`                                     | `openrouter/qwen/qwen3.5-27b` | Model name; runtime override supported via `/api/v1/settings`                                   |
+| `agent_max_steps`                  | `BILL_HELPER_AGENT_MAX_STEPS`                                 | `100`                         | Max tool loop iterations                                                                        |
+| `current_user_timezone`            | `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` | `America/Toronto`             | User-local date basis for the system-prompt current-date section                                |
+| `default_currency_code`            | `BILL_HELPER_DEFAULT_CURRENCY_CODE`                           | `CAD`                         | Fallback for entry proposals missing currency (`/settings` override first, env fallback second) |
+| `agent_retry_max_attempts`         | `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS`                        | `3`                           | Model completion retry attempts                                                                 |
+| `agent_retry_initial_wait_seconds` | `BILL_HELPER_AGENT_RETRY_INITIAL_WAIT_SECONDS`                | `0.25`                        | Exponential backoff start                                                                       |
+| `agent_retry_max_wait_seconds`     | `BILL_HELPER_AGENT_RETRY_MAX_WAIT_SECONDS`                    | `4.0`                         | Exponential backoff cap                                                                         |
+| `agent_retry_backoff_multiplier`   | `BILL_HELPER_AGENT_RETRY_BACKOFF_MULTIPLIER`                  | `2.0`                         | Exponential growth factor                                                                       |
+| `agent_max_images_per_message`     | `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE`                    | `4`                           | Image/PDF attachment count limit                                                                |
+| `agent_max_image_size_bytes`       | `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES`                      | `5242880`                     | Per-attachment size limit for image/PDF uploads                                                 |
+
 
 Retry behavior notes:
 
@@ -168,6 +172,10 @@ You are an expert in personal finance and accounting. You always call the right 
 - `delete_tag` is still allowed while referenced; apply removes the tag and its entry junction rows without deleting entries.
 
 ### Pending Proposal Lifecycle
+- Use `list_proposals` to inspect proposal history in the current thread before revising,
+  removing, or summarizing proposals.
+- When the user asks about a specific proposal, prefer `list_proposals` with `proposal_id`
+  so you can inspect the exact proposal payload and review history.
 - If the user asks to revise an existing pending proposal, prefer update_pending_proposal
   using proposal_id/proposal_short_id instead of creating a duplicate proposal.
 - If the user asks to discard/cancel/remove a pending proposal, use remove_pending_proposal
@@ -203,27 +211,29 @@ You are an expert in personal finance and accounting. You always call the right 
 
 Tool execution is composed from `backend/services/agent/tool_runtime.py` (registry + execution policy) with handlers in `backend/services/agent/tool_handlers_read.py` and `backend/services/agent/tool_handlers_propose.py`, shared entry reference helpers in `backend/services/agent/entry_references.py`, argument contracts in `backend/services/agent/tool_args.py`, and patch-map helpers in `backend/services/agent/proposal_patching.py`. `backend/services/agent/tools.py` is a thin facade that re-exports runtime interfaces. Each tool returns plain-text `content` to the model.
 
-Proposal tools (`propose_*`, `update_pending_proposal`, `remove_pending_proposal`) create `AgentChangeItem` rows with status `PENDING_REVIEW`. They do not mutate domain data; changes apply only after human approval via approve/reject endpoints.
+`list_proposals` is the read-only lifecycle inspection tool for proposals in the current thread. Proposal tools (`propose_`*, `update_pending_proposal`, `remove_pending_proposal`) create or mutate `AgentChangeItem` rows while they remain under review. They do not mutate domain data; changes apply only after human approval via approve/reject endpoints.
 
 ### Entries
 
 #### `list_entries` (read)
 
-**Description:** List/query entries by date, date range, name, from_entity, to_entity, tags, and kind. When name/from/to filters are present, exact matches are ranked higher than substring matches. Each returned entry includes an `entry_id` alias that can be reused with `propose_update_entry` and `propose_delete_entry`. This tool is read-only and never mutates data.
+**Description:** List/query entries by date, date range, name, from_entity, to_entity, tags, and kind. When name/from/to filters are present, exact matches are ranked higher than substring matches. Each returned entry includes an `entry_id` alias (the first 8 characters of the full entry id) that can be reused with `propose_update_entry` and `propose_delete_entry`. This tool is read-only and never mutates data.
 
 **Arguments:**
 
-| Parameter | Type | Required | Default | Constraints |
-|-----------|------|----------|---------|-------------|
-| `date` | string (date) \| null | no | null | ISO date, e.g. `"2026-03-02"` |
-| `start_date` | string (date) \| null | no | null | ISO date, e.g. `"2026-03-01"` |
-| `end_date` | string (date) \| null | no | null | ISO date, e.g. `"2026-03-31"`; must be ≥ start_date when both set |
-| `name` | string \| null | no | null | substring filter |
-| `from_entity` | string \| null | no | null | substring filter |
-| `to_entity` | string \| null | no | null | substring filter |
-| `tags` | array of string | no | [] | entries must have all tags |
-| `kind` | string \| null | no | null | `EXPENSE` or `INCOME` |
-| `limit` | integer | no | 50 | ≥1; no upper bound; be cautious with very large values |
+
+| Parameter     | Type                 | Required | Default | Constraints                                                       |
+| ------------- | -------------------- | -------- | ------- | ----------------------------------------------------------------- |
+| `date`        | string (date) | null | no       | null    | ISO date, e.g. `"2026-03-02"`                                     |
+| `start_date`  | string (date) | null | no       | null    | ISO date, e.g. `"2026-03-01"`                                     |
+| `end_date`    | string (date) | null | no       | null    | ISO date, e.g. `"2026-03-31"`; must be ≥ start_date when both set |
+| `name`        | string | null        | no       | null    | substring filter                                                  |
+| `from_entity` | string | null        | no       | null    | substring filter                                                  |
+| `to_entity`   | string | null        | no       | null    | substring filter                                                  |
+| `tags`        | array of string      | no       | []      | entries must have all tags                                        |
+| `kind`        | string | null        | no       | null    | `EXPENSE` or `INCOME`                                             |
+| `limit`       | integer              | no       | 10      | ≥1; no upper bound; be cautious with very large values            |
+
 
 **Expected output (text):**
 
@@ -233,25 +243,7 @@ summary: returned N of M matching entries
 entries: entry_id=abcd1234 YYYY-MM-DD name amount_minor CURRENCY from=from_entity to=to_entity tags=[...]; ...
 ```
 
-`N` = count returned (limited by `limit`); `M` = total matching. When N < M, more items exist; increase `limit` or narrow filters to see more.
-
----
-
-#### `get_dashboard_summary` (read)
-
-**Description:** Get a compact dashboard snapshot for the current month. Use this for high-level Q&A context. This tool is read-only.
-
-**Arguments:** None (empty object).
-
-**Expected output (text):**
-
-```
-OK
-summary: dashboard snapshot for YYYY-MM
-expenses_by_currency: {"USD": 12345, ...}
-incomes_by_currency: {"USD": 50000, ...}
-top_tags: tag:USD:1000; ...
-```
+`N` = count returned (limited by `limit`); `M` = total matching. When N < M, more items exist; increase `limit` or narrow filters to see more. The `entry_id` shown in `list_entries` output is a short alias, not the full stored id.
 
 ---
 
@@ -261,17 +253,19 @@ top_tags: tag:USD:1000; ...
 
 **Arguments:**
 
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `kind` | string | yes | `EXPENSE` or `INCOME` |
-| `date` | string (date) | yes | ISO date, e.g. `"2026-03-02"` |
-| `name` | string | yes | 1–255 chars |
-| `amount_minor` | integer | yes | > 0 |
-| `from_entity` | string | yes | 1–255 chars |
-| `to_entity` | string | yes | 1–255 chars |
-| `currency_code` | string \| null | no | null; 3 chars; falls back to `default_currency_code` |
-| `tags` | array of string | no | [] |
-| `markdown_notes` | string \| null | no | null |
+
+| Parameter        | Type            | Required | Constraints                                          |
+| ---------------- | --------------- | -------- | ---------------------------------------------------- |
+| `kind`           | string          | yes      | `EXPENSE` or `INCOME`                                |
+| `date`           | string (date)   | yes      | ISO date, e.g. `"2026-03-02"`                        |
+| `name`           | string          | yes      | 1–255 chars                                          |
+| `amount_minor`   | integer         | yes      | > 0                                                  |
+| `from_entity`    | string          | yes      | 1–255 chars                                          |
+| `to_entity`      | string          | yes      | 1–255 chars                                          |
+| `currency_code`  | string | null   | no       | null; 3 chars; falls back to `default_currency_code` |
+| `tags`           | array of string | no       | []                                                   |
+| `markdown_notes` | string | null   | no       | null                                                 |
+
 
 **Expected output:** `OK` with status and preview.
 
@@ -283,17 +277,24 @@ top_tags: tag:USD:1000; ...
 
 **Arguments:**
 
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `entry_id` | string \| null | no | Preferred entry reference; accepts short alias from `list_entries` or full entry id |
-| `selector` | object \| null | no | Fallback reference; exactly one match required (`{"..."}` JSON-object string is also normalized) |
-| `patch` | object | yes | At least one field (`{"..."}` JSON-object string is also normalized) |
+
+| Parameter  | Type          | Required | Constraints                                                                                      |
+| ---------- | ------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `entry_id` | string | null | no       | Preferred entry reference; accepts short alias from `list_entries` or full entry id              |
+| `selector` | object | null | no       | Fallback reference; exactly one match required (`{"..."}` JSON-object string is also normalized) |
+| `patch`    | object        | yes      | At least one field (`{"..."}` JSON-object string is also normalized)                             |
+
 
 **Selector fields:** `date` (string, ISO date e.g. `"2026-03-02"`), `amount_minor` (integer, > 0), `from_entity` (string), `to_entity` (string), `name` (string).
 
 **Patch fields:** `kind`, `date` (ISO date e.g. `"2026-03-02"`), `name`, `amount_minor`, `currency_code`, `from_entity`, `to_entity`, `tags`, `markdown_notes` (all optional).
 
 **Expected output:** `OK` with status and preview. Returns `ERROR` if no match or if `entry_id`/selector is ambiguous.
+
+**Ambiguity details:**
+
+- If an `entry_id` alias/prefix matches multiple entries, `details` includes the original `entry_id`, `candidate_count`, `candidate_entry_ids` with full entry ids, and `candidates` where each candidate record also uses the full-form `entry_id`.
+- If a `selector` matches multiple entries, `details` includes `candidate_count` and `candidates` in the normal public record shape, which means candidate `entry_id` values remain the short public aliases.
 
 ---
 
@@ -303,14 +304,21 @@ top_tags: tag:USD:1000; ...
 
 **Arguments:**
 
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `entry_id` | string \| null | no | Preferred entry reference; accepts short alias from `list_entries` or full entry id |
-| `selector` | object \| null | no | Fallback reference; exactly one match required |
+
+| Parameter  | Type          | Required | Constraints                                                                         |
+| ---------- | ------------- | -------- | ----------------------------------------------------------------------------------- |
+| `entry_id` | string | null | no       | Preferred entry reference; accepts short alias from `list_entries` or full entry id |
+| `selector` | object | null | no       | Fallback reference; exactly one match required                                      |
+
 
 **Selector fields:** `date` (string, ISO date e.g. `"2026-03-02"`), `amount_minor` (integer, > 0), `from_entity` (string), `to_entity` (string), `name` (string).
 
 **Expected output:** `OK` with status and preview. Returns `ERROR` if no match or if `entry_id`/selector is ambiguous.
+
+**Ambiguity details:**
+
+- If an `entry_id` alias/prefix matches multiple entries, `details` includes the original `entry_id`, `candidate_count`, `candidate_entry_ids` with full entry ids, and `candidates` where each candidate record also uses the full-form `entry_id`.
+- If a `selector` matches multiple entries, `details` includes `candidate_count` and `candidates` in the normal public record shape, which means candidate `entry_id` values remain the short public aliases.
 
 ---
 
@@ -322,11 +330,13 @@ top_tags: tag:USD:1000; ...
 
 **Arguments:**
 
-| Parameter | Type | Required | Default | Constraints |
-|-----------|------|----------|---------|-------------|
-| `name` | string \| null | no | null | substring filter |
-| `type` | string \| null | no | null | substring filter |
-| `limit` | integer | no | 50 | ≥1; no upper bound; be cautious with very large values |
+
+| Parameter | Type          | Required | Default | Constraints                                            |
+| --------- | ------------- | -------- | ------- | ------------------------------------------------------ |
+| `name`    | string | null | no       | null    | substring filter                                       |
+| `type`    | string | null | no       | null    | substring filter                                       |
+| `limit`   | integer       | no       | 10      | ≥1; no upper bound; be cautious with very large values |
+
 
 **Expected output (text):**
 
@@ -346,10 +356,12 @@ tags: name (type or untyped), ...
 
 **Arguments:**
 
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `name` | string | yes | 1–64 chars, normalized |
-| `type` | string | yes | 1–100 chars, normalized |
+
+| Parameter | Type   | Required | Constraints             |
+| --------- | ------ | -------- | ----------------------- |
+| `name`    | string | yes      | 1–64 chars, normalized  |
+| `type`    | string | yes      | 1–100 chars, normalized |
+
 
 **Expected output:** `OK` with status and preview. Returns `ERROR` if tag already exists.
 
@@ -361,12 +373,14 @@ tags: name (type or untyped), ...
 
 **Arguments:**
 
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `name` | string | yes | 1–64 chars, existing tag name |
-| `patch` | object | yes | At least one of `name`, `type` |
 
-**Patch fields:** `name` (string \| null), `type` (string \| null).
+| Parameter | Type   | Required | Constraints                    |
+| --------- | ------ | -------- | ------------------------------ |
+| `name`    | string | yes      | 1–64 chars, existing tag name  |
+| `patch`   | object | yes      | At least one of `name`, `type` |
+
+
+**Patch fields:** `name` (string  null), `type` (string  null).
 
 **Expected output:** `OK` with status and preview. Returns `ERROR` if tag not found or target name already exists.
 
@@ -378,9 +392,11 @@ tags: name (type or untyped), ...
 
 **Arguments:**
 
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `name` | string | yes | 1–64 chars, existing tag name |
+
+| Parameter | Type   | Required | Constraints                   |
+| --------- | ------ | -------- | ----------------------------- |
+| `name`    | string | yes      | 1–64 chars, existing tag name |
+
 
 **Expected output:** `OK` with status and preview, including referenced-entry counts when applicable. Returns `ERROR` only if tag not found.
 
@@ -394,11 +410,13 @@ tags: name (type or untyped), ...
 
 **Arguments:**
 
-| Parameter | Type | Required | Default | Constraints |
-|-----------|------|----------|---------|-------------|
-| `name` | string \| null | no | null | substring filter |
-| `category` | string \| null | no | null | substring filter |
-| `limit` | integer | no | 200 | ≥1; no upper bound; be cautious with very large values |
+
+| Parameter  | Type          | Required | Default | Constraints                                            |
+| ---------- | ------------- | -------- | ------- | ------------------------------------------------------ |
+| `name`     | string | null | no       | null    | substring filter                                       |
+| `category` | string | null | no       | null    | substring filter                                       |
+| `limit`    | integer       | no       | 10      | ≥1; no upper bound; be cautious with very large values |
+
 
 **Expected output (text):**
 
@@ -418,10 +436,12 @@ entities: name (category or uncategorized); ...
 
 **Arguments:**
 
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `name` | string | yes | 1–255 chars, normalized |
-| `category` | string | yes | 1–100 chars, normalized |
+
+| Parameter  | Type   | Required | Constraints             |
+| ---------- | ------ | -------- | ----------------------- |
+| `name`     | string | yes      | 1–255 chars, normalized |
+| `category` | string | yes      | 1–100 chars, normalized |
+
 
 **Expected output:** `OK` with status and preview. Returns `ERROR` if entity already exists.
 
@@ -433,12 +453,14 @@ entities: name (category or uncategorized); ...
 
 **Arguments:**
 
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `name` | string | yes | 1–255 chars, existing entity name |
-| `patch` | object | yes | At least one of `name`, `category` |
 
-**Patch fields:** `name` (string \| null), `category` (string \| null).
+| Parameter | Type   | Required | Constraints                        |
+| --------- | ------ | -------- | ---------------------------------- |
+| `name`    | string | yes      | 1–255 chars, existing entity name  |
+| `patch`   | object | yes      | At least one of `name`, `category` |
+
+
+**Patch fields:** `name` (string  null), `category` (string  null).
 
 **Expected output:** `OK` with status and preview. Returns `ERROR` if entity not found or target name already exists.
 
@@ -450,9 +472,11 @@ entities: name (category or uncategorized); ...
 
 **Arguments:**
 
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `name` | string | yes | 1–255 chars, existing entity name |
+
+| Parameter | Type   | Required | Constraints                       |
+| --------- | ------ | -------- | --------------------------------- |
+| `name`    | string | yes      | 1–255 chars, existing entity name |
+
 
 **Expected output:** `OK` with status and preview for non-account entities. Returns `ERROR` if entity not found or if the target is account-backed.
 
@@ -460,15 +484,47 @@ entities: name (category or uncategorized); ...
 
 ### Progress & Proposal Lifecycle
 
+#### `list_proposals` (read)
+
+**Description:** List proposals in the current thread by proposal type, CRUD action, lifecycle status, or optional `proposal_id`. Use this to inspect pending, rejected, applied, or failed proposals before revising, removing, or explaining proposal history. This tool is read-only.
+
+**Arguments:**
+
+
+| Parameter         | Type          | Required | Default | Constraints                                                                                             |
+| ----------------- | ------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------- |
+| `proposal_type`   | string | null | no       | null    | `entry`, `tag`, or `entity`                                                                             |
+| `proposal_status` | string | null | no       | null    | case-insensitive; supports `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `APPLIED`, `APPLY_FAILED`; `pending` also maps to `PENDING_REVIEW`, `failed` to `APPLY_FAILED` |
+| `change_action`   | string | null | no       | null    | `create`, `update`, or `delete`                                                                         |
+| `proposal_id`     | string | null | no       | null    | full proposal id or unique short-id prefix                                                              |
+| `limit`           | integer       | no       | 10      | ≥1; no upper bound; be cautious with very large values                                                  |
+
+
+**Expected output (text):**
+
+```
+OK
+summary: returned N of M matching proposals
+proposals: proposal_short_id=abcd1234 proposal_id=<uuid> status=REJECTED change_type=create_entity summary=create entity name=... review_actions=[...]; ...
+```
+
+Each returned proposal record includes `proposal_id`, `proposal_short_id`, `proposal_type`, `change_action`, `change_type`, `proposal_tool_name`, `status`, `proposal_summary`, `rationale_text`, `payload`, `review_note`, `applied_resource_type`, `applied_resource_id`, timestamps, `run_id`, and `review_actions`.
+
+If `proposal_id` is ambiguous as a short-id prefix, the tool returns `ERROR` with candidate full proposal ids and compact candidate summaries.
+
+---
+
 #### `send_intermediate_update`
 
 **Description:** Emit a brief user-visible progress note. If a task needs tool calls, call this first to describe the initial plan before other tools. Then use sparingly between distinct tool-call batches; do not call on every tool step.
 
 **Arguments:**
 
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `message` | string | yes | 1–400 chars, normalized |
+
+| Parameter | Type   | Required | Constraints             |
+| --------- | ------ | -------- | ----------------------- |
+| `message` | string | yes      | 1–400 chars, normalized |
+
 
 **Expected output (text):**
 
@@ -486,10 +542,12 @@ message: <update text>
 
 **Arguments:**
 
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `proposal_id` | string | yes | full id or unique short-id prefix of a pending proposal |
-| `patch_map` | object | yes | map of field-path -> new value |
+
+| Parameter     | Type   | Required | Constraints                                             |
+| ------------- | ------ | -------- | ------------------------------------------------------- |
+| `proposal_id` | string | yes      | full id or unique short-id prefix of a pending proposal |
+| `patch_map`   | object | yes      | map of field-path -> new value                          |
+
 
 **Expected output:** `OK` with updated proposal preview, `proposal_id`, and `proposal_short_id`. Returns `ERROR` for missing/ambiguous/non-pending proposals or invalid patch paths.
 
@@ -501,9 +559,11 @@ message: <update text>
 
 **Arguments:**
 
-| Parameter | Type | Required | Constraints |
-|-----------|------|----------|-------------|
-| `proposal_id` | string | yes | full id or unique short-id prefix of a pending proposal |
+
+| Parameter     | Type   | Required | Constraints                                             |
+| ------------- | ------ | -------- | ------------------------------------------------------- |
+| `proposal_id` | string | yes      | full id or unique short-id prefix of a pending proposal |
+
 
 **Expected output:** `OK` with removed proposal metadata (`proposal_id`, `proposal_short_id`, `change_type`) and a payload preview. Returns `ERROR` for missing/ambiguous/non-pending proposals.
 
@@ -516,13 +576,16 @@ Each tool emits model-visible text plus structured `output_json`:
 - Success: `status: "OK"`, `summary`, optional `preview`, `item_status`
 - Failure: `status: "ERROR"`, `summary`, optional `details`
 - Proposal tools additionally return `proposal_id` and `proposal_short_id`.
+- `list_proposals` returns `proposals` records with lifecycle status, payload, rationale, and review history for each matching proposal.
+
+For entry ambiguity failures, `details` vary by reference type: ambiguous `entry_id` lookups include full candidate ids, while ambiguous selector lookups include candidates in the normal public record form.
 
 Runtime persists non-intermediate tool calls in `agent_tool_calls` as soon as the model turn resolves, starting in `queued` state before execution begins, and feeds tool output text back to the model for next-step decisions.
 When `send_intermediate_update` is called, runtime persists an `agent_run_events.reasoning_update` row and streams it as `run_event`; it no longer creates an `agent_tool_calls` row.
 If the model emits assistant text in the same turn as tool calls, runtime persists that text as a `reasoning_update` run event with `source="assistant_content"` instead of a synthetic tool trace.
 For continuation after review, `message_history.py` prepends a compact review-results block to the latest user message, then includes user feedback text below it (not as dynamic system prompt text).
 Pending proposals from older runs do not block new proposal tools; the model can continue proposing while unresolved items remain pending.
-Pending proposals can be revised or removed by id in later turns without forcing immediate human review.
+Pending proposals can be inspected, revised, or removed by id in later turns without forcing immediate human review.
 
 ## Review Loop and Continuation
 
@@ -563,18 +626,19 @@ In `change_apply.py`:
 
 ## Affected Files
 
-| File | Purpose |
-|------|---------|
-| `backend/services/agent/tool_args.py` | Tool argument schemas and normalization helpers |
-| `backend/services/agent/tool_handlers_read.py` | Read/progress tool handlers |
-| `backend/services/agent/tool_handlers_propose.py` | Proposal/update/remove handlers |
-| `backend/services/agent/proposal_patching.py` | Pending proposal patch-map application helpers |
-| `backend/services/agent/tool_runtime.py` | Tool registry and execution/retry policy |
-| `backend/services/agent/tools.py` | Thin tool facade/re-export layer |
-| `backend/services/agent/runtime.py` | Run orchestration, tool loop |
-| `backend/services/agent/model_client.py` | LiteLLM client with retry |
-| `backend/services/agent/prompts.py` | System prompt |
-| `backend/services/agent/message_history.py` | LLM message construction and review-result user-message augmentation |
-| `backend/services/agent/review.py` | Approve/reject logic |
-| `backend/services/agent/change_apply.py` | Apply handlers for approved changes |
-| `backend/routers/agent.py` | Agent HTTP endpoints |
+
+| File                                              | Purpose                                                              |
+| ------------------------------------------------- | -------------------------------------------------------------------- |
+| `backend/services/agent/tool_args.py`             | Tool argument schemas and normalization helpers                      |
+| `backend/services/agent/tool_handlers_read.py`    | Read/progress tool handlers                                          |
+| `backend/services/agent/tool_handlers_propose.py` | Proposal/update/remove handlers                                      |
+| `backend/services/agent/proposal_patching.py`     | Pending proposal patch-map application helpers                       |
+| `backend/services/agent/tool_runtime.py`          | Tool registry and execution/retry policy                             |
+| `backend/services/agent/tools.py`                 | Thin tool facade/re-export layer                                     |
+| `backend/services/agent/runtime.py`               | Run orchestration, tool loop                                         |
+| `backend/services/agent/model_client.py`          | LiteLLM client with retry                                            |
+| `backend/services/agent/prompts.py`               | System prompt                                                        |
+| `backend/services/agent/message_history.py`       | LLM message construction and review-result user-message augmentation |
+| `backend/services/agent/review.py`                | Approve/reject logic                                                 |
+| `backend/services/agent/change_apply.py`          | Apply handlers for approved changes                                  |
+| `backend/routers/agent.py`                        | Agent HTTP endpoints                                                 |

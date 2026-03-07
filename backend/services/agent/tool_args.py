@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import date as DateValue
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from backend.enums_agent import AgentChangeStatus
 from backend.services.agent.change_contracts import (
     CreateEntityPayload as ProposeCreateEntityArgs,
     CreateEntryPayload as ProposeCreateEntryArgs,
@@ -80,7 +82,7 @@ class ListEntriesArgs(BaseModel):
     tags: list[str] = Field(default_factory=list)
     kind: str | None = Field(default=None, pattern="^(EXPENSE|INCOME|TRANSFER)$")
     limit: int = Field(
-        default=50,
+        default=10,
         ge=1,
         description="Max entries to return. No upper bound; be cautious with very large values.",
     )
@@ -106,7 +108,7 @@ class ListTagsArgs(BaseModel):
     name: str | None = None
     type: str | None = None
     limit: int = Field(
-        default=50,
+        default=10,
         ge=1,
         description="Max tags to return. No upper bound; be cautious with very large values.",
     )
@@ -127,7 +129,7 @@ class ListEntitiesArgs(BaseModel):
     name: str | None = None
     category: str | None = None
     limit: int = Field(
-        default=200,
+        default=10,
         ge=1,
         description="Max entities to return. No upper bound; be cautious with very large values.",
     )
@@ -142,6 +144,73 @@ class ListEntitiesArgs(BaseModel):
     @classmethod
     def normalize_category(cls, value: str | None) -> str | None:
         return normalize_optional_category(value)
+
+
+ProposalType = Literal["entry", "tag", "entity"]
+ProposalAction = Literal["create", "update", "delete"]
+
+
+class ListProposalsArgs(BaseModel):
+    proposal_type: ProposalType | None = Field(
+        default=None,
+        description="Filter by proposal domain: entry, tag, or entity.",
+    )
+    proposal_status: AgentChangeStatus | None = Field(
+        default=None,
+        description=(
+            "Filter by lifecycle status. Supported values: PENDING_REVIEW, APPROVED, "
+            "REJECTED, APPLIED, APPLY_FAILED."
+        ),
+    )
+    change_action: ProposalAction | None = Field(
+        default=None,
+        description="Filter by CRUD action: create, update, or delete.",
+    )
+    proposal_id: str | None = Field(
+        default=None,
+        min_length=4,
+        max_length=36,
+        description="Optional full proposal id or unique short-id prefix to inspect one proposal.",
+    )
+    limit: int = Field(
+        default=10,
+        ge=1,
+        description="Max proposals to return. No upper bound; be cautious with very large values.",
+    )
+
+    @field_validator("proposal_type", mode="before")
+    @classmethod
+    def normalize_proposal_type(cls, value: object) -> object:
+        if value is None:
+            return None
+        return normalize_required_text(str(value)).lower()
+
+    @field_validator("proposal_status", mode="before")
+    @classmethod
+    def normalize_proposal_status(cls, value: object) -> object:
+        if value is None or isinstance(value, AgentChangeStatus):
+            return value
+        normalized = normalize_required_text(str(value)).upper().replace("-", "_").replace(" ", "_")
+        aliases = {
+            "PENDING": AgentChangeStatus.PENDING_REVIEW.value,
+            "FAILED": AgentChangeStatus.APPLY_FAILED.value,
+        }
+        return aliases.get(normalized, normalized)
+
+    @field_validator("change_action", mode="before")
+    @classmethod
+    def normalize_change_action(cls, value: object) -> object:
+        if value is None:
+            return None
+        return normalize_required_text(str(value)).lower()
+
+    @field_validator("proposal_id")
+    @classmethod
+    def normalize_proposal_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = normalize_required_text(value)
+        return normalized.lower()
 
 
 class UpdatePendingProposalArgs(BaseModel):
