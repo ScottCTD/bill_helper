@@ -1,4 +1,4 @@
-import { Fragment, type Ref } from "react";
+import { Fragment, memo, type Ref } from "react";
 import { ArrowDown, FileText } from "lucide-react";
 
 import { withApiBase } from "../../../lib/api";
@@ -9,7 +9,7 @@ import { MarkdownRenderer } from "../../../components/ui/MarkdownRenderer";
 import { prettyDateTime } from "./format";
 import type { PendingAssistantMessage, PendingUserMessage } from "./types";
 
-interface AgentTimelineProps {
+export interface AgentTimelineProps {
   selectedThreadId: string;
   isLoading: boolean;
   errorMessage: string | null;
@@ -35,7 +35,7 @@ interface AgentTimelineProps {
   scrollToBottom: () => void;
 }
 
-export function AgentTimeline(props: AgentTimelineProps) {
+function AgentTimelineComponent(props: AgentTimelineProps) {
   const {
     selectedThreadId,
     isLoading,
@@ -311,3 +311,7 @@ export function AgentTimeline(props: AgentTimelineProps) {
     </>
   );
 }
+
+export const AgentTimeline = memo(AgentTimelineComponent);
+
+AgentTimeline.displayName = "AgentTimeline";

@@ -1,12 +1,23 @@
-import { createRef } from "react";
+import { createRef, useRef, useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentMessage } from "../../../lib/types";
 import { buildRun, buildRunEvent, buildToolCall } from "../../../test/factories/agent";
-import { AgentTimeline } from "./AgentTimeline";
+import { AgentTimeline, type AgentTimelineProps } from "./AgentTimeline";
 import type { PendingAssistantMessage } from "./types";
+
+const { markdownRenderSpy } = vi.hoisted(() => ({
+  markdownRenderSpy: vi.fn()
+}));
+
+vi.mock("../../../components/ui/MarkdownRenderer", () => ({
+  MarkdownRenderer: ({ markdown }: { markdown: string }) => {
+    markdownRenderSpy(markdown);
+    return <div>{markdown}</div>;
+  }
+}));
 
 function buildMessage(overrides: Partial<AgentMessage> = {}): AgentMessage {
   return {
@@ -34,7 +45,7 @@ function buildPendingAssistantMessage(
 }
 
 function renderTimeline(
-  overrides: Partial<Parameters<typeof AgentTimeline>[0]> = {}
+  overrides: Partial<AgentTimelineProps> = {}
 ) {
   const props = {
     selectedThreadId: "thread-1",
@@ -67,6 +78,68 @@ function renderTimeline(
 }
 
 describe("AgentTimeline", () => {
+  beforeEach(() => {
+    markdownRenderSpy.mockClear();
+  });
+
+  it("does not rerender stable historical markdown for unrelated draft typing", async () => {
+    const user = userEvent.setup();
+    const assistantMessage = buildMessage({
+      id: "message-assistant-1",
+      role: "assistant",
+      content_markdown: "Historical **markdown** reply"
+    });
+    const stableProps: AgentTimelineProps = {
+      selectedThreadId: "thread-1",
+      isLoading: false,
+      errorMessage: null,
+      messages: [assistantMessage],
+      timelineScrollRef: createRef<HTMLDivElement>(),
+      runsByAssistantMessageId: new Map(),
+      pendingAssistantRuns: [],
+      pendingAssistantRunsByUserMessageId: new Map(),
+      pendingUserMessage: null,
+      pendingAssistantMessage: null,
+      shouldShowOptimisticAssistantBubble: false,
+      pendingRunAttachedToOptimisticMessage: null,
+      isMutating: false,
+      activeStreamReasoningText: "",
+      activeStreamText: "",
+      optimisticRunEventsByRunId: {},
+      optimisticToolCallsByRunId: {},
+      activeOptimisticEvents: [],
+      activeOptimisticToolCalls: [],
+      onHydrateToolCall: () => undefined,
+      hydratingToolCallIds: new Set<string>(),
+      isAtBottom: true,
+      scrollToBottom: () => undefined
+    };
+
+    function Harness() {
+      const [draft, setDraft] = useState("");
+      const timelinePropsRef = useRef(stableProps);
+
+      return (
+        <>
+          <label>
+            Draft
+            <input value={draft} onChange={(event) => setDraft(event.target.value)} />
+          </label>
+          <AgentTimeline {...timelinePropsRef.current} />
+        </>
+      );
+    }
+
+    render(<Harness />);
+
+    expect(markdownRenderSpy).toHaveBeenCalledTimes(1);
+
+    await user.type(screen.getByLabelText("Draft"), "hello world");
+
+    expect(markdownRenderSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Historical **markdown** reply")).toBeInTheDocument();
+  });
+
   it("shows the optimistic assistant caret before the first stream event arrives", () => {
     const { container } = renderTimeline({
       pendingAssistantMessage: buildPendingAssistantMessage(),
