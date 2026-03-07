@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { AlertTriangle, Check, CheckCheck, PanelLeft, PanelLeftClose, type LucideIcon, X } from "lucide-react";
 
 import { CreatableSingleSelect } from "../../../components/CreatableSingleSelect";
 import { TagMultiSelect } from "../../../components/TagMultiSelect";
@@ -12,7 +13,7 @@ import { NativeSelect } from "../../../components/ui/native-select";
 import { Textarea } from "../../../components/ui/textarea";
 import { listCurrencies, listEntities, listTags, getRuntimeSettings } from "../../../lib/api";
 import { queryKeys } from "../../../lib/queryKeys";
-import type { AgentChangeItem, AgentChangeStatus, AgentRun, Currency, Entity, Tag } from "../../../lib/types";
+import type { AgentChangeItem, AgentChangeStatus, AgentChangeType, AgentRun, Currency, Entity, Tag } from "../../../lib/types";
 import { cn } from "../../../lib/utils";
 import {
   buildEntityOverrideState,
@@ -44,6 +45,20 @@ interface BatchSummary {
   succeeded: number;
   failed: number;
   failedItemIds: string[];
+}
+
+type TocProposalGroupKey = "entry" | "entity" | "tag";
+
+interface TocProposalGroup {
+  key: TocProposalGroupKey;
+  label: string;
+  items: ThreadReviewItem[];
+}
+
+interface TocStatusIndicator {
+  className: string;
+  icon: LucideIcon;
+  label: string;
 }
 
 const KIND_OPTIONS = [
@@ -80,6 +95,48 @@ function reviewModeClass(changeType: ThreadReviewItem["item"]["change_type"]): s
     return "is-delete";
   }
   return "is-snapshot";
+}
+
+function proposalGroupKey(changeType: AgentChangeType): TocProposalGroupKey {
+  if (changeType.endsWith("_entry")) {
+    return "entry";
+  }
+  if (changeType.endsWith("_entity")) {
+    return "entity";
+  }
+  return "tag";
+}
+
+function groupReviewItems(items: ThreadReviewItem[]): TocProposalGroup[] {
+  const grouped: Record<TocProposalGroupKey, ThreadReviewItem[]> = {
+    entry: [],
+    entity: [],
+    tag: []
+  };
+  for (const reviewItem of items) {
+    grouped[proposalGroupKey(reviewItem.item.change_type)].push(reviewItem);
+  }
+  const groups: TocProposalGroup[] = [
+    { key: "entry", label: "Entries", items: grouped.entry },
+    { key: "entity", label: "Entities", items: grouped.entity },
+    { key: "tag", label: "Tags", items: grouped.tag }
+  ];
+  return groups.filter((group) => group.items.length > 0);
+}
+
+function tocStatusIndicator(status: AgentChangeStatus): TocStatusIndicator | null {
+  switch (status) {
+    case "APPROVED":
+      return { className: "is-approved", icon: Check, label: "Approved" };
+    case "APPLIED":
+      return { className: "is-applied", icon: CheckCheck, label: "Applied" };
+    case "REJECTED":
+      return { className: "is-rejected", icon: X, label: "Rejected" };
+    case "APPLY_FAILED":
+      return { className: "is-failed", icon: AlertTriangle, label: "Apply failed" };
+    default:
+      return null;
+  }
 }
 
 function prettyDateTime(value: string): string {
@@ -169,40 +226,57 @@ function ReviewTocSection({
     return null;
   }
 
+  const groups = groupReviewItems(items);
+
   return (
     <section className="agent-review-toc-section" aria-label={title}>
       <div className="agent-review-toc-section-header">
         <h3>{title}</h3>
         <span>{items.length}</span>
       </div>
-      <div className="agent-review-toc-list">
-        {items.map((reviewItem) => {
-          const isActive = reviewItem.item.id === activeItemId;
-          return (
-            <button
-              key={reviewItem.item.id}
-              type="button"
-              className={cn(
-                "agent-review-toc-item",
-                reviewModeClass(reviewItem.item.change_type),
-                isActive && "is-active",
-                !isPendingReviewStatus(reviewItem.item.status) && "is-resolved"
-              )}
-              onClick={() => onSelect(reviewItem.item.id)}
-            >
-              <div className="agent-review-toc-item-copy">
-                <span className="agent-review-toc-item-title">{buildReviewItemSummary(reviewItem.item)}</span>
-                <span className="agent-review-toc-item-meta">
-                  Run {reviewItem.runIndex} · {shortId(reviewItem.item.id)}
-                </span>
-              </div>
-              <Badge variant="outline" className={cn("agent-review-status-badge", statusBadgeClass(reviewItem.item.status))}>
-                {reviewItem.item.status}
-              </Badge>
-            </button>
-          );
-        })}
-      </div>
+      {groups.map((group) => (
+        <div key={group.key} className="agent-review-toc-group">
+          <div className="agent-review-toc-group-header">
+            <h4>{group.label}</h4>
+            <span>{group.items.length}</span>
+          </div>
+          <div className="agent-review-toc-list">
+            {group.items.map((reviewItem) => {
+              const isActive = reviewItem.item.id === activeItemId;
+              const statusIndicator = tocStatusIndicator(reviewItem.item.status);
+              return (
+                <button
+                  key={reviewItem.item.id}
+                  type="button"
+                  className={cn(
+                    "agent-review-toc-item",
+                    reviewModeClass(reviewItem.item.change_type),
+                    isActive && "is-active",
+                    !isPendingReviewStatus(reviewItem.item.status) && "is-resolved"
+                  )}
+                  onClick={() => onSelect(reviewItem.item.id)}
+                >
+                  <div className="agent-review-toc-item-copy">
+                    <span className="agent-review-toc-item-title">{buildReviewItemSummary(reviewItem.item)}</span>
+                    <span className="agent-review-toc-item-meta">
+                      Run {reviewItem.runIndex} · {shortId(reviewItem.item.id)}
+                    </span>
+                  </div>
+                  {statusIndicator ? (
+                    <span
+                      className={cn("agent-review-toc-status-indicator", statusIndicator.className)}
+                      aria-label={statusIndicator.label}
+                      title={statusIndicator.label}
+                    >
+                      <statusIndicator.icon className="h-3.5 w-3.5" aria-hidden />
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </section>
   );
 }
@@ -412,6 +486,7 @@ export function AgentThreadReviewModal({
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [batchSummary, setBatchSummary] = useState<BatchSummary | null>(null);
   const [isBatchRunning, setIsBatchRunning] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const runtimeSettingsQuery = useQuery({
     queryKey: queryKeys.settings.runtime,
@@ -447,6 +522,7 @@ export function AgentThreadReviewModal({
       setActionNotice(null);
       setBatchSummary(null);
       setIsBatchRunning(false);
+      setIsSidebarCollapsed(false);
       return;
     }
 
@@ -694,7 +770,7 @@ export function AgentThreadReviewModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="agent-review-modal-content">
+      <DialogContent className="agent-review-modal-content h-[96vh] w-[96vw] max-w-none overflow-hidden bg-card p-0 sm:w-[94vw] md:w-[92vw] lg:h-[94vh] lg:w-[88vw] xl:w-[78rem]">
         <div className="agent-review-modal-layout">
           <DialogHeader className="agent-review-modal-header">
             <div className="agent-review-header-copy">
@@ -713,42 +789,96 @@ export function AgentThreadReviewModal({
             </div>
           </DialogHeader>
 
-          <div className="agent-review-shell">
-            <aside className="agent-review-sidebar">
-              <div className="agent-review-sidebar-top">
-                <div className="agent-review-sidebar-summary">
-                  <p>Review proposals across the whole thread. Pending items stay first; resolved items remain available for audit.</p>
-                </div>
-                <div className="agent-review-sidebar-actions">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => {
-                      void handleBatchAction("approve");
-                    }}
-                    disabled={pendingCount === 0 || isBatchRunning || isBusy}
-                  >
-                    {isBatchRunning ? "Working..." : "Approve All"}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      void handleBatchAction("reject");
-                    }}
-                    disabled={pendingCount === 0 || isBatchRunning || isBusy}
-                  >
-                    {isBatchRunning ? "Working..." : "Reject All"}
-                  </Button>
-                </div>
+          <div className={cn("agent-review-shell", isSidebarCollapsed && "is-sidebar-collapsed")}>
+            <div className="agent-review-controls-bar">
+              <div className="agent-review-controls-group">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="agent-review-sidebar-toggle"
+                  onClick={() => setIsSidebarCollapsed((current) => !current)}
+                  aria-controls="agent-review-sidebar"
+                  aria-expanded={!isSidebarCollapsed}
+                >
+                  {isSidebarCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                  {isSidebarCollapsed ? "Show list" : "Hide list"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    void handleBatchAction("approve");
+                  }}
+                  disabled={pendingCount === 0 || isBatchRunning || isBusy}
+                >
+                  {isBatchRunning ? "Working..." : "Approve All"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    void handleBatchAction("reject");
+                  }}
+                  disabled={pendingCount === 0 || isBatchRunning || isBusy}
+                >
+                  {isBatchRunning ? "Working..." : "Reject All"}
+                </Button>
               </div>
 
-              <div className="agent-review-sidebar-scroll">
-                <ReviewTocSection title="Pending" items={pendingItems} activeItemId={activeItemId} onSelect={setActiveItemId} />
-                <ReviewTocSection title="Reviewed / Failed" items={resolvedItems} activeItemId={activeItemId} onSelect={setActiveItemId} />
+              <div className="agent-review-controls-group agent-review-controls-nav">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveItemId(findRelativeItemId(items, activeItemId, -1))}
+                  disabled={items.length <= 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveItemId(findRelativeItemId(items, activeItemId, 1))}
+                  disabled={items.length <= 1}
+                >
+                  Next
+                </Button>
+                {isActivePending ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setActiveItemId(nextPendingItemId)}
+                    disabled={!nextPendingItemId || nextPendingItemId === activeItemId}
+                  >
+                    Skip
+                  </Button>
+                ) : null}
               </div>
-            </aside>
+
+              {isActivePending ? (
+                <div className="agent-review-controls-group agent-review-controls-actions">
+                  <Button type="button" variant="outline" onClick={handleRejectActive} disabled={isBusy || isBatchRunning}>
+                    Reject
+                  </Button>
+                  <Button type="button" onClick={handleApproveActive} disabled={isBusy || isBatchRunning}>
+                    Approve
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+
+            {!isSidebarCollapsed ? (
+              <aside id="agent-review-sidebar" className="agent-review-sidebar">
+                <div className="agent-review-sidebar-scroll">
+                  <ReviewTocSection title="Pending" items={pendingItems} activeItemId={activeItemId} onSelect={setActiveItemId} />
+                  <ReviewTocSection title="Reviewed / Failed" items={resolvedItems} activeItemId={activeItemId} onSelect={setActiveItemId} />
+                </div>
+              </aside>
+            ) : null}
 
             <section className="agent-review-card-column">
               {!activeReviewItem || !diffPreview ? (
@@ -933,50 +1063,6 @@ export function AgentThreadReviewModal({
                     ) : null}
                   </div>
 
-                  <footer className="agent-review-card-footer">
-                    <div className="agent-review-card-nav">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setActiveItemId(findRelativeItemId(items, activeItemId, -1))}
-                        disabled={items.length <= 1}
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setActiveItemId(findRelativeItemId(items, activeItemId, 1))}
-                        disabled={items.length <= 1}
-                      >
-                        Next
-                      </Button>
-                      {isActivePending ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setActiveItemId(nextPendingItemId)}
-                          disabled={!nextPendingItemId || nextPendingItemId === activeItemId}
-                        >
-                          Skip
-                        </Button>
-                      ) : null}
-                    </div>
-
-                    {isActivePending ? (
-                      <div className="agent-review-card-actions">
-                        <Button type="button" variant="outline" onClick={handleRejectActive} disabled={isBusy || isBatchRunning}>
-                          Reject
-                        </Button>
-                        <Button type="button" onClick={handleApproveActive} disabled={isBusy || isBatchRunning}>
-                          Approve
-                        </Button>
-                      </div>
-                    ) : null}
-                  </footer>
                 </article>
               )}
             </section>

@@ -40,10 +40,11 @@ Supporting modules include:
 
 - review actions are handled in `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`
 - the header `Review` button is the only review entry point and opens one thread-scoped dialog for all proposal items across the selected thread
-- the dialog splits items into `Pending` and `Reviewed / Failed`, with a TOC on the left and one focused review card at a time
+- the dialog uses responsive width rules, lets reviewers collapse the left TOC, groups TOC rows by proposal type within `Pending` and `Reviewed / Failed`, and surfaces batch plus per-item review controls in a full-width bar above the denser review surface
 - proposals render CRUD-aware field-level diffs, and reviewer overrides update the preview for create and update entry/tag/entity proposals
 - entry create/update review uses the same field model as `EntryEditorModal` through `frontend/src/features/agent/review/drafts.ts`; tag review edits only `name` and `type`, entity review edits only `name` and `category`
 - `Approve All` and `Reject All` remain sequential per-item API workflows and reuse any saved reviewer drafts
+- pending TOC rows rely on the section grouping instead of repeating a `PENDING_REVIEW` status badge, while resolved rows use compact symbolic status chips for audit context
 - apply failures surface inline on the affected item; local editor validation stays client-side and does not synthesize `APPLY_FAILED`
 
 ## Composer

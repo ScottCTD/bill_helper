@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -79,6 +79,24 @@ describe("AgentThreadReviewModal", () => {
             to_entity: "Cafe",
             tags: ["food"]
           }
+        }),
+        buildChangeItem({
+          id: "change-pending-entity",
+          run_id: "run-pending",
+          change_type: "create_entity",
+          payload_json: {
+            name: "Savings Vault",
+            category: "account"
+          }
+        }),
+        buildChangeItem({
+          id: "change-pending-tag",
+          run_id: "run-pending",
+          change_type: "create_tag",
+          payload_json: {
+            name: "travel",
+            type: "trip"
+          }
         })
       ]
     });
@@ -114,7 +132,36 @@ describe("AgentThreadReviewModal", () => {
     expect(await screen.findByText("Thread review")).toBeInTheDocument();
     expect(screen.getByText("Pending")).toBeInTheDocument();
     expect(screen.getByText("Reviewed / Failed")).toBeInTheDocument();
+    expect(screen.queryByText(/Review proposals across the whole thread/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText("PENDING_REVIEW")).toHaveLength(1);
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveClass("w-[96vw]", "max-w-none", "xl:w-[78rem]", "p-0");
+
+    const controlsBar = dialog.querySelector(".agent-review-controls-bar");
+    expect(controlsBar).not.toBeNull();
+    expect(within(controlsBar as HTMLElement).getByRole("button", { name: "Approve All" })).toBeInTheDocument();
+    expect(within(controlsBar as HTMLElement).getByRole("button", { name: "Previous" })).toBeInTheDocument();
+    expect(within(controlsBar as HTMLElement).getByRole("button", { name: "Hide list" })).toHaveAttribute("aria-expanded", "true");
+
+    const sidebar = dialog.querySelector(".agent-review-sidebar");
+    expect(sidebar).not.toBeNull();
+    expect(within(sidebar as HTMLElement).queryByRole("button", { name: "Approve All" })).not.toBeInTheDocument();
+    const pendingSection = within(sidebar as HTMLElement).getByLabelText("Pending");
+    expect(within(pendingSection).getByText("Entries")).toBeInTheDocument();
+    expect(within(pendingSection).getByText("Entities")).toBeInTheDocument();
+    expect(within(pendingSection).getByText("Tags")).toBeInTheDocument();
+    expect(within(sidebar as HTMLElement).queryByText("REJECTED")).not.toBeInTheDocument();
+    expect(within(sidebar as HTMLElement).getByLabelText("Rejected")).toBeInTheDocument();
+    expect(dialog.querySelector(".agent-review-sidebar-scroll")).not.toBeNull();
     expect(screen.getByRole("heading", { name: "Create Entry: Lunch on 2026-03-05" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Hide list" }));
+    expect(screen.getByRole("button", { name: "Show list" })).toHaveAttribute("aria-expanded", "false");
+    expect(dialog.querySelector(".agent-review-sidebar")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Show list" }));
+    expect(await screen.findByRole("button", { name: "Hide list" })).toHaveAttribute("aria-expanded", "true");
 
     await userEvent.click(screen.getByText("Delete Tag: groceries"));
 

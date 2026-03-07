@@ -12,11 +12,6 @@ Refine the agent proposal review modal UI based on UX feedback.
 
 Currently, the control buttons (Approve All / Reject All, Previous, Next, Skip, Reject, Approve) are located at the bottom of the card in [`agent-review-card-footer`](frontend/src/features/agent/review/AgentThreadReviewModal.tsx). Move them to appear above the card content and spanning both columns (sidebar and card area). Preferably in the header of the modal (below title).
 
-- **Location:** [`AgentThreadReviewModal.tsx`](frontend/src/features/agent/review/AgentThreadReviewModal.tsx)
-- **Current:** `<footer className="agent-review-card-footer">`
-- **Target:** Move buttons to a new controls bar that spans both columns (between sidebar and card), sharing the same horizontal area as Approve All/Reject All buttons
-- **CSS:** Added `.agent-review-controls-bar` with `col-span-2` in [`styles.css`](frontend/src/styles.css)
-
 ### 2. Widen Modal to Near Full Page
 
 The two-column modal needs more horizontal space.
