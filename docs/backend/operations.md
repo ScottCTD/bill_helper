@@ -26,6 +26,7 @@
 - `0022_agent_run_events_and_tool_lifecycle`
 - `0023_add_agent_provider_config`
 - `0024_entity_root_accounts`
+- `0025_user_memory_json_list`
 
 Commands:
 

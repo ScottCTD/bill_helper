@@ -47,7 +47,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | Model client    | `backend/services/agent/model_client.py`                                                                                                                                                                                                                             | LiteLLM adapter, tool wiring, retry-enabled model completion, explicit prompt-cache breakpoint injection (system + latest user anchors via negative index) for cache-capable models                                                                                                                                                                                                                                                                                           |
 | Prompts         | `backend/services/agent/prompts.py`                                                                                                                                                                                                                                  | Behavioral policy for duplicate checks (including duplicate enrichment via `propose_update_entry`), proposal ordering, explicit new entry/tag/entity specifications, canonical tag/entity normalization (including general tag examples and non-location/default anti-collision rules), error recovery, and current-user context section                                                                                                                                      |
 | Message history | `backend/services/agent/message_history.py`                                                                                                                                                                                                                          | Converts thread + attachments to model messages; parses PDF attachments to text via PyMuPDF (line-trimmed and internal-whitespace-normalized); when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` from `markdown_body` with truncation safeguards); prepends review outcomes and interruption prefix before current user feedback in the latest user message |
-| Tools           | `backend/services/agent/tool_args.py`, `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_propose.py`, `backend/services/agent/proposal_patching.py`, `backend/services/agent/tool_runtime.py`, `backend/services/agent/tools.py` | Split tool contract/runtime stack: argument schemas + normalization, read/progress handlers, proposal/mutation handlers, patch-map helpers, execution/retry registry, and thin facade                                                                                                                                                                                                                                                                                         |
+| Tools           | `backend/services/agent/tool_args.py`, `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_memory.py`, `backend/services/agent/tool_handlers_propose.py`, `backend/services/agent/proposal_patching.py`, `backend/services/agent/tool_runtime.py`, `backend/services/agent/tools.py` | Split tool contract/runtime stack: argument schemas + normalization, read/progress handlers, add-only memory appends, proposal/mutation handlers, patch-map helpers, execution/retry registry, and thin facade                                                                                                                                                                                                                                                                |
 | Review/apply    | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py`                                                                                                                                                                                         | Approval/rejection, apply handlers for proposed CRUD changes                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | API router      | `backend/routers/agent.py`                                                                                                                                                                                                                                           | Threads/runs/send/review/attachment endpoints                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
@@ -57,7 +57,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 1. User sends message to `POST /api/v1/agent/threads/{thread_id}/messages` (non-streaming) or `POST /api/v1/agent/threads/{thread_id}/messages/stream` (SSE streaming).
 2. Backend persists user message/attachments and creates run (`running`).
 3. Runtime builds model messages:
-  - system prompt (including current-user account context; optional `## User Memory` when `user_memory` is set)
+  - system prompt (including current-user account context; optional `## Agent Memory` list when `user_memory` is set)
   - current-user account context includes account markdown notes (`notes_markdown` from `markdown_body`) when present
   - thread message history
   - PDF attachments converted to normalized text via PyMuPDF (always)
@@ -110,17 +110,18 @@ Retry behavior notes:
 
 The agent receives a markdown-structured system prompt at the start of each run. It includes:
 
-- `## Current Date (User Timezone: <IANA timezone>)` (runtime-generated; defaults to `America/Toronto`)
 - `## Rules` (sectioned policy groups)
-- `## Current User Context` (runtime-generated account summaries + optional account `notes_markdown` from `markdown_body`)
-- `## User Memory` (optional; when `user_memory` is set via runtime settings—persistent user-provided background and preferences)
+- `## Current User Context` (runtime-generated timezone/date bullets, account summaries, and optional account `notes_markdown` from `markdown_body`)
+- `## Agent Memory` (optional; when `user_memory` is set via runtime settings as persistent list items)
 
 ```markdown
 ## Identity
 You are an expert in personal finance and accounting. You always call the right tools with the right arguments.
 
-## Current Date (User Timezone: America/Toronto)
-2026-02-10
+## Current User Context
+
+- User Timezone: America/Toronto
+- Current date: 2026-02-10
 
 ## Rules
 ### Tool Discipline
@@ -134,6 +135,10 @@ You are an expert in personal finance and accounting. You always call the right 
 - When transitioning between distinct tool-call batches, use send_intermediate_update
   with a brief progress note so the user can follow your reasoning.
 - Use send_intermediate_update sparingly for meaningful transitions; do not call it on every tool step.
+
+### Agent Memory
+- Use add_user_memory only when the user clearly asks you to remember/store a preference, rule, or standing hint for future runs.
+- add_user_memory is add-only. If the user asks to change or delete stored memory, explain that the agent can only append new memory items.
 
 ### Entry Proposal Workflow
 - Before proposing any entry, check for duplicates using existing entry data.
@@ -514,6 +519,29 @@ If `proposal_id` is ambiguous as a short-id prefix, the tool returns `ERROR` wit
 
 ---
 
+#### `add_user_memory`
+
+**Description:** Append one or more persistent agent-memory items for future runs. Use only when the user clearly asks the agent to remember a standing preference, rule, or hint. This tool is add-only and must not be used for edits or removals.
+
+**Arguments:**
+
+| Parameter      | Type         | Required | Default | Constraints                                                  |
+| -------------- | ------------ | -------- | ------- | ------------------------------------------------------------ |
+| `memory_items` | `string[]`   | yes      | —       | 1-20 non-empty items; duplicates are normalized away on save |
+
+**Expected output (text):**
+
+```
+OK
+summary: added N memory item(s)
+added_items: [...]
+total_count: N
+```
+
+If the user asks to change or delete existing memory, the assistant should explain that only append behavior is supported and should not call this tool.
+
+---
+
 #### `send_intermediate_update`
 
 **Description:** Emit a brief user-visible progress note. If a task needs tool calls, call this first to describe the initial plan before other tools. Then use sparingly between distinct tool-call batches; do not call on every tool step.
@@ -631,6 +659,7 @@ In `change_apply.py`:
 | ------------------------------------------------- | -------------------------------------------------------------------- |
 | `backend/services/agent/tool_args.py`             | Tool argument schemas and normalization helpers                      |
 | `backend/services/agent/tool_handlers_read.py`    | Read/progress tool handlers                                          |
+| `backend/services/agent/tool_handlers_memory.py`  | Add-only persistent memory append handler                            |
 | `backend/services/agent/tool_handlers_propose.py` | Proposal/update/remove handlers                                      |
 | `backend/services/agent/proposal_patching.py`     | Pending proposal patch-map application helpers                       |
 | `backend/services/agent/tool_runtime.py`          | Tool registry and execution/retry policy                             |

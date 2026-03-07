@@ -6,6 +6,7 @@ from backend.config import get_settings
 from backend.database import get_session_maker
 from backend.models_finance import RuntimeSettings
 from backend.services.runtime_settings import (
+    append_user_memory_items,
     build_runtime_settings_read,
     resolve_runtime_settings,
     update_runtime_settings_override,
@@ -93,5 +94,46 @@ def test_build_runtime_settings_read_reports_provider_credentials_without_custom
             payload = build_runtime_settings_read(db)
         assert payload.agent_api_key_configured is True
         assert payload.overrides.agent_api_key_configured is False
+    finally:
+        db.close()
+
+
+def test_resolve_runtime_settings_parses_legacy_multiline_user_memory() -> None:
+    make_session = get_session_maker()
+    db = make_session()
+    try:
+        db.add(
+            RuntimeSettings(
+                scope="default",
+                user_memory="Prefers terse answers.\n- Works in CAD.",
+            )
+        )
+        db.commit()
+
+        resolved = resolve_runtime_settings(db)
+        assert resolved.user_memory == ["Prefers terse answers.", "Works in CAD."]
+    finally:
+        db.close()
+
+
+def test_append_user_memory_items_deduplicates_and_persists_items() -> None:
+    make_session = get_session_maker()
+    db = make_session()
+    try:
+        update_runtime_settings_override(
+            db,
+            RuntimeSettingsUpdate(user_memory=["Prefers terse answers."]),
+        )
+        db.commit()
+
+        added_items, all_items = append_user_memory_items(
+            db,
+            items=["prefers terse answers.", "Works in CAD."],
+        )
+        db.commit()
+
+        assert added_items == ["Works in CAD."]
+        assert all_items == ["Prefers terse answers.", "Works in CAD."]
+        assert build_runtime_settings_read(db).user_memory == all_items
     finally:
         db.close()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -113,6 +114,38 @@ def test_migration_0007_backfills_entity_category_assignments(tmp_path):
 
         assert list(normalized_term_names) == ["daily expense"]
         assert set(assignments) == {first_entity_id, second_entity_id}
+
+
+def test_migration_0025_converts_user_memory_text_to_json_list(tmp_path):
+    database_url = _sqlite_url(tmp_path, "migration_0025.sqlite")
+    cfg = _build_alembic_config(database_url)
+    command.upgrade(cfg, "0024_entity_root_accounts")
+
+    engine = create_engine(database_url, future=True)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                INSERT INTO runtime_settings (scope, current_user_name, user_memory, created_at, updated_at)
+                VALUES (:scope, :current_user_name, :user_memory, :created_at, :updated_at)
+                """
+            ),
+            {
+                "scope": "default",
+                "current_user_name": "admin",
+                "user_memory": "Prefers terse answers.\n- Works in CAD.",
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+            },
+        )
+
+    command.upgrade(cfg, "0025_user_memory_json_list")
+
+    with engine.begin() as connection:
+        stored_value = connection.execute(
+            text("SELECT user_memory FROM runtime_settings WHERE scope = 'default' LIMIT 1")
+        ).scalar_one()
+    assert json.loads(stored_value) == ["Prefers terse answers.", "Works in CAD."]
 
 
 def test_migration_0017_renames_old_tag_taxonomy_when_new_key_missing(tmp_path):

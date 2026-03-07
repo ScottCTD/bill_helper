@@ -11,11 +11,13 @@ from backend.schemas_finance import RuntimeSettingsOverridesRead, RuntimeSetting
 from backend.services.agent.model_client import validate_litellm_environment
 from backend.services.runtime_settings_normalization import (
     normalize_currency_code_or_none,
-    normalize_multiline_text_or_none,
+    parse_user_memory_or_none,
     normalize_secret_or_none,
     normalize_text_or_none,
     sanitize_float_at_least,
     sanitize_int_at_least,
+    serialize_user_memory_or_none,
+    validate_user_memory_size,
 )
 
 RUNTIME_SETTINGS_SCOPE = "default"
@@ -25,7 +27,7 @@ RUNTIME_SETTINGS_SCOPE = "default"
 class ResolvedRuntimeSettings:
     api_prefix: str
     current_user_name: str
-    user_memory: str | None
+    user_memory: list[str] | None
     default_currency_code: str
     dashboard_currency_code: str
     agent_model: str
@@ -67,10 +69,41 @@ def update_runtime_settings_override(
         # Skip masked sentinel to prevent accidental overwrites of API key
         if field_name == "agent_api_key" and value == "***masked***":
             continue
+        if field_name == "user_memory":
+            value = serialize_user_memory_or_none(value)
         setattr(row, field_name, value)
     db.add(row)
     db.flush()
     return row
+
+
+def append_user_memory_items(
+    db: Session,
+    *,
+    items: list[str],
+) -> tuple[list[str], list[str]]:
+    normalized_items = validate_user_memory_size(items)
+    if not normalized_items:
+        raise ValueError("user memory items cannot be empty")
+
+    row = _ensure_runtime_settings_override(db)
+    existing_items = parse_user_memory_or_none(row.user_memory) or []
+    seen_keys = {item.casefold() for item in existing_items}
+
+    added_items: list[str] = []
+    merged_items = list(existing_items)
+    for item in normalized_items:
+        item_key = item.casefold()
+        if item_key in seen_keys:
+            continue
+        seen_keys.add(item_key)
+        merged_items.append(item)
+        added_items.append(item)
+
+    row.user_memory = serialize_user_memory_or_none(merged_items)
+    db.add(row)
+    db.flush()
+    return added_items, merged_items
 
 
 def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
@@ -82,7 +115,7 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         or "admin"
     )
     user_memory = (
-        normalize_multiline_text_or_none(override.user_memory)
+        parse_user_memory_or_none(override.user_memory)
         if override is not None
         else None
     )
@@ -216,7 +249,7 @@ def build_runtime_settings_read(
         agent_base_url=resolved.agent_base_url,
         agent_api_key_configured=bool(resolved.agent_api_key) or has_provider_credentials,
         overrides=RuntimeSettingsOverridesRead(
-            user_memory=normalize_multiline_text_or_none(override.user_memory)
+            user_memory=parse_user_memory_or_none(override.user_memory)
             if override
             else None,
             default_currency_code=normalize_currency_code_or_none(

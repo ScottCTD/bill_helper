@@ -53,7 +53,7 @@ Runtime override behavior:
 
 - `runtime_settings` stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`, including `user_memory`
 - effective runtime settings resolve as `override -> env default` where applicable
-- `user_memory` is DB-backed only and is injected into every agent system prompt when set
+- `user_memory` is DB-backed only, normalized as an ordered `list[str]`, and injected into every agent system prompt as a markdown unordered list when set
 - identity is request-principal-based at API boundaries; `current_user_name` is read-only in `/settings`
 - `agent_base_url` overrides allow only `http` and `https` and block localhost domains and non-public IP literals
 

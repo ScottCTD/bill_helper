@@ -8,6 +8,7 @@ from pydantic import BaseModel, ValidationError
 from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
 from backend.services.agent.tool_args import (
+    AddUserMemoryArgs,
     INTERMEDIATE_UPDATE_TOOL_NAME,
     ListEntitiesArgs,
     ListEntriesArgs,
@@ -26,6 +27,7 @@ from backend.services.agent.tool_args import (
     SendIntermediateUpdateArgs,
     UpdatePendingProposalArgs,
 )
+from backend.services.agent.tool_handlers_memory import add_user_memory
 from backend.services.agent.tool_handlers_propose import (
     propose_create_entity,
     propose_create_entry,
@@ -139,6 +141,16 @@ TOOLS: dict[str, AgentToolDefinition] = {
         ),
         args_model=ListProposalsArgs,
         handler=list_proposals,
+    ),
+    "add_user_memory": AgentToolDefinition(
+        name="add_user_memory",
+        description=(
+            "Append new persistent user-memory items. Use this only when the user clearly asks you "
+            "to remember/store a standing preference, rule, or hint for future runs. This tool is "
+            "add-only: do not use it to mutate or remove existing memory."
+        ),
+        args_model=AddUserMemoryArgs,
+        handler=add_user_memory,
     ),
     INTERMEDIATE_UPDATE_TOOL_NAME: AgentToolDefinition(
         name=INTERMEDIATE_UPDATE_TOOL_NAME,

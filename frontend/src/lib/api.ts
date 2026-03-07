@@ -360,7 +360,7 @@ export function getRuntimeSettings(): Promise<RuntimeSettings> {
 
 export function updateRuntimeSettings(payload: {
   current_user_name?: string | null;
-  user_memory?: string | null;
+  user_memory?: string[] | null;
   default_currency_code?: string | null;
   dashboard_currency_code?: string | null;
   agent_model?: string | null;

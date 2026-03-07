@@ -42,9 +42,15 @@ def _resolve_prompt_timezone(timezone_name: str | None) -> tuple[str, ZoneInfo]:
 class SystemPromptContext:
     current_user_context: str | None = None
     entity_category_context: str | None = None
-    user_memory: str | None = None
+    user_memory: list[str] | None = None
     current_date: date | None = None
     current_timezone: str | None = None
+
+
+def _format_markdown_unordered_list(items: list[str] | None) -> str:
+    if not items:
+        return "(none)"
+    return "\n".join(f"- {item}" for item in items)
 
 
 def system_prompt(context: SystemPromptContext | None = None) -> str:
@@ -54,11 +60,7 @@ def system_prompt(context: SystemPromptContext | None = None) -> str:
         if prompt_context.current_user_context is not None and prompt_context.current_user_context.strip()
         else "(none)"
     )
-    user_memory_content = (
-        prompt_context.user_memory.strip()
-        if prompt_context.user_memory is not None and prompt_context.user_memory.strip()
-        else "(none)"
-    )
+    user_memory_content = _format_markdown_unordered_list(prompt_context.user_memory)
     entity_category_content = (
         prompt_context.entity_category_context.strip()
         if prompt_context.entity_category_context is not None and prompt_context.entity_category_context.strip()

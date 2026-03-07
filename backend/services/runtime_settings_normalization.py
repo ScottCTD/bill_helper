@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Iterable
 from ipaddress import ip_address
 from urllib.parse import urlparse
+
+USER_MEMORY_MAX_CHARS = 4000
+_USER_MEMORY_LIST_PREFIXES = ("- ", "* ", "+ ")
 
 
 def normalize_text_or_none(value: str | None) -> str | None:
@@ -17,6 +22,68 @@ def normalize_multiline_text_or_none(value: str | None) -> str | None:
     normalized = value.replace("\r\n", "\n").replace("\r", "\n")
     normalized = "\n".join(line.rstrip() for line in normalized.split("\n")).strip()
     return normalized or None
+
+
+def normalize_user_memory_item_or_none(value: str | None) -> str | None:
+    normalized = normalize_text_or_none(value)
+    if normalized is None:
+        return None
+    for prefix in _USER_MEMORY_LIST_PREFIXES:
+        if normalized.startswith(prefix):
+            normalized = normalize_text_or_none(normalized.removeprefix(prefix))
+            break
+    return normalized or None
+
+
+def normalize_user_memory_items_or_none(values: Iterable[str] | None) -> list[str] | None:
+    if values is None:
+        return None
+    normalized_items: list[str] = []
+    seen_keys: set[str] = set()
+    for raw_value in values:
+        item = normalize_user_memory_item_or_none(raw_value)
+        if item is None:
+            continue
+        item_key = item.casefold()
+        if item_key in seen_keys:
+            continue
+        seen_keys.add(item_key)
+        normalized_items.append(item)
+    return normalized_items or None
+
+
+def parse_user_memory_or_none(value: object) -> list[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        return normalize_user_memory_items_or_none(str(item) for item in value)
+    if isinstance(value, str):
+        normalized_text = normalize_multiline_text_or_none(value)
+        if normalized_text is None:
+            return None
+        try:
+            decoded = json.loads(normalized_text)
+        except json.JSONDecodeError:
+            decoded = None
+        if isinstance(decoded, list):
+            return normalize_user_memory_items_or_none(str(item) for item in decoded)
+        return normalize_user_memory_items_or_none(normalized_text.split("\n"))
+    return normalize_user_memory_items_or_none([str(value)])
+
+
+def validate_user_memory_size(items: list[str] | None) -> list[str] | None:
+    if items is None:
+        return None
+    if len("\n".join(items)) > USER_MEMORY_MAX_CHARS:
+        raise ValueError(f"user_memory must be at most {USER_MEMORY_MAX_CHARS} characters total")
+    return items
+
+
+def serialize_user_memory_or_none(items: list[str] | None) -> str | None:
+    normalized_items = validate_user_memory_size(normalize_user_memory_items_or_none(items))
+    if normalized_items is None:
+        return None
+    return json.dumps(normalized_items, ensure_ascii=False)
 
 
 def normalize_currency_code_or_none(value: str | None) -> str | None:

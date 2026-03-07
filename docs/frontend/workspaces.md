@@ -80,5 +80,5 @@
 - categorized runtime settings workspace with `General`, `Agent Runtime`, and `Reliability` sections
 - supports save/update and reset-to-server-default flows
 - settings changes invalidate dependent query surfaces
-- `Agent memory` is persisted and sent to every backend agent system prompt
+- `Agent memory` lives under `Agent Runtime`, is edited as one item per line, persists as a list of strings, and is sent to every backend agent system prompt
 - agent provider overrides use a compact toggle; when off the custom endpoint/key fields are hidden and saving falls back to server env values from `.env` or process env

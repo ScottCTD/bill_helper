@@ -120,4 +120,37 @@ describe("SettingsPage", () => {
       })
     );
   });
+
+  it("saves agent memory as list items", async () => {
+    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
+    vi.mocked(getRuntimeSettings).mockResolvedValue({
+      ...baseSettingsFixture,
+      user_memory: ["Prefers terse answers."],
+      overrides: {
+        ...baseSettingsFixture.overrides,
+        user_memory: ["Prefers terse answers."],
+      },
+    });
+    vi.mocked(updateRuntimeSettings).mockResolvedValue(baseSettingsFixture);
+
+    const { container } = renderWithQueryClient(<SettingsPage />);
+
+    await screen.findByText("Agent memory");
+    const memoryInput = container.querySelector("textarea");
+    expect(memoryInput).not.toBeNull();
+    expect(memoryInput).toHaveValue("Prefers terse answers.");
+
+    await userEvent.clear(memoryInput as HTMLTextAreaElement);
+    await userEvent.type(memoryInput as HTMLTextAreaElement, "Prefers terse answers.\n- Works in CAD.");
+    fireEvent.submit(document.getElementById("runtime-settings-form") as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(updateRuntimeSettings).toHaveBeenCalled();
+    });
+    expect(vi.mocked(updateRuntimeSettings).mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        user_memory: ["Prefers terse answers.", "Works in CAD."],
+      })
+    );
+  });
 });

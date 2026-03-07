@@ -78,7 +78,7 @@ Purpose:
 
 - stores optional runtime overrides managed by `/api/v1/settings`
 - effective runtime values are resolved as `override -> env default` where applicable
-- `user_memory` is an optional DB-only text field used for persistent agent prompt context
+- `user_memory` is an optional DB-only JSON-serialized list of strings used for persistent agent prompt context
 
 ## `entities`
 

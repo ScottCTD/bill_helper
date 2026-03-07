@@ -8,8 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from backend.enums_finance import EntryKind, LinkType
 from backend.services.runtime_settings_normalization import (
     normalize_currency_code_or_none,
-    normalize_multiline_text_or_none,
     normalize_text_or_none,
+    normalize_user_memory_items_or_none,
+    validate_user_memory_size,
     validate_agent_api_key_or_none,
     validate_agent_base_url_or_none,
 )
@@ -382,7 +383,7 @@ class DashboardRead(BaseModel):
 
 
 class RuntimeSettingsOverridesRead(BaseModel):
-    user_memory: str | None = None
+    user_memory: list[str] | None = None
     default_currency_code: str | None = None
     dashboard_currency_code: str | None = None
     agent_model: str | None = None
@@ -399,7 +400,7 @@ class RuntimeSettingsOverridesRead(BaseModel):
 
 class RuntimeSettingsRead(BaseModel):
     current_user_name: str
-    user_memory: str | None = None
+    user_memory: list[str] | None = None
     default_currency_code: str
     dashboard_currency_code: str
     agent_model: str
@@ -418,7 +419,7 @@ class RuntimeSettingsRead(BaseModel):
 class RuntimeSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    user_memory: str | None = Field(default=None, max_length=4000)
+    user_memory: list[str] | None = None
     default_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     dashboard_currency_code: str | None = Field(
         default=None, min_length=3, max_length=3
@@ -448,10 +449,16 @@ class RuntimeSettingsUpdate(BaseModel):
 
     @field_validator("user_memory", mode="before")
     @classmethod
-    def normalize_optional_multiline_text(cls, value: Any) -> str | None:
+    def normalize_optional_user_memory(cls, value: Any) -> list[str] | None:
         if value is None:
             return None
-        return normalize_multiline_text_or_none(str(value))
+        if isinstance(value, str):
+            raise ValueError("user_memory must be a list of strings")
+        if not isinstance(value, list):
+            raise ValueError("user_memory must be a list of strings")
+        return validate_user_memory_size(
+            normalize_user_memory_items_or_none(str(item) for item in value)
+        )
 
     @field_validator("default_currency_code", "dashboard_currency_code", mode="before")
     @classmethod

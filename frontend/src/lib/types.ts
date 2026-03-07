@@ -243,7 +243,7 @@ export interface Dashboard {
 
 export interface RuntimeSettingsOverrides {
   current_user_name: string | null;
-  user_memory: string | null;
+  user_memory: string[] | null;
   default_currency_code: string | null;
   dashboard_currency_code: string | null;
   agent_model: string | null;
@@ -260,7 +260,7 @@ export interface RuntimeSettingsOverrides {
 
 export interface RuntimeSettings {
   current_user_name: string;
-  user_memory: string | null;
+  user_memory: string[] | null;
   default_currency_code: string;
   dashboard_currency_code: string;
   agent_model: string;

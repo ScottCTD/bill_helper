@@ -30,7 +30,7 @@
 - `versions/0013_add_account_markdown_body.py`: adds optional account-level markdown notes (`accounts.markdown_body`).
 - `versions/0014_remove_account_institution_type.py`: drops legacy account columns (`accounts.institution`, `accounts.account_type`).
 - `versions/0015_add_agent_tool_call_output_text.py`: adds persisted model-visible tool output text (`agent_tool_calls.output_text`).
-- `versions/0016_add_user_memory_to_runtime_settings.py`: adds optional persistent agent memory text to runtime settings (`runtime_settings.user_memory`).
+- `versions/0016_add_user_memory_to_runtime_settings.py`: adds optional persistent agent memory storage to runtime settings (`runtime_settings.user_memory`).
 - `versions/0017_rename_tag_category_taxonomy.py`: migrates tag taxonomy key/display naming from category to type (`tag_category` -> `tag_type`).
 - `versions/0018_add_tag_description.py`: adds optional free-text tag description (`tags.description`).
 - `versions/0019_add_transfer_entry_kind.py`: documents addition of `TRANSFER` to `EntryKind` enum (no DDL change for SQLite).
@@ -39,6 +39,7 @@
 - `versions/0022_agent_run_events_and_tool_lifecycle.py`: adds persisted run-event timeline rows (`agent_run_events`) and expands `agent_tool_calls` with lifecycle metadata (`llm_tool_call_id`, `started_at`, `completed_at`, queued/running/cancelled states).
 - `versions/0023_add_agent_provider_config.py`: adds custom provider configuration fields to runtime settings (`agent_base_url`, `agent_api_key`).
 - `versions/0024_entity_root_accounts.py`: rebuilds accounts as entity-root records by rekeying `accounts.id` to shared `entities.id` values and updating dependent account references.
+- `versions/0025_user_memory_json_list.py`: normalizes persisted runtime user memory into JSON list form for prompt rendering and add-only appends.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
@@ -74,7 +75,7 @@
 - `groups.py`: derived entry-group read models (`GET /groups` summary + `GET /groups/{id}` graph).
 - `dashboard.py`: monthly analytics endpoint.
 - `agent.py`: append-only agent thread/message/run/review endpoints.
-- `settings.py`: runtime settings read/update endpoints for user overrides with env fallback where applicable and DB-backed `user_memory`.
+- `settings.py`: runtime settings read/update endpoints for user overrides with env fallback where applicable and DB-backed list-form `user_memory`.
 - non-admin principal scope applies to owned-resource routes (`accounts`, `entries`, `users`, `groups`, `dashboard`).
 - shared dictionary mutation routes (`entities`, `tags`, `taxonomies` POST/PATCH, plus entity and tag DELETE) require admin principal.
 
@@ -90,9 +91,10 @@
 - `crud_policy.py`: shared CRUD validation/conflict policy primitives and standardized error-translation helpers.
 - `serializers.py`: ORM-to-schema mapping helpers.
 - `taxonomy.py`: shared taxonomy normalization, term assignment, and usage-count helpers.
-- `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, plus DB-backed `user_memory`.
+- `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, plus DB-backed list-form `user_memory` append support.
 - `runtime_settings_normalization.py`: shared normalization/validation helpers used by runtime settings schemas + service resolver.
 - `agent/`: agent runtime, tool execution, prompt-size counting, serialization, prompt/model adapters, and review apply handlers.
+  - `tool_handlers_memory.py`: add-only runtime memory append handler for explicit remember-this requests.
   - `protocol_helpers.py`: shared helper contracts for tool-call decoding and usage-shape normalization.
   - `protocol.py`: compatibility facade re-exporting protocol helper APIs.
   - `error_policy.py`: shared recoverable-error policy/result primitives and contextual fallback logging.

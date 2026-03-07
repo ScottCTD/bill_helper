@@ -117,14 +117,17 @@ def test_settings_agent_api_key_rejects_masked_sentinel(client):
 
 
 def test_settings_user_memory_override_and_clear(client):
-    memory_text = "Prefers terse answers.\nUses CAD unless stated otherwise."
-    set_override = client.patch("/api/v1/settings", json={"user_memory": memory_text})
+    memory_items = [
+        "Prefers terse answers.",
+        "Uses CAD unless stated otherwise.",
+    ]
+    set_override = client.patch("/api/v1/settings", json={"user_memory": memory_items})
     set_override.raise_for_status()
     set_payload = set_override.json()
-    assert set_payload["user_memory"] == memory_text
-    assert set_payload["overrides"]["user_memory"] == memory_text
+    assert set_payload["user_memory"] == memory_items
+    assert set_payload["overrides"]["user_memory"] == memory_items
 
-    clear_override = client.patch("/api/v1/settings", json={"user_memory": " \n  "})
+    clear_override = client.patch("/api/v1/settings", json={"user_memory": []})
     clear_override.raise_for_status()
     clear_payload = clear_override.json()
     assert clear_payload["user_memory"] is None

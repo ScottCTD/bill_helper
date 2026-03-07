@@ -58,11 +58,13 @@
 ## Prompt And Tooling Rules
 
 - prompt policy is organized into explicit sections for tool discipline, proposal workflows, execution, and final response behavior
-- `Current User Context` is rendered as `Account Context`, `User Memory`, and `Entity Category Reference`
+- `Current User Context` includes timezone/date bullets plus `Account Context` and `Entity Category Reference`
+- `Agent Memory` is rendered as a markdown unordered list built from persisted runtime-setting memory items
 - duplicate-entry checks should happen before new entry proposals
 - tag/entity naming should stay canonical and generalized
 - tag-delete proposals may proceed while referenced; proposal previews should surface impact counts and apply removes entry junction rows by cascade
 - `send_intermediate_update` is required as the first tool call when tool work is needed
+- `add_user_memory` is an add-only tool for explicit remember-this requests; mutate/remove requests must be declined
 - model-facing tool interfaces avoid requiring full domain IDs; entry mutations prefer `entry_id` aliases from `list_entries` with selector fallback
 
 ## Agent Router

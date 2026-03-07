@@ -156,7 +156,7 @@ Fetch effective runtime settings plus override metadata. Response: `RuntimeSetti
 Response highlights:
 
 - `current_user_name` resolved from request principal
-- `user_memory`
+- `user_memory` (`string[] | null` of persistent memory items)
 - `default_currency_code`
 - `dashboard_currency_code`
 - agent runtime fields
@@ -166,7 +166,7 @@ Response highlights:
 
 Behavior:
 
-- `user_memory` is DB-backed only
+- `user_memory` is DB-backed only and returned as an ordered list of strings
 - `agent_api_key` is never returned
 - `agent_base_url` reflects only an explicit custom override from runtime settings or `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL`
 - `agent_api_key_configured` reports whether an explicit override key exists or LiteLLM can resolve provider credentials for the selected model; `overrides.agent_api_key_configured` reports only whether a stored runtime override exists
@@ -192,5 +192,6 @@ Authorization: admin principal only.
 Notes:
 
 - identity fields are not mutable through runtime settings
+- `user_memory` must be sent as a JSON list of strings; empty list clears the override
 - `agent_base_url` must use `http` or `https` and cannot target localhost or non-public IP literals
 - `agent_api_key` cannot be the masked sentinel value `***masked***`

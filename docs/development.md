@@ -173,6 +173,13 @@ Current revisions:
 - `0016_add_user_memory_to_runtime_settings`
 - `0017_rename_tag_category_taxonomy`
 - `0018_add_tag_description`
+- `0019_add_transfer_entry_kind`
+- `0020_add_agent_message_attachment_original_filename`
+- `0021_add_agent_run_context_tokens`
+- `0022_agent_run_events_and_tool_lifecycle`
+- `0023_add_agent_provider_config`
+- `0024_entity_root_accounts`
+- `0025_user_memory_json_list`
 
 Optional seed:
 

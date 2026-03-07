@@ -34,6 +34,8 @@ interface SettingsFormState {
   agent_api_key_dirty: boolean;
 }
 
+const USER_MEMORY_LINE_PREFIXES = ["- ", "* ", "+ "];
+
 function bytesToMegabytes(value: number): string {
   const mb = value / (1024 * 1024);
   const rounded = Number.isInteger(mb) ? mb.toString() : mb.toFixed(2);
@@ -44,10 +46,46 @@ function hasStoredProviderOverride(data: RuntimeSettings): boolean {
   return data.overrides.agent_base_url !== null || data.overrides.agent_api_key_configured;
 }
 
+function formatUserMemoryLines(items: string[] | null): string {
+  return (items ?? []).join("\n");
+}
+
+function normalizeUserMemoryLine(rawValue: string): string | null {
+  let normalized = rawValue.trim();
+  if (!normalized) {
+    return null;
+  }
+  for (const prefix of USER_MEMORY_LINE_PREFIXES) {
+    if (normalized.startsWith(prefix)) {
+      normalized = normalized.slice(prefix.length).trim();
+      break;
+    }
+  }
+  return normalized || null;
+}
+
+function parseUserMemoryLines(rawValue: string): string[] | null {
+  const items: string[] = [];
+  const seenKeys = new Set<string>();
+  for (const line of rawValue.split(/\r?\n/)) {
+    const item = normalizeUserMemoryLine(line);
+    if (!item) {
+      continue;
+    }
+    const itemKey = item.toLocaleLowerCase();
+    if (seenKeys.has(itemKey)) {
+      continue;
+    }
+    seenKeys.add(itemKey);
+    items.push(item);
+  }
+  return items.length > 0 ? items : null;
+}
+
 function buildFormState(data: RuntimeSettings): SettingsFormState {
   return {
     current_user_name: data.current_user_name,
-    user_memory: data.user_memory ?? "",
+    user_memory: formatUserMemoryLines(data.user_memory),
     default_currency_code: data.default_currency_code,
     dashboard_currency_code: data.dashboard_currency_code,
     agent_model: data.agent_model,
@@ -183,9 +221,10 @@ export function SettingsPage() {
       const nextAgentApiKey = formState.use_custom_provider_override
         ? (formState.agent_api_key_dirty ? (formState.agent_api_key.trim() || null) : undefined)
         : null;
+      const nextUserMemory = parseUserMemoryLines(formState.user_memory);
 
       const payload: Record<string, unknown> = {
-        user_memory: formState.user_memory,
+        user_memory: nextUserMemory,
         default_currency_code: nextDefaultCurrencyCode,
         dashboard_currency_code: nextDashboardCurrencyCode,
         agent_model: formState.agent_model.trim(),
@@ -281,16 +320,6 @@ export function SettingsPage() {
               <Input value={formState.current_user_name} readOnly />
             </FormField>
 
-            <FormField
-              label="Agent memory"
-              hint="Persistent user context added to every agent system prompt. Use it for standing preferences, constraints, or background."
-            >
-              <Textarea
-                value={formState.user_memory}
-                onChange={(event) => setFormState((state) => (state ? { ...state, user_memory: event.target.value } : state))}
-              />
-            </FormField>
-
             <FormField label="Default currency" hint="Used when entry currency is omitted in agent proposals and entry defaults.">
               <NativeSelect
                 value={formState.default_currency_code}
@@ -329,6 +358,16 @@ export function SettingsPage() {
             <CardDescription>Controls model selection and guardrails for new runs.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
+            <FormField
+              label="Agent memory"
+              hint="Persistent agent memory added to every system prompt. Enter one preference/rule/hint per line."
+            >
+              <Textarea
+                value={formState.user_memory}
+                onChange={(event) => setFormState((state) => (state ? { ...state, user_memory: event.target.value } : state))}
+              />
+            </FormField>
+
             <FormField label="Agent model">
               <Input
                 value={formState.agent_model}

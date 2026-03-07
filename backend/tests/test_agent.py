@@ -592,7 +592,9 @@ def test_system_prompt_includes_current_date_tag():
     from backend.services.agent.prompts import SystemPromptContext, system_prompt
 
     prompt = system_prompt(SystemPromptContext(current_date=date(2026, 2, 10)))
-    assert "## Current Date (User Timezone: America/Toronto)\n2026-02-10" in prompt
+    assert "## Current User Context" in prompt
+    assert "- User Timezone: America/Toronto" in prompt
+    assert "- Current date: 2026-02-10" in prompt
 
 
 def test_system_prompt_renders_jinja_template_without_leaking_placeholders():
@@ -622,17 +624,23 @@ def test_system_prompt_renders_jinja_template_without_leaking_placeholders():
     assert "{{" not in prompt
     assert "{%" not in prompt
     assert "Primary checking" in prompt
-    assert "## Current Date (User Timezone: America/Vancouver)\n2026-02-10" in prompt
+    assert "## Current User Context" in prompt
+    assert "- User Timezone: America/Vancouver" in prompt
+    assert "- Current date: 2026-02-10" in prompt
 
 
 def test_system_prompt_includes_user_memory_when_present():
     from backend.services.agent.prompts import SystemPromptContext, system_prompt
 
-    memory_text = "Prefers terse answers.\nAlways mention CAD explicitly."
-    prompt = system_prompt(SystemPromptContext(user_memory=memory_text))
+    prompt = system_prompt(
+        SystemPromptContext(
+            user_memory=["Prefers terse answers.", "Always mention CAD explicitly."],
+        )
+    )
 
-    assert "### User Memory" in prompt
-    assert memory_text in prompt
+    assert "### Agent Memory" in prompt
+    assert "- Prefers terse answers." in prompt
+    assert "- Always mention CAD explicitly." in prompt
     assert "persistent user-provided background and preferences" in prompt
 
 
@@ -647,7 +655,8 @@ def test_system_prompt_uses_requested_current_timezone_for_date_label():
             current_timezone="America/Vancouver",
         )
     )
-    assert "## Current Date (User Timezone: America/Vancouver)\n2026-02-10" in prompt
+    assert "- User Timezone: America/Vancouver" in prompt
+    assert "- Current date: 2026-02-10" in prompt
 
 
 def test_system_prompt_falls_back_to_toronto_for_invalid_timezone():
@@ -661,7 +670,8 @@ def test_system_prompt_falls_back_to_toronto_for_invalid_timezone():
             current_timezone="Not/AZone",
         )
     )
-    assert "## Current Date (User Timezone: America/Toronto)\n2026-02-10" in prompt
+    assert "- User Timezone: America/Toronto" in prompt
+    assert "- Current date: 2026-02-10" in prompt
 
 
 def test_system_prompt_includes_current_user_account_context(client, monkeypatch):
@@ -692,8 +702,9 @@ def test_system_prompt_includes_current_user_account_context(client, monkeypatch
     system_message = captured_messages[-1][0]
     assert system_message.get("role") == "system"
     system_content = str(system_message.get("content", ""))
-    assert "## Current Date (User Timezone: America/Toronto)" in system_content
     assert "## Current User Context" in system_content
+    assert "- User Timezone: America/Toronto" in system_content
+    assert "- Current date:" in system_content
     assert "accounts_count: 1" in system_content
     assert "name=Main Checking" in system_content
     assert "currency=USD" in system_content
@@ -768,7 +779,7 @@ def test_system_prompt_truncates_account_markdown_image_data_urls(client, monkey
 def test_settings_user_memory_is_injected_into_system_prompt(client, monkeypatch):
     response = client.patch(
         "/api/v1/settings",
-        json={"user_memory": "Prefers terse answers.\nWorks in CAD."},
+        json={"user_memory": ["Prefers terse answers.", "Works in CAD."]},
     )
     response.raise_for_status()
 
@@ -787,8 +798,9 @@ def test_settings_user_memory_is_injected_into_system_prompt(client, monkeypatch
 
     system_message = captured_messages[-1][0]
     system_content = str(system_message.get("content", ""))
-    assert "### User Memory" in system_content
-    assert "Prefers terse answers.\nWorks in CAD." in system_content
+    assert "### Agent Memory" in system_content
+    assert "- Prefers terse answers." in system_content
+    assert "- Works in CAD." in system_content
 
 
 def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
@@ -799,6 +811,7 @@ def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
     assert "search_entries" not in names
     assert "list_entries" in names
     assert "list_proposals" in names
+    assert "add_user_memory" in names
     assert "send_intermediate_update" in names
     assert "propose_update_entry" in names
     assert "propose_delete_entry" in names
@@ -820,6 +833,66 @@ def test_intermediate_update_tool_description_requires_first_call_for_tool_runs(
     description = str(tool_by_name[INTERMEDIATE_UPDATE_TOOL_NAME]["description"])
     assert "call this first" in description
     assert "before other tools" in description
+
+
+def test_add_user_memory_tool_description_mentions_add_only_behavior():
+    from backend.services.agent.tools import build_openai_tool_schemas
+
+    tool_by_name = {
+        tool["function"]["name"]: tool["function"]
+        for tool in build_openai_tool_schemas()
+    }
+    description = str(tool_by_name["add_user_memory"]["description"])
+    assert "clearly asks" in description
+    assert "add-only" in description
+    assert "mutate or remove" in description
+
+
+def test_add_user_memory_tool_persists_runtime_settings_memory(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "I'll remember that."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_add_user_memory",
+                    "type": "function",
+                    "function": {
+                        "name": "add_user_memory",
+                        "arguments": json.dumps(
+                            {
+                                "memory_items": [
+                                    "Prefers terse answers.",
+                                    "Works in CAD.",
+                                ]
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Remember that I prefer terse answers and work in CAD.")
+
+    assert run["status"] == "completed"
+    assert len(run["tool_calls"]) == 1
+    assert run["tool_calls"][0]["tool_name"] == "add_user_memory"
+    assert run["tool_calls"][0]["output_json"]["added_items"] == [
+        "Prefers terse answers.",
+        "Works in CAD.",
+    ]
+
+    settings_response = client.get("/api/v1/settings")
+    settings_response.raise_for_status()
+    assert settings_response.json()["user_memory"] == [
+        "Prefers terse answers.",
+        "Works in CAD.",
+    ]
 
 
 def test_list_tags_tool_description_mentions_tag_descriptions():

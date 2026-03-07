@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.database import build_engine, build_session_maker
 from backend.db_meta import Base
-from backend.models_finance import Account
+from backend.models_finance import Account, Entity
 from backend.services.bootstrap import (
     run_schema_seed_and_stamp,
     should_seed_demo_data,
@@ -31,9 +31,12 @@ def test_should_seed_demo_data_when_accounts_table_is_empty(db_session):
 
 
 def test_should_not_seed_demo_data_when_account_exists(db_session):
+    entity = Entity(name="Existing Account", category=None)
+    db_session.add(entity)
+    db_session.flush()
     db_session.add(
         Account(
-            name="Existing Account",
+            id=entity.id,
             currency_code="CAD",
             is_active=True,
         )
