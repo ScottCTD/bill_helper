@@ -1,10 +1,10 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as api from "../../lib/api";
 import { renderWithQueryClient } from "../../test/renderWithQueryClient";
-import { buildChangeItem, buildRun } from "../../test/factories/agent";
+import { buildChangeItem, buildRun, buildRunEvent, buildToolCall } from "../../test/factories/agent";
 import { AgentPanel } from "./AgentPanel";
 
 vi.mock("../../lib/api", async () => {
@@ -22,6 +22,7 @@ vi.mock("../../lib/api", async () => {
     listCurrencies: vi.fn(),
     listEntities: vi.fn(),
     listTags: vi.fn(),
+    renameAgentThread: vi.fn(),
     rejectAgentChangeItem: vi.fn(),
     streamAgentMessage: vi.fn()
   };
@@ -125,6 +126,12 @@ describe("AgentPanel", () => {
     vi.mocked(api.rejectAgentChangeItem).mockResolvedValue(buildChangeItem({ status: "REJECTED" }));
     vi.mocked(api.deleteAgentThread).mockResolvedValue();
     vi.mocked(api.interruptAgentRun).mockResolvedValue(buildRun({ status: "failed", error_text: "Run interrupted by user." }));
+    vi.mocked(api.renameAgentThread).mockResolvedValue({
+      id: "thread-1",
+      title: "Review thread",
+      created_at: "2026-03-06T10:00:00Z",
+      updated_at: "2026-03-06T10:05:00Z"
+    });
     vi.mocked(api.streamAgentMessage).mockResolvedValue();
   });
 
@@ -202,5 +209,69 @@ describe("AgentPanel", () => {
 
     const countBadge = screen.getByText("2");
     expect(countBadge).toHaveClass("agent-panel-review-badge");
+  });
+
+  it("updates the thread title immediately when rename_thread streams", async () => {
+    let resolveStream: (() => void) | null = null;
+
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getAgentThread)
+      .mockResolvedValueOnce(buildThreadDetail([]))
+      .mockResolvedValue(buildThreadDetail([]));
+    vi.mocked(api.getAgentToolCall).mockResolvedValue(
+      buildToolCall({
+        id: "tool-call-rename",
+        run_id: "run-1",
+        tool_name: "rename_thread",
+        input_json: { title: "Budget Review" },
+        output_json: { status: "OK", title: "Budget Review" },
+        output_text: "OK\nsummary: renamed thread to Budget Review",
+        has_full_payload: true,
+        status: "ok"
+      })
+    );
+    vi.mocked(api.streamAgentMessage).mockImplementation(async ({ onEvent }) => {
+      await act(async () => {
+        onEvent({
+          type: "run_event",
+          run_id: "run-1",
+          event: buildRunEvent({
+            id: "event-started",
+            run_id: "run-1",
+            event_type: "tool_call_started",
+            tool_call_id: "tool-call-rename"
+          }),
+          tool_call: buildToolCall({
+            id: "tool-call-rename",
+            run_id: "run-1",
+            tool_name: "rename_thread",
+            has_full_payload: false,
+            input_json: null,
+            output_json: null,
+            output_text: null,
+            status: "running"
+          })
+        });
+      });
+      await new Promise<void>((resolve) => {
+        resolveStream = resolve;
+      });
+    });
+
+    renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    const composer = await screen.findByPlaceholderText(
+      "Ask a question or ask the agent to propose entries/tags/entities..."
+    );
+    await userEvent.type(composer, "Rename the thread");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(api.getAgentToolCall).toHaveBeenCalledWith("tool-call-rename"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Budget Review" })).toBeInTheDocument());
+
+    await act(async () => {
+      resolveStream?.();
+    });
   });
 });

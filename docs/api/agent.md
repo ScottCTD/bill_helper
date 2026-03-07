@@ -21,6 +21,20 @@ Create a thread. Body: optional `title`. Response: `AgentThreadRead`
 
 Authorization: admin principal only.
 
+If no title is supplied, the thread remains untitled until a later explicit rename.
+
+### `PATCH /agent/threads/{thread_id}`
+
+Rename one thread. Body: `{ "title": string }`. Response: `AgentThreadRead`
+
+Authorization: admin principal only.
+
+Validation:
+
+- title is normalized for internal whitespace
+- title must contain 1-5 words
+- title must be 80 characters or fewer
+
 ### `DELETE /agent/threads/{thread_id}`
 
 Delete one thread and its persisted timeline artifacts. Response: `204`
@@ -113,6 +127,7 @@ Event contract:
 - `run_event`
   - shape: `{ type, run_id, event, tool_call? }`
   - `tool_call` is present only for tool lifecycle events and uses the compact `AgentToolCallRead` shape (`has_full_payload=false`, payload fields omitted)
+  - `rename_thread` starts streaming as a compact tool-call event before the final assistant message; clients can hydrate the tool row immediately through `GET /agent/tool-calls/{tool_call_id}` and update thread labels without waiting for run completion
 
 Usage notes:
 

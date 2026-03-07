@@ -32,6 +32,7 @@ from backend.schemas_agent import (
     AgentThreadDetailRead,
     AgentThreadRead,
     AgentThreadSummaryRead,
+    AgentThreadUpdate,
 )
 from backend.services.agent.attachments import (
     delete_attachment_directories,
@@ -43,6 +44,7 @@ from backend.services.agent.execution import (
     current_context_tokens_for_thread,
     run_agent_in_background,
 )
+from backend.services.agent.threads import AgentThreadNotFoundError, rename_thread_by_id
 from backend.services.agent.review import approve_change_item, reject_change_item
 from backend.services.agent.runtime import (
     AgentRuntimeUnavailable,
@@ -175,6 +177,19 @@ def delete_thread(thread_id: str, db: Session = Depends(get_db)) -> None:
     db.delete(thread)
     db.commit()
     delete_attachment_directories(attachment_directories)
+
+
+@router.patch("/threads/{thread_id}", response_model=AgentThreadRead)
+def update_thread(
+    thread_id: str,
+    payload: AgentThreadUpdate,
+    db: Session = Depends(get_db),
+) -> AgentThreadRead:
+    try:
+        result = rename_thread_by_id(db, thread_id=thread_id, title=payload.title)
+    except AgentThreadNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return thread_to_schema(result.thread)
 
 
 @router.get("/threads/{thread_id}", response_model=AgentThreadDetailRead)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.enums_agent import (
     AgentChangeStatus,
@@ -15,10 +15,24 @@ from backend.enums_agent import (
     AgentRunStatus,
     AgentToolCallStatus,
 )
+from backend.services.agent.threads import THREAD_TITLE_MAX_LENGTH, validate_thread_title
 
 
 class AgentThreadCreate(BaseModel):
     title: str | None = Field(default=None, max_length=255)
+
+
+class AgentThreadUpdate(BaseModel):
+    title: str = Field(
+        min_length=1,
+        max_length=THREAD_TITLE_MAX_LENGTH,
+        description="Short thread title/topic in 1-5 words.",
+    )
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str) -> str:
+        return validate_thread_title(value)
 
 
 class AgentThreadRead(BaseModel):

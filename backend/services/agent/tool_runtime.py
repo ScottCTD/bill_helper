@@ -23,6 +23,7 @@ from backend.services.agent.tool_args import (
     ProposeUpdateEntityArgs,
     ProposeUpdateEntryArgs,
     ProposeUpdateTagArgs,
+    RenameThreadArgs,
     RemovePendingProposalArgs,
     SendIntermediateUpdateArgs,
     UpdatePendingProposalArgs,
@@ -49,6 +50,7 @@ from backend.services.agent.tool_handlers_read import (
     list_tags,
     send_intermediate_update,
 )
+from backend.services.agent.tool_handlers_threads import rename_thread
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
 from backend.services.runtime_settings import resolve_runtime_settings
 
@@ -151,6 +153,16 @@ TOOLS: dict[str, AgentToolDefinition] = {
         ),
         args_model=AddUserMemoryArgs,
         handler=add_user_memory,
+    ),
+    "rename_thread": AgentToolDefinition(
+        name="rename_thread",
+        description=(
+            "Rename the current thread to a short 1-5 word topic. Use this right after the first user "
+            "message in a new thread. After that, only rename when the user explicitly asks or the topic "
+            "shifts substantially."
+        ),
+        args_model=RenameThreadArgs,
+        handler=rename_thread,
     ),
     INTERMEDIATE_UPDATE_TOOL_NAME: AgentToolDefinition(
         name=INTERMEDIATE_UPDATE_TOOL_NAME,

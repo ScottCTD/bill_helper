@@ -11,6 +11,7 @@ This document describes the architecture, prompts, tools, and usage workflow of 
 5. Review the timeline as the agent works:
   - User/assistant messages render inline; assistant messages support markdown.
   - In-flight tool-call progress and reasoning updates appear while the run is active.
+  - The first tool call in a fresh thread should normally be `rename_thread`, which gives the thread a short topical label immediately.
   - Run/tool context is shown alongside the assistant message.
   - Removable attachment chips (image thumbnails + PDF file chips) appear above the composer before send.
   - Paste (`Cmd/Ctrl+V`) and drag-drop ingestion for image/PDF attachments.
@@ -33,6 +34,7 @@ This document describes the architecture, prompts, tools, and usage workflow of 
 The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated mutation model:
 
 - The agent reads data with read tools.
+- The agent can rename the current conversation thread with `rename_thread`.
 - The agent can publish concise user-visible progress notes with `send_intermediate_update`.
 - The agent proposes CRUD changes for entries, tags, and entities.
 - The agent does not directly mutate domain tables.
@@ -47,7 +49,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | Model client    | `backend/services/agent/model_client.py`                                                                                                                                                                                                                             | LiteLLM adapter, tool wiring, retry-enabled model completion, explicit prompt-cache breakpoint injection (system + latest user anchors via negative index) for cache-capable models                                                                                                                                                                                                                                                                                           |
 | Prompts         | `backend/services/agent/prompts.py`                                                                                                                                                                                                                                  | Behavioral policy for duplicate checks (including duplicate enrichment via `propose_update_entry`), proposal ordering, explicit new entry/tag/entity specifications, canonical tag/entity normalization (including general tag examples and non-location/default anti-collision rules), error recovery, and current-user context section                                                                                                                                      |
 | Message history | `backend/services/agent/message_history.py`                                                                                                                                                                                                                          | Converts thread + attachments to model messages; parses PDF attachments to text via PyMuPDF (line-trimmed and internal-whitespace-normalized); when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` from `markdown_body` with truncation safeguards); prepends review outcomes and interruption prefix before current user feedback in the latest user message |
-| Tools           | `backend/services/agent/tool_args.py`, `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_memory.py`, `backend/services/agent/tool_handlers_propose.py`, `backend/services/agent/proposal_patching.py`, `backend/services/agent/tool_runtime.py`, `backend/services/agent/tools.py` | Split tool contract/runtime stack: argument schemas + normalization, read/progress handlers, add-only memory appends, proposal/mutation handlers, patch-map helpers, execution/retry registry, and thin facade                                                                                                                                                                                                                                                                |
+| Tools           | `backend/services/agent/tool_args.py`, `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_memory.py`, `backend/services/agent/tool_handlers_threads.py`, `backend/services/agent/tool_handlers_propose.py`, `backend/services/agent/proposal_patching.py`, `backend/services/agent/tool_runtime.py`, `backend/services/agent/tools.py`, `backend/services/agent/threads.py` | Split tool contract/runtime stack: argument schemas + normalization, read/progress handlers, add-only memory appends, thread-title validation/rename helpers, proposal/mutation handlers, patch-map helpers, execution/retry registry, and thin facade |
 | Review/apply    | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py`                                                                                                                                                                                         | Approval/rejection, apply handlers for proposed CRUD changes                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | API router      | `backend/routers/agent.py`                                                                                                                                                                                                                                           | Threads/runs/send/review/attachment endpoints                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
@@ -65,12 +67,13 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
   - for the latest user turn only: review outcomes (if any) and interruption prefix (if the previous run was interrupted) prepended before that user feedback text
 4. Runtime loops: model call → optional tool calls (including sparse `send_intermediate_update` progress notes) → tool results appended → repeat (bounded by `agent_max_steps`).
 5. Runtime persists final assistant message and marks run `completed` or `failed`.
-6. For streaming: SSE emits `text_delta` plus persisted `run_event` rows. `run_event` covers run start/finish, `reasoning_update`, and each tool lifecycle transition. `send_intermediate_update` is stored only as a reasoning event (not a fake tool row). On client disconnect mid-stream, the run continues in the background.
+6. For streaming: SSE emits `text_delta` plus persisted `run_event` rows. `run_event` covers run start/finish, `reasoning_update`, and each tool lifecycle transition. `rename_thread` lifecycle events arrive before the run finishes so the client can relabel the thread immediately. `send_intermediate_update` is stored only as a reasoning event (not a fake tool row). On client disconnect mid-stream, the run continues in the background.
 
 ## Thread Lifecycle Endpoints
 
 - `GET /api/v1/agent/threads`: list thread summaries
 - `POST /api/v1/agent/threads`: create thread shell
+- `PATCH /api/v1/agent/threads/{thread_id}`: rename one thread to a normalized 1-5 word title
 - `DELETE /api/v1/agent/threads/{thread_id}`: delete one thread history
   - blocked with `409` while the thread has any `running` run
   - cascades DB removal of thread messages/runs/change items/review actions
@@ -214,7 +217,7 @@ You are an expert in personal finance and accounting. You always call the right 
 
 ## Tools
 
-Tool execution is composed from `backend/services/agent/tool_runtime.py` (registry + execution policy) with handlers in `backend/services/agent/tool_handlers_read.py` and `backend/services/agent/tool_handlers_propose.py`, shared entry reference helpers in `backend/services/agent/entry_references.py`, argument contracts in `backend/services/agent/tool_args.py`, and patch-map helpers in `backend/services/agent/proposal_patching.py`. `backend/services/agent/tools.py` is a thin facade that re-exports runtime interfaces. Each tool returns plain-text `content` to the model.
+Tool execution is composed from `backend/services/agent/tool_runtime.py` (registry + execution policy) with handlers in `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_memory.py`, `backend/services/agent/tool_handlers_threads.py`, and `backend/services/agent/tool_handlers_propose.py`, shared entry reference helpers in `backend/services/agent/entry_references.py`, argument contracts in `backend/services/agent/tool_args.py`, thread-title helpers in `backend/services/agent/threads.py`, and patch-map helpers in `backend/services/agent/proposal_patching.py`. `backend/services/agent/tools.py` is a thin facade that re-exports runtime interfaces. Each tool returns plain-text `content` to the model.
 
 `list_proposals` is the read-only lifecycle inspection tool for proposals in the current thread. Proposal tools (`propose_`*, `update_pending_proposal`, `remove_pending_proposal`) create or mutate `AgentChangeItem` rows while they remain under review. They do not mutate domain data; changes apply only after human approval via approve/reject endpoints.
 
@@ -542,6 +545,27 @@ If the user asks to change or delete existing memory, the assistant should expla
 
 ---
 
+#### `rename_thread`
+
+**Description:** Rename the current thread to a short topical label. Use this right after the first user message in a new thread. After that, only use it when the user explicitly asks for a rename or the conversation topic shifts substantially.
+
+**Arguments:**
+
+| Parameter | Type     | Required | Constraints                          |
+| --------- | -------- | -------- | ------------------------------------ |
+| `title`   | `string` | yes      | normalized; 1-5 words; max 80 chars |
+
+**Expected output (text):**
+
+```
+OK
+summary: renamed thread to Budget Review
+thread_id: <uuid>
+title: Budget Review
+```
+
+---
+
 #### `send_intermediate_update`
 
 **Description:** Emit a brief user-visible progress note. If a task needs tool calls, call this first to describe the initial plan before other tools. Then use sparingly between distinct tool-call batches; do not call on every tool step.
@@ -660,8 +684,10 @@ In `change_apply.py`:
 | `backend/services/agent/tool_args.py`             | Tool argument schemas and normalization helpers                      |
 | `backend/services/agent/tool_handlers_read.py`    | Read/progress tool handlers                                          |
 | `backend/services/agent/tool_handlers_memory.py`  | Add-only persistent memory append handler                            |
+| `backend/services/agent/tool_handlers_threads.py` | Thread rename tool handler                                           |
 | `backend/services/agent/tool_handlers_propose.py` | Proposal/update/remove handlers                                      |
 | `backend/services/agent/proposal_patching.py`     | Pending proposal patch-map application helpers                       |
+| `backend/services/agent/threads.py`               | Thread-title normalization and rename persistence helpers            |
 | `backend/services/agent/tool_runtime.py`          | Tool registry and execution/retry policy                             |
 | `backend/services/agent/tools.py`                 | Thin tool facade/re-export layer                                     |
 | `backend/services/agent/runtime.py`               | Run orchestration, tool loop                                         |

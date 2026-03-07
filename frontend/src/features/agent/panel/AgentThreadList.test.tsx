@@ -29,6 +29,7 @@ const THREADS: AgentThreadSummary[] = [
 describe("AgentThreadList", () => {
   it("selects thread rows and deletes via the row delete control", async () => {
     const onSelectThread = vi.fn();
+    const onRenameThread = vi.fn().mockResolvedValue(undefined);
     const onDeleteThread = vi.fn();
 
     render(
@@ -38,9 +39,12 @@ describe("AgentThreadList", () => {
         isLoading={false}
         errorMessage={null}
         onSelectThread={onSelectThread}
+        onRenameThread={onRenameThread}
         onDeleteThread={onDeleteThread}
+        renamingThreadId={null}
         deletingThreadId={null}
         isDeleteDisabled={false}
+        isRenameDisabled={false}
         optimisticRunningThreadId={null}
       />
     );
@@ -52,6 +56,35 @@ describe("AgentThreadList", () => {
     expect(onDeleteThread).toHaveBeenCalledWith("thread-1");
   });
 
+
+  it("renames a thread on double click", async () => {
+    const onRenameThread = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <AgentThreadList
+        threads={THREADS}
+        selectedThreadId="thread-1"
+        isLoading={false}
+        errorMessage={null}
+        onSelectThread={() => undefined}
+        onRenameThread={onRenameThread}
+        onDeleteThread={() => undefined}
+        renamingThreadId={null}
+        deletingThreadId={null}
+        isDeleteDisabled={false}
+        isRenameDisabled={false}
+        optimisticRunningThreadId={null}
+      />
+    );
+
+    await userEvent.dblClick(screen.getByRole("button", { name: "Groceries" }));
+    const input = screen.getByRole("textbox", { name: "Rename thread Groceries" });
+    await userEvent.clear(input);
+    await userEvent.type(input, "Monthly Budget{Enter}");
+
+    expect(onRenameThread).toHaveBeenCalledWith("thread-1", "Monthly Budget");
+  });
+
   it("disables the delete button for the thread currently being deleted", () => {
     render(
       <AgentThreadList
@@ -60,9 +93,12 @@ describe("AgentThreadList", () => {
         isLoading={false}
         errorMessage={null}
         onSelectThread={() => undefined}
+        onRenameThread={vi.fn().mockResolvedValue(undefined)}
         onDeleteThread={() => undefined}
+        renamingThreadId={null}
         deletingThreadId="thread-1"
         isDeleteDisabled={false}
+        isRenameDisabled={false}
         optimisticRunningThreadId={null}
       />
     );
@@ -78,9 +114,12 @@ describe("AgentThreadList", () => {
         isLoading={false}
         errorMessage={null}
         onSelectThread={() => undefined}
+        onRenameThread={vi.fn().mockResolvedValue(undefined)}
         onDeleteThread={() => undefined}
+        renamingThreadId={null}
         deletingThreadId={null}
         isDeleteDisabled={true}
+        isRenameDisabled={false}
         optimisticRunningThreadId={null}
       />
     );
@@ -97,9 +136,12 @@ describe("AgentThreadList", () => {
         isLoading={false}
         errorMessage={null}
         onSelectThread={() => undefined}
+        onRenameThread={vi.fn().mockResolvedValue(undefined)}
         onDeleteThread={() => undefined}
+        renamingThreadId={null}
         deletingThreadId={null}
         isDeleteDisabled={false}
+        isRenameDisabled={false}
         optimisticRunningThreadId={null}
       />
     );
@@ -115,9 +157,12 @@ describe("AgentThreadList", () => {
         isLoading={false}
         errorMessage={null}
         onSelectThread={() => undefined}
+        onRenameThread={vi.fn().mockResolvedValue(undefined)}
         onDeleteThread={() => undefined}
+        renamingThreadId={null}
         deletingThreadId={null}
         isDeleteDisabled={false}
+        isRenameDisabled={false}
         optimisticRunningThreadId="thread-1"
       />
     );

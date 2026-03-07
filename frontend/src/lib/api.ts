@@ -399,6 +399,13 @@ export function getAgentThread(threadId: string): Promise<AgentThreadDetail> {
   return request<AgentThreadDetail>(`/api/v1/agent/threads/${threadId}`);
 }
 
+export function renameAgentThread(payload: { threadId: string; title: string }): Promise<AgentThread> {
+  return request<AgentThread>(`/api/v1/agent/threads/${payload.threadId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ title: payload.title })
+  });
+}
+
 export function deleteAgentThread(threadId: string): Promise<void> {
   return request<void>(`/api/v1/agent/threads/${threadId}`, {
     method: "DELETE"

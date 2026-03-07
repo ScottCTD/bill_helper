@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.enums_agent import AgentChangeStatus
+from backend.services.agent.threads import THREAD_TITLE_MAX_LENGTH, validate_thread_title
 from backend.services.runtime_settings_normalization import (
     normalize_user_memory_items_or_none,
     validate_user_memory_size,
@@ -90,6 +91,19 @@ class AddUserMemoryArgs(BaseModel):
         if normalized is None:
             raise ValueError("memory_items must include at least one non-empty item")
         return normalized
+
+
+class RenameThreadArgs(BaseModel):
+    title: str = Field(
+        min_length=1,
+        max_length=THREAD_TITLE_MAX_LENGTH,
+        description="Short thread title/topic in 1-5 words.",
+    )
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str) -> str:
+        return validate_thread_title(value)
 
 
 _DATE_DESC = "ISO date YYYY-MM-DD, e.g. '2026-03-02'"

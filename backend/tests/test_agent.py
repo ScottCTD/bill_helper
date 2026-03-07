@@ -177,6 +177,34 @@ def test_delete_thread_removes_thread_from_list_and_detail(client):
     assert detail_response.json()["detail"] == "Thread not found"
 
 
+def test_patch_thread_renames_thread(client):
+    thread = create_thread(client)
+
+    response = client.patch(
+        f"/api/v1/agent/threads/{thread['id']}",
+        json={"title": "Budget Review"},
+    )
+    response.raise_for_status()
+    renamed = response.json()
+
+    assert renamed["title"] == "Budget Review"
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    assert detail_response.json()["thread"]["title"] == "Budget Review"
+
+
+def test_patch_thread_rejects_titles_longer_than_five_words(client):
+    thread = create_thread(client)
+
+    response = client.patch(
+        f"/api/v1/agent/threads/{thread['id']}",
+        json={"title": "one two three four five six"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_delete_thread_rejects_running_run(client, monkeypatch):
     block_model = Event()
     block_model.clear()
@@ -803,6 +831,15 @@ def test_settings_user_memory_is_injected_into_system_prompt(client, monkeypatch
     assert "- Works in CAD." in system_content
 
 
+def test_system_prompt_guides_thread_naming_policy():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    assert "Right after the first user message in a new thread, call rename_thread" in prompt
+    assert "only call rename_thread again if the user explicitly asks" in prompt
+    assert "Keep thread titles concise and topical" in prompt
+
+
 def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
     from backend.services.agent.tools import build_openai_tool_schemas
 
@@ -812,6 +849,7 @@ def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
     assert "list_entries" in names
     assert "list_proposals" in names
     assert "add_user_memory" in names
+    assert "rename_thread" in names
     assert "send_intermediate_update" in names
     assert "propose_update_entry" in names
     assert "propose_delete_entry" in names
@@ -893,6 +931,52 @@ def test_add_user_memory_tool_persists_runtime_settings_memory(client, monkeypat
         "Prefers terse answers.",
         "Works in CAD.",
     ]
+
+
+def test_rename_thread_tool_persists_thread_title(client, monkeypatch):
+    calls = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_rename_thread",
+                    "type": "function",
+                    "function": {
+                        "name": "rename_thread",
+                        "arguments": json.dumps({"title": "Budget Review"}),
+                    },
+                }
+            ],
+        },
+        {"role": "assistant", "content": "Done."},
+    ]
+    patch_model(monkeypatch, lambda _messages: calls.pop(0))
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Please summarize my budget.")
+
+    assert run["status"] == "completed"
+    assert len(run["tool_calls"]) == 1
+    assert run["tool_calls"][0]["tool_name"] == "rename_thread"
+    assert run["tool_calls"][0]["output_json"]["title"] == "Budget Review"
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    assert detail_response.json()["thread"]["title"] == "Budget Review"
+
+
+def test_thread_title_stays_untitled_without_rename_tool(client, monkeypatch):
+    patch_model(monkeypatch, lambda _messages: {"role": "assistant", "content": "No rename."})
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "hello")
+
+    assert run["status"] == "completed"
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    assert detail_response.json()["thread"]["title"] is None
 
 
 def test_list_tags_tool_description_mentions_tag_descriptions():
@@ -1265,6 +1349,84 @@ def test_stream_message_endpoint_emits_real_time_events(client, monkeypatch):
     assistant_messages = [message for message in detail["messages"] if message["role"] == "assistant"]
     assert len(assistant_messages) == 1
     assert assistant_messages[0]["content_markdown"] == "Hello"
+
+
+def test_stream_rename_thread_tool_updates_title_before_final_assistant_turn(client, monkeypatch):
+    from backend.models_agent import AgentThread
+    from backend.services.agent import runtime
+
+    call_count = 0
+
+    def stream_model(messages, db, **_kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            yield {
+                "type": "done",
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "call_rename_thread",
+                            "type": "function",
+                            "function": {
+                                "name": "rename_thread",
+                                "arguments": json.dumps({"title": "Budget Review"}),
+                            },
+                        }
+                    ],
+                    "usage": {
+                        "input_tokens": 10,
+                        "output_tokens": 5,
+                        "cache_read_tokens": 0,
+                        "cache_write_tokens": 0,
+                    },
+                },
+            }
+            return
+
+        thread = db.get(AgentThread, thread_id)
+        assert thread is not None
+        assert thread.title == "Budget Review"
+        yield {"type": "text_delta", "delta": "Done."}
+        yield {
+            "type": "done",
+            "message": {
+                "role": "assistant",
+                "content": "Done.",
+                "tool_calls": [],
+                "usage": {
+                    "input_tokens": 10,
+                    "output_tokens": 5,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0,
+                },
+            },
+        }
+
+    monkeypatch.setattr(runtime, "call_model_stream", stream_model)
+
+    thread = create_thread(client)
+    thread_id = thread["id"]
+    events = collect_sse_events(client, thread_id, "Please rename this thread")
+
+    tool_call_events = [
+        event
+        for event in events
+        if event.get("type") == "run_event" and event.get("event", {}).get("event_type", "").startswith("tool_call_")
+    ]
+    assert [event["event"]["event_type"] for event in tool_call_events] == [
+        "tool_call_queued",
+        "tool_call_started",
+        "tool_call_completed",
+    ]
+    assert tool_call_events[-1]["tool_call"]["tool_name"] == "rename_thread"
+    assert events[-1]["event"]["event_type"] == "run_completed"
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread_id}")
+    detail_response.raise_for_status()
+    assert detail_response.json()["thread"]["title"] == "Budget Review"
 
 
 def test_stream_message_endpoint_emits_reasoning_delta_events(client, monkeypatch):

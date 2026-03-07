@@ -24,6 +24,8 @@
   - tool argument schemas and nested JSON normalization
 - `backend/services/agent/tool_handlers_read.py`
   - read tools and `send_intermediate_update`
+- `backend/services/agent/tool_handlers_threads.py`
+  - `rename_thread` handler for short thread-topic updates
 - `backend/services/agent/tool_handlers_propose.py`
   - proposal CRUD tools and pending-proposal edit or remove tools
 - `backend/services/agent/entry_references.py`
@@ -32,6 +34,8 @@
   - patch-map helpers for pending proposal edits
 - `backend/services/agent/tool_runtime.py`
   - tool registry, schema composition, and execution policy
+- `backend/services/agent/threads.py`
+  - thread-title normalization plus rename persistence helpers shared by the router and tool handler
 - `backend/services/agent/tools.py`
   - thin composition facade for runtime interfaces
 - `backend/services/agent/change_contracts.py`
@@ -65,6 +69,7 @@
 - tag-delete proposals may proceed while referenced; proposal previews should surface impact counts and apply removes entry junction rows by cascade
 - `send_intermediate_update` is required as the first tool call when tool work is needed
 - `add_user_memory` is an add-only tool for explicit remember-this requests; mutate/remove requests must be declined
+- `rename_thread` should run right after the first user message in a new thread, then only when the user explicitly asks or the topic materially changes
 - model-facing tool interfaces avoid requiring full domain IDs; entry mutations prefer `entry_id` aliases from `list_entries` with selector fallback
 
 ## Agent Router
@@ -79,6 +84,7 @@ Endpoints:
 
 - `GET /api/v1/agent/threads`
 - `POST /api/v1/agent/threads`
+- `PATCH /api/v1/agent/threads/{thread_id}`
 - `DELETE /api/v1/agent/threads/{thread_id}`
 - `GET /api/v1/agent/threads/{thread_id}`
 - `POST /api/v1/agent/threads/{thread_id}/messages`
@@ -104,6 +110,7 @@ Endpoints:
 - runs support both background execution and SSE execution
 - streamed runs emit transient `reasoning_delta`, `text_delta`, and ordered persisted `run_event` rows
 - streamed tool lifecycle `run_event` payloads include a compact top-level `tool_call` snapshot so clients can render the tool name immediately without fetching full payloads
+- clients may hydrate a streamed `rename_thread` tool call immediately and update the visible thread title before the final assistant message arrives
 - `send_intermediate_update` is persisted as a `reasoning_update` event, not as a fake tool call
 - attachment-bearing user turns reach the model as ordered content parts: attachment text, then attachment images, then the typed user prompt
 - PDFs use PyMuPDF first and then local Tesseract OCR only when native text extraction fails

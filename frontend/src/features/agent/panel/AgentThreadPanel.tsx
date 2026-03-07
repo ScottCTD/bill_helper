@@ -7,9 +7,12 @@ interface AgentThreadPanelProps {
   isLoading: boolean;
   errorMessage: string | null;
   onSelectThread: (threadId: string) => void;
+  onRenameThread: (threadId: string, title: string) => Promise<void>;
   onDeleteThread: (threadId: string) => void;
+  renamingThreadId: string | null;
   deletingThreadId: string | null;
   isDeleteDisabled: boolean;
+  isRenameDisabled: boolean;
   isOpen: boolean;
   optimisticRunningThreadId: string | null;
 }
@@ -21,9 +24,12 @@ export function AgentThreadPanel(props: AgentThreadPanelProps) {
     isLoading,
     errorMessage,
     onSelectThread,
+    onRenameThread,
     onDeleteThread,
+    renamingThreadId,
     deletingThreadId,
     isDeleteDisabled,
+    isRenameDisabled,
     isOpen,
     optimisticRunningThreadId
   } = props;
@@ -41,9 +47,12 @@ export function AgentThreadPanel(props: AgentThreadPanelProps) {
         isLoading={isLoading}
         errorMessage={errorMessage}
         onSelectThread={onSelectThread}
+        onRenameThread={onRenameThread}
         onDeleteThread={onDeleteThread}
+        renamingThreadId={renamingThreadId}
         deletingThreadId={deletingThreadId}
         isDeleteDisabled={isDeleteDisabled}
+        isRenameDisabled={isRenameDisabled}
         optimisticRunningThreadId={optimisticRunningThreadId}
       />
     </div>

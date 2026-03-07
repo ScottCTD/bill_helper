@@ -42,15 +42,6 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _sanitize_title(content: str) -> str | None:
-    normalized = " ".join(content.split()).strip()
-    if not normalized:
-        return None
-    if len(normalized) <= 72:
-        return normalized
-    return f"{normalized[:69]}..."
-
-
 def _normalize_optional_text(value: str | None) -> str:
     return (value or "").strip()
 
@@ -148,8 +139,6 @@ async def create_user_message_and_start_run(
             )
         )
 
-    if thread.title is None:
-        thread.title = _sanitize_title(clean_content) or f"Thread {thread.created_at.date().isoformat()}"
     thread.updated_at = utc_now()
     db.add(thread)
     db.commit()

@@ -152,7 +152,7 @@
     @apply text-foreground;
   }
 
-  input:not([type="checkbox"]):not([type="file"]),
+  input:not([type="checkbox"]):not([type="file"]):not(.agent-thread-input),
   select,
   textarea {
     @apply h-9 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60;
@@ -1036,11 +1036,24 @@
   }
 
   .agent-thread-button {
-    @apply flex h-full min-w-0 flex-1 items-center justify-start rounded-md border-none bg-transparent px-2.5 py-0 pr-14 text-left text-sm font-medium leading-5 shadow-none hover:bg-transparent;
+    @apply m-0 flex h-full min-w-0 flex-1 appearance-none items-center justify-start rounded-md border-0 bg-transparent px-2.5 py-0 pr-14 text-left text-sm font-medium leading-5 shadow-none outline-none hover:bg-transparent focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0;
   }
 
   .agent-thread-label {
-    @apply block min-w-0 flex-1 truncate leading-5;
+    @apply flex h-5 min-w-0 flex-1 items-center truncate leading-5;
+  }
+
+  .agent-thread-edit-slot {
+    @apply flex h-full min-w-0 flex-1 items-center px-2.5 pr-14;
+  }
+
+  .agent-thread-input {
+    @apply m-0 h-5 w-full appearance-none rounded-none border-0 bg-transparent px-0 py-0 text-left text-sm font-medium leading-5 shadow-none outline-none focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0;
+    -webkit-appearance: none;
+    font-family: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    font-feature-settings: inherit;
   }
 
   .agent-thread-status-indicator {

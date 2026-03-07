@@ -27,10 +27,11 @@ Supporting modules include:
 ## Timeline Behavior
 
 - thread rail is on the right, collapsible, resizable, and independently scrollable
-- thread rows expose hover/focus delete controls and reconcile optimistic running state with `has_running_run`
+- thread rows expose hover/focus delete controls, support double-click inline rename, and reconcile optimistic running state with `has_running_run`
 - timeline is event-driven from persisted `run.events`
 - tool rows appear as queued, then update in place through running, completed, failed, or cancelled
 - live SSE `run_event` payloads can include a compact `tool_call` snapshot so tool rows show their real name before full hydration
+- streamed `rename_thread` calls hydrate immediately so the thread rail relabels before the assistant finishes the turn
 - live SSE `reasoning_delta` and `text_delta` chunks render transient Reasoning and Assistant updates inside the same activity bubble until persisted events/messages reconcile
 - compact tool-call snapshots are hydrated on demand from `GET /agent/tool-calls/{tool_call_id}`
 - assistant activity and transient SSE text render in the same assistant/update bubble

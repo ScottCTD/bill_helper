@@ -19,6 +19,7 @@ import {
   getAgentThread,
   interruptAgentRun,
   listAgentThreads,
+  renameAgentThread,
   rejectAgentChangeItem,
   streamAgentMessage
 } from "../../lib/api";
@@ -64,6 +65,22 @@ interface AgentPanelProps {
   onClose?: () => void;
 }
 
+function normalizeThreadTitleValue(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized || null;
+}
+
+function extractRenameThreadTitle(toolCall: AgentToolCall): string | null {
+  const outputTitle = normalizeThreadTitleValue(toolCall.output_json?.title);
+  if (outputTitle) {
+    return outputTitle;
+  }
+  return normalizeThreadTitleValue(toolCall.input_json?.title);
+}
+
 export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const queryClient = useQueryClient();
   const [selectedThreadId, setSelectedThreadId] = useState<string>("");
@@ -75,6 +92,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const [streamedTextByRunId, setStreamedTextByRunId] = useState<Record<string, string>>({});
   const [optimisticRunEventsByRunId, setOptimisticRunEventsByRunId] = useState<Record<string, AgentRunEvent[]>>({});
   const [optimisticToolCallsByRunId, setOptimisticToolCallsByRunId] = useState<Record<string, AgentToolCall[]>>({});
+  const [optimisticThreadTitlesById, setOptimisticThreadTitlesById] = useState<Record<string, string>>({});
   const [hydratingToolCallIds, setHydratingToolCallIds] = useState<Set<string>>(new Set());
   const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null);
   const [pendingAssistantMessage, setPendingAssistantMessage] = useState<PendingAssistantMessage | null>(null);
@@ -156,6 +174,16 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     refetchIntervalInBackground: true
   });
 
+  const displayedThreads = useMemo(() => {
+    if (!threadsQuery.data) {
+      return threadsQuery.data;
+    }
+    return threadsQuery.data.map((thread) => {
+      const optimisticTitle = optimisticThreadTitlesById[thread.id];
+      return optimisticTitle ? { ...thread, title: optimisticTitle } : thread;
+    });
+  }, [optimisticThreadTitlesById, threadsQuery.data]);
+
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -223,6 +251,52 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
   });
 
+  const applyThreadTitleToCaches = useCallback(
+    (threadId: string, title: string | null, updatedAt: string = new Date().toISOString()) => {
+      setOptimisticThreadTitlesById((current) => {
+        if (!title) {
+          return current;
+        }
+        return { ...current, [threadId]: title };
+      });
+      queryClient.setQueryData(queryKeys.agent.threads, (current: AgentThreadSummary[] | undefined) => {
+        if (!current) {
+          return current;
+        }
+        return [...current]
+          .map((thread) => (thread.id === threadId ? { ...thread, title, updated_at: updatedAt } : thread))
+          .sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+      });
+      queryClient.setQueryData(queryKeys.agent.thread(threadId), (current: AgentThreadDetail | undefined) => {
+        if (!current) {
+          return current;
+        }
+        return {
+          ...current,
+          thread: {
+            ...current.thread,
+            title,
+            updated_at: updatedAt
+          }
+        };
+      });
+    },
+    [queryClient]
+  );
+
+  const renameThreadMutation = useMutation({
+    mutationFn: renameAgentThread,
+    onSuccess: (thread) => {
+      applyThreadTitleToCaches(thread.id, thread.title, thread.updated_at);
+      setOptimisticThreadTitlesById((current) => {
+        const next = { ...current };
+        delete next[thread.id];
+        return next;
+      });
+      setActionError(null);
+    }
+  });
+
   const interruptRunMutation = useMutation({
     mutationFn: interruptAgentRun,
     onSuccess: () => {
@@ -254,6 +328,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const isMutating =
     createThreadMutation.isPending ||
     deleteThreadMutation.isPending ||
+    renameThreadMutation.isPending ||
     interruptRunMutation.isPending ||
     approveMutation.isPending ||
     rejectMutation.isPending;
@@ -455,6 +530,16 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
   }
 
+  async function handleRenameThread(threadId: string, title: string) {
+    setActionError(null);
+    try {
+      await renameThreadMutation.mutateAsync({ threadId, title });
+    } catch (error) {
+      setActionError((error as Error).message);
+      throw error;
+    }
+  }
+
   async function ensureThreadId(): Promise<string> {
     if (selectedThreadId) {
       return selectedThreadId;
@@ -464,14 +549,14 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     return created.id;
   }
 
-  const hydrateToolCallDetails = useCallback(async (runId: string, toolCallId: string) => {
+  const hydrateToolCallDetails = useCallback(async (threadId: string, runId: string, toolCallId: string, force = false) => {
     const persistedRun = threadRunsRef.current.find((run) => run.id === runId);
-    if (persistedRun?.tool_calls.some((toolCall) => toolCall.id === toolCallId && toolCall.has_full_payload)) {
+    if (!force && persistedRun?.tool_calls.some((toolCall) => toolCall.id === toolCallId && toolCall.has_full_payload)) {
       return;
     }
 
     const optimisticToolCalls = optimisticToolCallsRef.current[runId] ?? [];
-    if (optimisticToolCalls.some((toolCall) => toolCall.id === toolCallId && toolCall.has_full_payload)) {
+    if (!force && optimisticToolCalls.some((toolCall) => toolCall.id === toolCallId && toolCall.has_full_payload)) {
       return;
     }
 
@@ -487,6 +572,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     });
     try {
       const toolCall = await getAgentToolCall(toolCallId);
+      const renamedTitle = toolCall.tool_name === "rename_thread" ? extractRenameThreadTitle(toolCall) : null;
       setOptimisticToolCallsByRunId((current) => {
         const existing = current[runId] ?? [];
         const nextToolCalls = mergeRunToolCalls(existing, [toolCall]);
@@ -509,6 +595,9 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
           [runId]: nextToolCalls
         };
       });
+      if (renamedTitle) {
+        applyThreadTitleToCaches(threadId, renamedTitle);
+      }
     } catch {
       // Ignore transient hydration errors; later expansions or final snapshots will retry/reconcile.
     } finally {
@@ -522,7 +611,17 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         return next;
       });
     }
-  }, []);
+  }, [applyThreadTitleToCaches]);
+
+  const handleHydrateToolCall = useCallback(
+    (runId: string, toolCallId: string) => {
+      if (!selectedThreadId) {
+        return;
+      }
+      void hydrateToolCallDetails(selectedThreadId, runId, toolCallId);
+    },
+    [hydrateToolCallDetails, selectedThreadId]
+  );
 
   function handleAgentStreamEvent(threadId: string, event: AgentStreamEvent) {
     if (event.type === "run_event") {
@@ -533,6 +632,17 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
           ...current,
           [event.run_id]: mergeRunToolCalls(current[event.run_id] ?? [], [toolCall])
         }));
+        if (toolCall.tool_name === "rename_thread") {
+          if (event.event.event_type === "tool_call_started") {
+            void hydrateToolCallDetails(threadId, event.run_id, toolCall.id);
+          }
+          if (event.event.event_type === "tool_call_completed") {
+            void hydrateToolCallDetails(threadId, event.run_id, toolCall.id, true);
+          }
+          if (event.event.event_type === "tool_call_failed") {
+            invalidateAgentThreadData(queryClient, threadId);
+          }
+        }
       }
       setOptimisticRunEventsByRunId((current) => {
         const existing = current[event.run_id] ?? [];
@@ -653,6 +763,11 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       setIsStreamHealthy(false);
       const detail = await getAgentThread(threadId);
       queryClient.setQueryData(queryKeys.agent.thread(threadId), detail);
+      setOptimisticThreadTitlesById((current) => {
+        const next = { ...current };
+        delete next[threadId];
+        return next;
+      });
       invalidateAgentThreadData(queryClient, threadId);
       setPendingUserMessage((current) => {
         if (!current || current.threadId !== threadId) {
@@ -845,7 +960,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               optimisticToolCallsByRunId={optimisticToolCallsByRunId}
               activeOptimisticEvents={activeOptimisticEvents}
               activeOptimisticToolCalls={activeOptimisticToolCalls}
-              onHydrateToolCall={hydrateToolCallDetails}
+              onHydrateToolCall={handleHydrateToolCall}
               hydratingToolCallIds={hydratingToolCallIds}
               isAtBottom={isAtBottom}
               scrollToBottom={scrollToBottom}
@@ -895,16 +1010,19 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
             style={isThreadPanelOpen ? { width: panelWidth } : undefined}
           >
             <AgentThreadPanel
-              threads={threadsQuery.data}
+              threads={displayedThreads}
               selectedThreadId={selectedThreadId}
               isLoading={threadsQuery.isLoading}
               errorMessage={threadsQuery.isError ? (threadsQuery.error as Error).message : null}
               onSelectThread={setSelectedThreadId}
+              onRenameThread={handleRenameThread}
               onDeleteThread={(threadId) => {
                 void handleDeleteThread(threadId);
               }}
+              renamingThreadId={renameThreadMutation.isPending ? (renameThreadMutation.variables?.threadId ?? null) : null}
               deletingThreadId={deleteThreadMutation.isPending ? (deleteThreadMutation.variables ?? null) : null}
               isDeleteDisabled={isMutating || isRunInFlight}
+              isRenameDisabled={isMutating || isRunInFlight}
               isOpen={isThreadPanelOpen}
               optimisticRunningThreadId={optimisticRunningThreadId}
             />

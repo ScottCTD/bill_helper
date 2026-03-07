@@ -36,6 +36,7 @@ Use the docs in layers:
 - `exec-plans/active/*.md`: active proposals, migration notes, and temporary caveats.
 - `exec-plans/completed/*.md`: archived implementation plans and retrospectives.
 - `exec-plans/completed/2026-03-05_clean_architecture_fix_log.md`: archived desloppify and refactor fix log.
+- `exec-plans/completed/2026-03-07_agent_thread_rename_ui_fix_log.md`: archived debug log for the agent thread inline-rename UI polish fixes.
 
 Execution plans are not source-of-truth for current behavior. Promote stable conclusions back into the canonical docs above.
 
