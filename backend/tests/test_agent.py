@@ -820,6 +820,23 @@ def test_entry_proposal_tool_descriptions_define_markdown_notes_style():
     assert "ordered/unordered lists" in update_description
 
 
+def test_entry_tool_descriptions_prefer_entry_id_aliases():
+    from backend.services.agent.tools import build_openai_tool_schemas
+
+    tool_by_name = {
+        tool["function"]["name"]: tool["function"]
+        for tool in build_openai_tool_schemas()
+    }
+
+    list_description = str(tool_by_name["list_entries"]["description"])
+    update_description = str(tool_by_name["propose_update_entry"]["description"])
+    delete_description = str(tool_by_name["propose_delete_entry"]["description"])
+
+    assert "entry_id alias" in list_description
+    assert "Prefer entry_id from list_entries" in update_description
+    assert "Prefer entry_id from list_entries" in delete_description
+
+
 def test_entry_tool_schemas_inline_local_refs():
     from backend.services.agent.tools import build_openai_tool_schemas
 
@@ -1664,6 +1681,159 @@ def test_propose_create_entry_accepts_double_encoded_tool_arguments(client, monk
     assert run["tool_calls"][0]["input_json"] == entry_args
     assert run["tool_calls"][0]["output_json"]["status"] == "OK"
     assert run["change_items"][0]["change_type"] == "create_entry"
+
+
+def test_malformed_tool_arguments_do_not_crash_followup_model_step(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {
+                "role": "assistant",
+                "content": "The update request failed because the tool arguments were invalid.",
+            }
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_bad_update_entry",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_entry",
+                        "arguments": '{"patch": date":"2026-02-09"}, "selector": {"amount_minor":12264}}',
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Fix those entry dates")
+
+    assert run["status"] == "completed"
+    assert run["change_items"] == []
+    assert len(run["tool_calls"]) == 1
+    assert run["tool_calls"][0]["output_json"]["status"] == "ERROR"
+    assert run["tool_calls"][0]["output_json"]["summary"] == "invalid tool arguments"
+
+
+def test_update_entry_can_target_entry_id_from_list_entries(client, monkeypatch):
+    create_response = client.post(
+        "/api/v1/entries",
+        json={
+            "kind": "EXPENSE",
+            "occurred_at": "2026-02-14",
+            "name": "Morning Coffee",
+            "amount_minor": 525,
+            "currency_code": "CAD",
+            "from_entity": "Main Checking",
+            "to_entity": "Coffee Shop",
+            "tags": ["food"],
+        },
+    )
+    create_response.raise_for_status()
+    entry_id = create_response.json()["id"]
+
+    def fake_model(messages):
+        last_message = messages[-1]
+        if last_message["role"] == "tool" and last_message.get("name") == "list_entries":
+            tool_content = str(last_message.get("content") or "")
+            listed_entry_id = tool_content.split("entry_id=", 1)[1].split(" ", 1)[0]
+            return {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_update_by_entry_id",
+                        "type": "function",
+                        "function": {
+                            "name": "propose_update_entry",
+                            "arguments": json.dumps(
+                                {
+                                    "entry_id": listed_entry_id,
+                                    "patch": {"name": "Morning Coffee Updated"},
+                                }
+                            ),
+                        },
+                    }
+                ],
+            }
+        if last_message["role"] == "tool":
+            return {"role": "assistant", "content": "Update proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_list_entries",
+                    "type": "function",
+                    "function": {
+                        "name": "list_entries",
+                        "arguments": json.dumps({"name": "Morning Coffee"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Rename the morning coffee entry")
+
+    assert run["status"] == "completed"
+    assert len(run["tool_calls"]) == 2
+    list_output = run["tool_calls"][0]["output_json"]
+    assert list_output["entries"][0]["entry_id"] == entry_id[:8]
+    update_item = run["change_items"][0]
+    assert update_item["payload_json"]["entry_id"] == entry_id
+    assert update_item["payload_json"]["selector"]["name"] == "Morning Coffee"
+    assert update_item["payload_json"]["patch"]["name"] == "Morning Coffee Updated"
+
+    approve_response = client.post(f"/api/v1/agent/change-items/{update_item['id']}/approve", json={})
+    approve_response.raise_for_status()
+
+    entry_response = client.get(f"/api/v1/entries/{entry_id}")
+    entry_response.raise_for_status()
+    assert entry_response.json()["name"] == "Morning Coffee Updated"
+
+
+def test_list_entities_category_account_returns_account_backed_entities(client, monkeypatch):
+    create_account_response = client.post(
+        "/api/v1/accounts",
+        json={
+            "name": "Primary Checking",
+            "currency_code": "CAD",
+        },
+    )
+    create_account_response.raise_for_status()
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Found the account entity."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_list_entities_account",
+                    "type": "function",
+                    "function": {
+                        "name": "list_entities",
+                        "arguments": json.dumps({"category": "account"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "List my account entities")
+
+    assert run["status"] == "completed"
+    assert len(run["tool_calls"]) == 1
+    output = run["tool_calls"][0]["output_json"]
+    assert output["returned_count"] == 1
+    assert output["entities"][0]["name"] == "Primary Checking"
+    assert output["entities"][0]["category"] == "account"
+    assert output["entities"][0]["is_account"] is True
 
 
 def test_entry_proposal_can_reference_pending_entity_in_same_turn(client, monkeypatch):

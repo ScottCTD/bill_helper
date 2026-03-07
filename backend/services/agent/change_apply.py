@@ -22,6 +22,11 @@ from backend.services.agent.change_contracts import (
     UpdateTagPayload,
     validate_change_payload,
 )
+from backend.services.agent.entry_references import (
+    entry_public_summary,
+    find_entries_by_id,
+    find_entries_by_selector,
+)
 from backend.services.crud_policy import PolicyViolation
 from backend.services.entries import set_entry_tags, soft_delete_entry
 from backend.services.entities import (
@@ -72,37 +77,23 @@ def _parse_payload(
     return parsed
 
 
-def _find_entries_by_selector(db: Session, selector_payload: EntrySelectorPayload) -> list[Entry]:
-    return list(
-        db.scalars(
-            select(Entry)
-            .where(
-                Entry.is_deleted.is_(False),
-                Entry.occurred_at == selector_payload.date,
-                Entry.amount_minor == selector_payload.amount_minor,
-                func.lower(func.coalesce(Entry.name, "")) == selector_payload.name.lower(),
-                func.lower(func.coalesce(Entry.from_entity, "")) == selector_payload.from_entity.lower(),
-                func.lower(func.coalesce(Entry.to_entity, "")) == selector_payload.to_entity.lower(),
-            )
-            .order_by(Entry.created_at.asc())
-        )
-    )
-
-
-def _entry_public_summary(entry: Entry) -> str:
-    return (
-        f"{entry.occurred_at.isoformat()} {entry.name} {entry.amount_minor} {entry.currency_code} "
-        f"from={entry.from_entity or '-'} to={entry.to_entity or '-'}"
-    )
-
-
 def _find_unique_entry_by_selector(db: Session, selector_payload: EntrySelectorPayload) -> Entry:
-    matches = _find_entries_by_selector(db, selector_payload)
+    matches = find_entries_by_selector(db, selector_payload)
     if not matches:
         raise ValueError("Entry selector did not match any entry")
     if len(matches) > 1:
-        candidates = "; ".join(_entry_public_summary(entry) for entry in matches)
+        candidates = "; ".join(entry_public_summary(entry) for entry in matches)
         raise ValueError(f"Entry selector is ambiguous ({len(matches)} matches): {candidates}")
+    return matches[0]
+
+
+def _find_unique_entry_by_id(db: Session, entry_id: str) -> Entry:
+    matches = find_entries_by_id(db, entry_id)
+    if not matches:
+        raise ValueError("Entry id did not match any entry")
+    if len(matches) > 1:
+        candidates = "; ".join(entry.id for entry in matches)
+        raise ValueError(f"Entry id is ambiguous ({len(matches)} matches): {candidates}")
     return matches[0]
 
 
@@ -252,7 +243,12 @@ def apply_create_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
 def apply_update_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
     parsed = _parse_payload(payload, change_type=AgentChangeType.UPDATE_ENTRY, model_type=UpdateEntryPayload)
 
-    entry = _find_unique_entry_by_selector(db, parsed.selector)
+    if parsed.entry_id is not None:
+        entry = _find_unique_entry_by_id(db, parsed.entry_id)
+    elif parsed.selector is not None:
+        entry = _find_unique_entry_by_selector(db, parsed.selector)
+    else:  # pragma: no cover - validated by Pydantic
+        raise ValueError("Entry reference is required")
 
     if "kind" in parsed.patch.model_fields_set and parsed.patch.kind is not None:
         entry.kind = parsed.patch.kind
@@ -297,7 +293,12 @@ def apply_update_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
 def apply_delete_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
     parsed = _parse_payload(payload, change_type=AgentChangeType.DELETE_ENTRY, model_type=DeleteEntryPayload)
 
-    entry = _find_unique_entry_by_selector(db, parsed.selector)
+    if parsed.entry_id is not None:
+        entry = _find_unique_entry_by_id(db, parsed.entry_id)
+    elif parsed.selector is not None:
+        entry = _find_unique_entry_by_selector(db, parsed.selector)
+    else:  # pragma: no cover - validated by Pydantic
+        raise ValueError("Entry reference is required")
     soft_delete_entry(db, entry)
     recompute_entry_groups(db)
     db.flush()

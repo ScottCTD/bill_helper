@@ -105,7 +105,8 @@ TOOLS: dict[str, AgentToolDefinition] = {
         description=(
             "List/query entries by date, date range, name, from_entity, to_entity, tags, and kind. "
             "When name/from/to filters are present, exact matches are ranked higher than substring matches. "
-            "This tool is read-only and never mutates data."
+            "Each returned entry includes an entry_id alias you can reuse in propose_update_entry "
+            "or propose_delete_entry. This tool is read-only and never mutates data."
         ),
         args_model=ListEntriesArgs,
         handler=list_entries,
@@ -123,7 +124,8 @@ TOOLS: dict[str, AgentToolDefinition] = {
         name="list_entities",
         description=(
             "List/query entities by name and category. Exact matches are ranked higher than substring matches. "
-            "Use category='account' when looking for account entities. This tool is read-only."
+            "Use category='account' when looking for account entities; account-backed entities are returned "
+            "with category='account'. This tool is read-only."
         ),
         args_model=ListEntitiesArgs,
         handler=list_entities,
@@ -220,8 +222,9 @@ TOOLS: dict[str, AgentToolDefinition] = {
     "propose_update_entry": AgentToolDefinition(
         name="propose_update_entry",
         description=(
-            "Create a review-gated proposal to update an existing entry selected by date/amount/name/from/to. "
-            "If selector matches multiple entries, the tool reports ambiguity so the user can clarify. "
+            "Create a review-gated proposal to update an existing entry. Prefer entry_id from list_entries; "
+            "selector by date/amount/name/from/to is still accepted as a fallback. "
+            "If entry_id or selector matches multiple entries, the tool reports ambiguity so the user can clarify. "
             "When patch.markdown_notes is provided, keep it human-readable markdown that preserves all relevant "
             "input details. For short notes, avoid headings; prefer clear line breaks and ordered/unordered lists."
         ),
@@ -231,8 +234,9 @@ TOOLS: dict[str, AgentToolDefinition] = {
     "propose_delete_entry": AgentToolDefinition(
         name="propose_delete_entry",
         description=(
-            "Create a review-gated proposal to delete an existing entry selected by date/amount/name/from/to. "
-            "If selector matches multiple entries, the tool reports ambiguity so the user can clarify."
+            "Create a review-gated proposal to delete an existing entry. Prefer entry_id from list_entries; "
+            "selector by date/amount/name/from/to is still accepted as a fallback. "
+            "If entry_id or selector matches multiple entries, the tool reports ambiguity so the user can clarify."
         ),
         args_model=ProposeDeleteEntryArgs,
         handler=propose_delete_entry,

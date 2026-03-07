@@ -11,13 +11,21 @@ from backend.enums_agent import AgentChangeStatus, AgentChangeType
 from backend.models_finance import Account, Entry, Tag
 from backend.models_agent import AgentChangeItem, AgentRun
 from backend.services.agent.change_contracts import (
+    EntrySelectorPayload,
     validate_change_payload,
     validate_patch_map_paths,
+)
+from backend.services.agent.entry_references import (
+    entry_id_ambiguity_details,
+    entry_public_id,
+    entry_selector_from_entry,
+    entry_selector_to_json,
+    find_entries_by_id,
+    find_entries_by_selector,
 )
 from backend.services.agent.proposal_patching import apply_patch_map_to_payload
 from backend.services.agent.tool_args import (
     EntryPatchArgs,
-    EntrySelectorArgs,
     ProposeCreateEntityArgs,
     ProposeCreateEntryArgs,
     ProposeCreateTagArgs,
@@ -94,32 +102,30 @@ def create_change_item(
     return item
 
 
-def find_entries_by_selector(context: ToolContext, selector_args: EntrySelectorArgs) -> list[Entry]:
-    return list(
-        context.db.scalars(
-            select(Entry)
-            .where(
-                Entry.is_deleted.is_(False),
-                Entry.occurred_at == selector_args.date,
-                Entry.amount_minor == selector_args.amount_minor,
-                func.lower(func.coalesce(Entry.name, "")) == selector_args.name.lower(),
-                func.lower(func.coalesce(Entry.from_entity, "")) == selector_args.from_entity.lower(),
-                func.lower(func.coalesce(Entry.to_entity, "")) == selector_args.to_entity.lower(),
-            )
-            .options(selectinload(Entry.tags))
-            .order_by(Entry.created_at.asc())
-        )
-    )
+def _reference_details(
+    *,
+    entry_id: str | None,
+    selector: EntrySelectorPayload | None,
+) -> dict[str, Any]:
+    details: dict[str, Any] = {}
+    if entry_id is not None:
+        details["entry_id"] = entry_id
+    if selector is not None:
+        details["selector"] = entry_selector_to_json(selector)
+    return details
 
 
-def entry_selector_to_json(selector_args: EntrySelectorArgs) -> dict[str, Any]:
-    return {
-        "date": selector_args.date.isoformat(),
-        "amount_minor": selector_args.amount_minor,
-        "from_entity": selector_args.from_entity,
-        "to_entity": selector_args.to_entity,
-        "name": selector_args.name,
-    }
+def _find_entries_for_reference(
+    context: ToolContext,
+    *,
+    entry_id: str | None,
+    selector: EntrySelectorPayload | None,
+) -> list[Entry]:
+    if entry_id is not None:
+        return find_entries_by_id(context.db, entry_id)
+    if selector is None:  # pragma: no cover - validated by Pydantic
+        return []
+    return find_entries_by_selector(context.db, selector)
 
 
 def pending_proposals_for_thread(context: ToolContext) -> list[AgentChangeItem]:
@@ -578,17 +584,28 @@ def propose_create_entry(context: ToolContext, args: ProposeCreateEntryArgs) -> 
 
 
 def propose_update_entry(context: ToolContext, args: ProposeUpdateEntryArgs) -> ToolExecutionResult:
-    matches = find_entries_by_selector(context, args.selector)
+    matches = _find_entries_for_reference(
+        context,
+        entry_id=args.entry_id,
+        selector=args.selector,
+    )
     if not matches:
         return error_result(
-            "no entry matched selector",
-            details={"selector": entry_selector_to_json(args.selector)},
+            "no entry matched reference",
+            details=_reference_details(entry_id=args.entry_id, selector=args.selector),
         )
     if len(matches) > 1:
+        details = _reference_details(entry_id=args.entry_id, selector=args.selector)
+        if args.entry_id is not None:
+            details.update(entry_id_ambiguity_details(matches, entry_id=args.entry_id))
+            return error_result(
+                "ambiguous entry_id matched multiple entries; retry with one of the candidate ids",
+                details=details,
+            )
         return error_result(
             "ambiguous selector matched multiple entries; ask the user to clarify",
             details={
-                "selector": entry_selector_to_json(args.selector),
+                **details,
                 **entry_ambiguity_details(matches),
             },
         )
@@ -602,10 +619,12 @@ def propose_update_entry(context: ToolContext, args: ProposeUpdateEntryArgs) -> 
     if "date" in patch and patch["date"] is not None:
         patch["date"] = patch["date"].isoformat()
 
+    matched_entry = matches[0]
     payload = {
-        "selector": entry_selector_to_json(args.selector),
+        "entry_id": matched_entry.id,
+        "selector": entry_selector_from_entry(matched_entry),
         "patch": patch,
-        "target": entry_to_public_record(matches[0]),
+        "target": entry_to_public_record(matched_entry),
     }
     item = create_change_item(
         context,
@@ -614,6 +633,7 @@ def propose_update_entry(context: ToolContext, args: ProposeUpdateEntryArgs) -> 
         rationale_text="Agent proposed updating an entry.",
     )
     preview = {
+        "entry_id": entry_public_id(matched_entry.id),
         "selector": payload["selector"],
         "patch": patch,
     }
@@ -621,24 +641,37 @@ def propose_update_entry(context: ToolContext, args: ProposeUpdateEntryArgs) -> 
 
 
 def propose_delete_entry(context: ToolContext, args: ProposeDeleteEntryArgs) -> ToolExecutionResult:
-    matches = find_entries_by_selector(context, args.selector)
+    matches = _find_entries_for_reference(
+        context,
+        entry_id=args.entry_id,
+        selector=args.selector,
+    )
     if not matches:
         return error_result(
-            "no entry matched selector",
-            details={"selector": entry_selector_to_json(args.selector)},
+            "no entry matched reference",
+            details=_reference_details(entry_id=args.entry_id, selector=args.selector),
         )
     if len(matches) > 1:
+        details = _reference_details(entry_id=args.entry_id, selector=args.selector)
+        if args.entry_id is not None:
+            details.update(entry_id_ambiguity_details(matches, entry_id=args.entry_id))
+            return error_result(
+                "ambiguous entry_id matched multiple entries; retry with one of the candidate ids",
+                details=details,
+            )
         return error_result(
             "ambiguous selector matched multiple entries; ask the user to clarify",
             details={
-                "selector": entry_selector_to_json(args.selector),
+                **details,
                 **entry_ambiguity_details(matches),
             },
         )
 
+    matched_entry = matches[0]
     payload = {
-        "selector": entry_selector_to_json(args.selector),
-        "target": entry_to_public_record(matches[0]),
+        "entry_id": matched_entry.id,
+        "selector": entry_selector_from_entry(matched_entry),
+        "target": entry_to_public_record(matched_entry),
     }
     item = create_change_item(
         context,
@@ -647,6 +680,7 @@ def propose_delete_entry(context: ToolContext, args: ProposeDeleteEntryArgs) -> 
         rationale_text="Agent proposed deleting an entry.",
     )
     preview = {
+        "entry_id": entry_public_id(matched_entry.id),
         "selector": payload["selector"],
         "target": payload["target"],
     }

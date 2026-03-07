@@ -67,6 +67,20 @@ def decode_tool_call(tool_call: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     return tool_name, arguments
 
 
+def canonicalize_tool_call(tool_call: dict[str, Any]) -> dict[str, Any]:
+    function = tool_call.get("function") or {}
+    tool_name = str(function.get("name") or "")
+    arguments = parse_tool_arguments(function.get("arguments") or "{}")
+    return {
+        "id": tool_call.get("id"),
+        "type": str(tool_call.get("type") or "function"),
+        "function": {
+            "name": tool_name,
+            "arguments": json.dumps(arguments, separators=(",", ":")),
+        },
+    }
+
+
 def coerce_usage_int(value: Any) -> int | None:
     if isinstance(value, bool):
         return None

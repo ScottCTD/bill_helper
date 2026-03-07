@@ -18,6 +18,7 @@ from backend.services.agent.execution import (
 from backend.services.agent.model_client import AgentModelError
 from backend.services.agent.protocol_helpers import (
     USAGE_FIELDS,
+    canonicalize_tool_call,
     decode_tool_call,
     extract_usage_dict,
 )
@@ -294,15 +295,16 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
         step: AssistantStepContext,
         llm_messages: list[dict[str, Any]],
     ) -> tuple[list[_PreparedToolCall], list[dict[str, Any]]]:
+        sanitized_tool_calls = [canonicalize_tool_call(tool_call) for tool_call in step.tool_calls]
         llm_messages.append(
             {
                 "role": "assistant",
                 "content": step.assistant_content,
-                "tool_calls": step.tool_calls,
+                "tool_calls": sanitized_tool_calls,
             }
         )
         prepared_calls: list[_PreparedToolCall] = []
-        for tool_call in step.tool_calls:
+        for tool_call in sanitized_tool_calls:
             tool_name, arguments = decode_tool_call(tool_call)
             prepared_calls.append(
                 _PreparedToolCall(

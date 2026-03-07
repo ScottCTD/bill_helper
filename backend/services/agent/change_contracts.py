@@ -44,6 +44,23 @@ def normalize_object_json_string(value: Any) -> Any:
     return decoded if isinstance(decoded, dict) else value
 
 
+def normalize_optional_reference_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = normalize_loose_text(value)
+    return normalized.lower() if normalized is not None else None
+
+
+def normalize_entry_reference_payload(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return value
+    normalized = dict(value)
+    if "entry_id" in normalized:
+        normalized["entry_id"] = normalize_optional_reference_id(normalized.get("entry_id"))
+    normalized["selector"] = normalize_object_json_string(normalized.get("selector"))
+    return normalized
+
+
 class CreateTagPayload(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     type: str = Field(min_length=1, max_length=100)
@@ -270,31 +287,50 @@ class UpdateEntryPatchPayload(BaseModel):
 
 
 class UpdateEntryPayload(BaseModel):
-    selector: EntrySelectorPayload
+    entry_id: str | None = Field(default=None, min_length=4, max_length=36)
+    selector: EntrySelectorPayload | None = None
     patch: UpdateEntryPatchPayload
+
+    @field_validator("entry_id")
+    @classmethod
+    def normalize_entry_id(cls, value: str | None) -> str | None:
+        return normalize_optional_reference_id(value)
 
     @model_validator(mode="before")
     @classmethod
     def normalize_nested_object_args(cls, value: Any) -> Any:
-        if not isinstance(value, dict):
-            return value
-        normalized = dict(value)
-        normalized["selector"] = normalize_object_json_string(normalized.get("selector"))
+        normalized = normalize_entry_reference_payload(value)
+        if not isinstance(normalized, dict):
+            return normalized
         normalized["patch"] = normalize_object_json_string(normalized.get("patch"))
         return normalized
 
+    @model_validator(mode="after")
+    def ensure_reference_present(self) -> UpdateEntryPayload:
+        if self.entry_id is None and self.selector is None:
+            raise ValueError("either entry_id or selector is required")
+        return self
+
 
 class DeleteEntryPayload(BaseModel):
-    selector: EntrySelectorPayload
+    entry_id: str | None = Field(default=None, min_length=4, max_length=36)
+    selector: EntrySelectorPayload | None = None
+
+    @field_validator("entry_id")
+    @classmethod
+    def normalize_entry_id(cls, value: str | None) -> str | None:
+        return normalize_optional_reference_id(value)
 
     @model_validator(mode="before")
     @classmethod
     def normalize_nested_object_args(cls, value: Any) -> Any:
-        if not isinstance(value, dict):
-            return value
-        normalized = dict(value)
-        normalized["selector"] = normalize_object_json_string(normalized.get("selector"))
-        return normalized
+        return normalize_entry_reference_payload(value)
+
+    @model_validator(mode="after")
+    def ensure_reference_present(self) -> DeleteEntryPayload:
+        if self.entry_id is None and self.selector is None:
+            raise ValueError("either entry_id or selector is required")
+        return self
 
 
 CHANGE_PAYLOAD_MODELS: dict[AgentChangeType, type[BaseModel]] = {
@@ -335,8 +371,8 @@ PROPOSAL_MUTABLE_ROOTS: dict[AgentChangeType, set[str]] = {
         "tags",
         "markdown_notes",
     },
-    AgentChangeType.UPDATE_ENTRY: {"selector", "patch"},
-    AgentChangeType.DELETE_ENTRY: {"selector"},
+    AgentChangeType.UPDATE_ENTRY: {"entry_id", "selector", "patch"},
+    AgentChangeType.DELETE_ENTRY: {"entry_id", "selector"},
 }
 
 

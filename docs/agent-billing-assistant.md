@@ -174,6 +174,7 @@ You are an expert in personal finance and accounting. You always call the right 
 
 ### Error Handling and Continuation
 - If a tool returns an ERROR, decide whether to recover with other tools or ask the user to clarify.
+  When updating or deleting an existing entry, prefer the `entry_id` returned by `list_entries`.
   If selector ambiguity is reported, ask the user for clarification before proposing a mutation.
 - Reviewed proposal results are prepended in the latest user message before user feedback.
   Use review statuses/comments to improve the next proposal iteration.
@@ -199,7 +200,7 @@ You are an expert in personal finance and accounting. You always call the right 
 
 ## Tools
 
-Tool execution is composed from `backend/services/agent/tool_runtime.py` (registry + execution policy) with handlers in `backend/services/agent/tool_handlers_read.py` and `backend/services/agent/tool_handlers_propose.py`, argument contracts in `backend/services/agent/tool_args.py`, and patch-map helpers in `backend/services/agent/proposal_patching.py`. `backend/services/agent/tools.py` is a thin facade that re-exports runtime interfaces. Each tool returns plain-text `content` to the model.
+Tool execution is composed from `backend/services/agent/tool_runtime.py` (registry + execution policy) with handlers in `backend/services/agent/tool_handlers_read.py` and `backend/services/agent/tool_handlers_propose.py`, shared entry reference helpers in `backend/services/agent/entry_references.py`, argument contracts in `backend/services/agent/tool_args.py`, and patch-map helpers in `backend/services/agent/proposal_patching.py`. `backend/services/agent/tools.py` is a thin facade that re-exports runtime interfaces. Each tool returns plain-text `content` to the model.
 
 Proposal tools (`propose_*`, `update_pending_proposal`, `remove_pending_proposal`) create `AgentChangeItem` rows with status `PENDING_REVIEW`. They do not mutate domain data; changes apply only after human approval via approve/reject endpoints.
 
@@ -207,7 +208,7 @@ Proposal tools (`propose_*`, `update_pending_proposal`, `remove_pending_proposal
 
 #### `list_entries` (read)
 
-**Description:** List/query entries by date, date range, name, from_entity, to_entity, tags, and kind. When name/from/to filters are present, exact matches are ranked higher than substring matches. This tool is read-only and never mutates data.
+**Description:** List/query entries by date, date range, name, from_entity, to_entity, tags, and kind. When name/from/to filters are present, exact matches are ranked higher than substring matches. Each returned entry includes an `entry_id` alias that can be reused with `propose_update_entry` and `propose_delete_entry`. This tool is read-only and never mutates data.
 
 **Arguments:**
 
@@ -228,7 +229,7 @@ Proposal tools (`propose_*`, `update_pending_proposal`, `remove_pending_proposal
 ```
 OK
 summary: returned N of M matching entries
-entries: YYYY-MM-DD name amount_minor CURRENCY from=from_entity to=to_entity tags=[...]; ...
+entries: entry_id=abcd1234 YYYY-MM-DD name amount_minor CURRENCY from=from_entity to=to_entity tags=[...]; ...
 ```
 
 `N` = count returned (limited by `limit`); `M` = total matching. When N < M, more items exist; increase `limit` or narrow filters to see more.
@@ -277,36 +278,38 @@ top_tags: tag:USD:1000; ...
 
 #### `propose_update_entry` (proposal)
 
-**Description:** Create a review-gated proposal to update an existing entry selected by date/amount/name/from/to. If selector matches multiple entries, the tool reports ambiguity so the user can clarify. For robustness, the tool also accepts `selector`/`patch` when they arrive as JSON-object strings and normalizes them before validation. When `patch.markdown_notes` is provided, keep it human-readable markdown that preserves all relevant input details; for short notes, avoid headings and prefer clear line breaks plus ordered/unordered lists.
+**Description:** Create a review-gated proposal to update an existing entry. Prefer the `entry_id` alias returned by `list_entries`; selector by date/amount/name/from/to remains available as a fallback. If `entry_id` or selector matches multiple entries, the tool reports ambiguity so the user can clarify. For robustness, the tool also accepts `selector`/`patch` when they arrive as JSON-object strings and normalizes them before validation. When `patch.markdown_notes` is provided, keep it human-readable markdown that preserves all relevant input details; for short notes, avoid headings and prefer clear line breaks plus ordered/unordered lists.
 
 **Arguments:**
 
 | Parameter | Type | Required | Constraints |
 |-----------|------|----------|-------------|
-| `selector` | object | yes | Exactly one match required (`{"..."}` JSON-object string is also normalized) |
+| `entry_id` | string \| null | no | Preferred entry reference; accepts short alias from `list_entries` or full entry id |
+| `selector` | object \| null | no | Fallback reference; exactly one match required (`{"..."}` JSON-object string is also normalized) |
 | `patch` | object | yes | At least one field (`{"..."}` JSON-object string is also normalized) |
 
 **Selector fields:** `date` (string, ISO date e.g. `"2026-03-02"`), `amount_minor` (integer, > 0), `from_entity` (string), `to_entity` (string), `name` (string).
 
 **Patch fields:** `kind`, `date` (ISO date e.g. `"2026-03-02"`), `name`, `amount_minor`, `currency_code`, `from_entity`, `to_entity`, `tags`, `markdown_notes` (all optional).
 
-**Expected output:** `OK` with status and preview. Returns `ERROR` if no match or ambiguous selector.
+**Expected output:** `OK` with status and preview. Returns `ERROR` if no match or if `entry_id`/selector is ambiguous.
 
 ---
 
 #### `propose_delete_entry` (proposal)
 
-**Description:** Create a review-gated proposal to delete an existing entry selected by date/amount/name/from/to. If selector matches multiple entries, the tool reports ambiguity so the user can clarify.
+**Description:** Create a review-gated proposal to delete an existing entry. Prefer the `entry_id` alias returned by `list_entries`; selector by date/amount/name/from/to remains available as a fallback. If `entry_id` or selector matches multiple entries, the tool reports ambiguity so the user can clarify.
 
 **Arguments:**
 
 | Parameter | Type | Required | Constraints |
 |-----------|------|----------|-------------|
-| `selector` | object | yes | Exactly one match required |
+| `entry_id` | string \| null | no | Preferred entry reference; accepts short alias from `list_entries` or full entry id |
+| `selector` | object \| null | no | Fallback reference; exactly one match required |
 
 **Selector fields:** `date` (string, ISO date e.g. `"2026-03-02"`), `amount_minor` (integer, > 0), `from_entity` (string), `to_entity` (string), `name` (string).
 
-**Expected output:** `OK` with status and preview. Returns `ERROR` if no match or ambiguous selector.
+**Expected output:** `OK` with status and preview. Returns `ERROR` if no match or if `entry_id`/selector is ambiguous.
 
 ---
 
@@ -386,7 +389,7 @@ tags: name (type or untyped), ...
 
 #### `list_entities` (read)
 
-**Description:** List/query entities by name and category. Exact matches are ranked higher than substring matches. Account-backed rows are flagged in the returned records. This tool is read-only.
+**Description:** List/query entities by name and category. Exact matches are ranked higher than substring matches. Account-backed rows are flagged in the returned records and exposed with `category="account"` for lookup purposes. This tool is read-only.
 
 **Arguments:**
 
@@ -548,7 +551,7 @@ Try again with the right type
 In `change_apply.py`:
 
 - `create_entry`: create entry directly
-- `update_entry`: update uniquely-selected entry by selector
+- `update_entry`: update uniquely-selected entry by `entry_id` (preferred) or selector
 - `delete_entry`: soft-delete uniquely-selected entry
 - `create_tag`: create/reuse normalized tag + assign type
 - `update_tag`: rename and/or update type

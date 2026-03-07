@@ -26,6 +26,7 @@ from backend.services.agent.model_client import (
     LiteLLMModelClient,
     validate_litellm_environment,
 )
+from backend.services.agent.protocol_helpers import canonicalize_tool_call
 from backend.services.agent.runtime_state import (
     PreparedToolCall,
     apply_usage_totals_to_run as _apply_usage_totals_to_run,
@@ -255,6 +256,7 @@ def _prepare_tool_turn(
 ) -> tuple[list[PreparedToolCall], list[AgentRunEvent]]:
     prepared_calls: list[PreparedToolCall] = []
     event_rows: list[AgentRunEvent] = []
+    sanitized_tool_calls = [canonicalize_tool_call(tool_call) for tool_call in tool_calls]
 
     reasoning_event = _record_reasoning_update_event(
         db,
@@ -269,7 +271,7 @@ def _prepare_tool_turn(
         {
             "role": "assistant",
             "content": assistant_content,
-            "tool_calls": tool_calls,
+            "tool_calls": sanitized_tool_calls,
         }
     )
     assistant_event = _record_reasoning_update_event(
@@ -281,7 +283,7 @@ def _prepare_tool_turn(
     if assistant_event is not None:
         event_rows.append(assistant_event)
 
-    for tool_call in tool_calls:
+    for tool_call in sanitized_tool_calls:
         prepared_call = _queue_tool_call_record(db, run=run, tool_call=tool_call)
         prepared_calls.append(prepared_call)
         if prepared_call.persisted_row is None:

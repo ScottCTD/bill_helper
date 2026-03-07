@@ -76,9 +76,9 @@ Proposal tools:
 
 Contract notes:
 
-- model-facing tool interfaces avoid domain IDs and use natural keys/selectors
-- entry update/delete selectors: `date + amount_minor + from_entity + to_entity + name`
-- selector ambiguity is reported to the model as a tool error so the model asks user clarification
+- model-facing tool interfaces avoid requiring full domain IDs; entry mutations prefer `entry_id` aliases from `list_entries`
+- entry update/delete fall back to selectors: `date + amount_minor + from_entity + to_entity + name`
+- entry-id or selector ambiguity is reported to the model as a tool error so the model asks user clarification
 
 ## Agent Internal Boundaries (Refactor Baseline)
 

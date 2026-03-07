@@ -26,6 +26,8 @@
   - read tools and `send_intermediate_update`
 - `backend/services/agent/tool_handlers_propose.py`
   - proposal CRUD tools and pending-proposal edit or remove tools
+- `backend/services/agent/entry_references.py`
+  - shared entry lookup helpers for `entry_id` aliases, selector fallback, and public entry snapshots
 - `backend/services/agent/proposal_patching.py`
   - patch-map helpers for pending proposal edits
 - `backend/services/agent/tool_runtime.py`
@@ -61,7 +63,7 @@
 - tag/entity naming should stay canonical and generalized
 - tag-delete proposals may proceed while referenced; proposal previews should surface impact counts and apply removes entry junction rows by cascade
 - `send_intermediate_update` is required as the first tool call when tool work is needed
-- model-facing tool interfaces avoid domain IDs and use names or selectors instead
+- model-facing tool interfaces avoid requiring full domain IDs; entry mutations prefer `entry_id` aliases from `list_entries` with selector fallback
 
 ## Agent Router
 

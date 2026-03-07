@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from backend.models_finance import Entity, Entry, Tag
+from backend.services.agent.entry_references import entry_to_public_record
 from backend.services.agent.tool_args import (
     EmptyArgs,
     ListEntitiesArgs,
@@ -37,25 +38,11 @@ def string_match_rank(value: str | None, query: str | None) -> tuple[int, bool]:
     return 99, False
 
 
-def entry_to_public_record(entry: Entry) -> dict[str, Any]:
-    tag_names = sorted(normalize_tag_name(tag.name) for tag in entry.tags)
-    return {
-        "date": entry.occurred_at.isoformat(),
-        "kind": entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind),
-        "name": entry.name,
-        "amount_minor": entry.amount_minor,
-        "currency_code": entry.currency_code,
-        "from_entity": entry.from_entity,
-        "to_entity": entry.to_entity,
-        "tags": tag_names,
-        "markdown_notes": entry.markdown_body,
-    }
-
-
 def format_entry_record(record: dict[str, Any]) -> str:
     tags = record.get("tags") or []
     return (
-        f"{record.get('date')} {record.get('name')} {record.get('amount_minor')} {record.get('currency_code')} "
+        f"entry_id={record.get('entry_id')} {record.get('date')} {record.get('name')} "
+        f"{record.get('amount_minor')} {record.get('currency_code')} "
         f"from={record.get('from_entity') or '-'} to={record.get('to_entity') or '-'} tags={tags}"
     )
 
@@ -78,6 +65,19 @@ def error_result(summary: str, *, details: Any | None = None) -> ToolExecutionRe
         output_json=payload,
         status="error",
     )
+
+
+def effective_entity_category(
+    entity: Entity,
+    *,
+    category_by_entity_id: dict[str, str],
+) -> str | None:
+    category = category_by_entity_id.get(str(entity.id)) or entity.category
+    if category is not None:
+        return category
+    if entity.account is not None:
+        return "account"
+    return None
 
 
 def list_entries(context: ToolContext, args: ListEntriesArgs) -> ToolExecutionResult:
@@ -231,7 +231,7 @@ def list_entities(context: ToolContext, args: ListEntitiesArgs) -> ToolExecution
 
     ranked: list[tuple[tuple[int, int, str], dict[str, Any]]] = []
     for entity in entities:
-        category = category_by_entity_id.get(entity.id) or entity.category
+        category = effective_entity_category(entity, category_by_entity_id=category_by_entity_id)
         name_rank, name_ok = string_match_rank(entity.name, args.name)
         category_rank, category_ok = string_match_rank(category, args.category)
         if not (name_ok and category_ok):
