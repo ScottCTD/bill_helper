@@ -148,6 +148,50 @@ describe("AgentRunBlock", () => {
     expect(screen.getByText("Tool details")).toBeInTheDocument();
   });
 
+  it("renders streamed compact tool labels before hydration", async () => {
+    const compactToolCall = buildToolCall({
+      id: "tool-streamed-compact",
+      run_id: "run-streamed-compact",
+      tool_name: "propose_create_entity",
+      has_full_payload: false,
+      input_json: null,
+      output_json: null,
+      output_text: null,
+      status: "queued"
+    });
+    const run = buildRun({
+      id: "run-streamed-compact",
+      status: "running",
+      events: []
+    });
+
+    render(
+      <AgentRunBlock
+        run={run}
+        isMutating={false}
+        onReviewRun={() => undefined}
+        mode="activity"
+        optimisticEvents={[
+          buildRunEvent({
+            id: "event-1",
+            run_id: "run-streamed-compact",
+            sequence_index: 1,
+            event_type: "tool_call_queued",
+            tool_call_id: "tool-streamed-compact"
+          })
+        ]}
+        optimisticToolCalls={[compactToolCall]}
+      />
+    );
+
+    expect(screen.getByText("propose_create_entity")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("propose_create_entity"));
+
+    expect(screen.getByText("Tool details")).toBeInTheDocument();
+    expect(screen.getByText("Loading on demand...")).toBeInTheDocument();
+  });
+
   it("renders transient streaming assistant text inside the activity bubble", () => {
     const run = buildRun({
       id: "run-streaming",

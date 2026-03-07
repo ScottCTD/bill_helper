@@ -107,13 +107,18 @@ Response content type: `text/event-stream`
 
 Event contract:
 
+- `reasoning_delta`
 - `text_delta`
 - `run_event`
+  - shape: `{ type, run_id, event, tool_call? }`
+  - `tool_call` is present only for tool lifecycle events and uses the compact `AgentToolCallRead` shape (`has_full_payload=false`, payload fields omitted)
 
 Usage notes:
 
 - usage totals are persisted on the run record and read from snapshot endpoints
 - retries after partial streamed text suppress already-emitted prefixes
+- `reasoning_delta` is transient live stream output; the durable record remains the later persisted `run_event` with `event_type=reasoning_update`
+- expand a streamed compact tool row through `GET /agent/tool-calls/{tool_call_id}` when full arguments or results are needed
 
 ## Runs And Tool Calls
 

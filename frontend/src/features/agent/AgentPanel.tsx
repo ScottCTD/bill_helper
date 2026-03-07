@@ -70,6 +70,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isStreamHealthy, setIsStreamHealthy] = useState(false);
   const [activeStreamRunId, setActiveStreamRunId] = useState<string | null>(null);
+  const [streamedReasoningTextByRunId, setStreamedReasoningTextByRunId] = useState<Record<string, string>>({});
   const [streamedTextByRunId, setStreamedTextByRunId] = useState<Record<string, string>>({});
   const [optimisticRunEventsByRunId, setOptimisticRunEventsByRunId] = useState<Record<string, AgentRunEvent[]>>({});
   const [optimisticToolCallsByRunId, setOptimisticToolCallsByRunId] = useState<Record<string, AgentToolCall[]>>({});
@@ -128,6 +129,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
 
   const resetOptimisticRunState = useCallback(() => {
     setActiveStreamRunId(null);
+    setStreamedReasoningTextByRunId({});
     setStreamedTextByRunId({});
     setOptimisticRunEventsByRunId({});
     setOptimisticToolCallsByRunId({});
@@ -298,6 +300,12 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
     return streamedTextByRunId[activeStreamRunId] ?? "";
   }, [activeStreamRunId, streamedTextByRunId]);
+  const activeStreamReasoningText = useMemo(() => {
+    if (!activeStreamRunId) {
+      return "";
+    }
+    return streamedReasoningTextByRunId[activeStreamRunId] ?? "";
+  }, [activeStreamRunId, streamedReasoningTextByRunId]);
   const activeOptimisticEvents = useMemo(() => {
     if (!activeStreamRunId) {
       return [];
@@ -522,6 +530,12 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   function handleAgentStreamEvent(threadId: string, event: AgentStreamEvent) {
     if (event.type === "run_event") {
       setActiveStreamRunId((current) => current || event.run_id);
+      if (event.tool_call) {
+        setOptimisticToolCallsByRunId((current) => ({
+          ...current,
+          [event.run_id]: mergeRunToolCalls(current[event.run_id] ?? [], [event.tool_call])
+        }));
+      }
       setOptimisticRunEventsByRunId((current) => {
         const existing = current[event.run_id] ?? [];
         if (existing.some((item) => item.id === event.event.id)) {
@@ -543,9 +557,28 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
           };
         });
       }
+      if (event.event.event_type === "reasoning_update" && event.event.source === "model_reasoning") {
+        setStreamedReasoningTextByRunId((current) => {
+          if (!current[event.run_id]) {
+            return current;
+          }
+          return {
+            ...current,
+            [event.run_id]: ""
+          };
+        });
+      }
       if (event.event.event_type === "run_failed" && event.event.message) {
         setActionError(event.event.message);
       }
+      return;
+    }
+    if (event.type === "reasoning_delta") {
+      setActiveStreamRunId((current) => current || event.run_id);
+      setStreamedReasoningTextByRunId((current) => ({
+        ...current,
+        [event.run_id]: `${current[event.run_id] ?? ""}${event.delta}`
+      }));
       return;
     }
     if (event.type === "text_delta") {
@@ -792,6 +825,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               shouldShowOptimisticAssistantBubble={shouldShowOptimisticAssistantBubble}
               pendingRunAttachedToOptimisticMessage={pendingRunAttachedToOptimisticMessage}
               isMutating={isMutating}
+              activeStreamReasoningText={activeStreamReasoningText}
               activeStreamText={activeStreamText}
               optimisticRunEventsByRunId={optimisticRunEventsByRunId}
               optimisticToolCallsByRunId={optimisticToolCallsByRunId}

@@ -1088,8 +1088,10 @@ def test_stream_message_endpoint_emits_real_time_events(client, monkeypatch):
     events = collect_sse_events(client, thread["id"], "say hello")
 
     assert events
-    run_event_types = [event["event"]["event_type"] for event in events if event.get("type") == "run_event"]
+    run_events = [event for event in events if event.get("type") == "run_event"]
+    run_event_types = [event["event"]["event_type"] for event in run_events]
     assert run_event_types[0] == "run_started"
+    assert all("tool_call" not in event for event in run_events)
     text = "".join(event.get("delta", "") for event in events if event.get("type") == "text_delta")
     assert text == "Hello"
     assert run_event_types[-1] == "run_completed"
@@ -1100,6 +1102,48 @@ def test_stream_message_endpoint_emits_real_time_events(client, monkeypatch):
     assistant_messages = [message for message in detail["messages"] if message["role"] == "assistant"]
     assert len(assistant_messages) == 1
     assert assistant_messages[0]["content_markdown"] == "Hello"
+
+
+def test_stream_message_endpoint_emits_reasoning_delta_events(client, monkeypatch):
+    from backend.services.agent import runtime
+
+    def stream_model(_messages, _db, **_kwargs):
+        yield {"type": "reasoning_delta", "delta": "Checking "}
+        yield {"type": "reasoning_delta", "delta": "entities"}
+        yield {"type": "text_delta", "delta": "Done."}
+        yield {
+            "type": "done",
+            "message": {
+                "role": "assistant",
+                "content": "Done.",
+                "reasoning": "Checking entities",
+                "tool_calls": [],
+                "usage": {
+                    "input_tokens": 10,
+                    "output_tokens": 5,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0,
+                },
+            },
+        }
+
+    monkeypatch.setattr(runtime, "call_model_stream", stream_model)
+
+    thread = create_thread(client)
+    events = collect_sse_events(client, thread["id"], "say hello")
+
+    reasoning_deltas = [event["delta"] for event in events if event.get("type") == "reasoning_delta"]
+    assert reasoning_deltas == ["Checking ", "entities"]
+
+    reasoning_updates = [
+        event["event"]
+        for event in events
+        if event.get("type") == "run_event"
+        and event.get("event", {}).get("event_type") == "reasoning_update"
+        and event.get("event", {}).get("source") == "model_reasoning"
+    ]
+    assert len(reasoning_updates) == 1
+    assert reasoning_updates[0]["message"] == "Checking entities"
 
 
 def test_stream_message_endpoint_emits_reasoning_update_events(client, monkeypatch):
@@ -1230,15 +1274,22 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
     assert reasoning_updates[0]["message"] == "I am checking current tags before making any changes."
 
     tool_call_events = [
-        event["event"]
+        event
         for event in events
         if event.get("type") == "run_event" and event.get("event", {}).get("event_type", "").startswith("tool_call_")
     ]
-    assert [event["event_type"] for event in tool_call_events] == [
+    assert [event["event"]["event_type"] for event in tool_call_events] == [
         "tool_call_queued",
         "tool_call_started",
         "tool_call_completed",
     ]
+    assert [event["tool_call"]["tool_name"] for event in tool_call_events] == [
+        "list_tags",
+        "list_tags",
+        "list_tags",
+    ]
+    assert [event["tool_call"]["has_full_payload"] for event in tool_call_events] == [False, False, False]
+    assert [event["tool_call"]["status"] for event in tool_call_events] == ["queued", "running", "ok"]
 
     text = "".join(event.get("delta", "") for event in events if event.get("type") == "text_delta")
     assert text == "I am checking current tags before making any changes.Done."

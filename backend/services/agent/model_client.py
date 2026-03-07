@@ -641,7 +641,8 @@ class LiteLLMModelClient:
 
         emitted_content = ""
         final_content = ""
-        reasoning_content = ""
+        emitted_reasoning = ""
+        final_reasoning = ""
         usage_totals = _empty_usage_totals()
         final_tool_calls_by_index: dict[int, dict[str, Any]] = {}
 
@@ -661,6 +662,7 @@ class LiteLLMModelClient:
                 try:
                     stream = self._stream_completion_once(request)
                     attempt_content = ""
+                    attempt_reasoning = ""
                     attempt_tool_calls_by_index: dict[int, dict[str, Any]] = {}
                     for chunk in stream:
                         _apply_usage_totals(
@@ -678,9 +680,18 @@ class LiteLLMModelClient:
                                 _read_attr(delta, "reasoning_content")
                             ) or _coerce_text(_read_attr(delta, "reasoning"))
                             if reasoning_delta is not None:
-                                reasoning_content = (
-                                    f"{reasoning_content}{reasoning_delta}"
+                                emitted_reasoning, attempt_reasoning, streamed_reasoning_delta = (
+                                    _append_stream_content(
+                                        emitted_content=emitted_reasoning,
+                                        attempt_content=attempt_reasoning,
+                                        content_delta=reasoning_delta,
+                                    )
                                 )
+                                if streamed_reasoning_delta is not None:
+                                    yield {
+                                        "type": "reasoning_delta",
+                                        "delta": streamed_reasoning_delta,
+                                    }
 
                             content_delta = _coerce_text(_read_attr(delta, "content"))
                             if content_delta is not None:
@@ -708,12 +719,25 @@ class LiteLLMModelClient:
                     )
                     if trailing_delta is not None:
                         yield {"type": "text_delta", "delta": trailing_delta}
+                    emitted_reasoning, final_reasoning, trailing_reasoning_delta = (
+                        _finalize_stream_content(
+                            emitted_content=emitted_reasoning,
+                            attempt_content=attempt_reasoning,
+                        )
+                    )
+                    if trailing_reasoning_delta is not None:
+                        yield {
+                            "type": "reasoning_delta",
+                            "delta": trailing_reasoning_delta,
+                        }
                     final_tool_calls_by_index = attempt_tool_calls_by_index
                 except Exception as exc:
                     raise self._to_model_error(exc) from exc
 
         if not final_content:
             final_content = emitted_content
+        if not final_reasoning:
+            final_reasoning = emitted_reasoning
         yield {
             "type": "done",
             "message": {
@@ -721,6 +745,6 @@ class LiteLLMModelClient:
                 "content": final_content,
                 "tool_calls": _ordered_tool_calls(final_tool_calls_by_index),
                 "usage": usage_totals,
-                "reasoning": reasoning_content,
+                "reasoning": final_reasoning,
             },
         }

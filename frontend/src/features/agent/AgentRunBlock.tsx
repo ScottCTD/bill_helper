@@ -28,6 +28,7 @@ interface AgentRunBlockProps {
   mode?: "activity" | "summary" | "all";
   optimisticEvents?: AgentRunEvent[];
   optimisticToolCalls?: AgentToolCall[];
+  streamingReasoningText?: string;
   streamingAssistantText?: string;
 }
 
@@ -41,7 +42,7 @@ function prettyDateTime(value: string): string {
   return parsed.toLocaleString();
 }
 
-function renderableStreamingAssistantText(value: string, showPlaceholder: boolean): string {
+function renderableStreamingUpdateText(value: string, showPlaceholder: boolean): string {
   if (value.length > 0) {
     return value.trim().length > 0 ? value : STREAMING_ASSISTANT_PLACEHOLDER;
   }
@@ -160,27 +161,37 @@ function ActivityTimeline({
   isRunning,
   onHydrateToolCall,
   hydratingToolCallIds,
+  streamingReasoningText = "",
   streamingAssistantText = "",
-  showStreamingAssistantPlaceholder = false
+  showStreamingPlaceholder = false
 }: {
   items: RunActivityItem[];
   isRunning: boolean;
   onHydrateToolCall?: (runId: string, toolCallId: string) => void;
   hydratingToolCallIds?: ReadonlySet<string>;
+  streamingReasoningText?: string;
   streamingAssistantText?: string;
-  showStreamingAssistantPlaceholder?: boolean;
+  showStreamingPlaceholder?: boolean;
 }) {
-  const visibleStreamingAssistantText = renderableStreamingAssistantText(
-    streamingAssistantText,
-    showStreamingAssistantPlaceholder
+  const visibleStreamingReasoningText = renderableStreamingUpdateText(
+    streamingReasoningText,
+    false
   );
+  const visibleStreamingAssistantText = renderableStreamingUpdateText(
+    streamingAssistantText,
+    showStreamingPlaceholder
+  );
+  const hasStreamingReasoningText = visibleStreamingReasoningText.length > 0;
   const hasStreamingAssistantText = visibleStreamingAssistantText.length > 0;
   return (
     <details className={cn("agent-run-root-activity", isRunning && "agent-run-root-activity-static")} open={isRunning}>
       <summary>
         <ChevronRight className="agent-tool-call-chevron" />
         <span className="agent-tool-call-group-label">
-          {summarizeActivityTimeline(items, hasStreamingAssistantText ? 1 : 0)}
+          {summarizeActivityTimeline(
+            items,
+            (hasStreamingReasoningText ? 1 : 0) + (hasStreamingAssistantText ? 1 : 0)
+          )}
         </span>
         {isRunning ? <span className="agent-tool-call-status">live</span> : null}
       </summary>
@@ -207,6 +218,13 @@ function ActivityTimeline({
             />
           );
         })}
+        {hasStreamingReasoningText ? (
+          <CollapsibleReasoningUpdate
+            message={visibleStreamingReasoningText}
+            source="model_reasoning"
+            defaultOpen={isRunning}
+          />
+        ) : null}
         {hasStreamingAssistantText ? (
           <CollapsibleReasoningUpdate
             message={visibleStreamingAssistantText}
@@ -224,19 +242,26 @@ export function PendingAssistantActivityBlock({
   toolCalls = [],
   onHydrateToolCall,
   hydratingToolCallIds,
+  streamingReasoningText = "",
   streamingAssistantText = ""
 }: {
   events: AgentRunEvent[];
   toolCalls?: AgentToolCall[];
   onHydrateToolCall?: (runId: string, toolCallId: string) => void;
   hydratingToolCallIds?: ReadonlySet<string>;
+  streamingReasoningText?: string;
   streamingAssistantText?: string;
 }) {
   const items = useMemo(() => buildRunTimelineFromEvents(events, toolCalls), [events, toolCalls]);
+  const hasStreamingReasoningText = streamingReasoningText.length > 0;
   const hasStreamingAssistantText = streamingAssistantText.length > 0;
-  const showStreamingAssistantPlaceholder = events.length > 0 && items.length === 0 && !hasStreamingAssistantText;
+  const showStreamingPlaceholder =
+    events.length > 0 &&
+    items.length === 0 &&
+    !hasStreamingReasoningText &&
+    !hasStreamingAssistantText;
 
-  if (items.length === 0 && !hasStreamingAssistantText && !showStreamingAssistantPlaceholder) {
+  if (items.length === 0 && !hasStreamingReasoningText && !hasStreamingAssistantText && !showStreamingPlaceholder) {
     return null;
   }
 
@@ -246,8 +271,9 @@ export function PendingAssistantActivityBlock({
       isRunning={true}
       onHydrateToolCall={onHydrateToolCall}
       hydratingToolCallIds={hydratingToolCallIds}
+      streamingReasoningText={streamingReasoningText}
       streamingAssistantText={streamingAssistantText}
-      showStreamingAssistantPlaceholder={showStreamingAssistantPlaceholder}
+      showStreamingPlaceholder={showStreamingPlaceholder}
     />
   );
 }
@@ -261,6 +287,7 @@ export function AgentRunBlock({
   mode = "all",
   optimisticEvents = [],
   optimisticToolCalls = [],
+  streamingReasoningText = "",
   streamingAssistantText = ""
 }: AgentRunBlockProps) {
   const showActivity = mode !== "summary";
@@ -278,14 +305,21 @@ export function AgentRunBlock({
     () => buildRunTimelineFromEvents(mergedEvents, mergedToolCalls),
     [mergedEvents, mergedToolCalls]
   );
+  const hasStreamingReasoningText = streamingReasoningText.length > 0;
   const hasStreamingAssistantText = streamingAssistantText.length > 0;
   const isRunning = run.status === "running";
-  const showStreamingAssistantPlaceholder = isRunning && mergedEvents.length > 0 && activityTimeline.length === 0 && !hasStreamingAssistantText;
+  const showStreamingPlaceholder =
+    isRunning &&
+    mergedEvents.length > 0 &&
+    activityTimeline.length === 0 &&
+    !hasStreamingReasoningText &&
+    !hasStreamingAssistantText;
   const hasActivityContent =
     Boolean(run.error_text) ||
     activityTimeline.length > 0 ||
+    hasStreamingReasoningText ||
     hasStreamingAssistantText ||
-    showStreamingAssistantPlaceholder;
+    showStreamingPlaceholder;
 
   if (!hasActivityContent && !hasSummaryChanges) {
     return null;
@@ -302,8 +336,9 @@ export function AgentRunBlock({
               isRunning={isRunning}
               onHydrateToolCall={onHydrateToolCall}
               hydratingToolCallIds={hydratingToolCallIds}
+              streamingReasoningText={streamingReasoningText}
               streamingAssistantText={streamingAssistantText}
-              showStreamingAssistantPlaceholder={showStreamingAssistantPlaceholder}
+              showStreamingPlaceholder={showStreamingPlaceholder}
             />
           ) : null}
         </>

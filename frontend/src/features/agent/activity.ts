@@ -172,10 +172,24 @@ export function mergeRunEvents(persisted: AgentRunEvent[], optimistic: AgentRunE
   return sortRunEvents([...byId.values()]);
 }
 
+function mergeToolCallSnapshot(current: RunToolCall, incoming: RunToolCall): RunToolCall {
+  const shouldPreserveCurrentPayload = current.has_full_payload && !incoming.has_full_payload;
+
+  return {
+    ...current,
+    ...incoming,
+    input_json: shouldPreserveCurrentPayload ? current.input_json : incoming.input_json,
+    output_json: shouldPreserveCurrentPayload ? current.output_json : incoming.output_json,
+    output_text: shouldPreserveCurrentPayload ? current.output_text : incoming.output_text,
+    has_full_payload: current.has_full_payload || incoming.has_full_payload
+  };
+}
+
 export function mergeRunToolCalls(persisted: RunToolCall[], optimistic: RunToolCall[] = []): RunToolCall[] {
   const byId = new Map<string, RunToolCall>();
   [...persisted, ...optimistic].forEach((toolCall) => {
-    byId.set(toolCall.id, toolCall);
+    const existing = byId.get(toolCall.id);
+    byId.set(toolCall.id, existing ? mergeToolCallSnapshot(existing, toolCall) : toolCall);
   });
   return sortedToolCalls([...byId.values()]);
 }

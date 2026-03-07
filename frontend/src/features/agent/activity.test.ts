@@ -140,6 +140,41 @@ describe("activity helpers", () => {
     expect(merged[0]).toMatchObject({ id: "tool-1", status: "ok", output_text: "OK" });
   });
 
+  it("preserves hydrated payloads when a later compact snapshot arrives", () => {
+    const merged = mergeRunToolCalls(
+      [
+        buildToolCall({
+          id: "tool-1",
+          status: "running",
+          has_full_payload: true,
+          input_json: { entity_name: "ACME" },
+          output_json: { status: "OK", proposal_id: "proposal-1" },
+          output_text: "OK\nproposal_id: proposal-1"
+        })
+      ],
+      [
+        buildToolCall({
+          id: "tool-1",
+          status: "ok",
+          has_full_payload: false,
+          input_json: null,
+          output_json: null,
+          output_text: null
+        })
+      ]
+    );
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({
+      id: "tool-1",
+      status: "ok",
+      has_full_payload: true,
+      input_json: { entity_name: "ACME" },
+      output_json: { status: "OK", proposal_id: "proposal-1" },
+      output_text: "OK\nproposal_id: proposal-1"
+    });
+  });
+
   it("indexes runs by assistant message and separates unattached runs", () => {
     const threadDetail: AgentThreadDetail = {
       thread: {

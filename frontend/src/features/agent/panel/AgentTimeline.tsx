@@ -23,6 +23,7 @@ interface AgentTimelineProps {
   shouldShowOptimisticAssistantBubble: boolean;
   pendingRunAttachedToOptimisticMessage: AgentRun | null;
   isMutating: boolean;
+  activeStreamReasoningText: string;
   activeStreamText: string;
   optimisticRunEventsByRunId: Record<string, AgentRunEvent[]>;
   optimisticToolCallsByRunId: Record<string, AgentToolCall[]>;
@@ -50,6 +51,7 @@ export function AgentTimeline(props: AgentTimelineProps) {
     shouldShowOptimisticAssistantBubble,
     pendingRunAttachedToOptimisticMessage,
     isMutating,
+    activeStreamReasoningText,
     activeStreamText,
     optimisticRunEventsByRunId = {},
     optimisticToolCallsByRunId = {},
@@ -243,18 +245,23 @@ export function AgentTimeline(props: AgentTimelineProps) {
                   mode="activity"
                   optimisticEvents={activeOptimisticEvents}
                   optimisticToolCalls={activeOptimisticToolCalls}
+                  streamingReasoningText={activeStreamReasoningText}
                   streamingAssistantText={activeStreamText}
                 />
-              ) : activeOptimisticEvents.length > 0 || activeStreamText.length > 0 ? (
+              ) : activeOptimisticEvents.length > 0 || activeStreamReasoningText.length > 0 || activeStreamText.length > 0 ? (
                 <PendingAssistantActivityBlock
                   events={activeOptimisticEvents}
                   toolCalls={activeOptimisticToolCalls}
                   onHydrateToolCall={onHydrateToolCall}
                   hydratingToolCallIds={hydratingToolCallIds}
+                  streamingReasoningText={activeStreamReasoningText}
                   streamingAssistantText={activeStreamText}
                 />
               ) : null}
-              {!activeStreamText.length && activeOptimisticEvents.length === 0 && !pendingRunAttachedToOptimisticMessage ? (
+              {!activeStreamReasoningText.length &&
+              !activeStreamText.length &&
+              activeOptimisticEvents.length === 0 &&
+              !pendingRunAttachedToOptimisticMessage ? (
                 <p className="agent-message-text agent-message-streaming-text">
                   <span className="agent-message-caret">{"\u258d"}</span>
                 </p>

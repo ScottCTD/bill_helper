@@ -638,6 +638,15 @@ class _RuntimeStreamRunLoopAdapter(_RuntimeRunLoopAdapterBase):
             observability=self._model_observability(step_index=step_index),
         ):
             event_type = str(event.get("type") or "")
+            if event_type == "reasoning_delta":
+                delta = str(event.get("delta") or "")
+                if delta:
+                    yield {
+                        "type": "reasoning_delta",
+                        "run_id": self.run.id,
+                        "delta": delta,
+                    }
+                continue
             if event_type == "text_delta":
                 delta = str(event.get("delta") or "")
                 if delta:

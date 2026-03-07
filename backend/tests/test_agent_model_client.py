@@ -90,6 +90,38 @@ def test_complete_stream_retries_transient_ssl_bad_record_mac_when_max_attempts_
     assert events[1]["message"]["usage"]["output_tokens"] == 1
 
 
+def test_complete_stream_emits_reasoning_delta_events(monkeypatch):
+    client = _build_model_client(retry_max_attempts=1)
+
+    def fake_completion(**_kwargs):
+        return iter(
+            [
+                {"choices": [{"delta": {"reasoning_content": "Checking "}}]},
+                {"choices": [{"delta": {"reasoning_content": "entities"}}]},
+                {"choices": [{"delta": {"content": "Done."}}]},
+                {
+                    "choices": [{"delta": {}}],
+                    "usage": {"input_tokens": 3, "output_tokens": 1},
+                },
+            ]
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    events = list(client.complete_stream([{"role": "user", "content": "hi"}]))
+
+    assert [event["type"] for event in events] == [
+        "reasoning_delta",
+        "reasoning_delta",
+        "text_delta",
+        "done",
+    ]
+    assert events[0]["delta"] == "Checking "
+    assert events[1]["delta"] == "entities"
+    assert events[2]["delta"] == "Done."
+    assert events[3]["message"]["reasoning"] == "Checking entities"
+    assert events[3]["message"]["content"] == "Done."
+
+
 def test_complete_retries_before_failing(monkeypatch):
     client = _build_model_client(retry_max_attempts=2)
     calls = {"count": 0}

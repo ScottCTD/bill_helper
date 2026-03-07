@@ -417,6 +417,11 @@ export interface AgentThreadDetail {
 
 export type AgentStreamEvent =
   | {
+      type: "reasoning_delta";
+      run_id: string;
+      delta: string;
+    }
+  | {
       type: "text_delta";
       run_id: string;
       delta: string;
@@ -425,4 +430,5 @@ export type AgentStreamEvent =
       type: "run_event";
       run_id: string;
       event: AgentRunEvent;
+      tool_call?: AgentToolCall;
     };

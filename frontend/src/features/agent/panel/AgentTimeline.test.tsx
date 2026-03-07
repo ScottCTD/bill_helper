@@ -50,6 +50,7 @@ function renderTimeline(
     shouldShowOptimisticAssistantBubble: false,
     pendingRunAttachedToOptimisticMessage: null,
     isMutating: false,
+    activeStreamReasoningText: "",
     activeStreamText: "",
     optimisticRunEventsByRunId: {},
     optimisticToolCallsByRunId: {},
@@ -101,6 +102,18 @@ describe("AgentTimeline", () => {
     expect(screen.getByText("1 update")).toBeInTheDocument();
     expect(screen.getAllByText("▍").length).toBeGreaterThanOrEqual(1);
     expect(container.querySelector(".agent-message-streaming-text")).toBeNull();
+  });
+
+  it("shows live reasoning text in the activity bubble before the persisted reasoning event lands", () => {
+    renderTimeline({
+      pendingAssistantMessage: buildPendingAssistantMessage(),
+      shouldShowOptimisticAssistantBubble: true,
+      activeStreamReasoningText: "Checking existing entities before proposing changes."
+    });
+
+    expect(screen.getByText("1 update")).toBeInTheDocument();
+    expect(screen.getAllByText("Checking existing entities before proposing changes.").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Reasoning")).toBeInTheDocument();
   });
 
   it("anchors interrupted pending runs after the triggering user message without duplicating them", () => {

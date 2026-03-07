@@ -23,6 +23,7 @@ from backend.models_agent import (
     AgentToolCall,
 )
 from backend.services.agent.protocol_helpers import decode_tool_call
+from backend.services.agent.serializers import stream_run_event_to_payload
 from backend.services.agent.tools import (
     INTERMEDIATE_UPDATE_TOOL_NAME,
     ToolExecutionResult,
@@ -76,7 +77,7 @@ def load_run_snapshot(db: Session, run_id: str) -> AgentRun:
         select(AgentRun)
         .where(AgentRun.id == run_id)
         .options(
-            selectinload(AgentRun.events),
+            selectinload(AgentRun.events).selectinload(AgentRunEvent.tool_call),
             selectinload(AgentRun.tool_calls),
             selectinload(AgentRun.change_items).selectinload(
                 AgentChangeItem.review_actions
@@ -112,7 +113,7 @@ def persist_run_event(
         event_type=event_type,
         source=source,
         message=message,
-        tool_call_id=tool_call.id if tool_call is not None else None,
+        tool_call=tool_call,
     )
     db.add(event_row)
     db.flush()
@@ -120,22 +121,7 @@ def persist_run_event(
 
 
 def emit_run_event(run: AgentRun, persisted_event: AgentRunEvent) -> dict[str, Any]:
-    return {
-        "type": "run_event",
-        "run_id": run.id,
-        "event": {
-            "id": persisted_event.id,
-            "run_id": persisted_event.run_id,
-            "sequence_index": persisted_event.sequence_index,
-            "event_type": persisted_event.event_type.value,
-            "source": persisted_event.source.value
-            if persisted_event.source is not None
-            else None,
-            "message": persisted_event.message,
-            "tool_call_id": persisted_event.tool_call_id,
-            "created_at": persisted_event.created_at.isoformat(),
-        },
-    }
+    return stream_run_event_to_payload(run, persisted_event)
 
 
 def queue_tool_call_record(
@@ -355,4 +341,3 @@ def events_after_sequence(
             .order_by(AgentRunEvent.sequence_index)
         )
     )
-

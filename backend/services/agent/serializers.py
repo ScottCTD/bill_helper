@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from backend.models_agent import (
     AgentChangeItem,
     AgentMessage,
@@ -74,6 +76,41 @@ def run_event_to_schema(event: AgentRunEvent) -> AgentRunEventRead:
         tool_call_id=event.tool_call_id,
         created_at=event.created_at,
     )
+
+
+def _tool_call_for_stream_event(
+    run: AgentRun,
+    event: AgentRunEvent,
+    *,
+    tool_call: AgentToolCall | None = None,
+) -> AgentToolCall | None:
+    if tool_call is not None:
+        return tool_call
+    if event.tool_call is not None:
+        return event.tool_call
+    if event.tool_call_id is None:
+        return None
+    return next((call for call in run.tool_calls if call.id == event.tool_call_id), None)
+
+
+def stream_run_event_to_payload(
+    run: AgentRun,
+    event: AgentRunEvent,
+    *,
+    tool_call: AgentToolCall | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "type": "run_event",
+        "run_id": run.id,
+        "event": run_event_to_schema(event).model_dump(mode="json"),
+    }
+    compact_tool_call = _tool_call_for_stream_event(run, event, tool_call=tool_call)
+    if compact_tool_call is not None:
+        payload["tool_call"] = tool_call_to_schema(
+            compact_tool_call,
+            include_payload=False,
+        ).model_dump(mode="json")
+    return payload
 
 
 def review_action_to_schema(action: AgentReviewAction) -> AgentReviewActionRead:

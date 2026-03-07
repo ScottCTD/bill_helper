@@ -97,7 +97,8 @@ Endpoints:
 ## Current Agent Execution Behavior
 
 - runs support both background execution and SSE execution
-- streamed runs emit ordered `run_event` rows plus `text_delta`
+- streamed runs emit transient `reasoning_delta`, `text_delta`, and ordered persisted `run_event` rows
+- streamed tool lifecycle `run_event` payloads include a compact top-level `tool_call` snapshot so clients can render the tool name immediately without fetching full payloads
 - `send_intermediate_update` is persisted as a `reasoning_update` event, not as a fake tool call
 - attachment-bearing user turns reach the model as ordered content parts: attachment text, then attachment images, then the typed user prompt
 - PDFs use PyMuPDF first and then local Tesseract OCR only when native text extraction fails
