@@ -95,7 +95,7 @@ Endpoints:
 - full tool payloads are fetched through `GET /api/v1/agent/tool-calls/{tool_call_id}`
 - runs persist ordered `events[]` rows for replayable timeline activity
 - runs also carry their `change_items`; the frontend flattens those per-run proposal lists into one thread review model
-- run snapshots aggregate usage metrics and derived USD pricing
+- run snapshots aggregate usage metrics and derived USD pricing; prompt-side costs use cache-aware LiteLLM rates when cache usage is present and stay folded into the existing `input_cost_usd`/`total_cost_usd` fields
 
 ## Current Agent Execution Behavior
 

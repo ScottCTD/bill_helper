@@ -26,12 +26,24 @@ class UsageCosts:
     total_cost_usd: float | None
 
 
-def _cost_per_token(*, model: str, prompt_tokens: int, completion_tokens: int) -> tuple[float, float]:
-    return cost_per_token(
-        model=model,
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-    )
+def _cost_per_token(
+    *,
+    model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    cache_read_input_tokens: int | None = None,
+    cache_creation_input_tokens: int | None = None,
+) -> tuple[float, float]:
+    cost_kwargs: dict[str, Any] = {
+        "model": model,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+    }
+    if cache_read_input_tokens is not None:
+        cost_kwargs["cache_read_input_tokens"] = cache_read_input_tokens
+    if cache_creation_input_tokens is not None:
+        cost_kwargs["cache_creation_input_tokens"] = cache_creation_input_tokens
+    return cost_per_token(**cost_kwargs)
 
 
 def _model_cost_candidates(model_name: str) -> list[str]:
@@ -93,6 +105,8 @@ def calculate_usage_costs(
     model_name: str,
     input_tokens: int | None,
     output_tokens: int | None,
+    cache_read_tokens: int | None = None,
+    cache_write_tokens: int | None = None,
 ) -> UsageCosts:
     if input_tokens is None and output_tokens is None:
         return UsageCosts(input_cost_usd=None, output_cost_usd=None, total_cost_usd=None)
@@ -101,6 +115,13 @@ def calculate_usage_costs(
 
     prompt_tokens = max(int(input_tokens or 0), 0)
     completion_tokens = max(int(output_tokens or 0), 0)
+    cache_read_input_tokens = max(int(cache_read_tokens or 0), 0) if cache_read_tokens is not None else None
+    cache_creation_input_tokens = max(int(cache_write_tokens or 0), 0) if cache_write_tokens is not None else None
+    pricing_kwargs: dict[str, int] = {}
+    if cache_read_input_tokens is not None:
+        pricing_kwargs["cache_read_input_tokens"] = cache_read_input_tokens
+    if cache_creation_input_tokens is not None:
+        pricing_kwargs["cache_creation_input_tokens"] = cache_creation_input_tokens
 
     for candidate in _model_cost_candidates(model_name):
         try:
@@ -108,6 +129,7 @@ def calculate_usage_costs(
                 model=candidate,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
+                **pricing_kwargs,
             )
         except COST_PER_TOKEN_EXCEPTIONS as exc:
             recoverable_result(
@@ -118,6 +140,8 @@ def calculate_usage_costs(
                     "model_name": candidate,
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
+                    "cache_read_input_tokens": cache_read_input_tokens,
+                    "cache_creation_input_tokens": cache_creation_input_tokens,
                 },
             )
             continue

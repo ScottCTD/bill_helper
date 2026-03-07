@@ -1515,6 +1515,62 @@ def test_run_usage_fields_are_null_when_usage_unavailable(client, monkeypatch):
     assert run["cache_write_tokens"] is None
 
 
+def test_run_pricing_handles_missing_cache_usage_fields(client, monkeypatch):
+    from backend.services.agent.pricing import UsageCosts
+
+    pricing_calls: list[dict[str, object]] = []
+
+    def fake_calculate_usage_costs(**kwargs):
+        pricing_calls.append(kwargs)
+        return UsageCosts(input_cost_usd=0.12, output_cost_usd=0.34, total_cost_usd=0.46)
+
+    monkeypatch.setattr("backend.services.agent.serializers.calculate_usage_costs", fake_calculate_usage_costs)
+    patch_model(
+        monkeypatch,
+        lambda _messages: {
+            "role": "assistant",
+            "content": "Here is the final answer with usage metadata but no cache fields.",
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+        },
+    )
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "What happened this month?")
+
+    assert run["status"] == "completed"
+    assert run["input_tokens"] == 10
+    assert run["output_tokens"] == 5
+    assert run["cache_read_tokens"] is None
+    assert run["cache_write_tokens"] is None
+    assert run["input_cost_usd"] == 0.12
+    assert run["output_cost_usd"] == 0.34
+    assert run["total_cost_usd"] == 0.46
+
+    run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
+    run_response.raise_for_status()
+    payload = run_response.json()
+
+    assert payload["cache_read_tokens"] is None
+    assert payload["cache_write_tokens"] is None
+    assert payload["input_cost_usd"] == 0.12
+    assert payload["output_cost_usd"] == 0.34
+    assert payload["total_cost_usd"] == 0.46
+    assert pricing_calls
+    assert all("cache_read_tokens" in call for call in pricing_calls)
+    assert all("cache_write_tokens" in call for call in pricing_calls)
+    assert any(
+        call
+        == {
+            "model_name": "openrouter/qwen/qwen3.5-27b",
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "cache_read_tokens": None,
+            "cache_write_tokens": None,
+        }
+        for call in pricing_calls
+    )
+
+
 def test_run_handles_unknown_tool_calls_as_error(client, monkeypatch):
     calls = [
         {

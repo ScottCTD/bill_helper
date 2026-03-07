@@ -262,7 +262,10 @@ API-derived fields (not persisted in DB columns):
 - `input_cost_usd` (nullable float)
 - `output_cost_usd` (nullable float)
 - `total_cost_usd` (nullable float)
-- computed from `input_tokens` + `output_tokens` via LiteLLM pricing map at serialization time
+- computed from persisted usage counters via LiteLLM pricing at serialization time
+- `input_cost_usd` remains the full prompt-side cost after cache-aware pricing when `cache_read_tokens` or `cache_write_tokens` are present
+- `output_cost_usd` remains the completion-side cost
+- `total_cost_usd` is the sum of prompt-side and completion-side cost; no separate cache-cost response fields are added
 
 ## `agent_tool_calls`
 

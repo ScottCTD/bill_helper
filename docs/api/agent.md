@@ -54,7 +54,7 @@ Includes:
 - `current_context_tokens`
 - compact tool-call snapshots by default
 - ordered run `events[]`
-- nullable usage and pricing fields
+- nullable usage counters and derived pricing fields (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
 
 ## Message Send
 
@@ -117,6 +117,7 @@ Event contract:
 Usage notes:
 
 - usage totals are persisted on the run record and read from snapshot endpoints
+- when cache metadata is present, prompt-side pricing uses LiteLLM's cache-aware rates but remains exposed through the existing `input_cost_usd` and `total_cost_usd` fields
 - retries after partial streamed text suppress already-emitted prefixes
 - `reasoning_delta` is transient live stream output; the durable record remains the later persisted `run_event` with `event_type=reasoning_update`
 - expand a streamed compact tool row through `GET /agent/tool-calls/{tool_call_id}` when full arguments or results are needed
@@ -135,7 +136,7 @@ Returned payload includes:
 - full tool calls (`has_full_payload=true`)
 - change items
 - usage counters
-- derived pricing fields
+- derived pricing fields, where `input_cost_usd` is the full prompt-side cost after cache-aware pricing, `output_cost_usd` remains the completion-side cost, and `total_cost_usd` is their sum
 
 ### `GET /agent/tool-calls/{tool_call_id}`
 

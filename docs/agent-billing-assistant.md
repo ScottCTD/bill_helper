@@ -17,6 +17,7 @@ This document describes the architecture, prompts, tools, and usage workflow of 
    - Composer shortcut: `Cmd+Enter` (or `Ctrl+Enter`) sends the message.
    - Cumulative thread usage bar above the composer: `Context`, `Total input`, `Output`, `Cache read`, `Cache hit rate`, `Total cost`.
    - `Context` is the best-effort current prompt size for the selected thread; `Total input` remains the cumulative billed input usage across completed and in-flight runs.
+   - `Total cost` sums backend-derived run totals, so cache-aware prompt pricing is already reflected when providers report cache reads/writes; there are no separate cache-cost fields in the run API.
    - Run-level proposal summary cards with pending counts.
 6. Open the thread review modal from the persistent header `Review` button and process proposals:
    - Pending items appear first, with reviewed and failed items kept in a secondary audit section.
