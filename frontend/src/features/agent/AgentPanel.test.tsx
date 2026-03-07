@@ -178,4 +178,29 @@ describe("AgentPanel", () => {
 
     await waitFor(() => expect(reviewButton).toBeDisabled());
   });
+
+  it("uses the pending review styling and shows a readable count badge", async () => {
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary({ pending_change_count: 2 })]);
+    vi.mocked(api.getAgentThread).mockResolvedValue(
+      buildThreadDetail([
+        buildRun({
+          id: "run-1",
+          assistant_message_id: null,
+          change_items: [
+            buildChangeItem({ id: "change-1", run_id: "run-1", status: "PENDING_REVIEW" }),
+            buildChangeItem({ id: "change-2", run_id: "run-1", status: "PENDING_REVIEW" })
+          ]
+        })
+      ])
+    );
+
+    renderWithQueryClient(<AgentPanel isOpen />);
+
+    const reviewButton = await screen.findByRole("button", { name: /Review/i });
+    await waitFor(() => expect(reviewButton).toBeEnabled());
+    expect(reviewButton).toHaveClass("agent-panel-review-button", "is-pending");
+
+    const countBadge = screen.getByText("2");
+    expect(countBadge).toHaveClass("agent-panel-review-badge");
+  });
 });

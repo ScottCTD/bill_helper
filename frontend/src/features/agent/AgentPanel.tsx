@@ -785,11 +785,11 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
             <div className="agent-panel-header-actions">
               <Button
                 type="button"
-                variant={pendingReviewCount > 0 ? "default" : "secondary"}
+                variant="secondary"
                 size="sm"
                 onClick={() => setIsThreadReviewOpen(true)}
                 disabled={!selectedThreadId || reviewProposalCount === 0 || isMutating}
-                className="agent-panel-review-button"
+                className={`agent-panel-review-button${pendingReviewCount > 0 ? " is-pending" : ""}`}
               >
                 <span>Review</span>
                 {pendingReviewCount > 0 ? (

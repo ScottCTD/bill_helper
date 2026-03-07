@@ -972,11 +972,23 @@
   }
 
   .agent-panel-review-button {
-    @apply gap-2;
+    @apply gap-2 border border-transparent shadow-none;
+  }
+
+  .agent-panel-review-button.is-pending {
+    @apply border-primary/25 bg-primary/10 text-foreground;
+  }
+
+  .agent-panel-review-button.is-pending:hover:not(:disabled) {
+    @apply bg-primary/15;
   }
 
   .agent-panel-review-badge {
-    @apply border-white/25 bg-white/10 text-current;
+    @apply min-w-5 justify-center border-border/80 bg-background text-[11px] leading-none text-foreground;
+  }
+
+  .agent-panel-review-button.is-pending .agent-panel-review-badge {
+    @apply border-primary/35 bg-primary text-primary-foreground;
   }
 
   .agent-panel-body {
