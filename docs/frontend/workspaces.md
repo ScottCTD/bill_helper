@@ -10,6 +10,7 @@
 - group column hides UUID-only unnamed groups
 - date column is fixed-width and no-wrap
 - name cells show the primary name plus a compact `from -> to` secondary line
+- tag cells render colored chips using configured tag colors or the shared deterministic fallback color
 - rows show a `Missing entity` badge when preserved labels remain after entity or account deletion
 - entry create modal resolves default currency from runtime settings
 

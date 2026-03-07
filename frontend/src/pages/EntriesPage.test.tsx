@@ -2,6 +2,7 @@ import { screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EntriesPage } from "./EntriesPage";
+import { fallbackTagColor } from "../lib/tagColors";
 import { renderWithQueryClient } from "../test/renderWithQueryClient";
 import type { Entry, RuntimeSettings } from "../lib/types";
 import {
@@ -92,28 +93,69 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+function normalizeCssColor(color: string) {
+  const element = document.createElement("div");
+  element.style.color = color;
+  return element.style.color;
+}
+
+function mockEntriesPageData(entry: Entry) {
+  vi.mocked(listEntries).mockResolvedValue({
+    items: [entry],
+    total: 1,
+    limit: 200,
+    offset: 0
+  });
+  vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]);
+  vi.mocked(listEntities).mockResolvedValue([
+    { id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }
+  ]);
+  vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true }]);
+  vi.mocked(listTags).mockResolvedValue(entry.tags.map((tag) => ({ ...tag })));
+  vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
+  vi.mocked(createEntry).mockResolvedValue(entry);
+  vi.mocked(updateEntry).mockResolvedValue(entry);
+  vi.mocked(deleteEntry).mockResolvedValue(undefined);
+}
+
 describe("EntriesPage", () => {
   it("shows a missing-entity badge for preserved labels in the entries table", async () => {
-    vi.mocked(listEntries).mockResolvedValue({
-      items: [entryFixture],
-      total: 1,
-      limit: 200,
-      offset: 0
-    });
-    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]);
-    vi.mocked(listEntities).mockResolvedValue([
-      { id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }
-    ]);
-    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true }]);
-    vi.mocked(listTags).mockResolvedValue([{ id: 1, name: "coffee", color: "#5f6caf", type: "Food", entry_count: 1 }]);
-    vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
-    vi.mocked(createEntry).mockResolvedValue(entryFixture);
-    vi.mocked(updateEntry).mockResolvedValue(entryFixture);
-    vi.mocked(deleteEntry).mockResolvedValue(undefined);
+    mockEntriesPageData(entryFixture);
 
     renderWithQueryClient(<EntriesPage />);
 
     await screen.findByText("Coffee");
     expect(screen.getByText("Missing entity")).toBeInTheDocument();
+  });
+
+  it("renders explicit and fallback tag colors in the entries table", async () => {
+    const entryWithFallbackTag: Entry = {
+      ...entryFixture,
+      tags: [
+        entryFixture.tags[0],
+        { id: 2, name: "travel", color: null, type: null, entry_count: 1 }
+      ]
+    };
+    mockEntriesPageData(entryWithFallbackTag);
+
+    renderWithQueryClient(<EntriesPage />);
+
+    await screen.findByText("travel");
+
+    const coffeeChip = screen.getByText("coffee").closest(".entries-tag-pill");
+    const travelChip = screen.getByText("travel").closest(".entries-tag-pill");
+    const coffeeDot = coffeeChip?.querySelector(".entries-tag-pill-color");
+    const travelDot = travelChip?.querySelector(".entries-tag-pill-color");
+    const fallbackColor = fallbackTagColor("travel");
+
+    expect(coffeeChip).not.toBeNull();
+    expect(travelChip).not.toBeNull();
+    expect(coffeeDot).not.toBeNull();
+    expect(travelDot).not.toBeNull();
+
+    expect(coffeeChip?.style.borderColor).toBe(normalizeCssColor("#5f6caf"));
+    expect(coffeeDot?.getAttribute("style")).toContain(normalizeCssColor("#5f6caf"));
+    expect(travelChip?.style.borderColor).toBe(normalizeCssColor(fallbackColor));
+    expect(travelDot?.getAttribute("style")).toContain(normalizeCssColor(fallbackColor));
   });
 });

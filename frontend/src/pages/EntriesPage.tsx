@@ -23,6 +23,7 @@ import {
   updateEntry
 } from "../lib/api";
 import { formatMinorCompact } from "../lib/format";
+import { resolveTagColor } from "../lib/tagColors";
 import { invalidateEntryReadModels } from "../lib/queryInvalidation";
 import { queryKeys } from "../lib/queryKeys";
 
@@ -326,11 +327,15 @@ export function EntriesPage() {
                         <TableCell>
                           {entry.tags.length > 0 ? (
                             <div className="entries-tag-list">
-                              {entry.tags.map((tag) => (
-                                <Badge key={tag.id} variant="secondary" className="entries-tag-pill">
-                                  {tag.name}
-                                </Badge>
-                              ))}
+                              {entry.tags.map((tag) => {
+                                const color = resolveTagColor(tag.name, tag.color);
+                                return (
+                                  <Badge key={tag.id} variant="outline" className="entries-tag-pill" style={{ borderColor: color }}>
+                                    <span className="entries-tag-pill-color" aria-hidden="true" style={{ backgroundColor: color }} />
+                                    {tag.name}
+                                  </Badge>
+                                );
+                              })}
                             </div>
                           ) : (
                             <span className="entries-tag-empty">-</span>

@@ -1,5 +1,6 @@
 import { KeyboardEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 
+import { resolveTagColor } from "../lib/tagColors";
 import type { Tag } from "../lib/types";
 
 interface TagMultiSelectProps {
@@ -15,19 +16,6 @@ interface TagMultiSelectProps {
 
 function normalizeTagName(value: string) {
   return value.trim().toLowerCase();
-}
-
-function fallbackTagColor(tagName: string) {
-  let hash = 0;
-  for (let index = 0; index < tagName.length; index += 1) {
-    hash = (hash * 31 + tagName.charCodeAt(index)) >>> 0;
-  }
-  const hue = hash % 360;
-  return `hsl(${hue} 62% 72%)`;
-}
-
-function tagColor(name: string, color: string | null | undefined) {
-  return color ?? fallbackTagColor(name);
 }
 
 function normalizeTagList(values: string[]) {
@@ -123,7 +111,7 @@ export function TagMultiSelect({
       selectedTags.push({
         key,
         name: catalogTag?.name ?? tagName.trim(),
-        color: tagColor(catalogTag?.name ?? tagName.trim(), catalogTag?.color)
+        color: resolveTagColor(catalogTag?.name ?? tagName.trim(), catalogTag?.color)
       });
     }
     return selectedTags;
@@ -347,7 +335,7 @@ export function TagMultiSelect({
                 aria-pressed={isSelected}
               >
                 <span className="tag-option-label">
-                  <span className="tag-option-color" style={{ backgroundColor: tagColor(tag.name, tag.color) }} />
+                  <span className="tag-option-color" style={{ backgroundColor: resolveTagColor(tag.name, tag.color) }} />
                   {tag.name}
                 </span>
                 <span className="tag-option-check">{isSelected ? "✓" : ""}</span>
