@@ -168,6 +168,8 @@ Behavior:
 
 - `user_memory` is DB-backed only
 - `agent_api_key` is never returned
+- effective agent provider fields resolve as stored runtime override, then server env, then app/provider defaults
+- `agent_api_key_configured` reports whether an effective key is available; `overrides.agent_api_key_configured` reports only whether a stored runtime override exists
 
 ### `PATCH /settings`
 

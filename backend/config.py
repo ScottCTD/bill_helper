@@ -80,11 +80,21 @@ class Settings(BaseSettings):
     agent_max_images_per_message: int = 4
     agent_base_url: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("AGENT_BASE_URL", "BILL_HELPER_AGENT_BASE_URL"),
+        validation_alias=AliasChoices(
+            "AGENT_BASE_URL",
+            "BILL_HELPER_AGENT_BASE_URL",
+            "OPENROUTER_BASE_URL",
+            "BILL_HELPER_OPENROUTER_BASE_URL",
+        ),
     )
     agent_api_key: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("AGENT_API_KEY", "BILL_HELPER_AGENT_API_KEY"),
+        validation_alias=AliasChoices(
+            "AGENT_API_KEY",
+            "BILL_HELPER_AGENT_API_KEY",
+            "OPENROUTER_API_KEY",
+            "BILL_HELPER_OPENROUTER_API_KEY",
+        ),
     )
 
     @model_validator(mode="after")

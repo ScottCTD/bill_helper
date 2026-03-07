@@ -121,14 +121,17 @@ uv sync --extra dev
 
 ### Provider Credentials
 
-LiteLLM resolves provider credentials from standard environment variables based on `BILL_HELPER_AGENT_MODEL`:
+LiteLLM resolves provider credentials from standard environment variables based on `BILL_HELPER_AGENT_MODEL`. Bill Helper also maps OpenRouter's legacy/env-standard names into runtime settings so clearing the UI override falls back cleanly:
 
 | Variable | Used when |
 |----------|-----------|
 | `OPENROUTER_API_KEY` | Model starts with `openrouter/` (default) |
+| `OPENROUTER_BASE_URL` | Optional OpenRouter-compatible base URL |
 | `OPENAI_API_KEY` | Model starts with `openai/` |
 | `ANTHROPIC_API_KEY` | Model starts with `anthropic/` |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Model starts with `gemini/` |
+| `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY` | Optional app-level provider override |
+| `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL` | Optional app-level base URL override |
 
 ### Seed / Scripts
 

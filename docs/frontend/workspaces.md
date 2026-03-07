@@ -78,3 +78,4 @@
 - supports save/update and reset-to-server-default flows
 - settings changes invalidate dependent query surfaces
 - `Agent memory` is persisted and sent to every backend agent system prompt
+- agent provider overrides use a compact toggle; when off the custom endpoint/key fields are hidden and saving falls back to server env values from `.env` or process env

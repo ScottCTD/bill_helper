@@ -72,11 +72,14 @@ At minimum, set the API key for your chosen model provider:
 ```env
 # Pick one provider credential for the agent model:
 OPENROUTER_API_KEY=your-key-here          # default model uses OpenRouter
+# OPENROUTER_BASE_URL=https://openrouter.ai/api/v1  # optional OpenRouter-compatible override
 # OPENAI_API_KEY=your-key-here            # if using openai/* models
 # ANTHROPIC_API_KEY=your-key-here         # if using anthropic/* models
 
 # Optional: change the model (default: openrouter/qwen/qwen3.5-27b)
 # BILL_HELPER_AGENT_MODEL=openai/gpt-4.1-mini
+# BILL_HELPER_AGENT_API_KEY=provider-key   # optional app-level override for custom endpoints
+# BILL_HELPER_AGENT_BASE_URL=https://api.example.com/v1
 
 # Optional: Langfuse observability
 # LANGFUSE_PUBLIC_KEY=pk-lf-...

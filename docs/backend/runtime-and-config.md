@@ -51,6 +51,8 @@ Agent settings include:
 - `AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`)
 - `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL`
 - `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY`
+- `OPENROUTER_BASE_URL` / `BILL_HELPER_OPENROUTER_BASE_URL` (legacy-compatible aliases for OpenRouter-backed defaults)
+- `OPENROUTER_API_KEY` / `BILL_HELPER_OPENROUTER_API_KEY` (legacy-compatible aliases for OpenRouter-backed defaults)
 
 Runtime override behavior:
 

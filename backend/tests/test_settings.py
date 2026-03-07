@@ -73,6 +73,28 @@ def test_settings_agent_provider_config_masks_api_key_in_response(client):
     assert "agent_api_key" not in payload["overrides"]
 
 
+def test_settings_endpoint_reports_openrouter_env_provider_config(client, monkeypatch):
+    from backend.config import get_settings
+
+    monkeypatch.delenv("AGENT_API_KEY", raising=False)
+    monkeypatch.delenv("BILL_HELPER_AGENT_API_KEY", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter-key")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    get_settings.cache_clear()
+
+    try:
+        response = client.get("/api/v1/settings")
+        response.raise_for_status()
+        payload = response.json()
+    finally:
+        get_settings.cache_clear()
+
+    assert payload["agent_api_key_configured"] is True
+    assert payload["agent_base_url"] == "https://openrouter.ai/api/v1"
+    assert payload["overrides"]["agent_api_key_configured"] is False
+    assert payload["overrides"]["agent_base_url"] is None
+
+
 def test_settings_agent_base_url_rejects_non_public_ip_hosts(client):
     blocked = [
         "http://127.0.0.2/v1",

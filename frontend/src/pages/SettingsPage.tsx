@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { FormField } from "../components/ui/form-field";
 import { Input } from "../components/ui/input";
+import { Switch } from "../components/ui/switch";
 import { NativeSelect } from "../components/ui/native-select";
 import { Textarea } from "../components/ui/textarea";
 import { getRuntimeSettings, listCurrencies, updateRuntimeSettings } from "../lib/api";
@@ -28,6 +29,7 @@ interface SettingsFormState {
   agent_retry_backoff_multiplier: string;
   agent_base_url: string;
   agent_api_key: string;
+  use_custom_provider_override: boolean;
   agent_api_key_configured: boolean;
   agent_api_key_dirty: boolean;
 }
@@ -36,6 +38,10 @@ function bytesToMegabytes(value: number): string {
   const mb = value / (1024 * 1024);
   const rounded = Number.isInteger(mb) ? mb.toString() : mb.toFixed(2);
   return rounded;
+}
+
+function hasStoredProviderOverride(data: RuntimeSettings): boolean {
+  return data.overrides.agent_base_url !== null || data.overrides.agent_api_key_configured;
 }
 
 function buildFormState(data: RuntimeSettings): SettingsFormState {
@@ -54,6 +60,7 @@ function buildFormState(data: RuntimeSettings): SettingsFormState {
     agent_retry_backoff_multiplier: String(data.agent_retry_backoff_multiplier),
     agent_base_url: data.agent_base_url ?? "",
     agent_api_key: "", // Always empty - user must re-enter to change
+    use_custom_provider_override: hasStoredProviderOverride(data),
     agent_api_key_configured: data.agent_api_key_configured ?? false,
     agent_api_key_dirty: false,
   };
@@ -170,10 +177,12 @@ export function SettingsPage() {
       }
       const nextAgentMaxImageSizeBytes = Math.round(imageSizeMb * 1024 * 1024);
 
-      const nextAgentBaseUrl = formState.agent_base_url.trim() || null;
-      const nextAgentApiKey = formState.agent_api_key_dirty
-        ? (formState.agent_api_key.trim() || null)
-        : undefined; // undefined means "don't change"
+      const nextAgentBaseUrl = formState.use_custom_provider_override
+        ? (formState.agent_base_url.trim() || null)
+        : null;
+      const nextAgentApiKey = formState.use_custom_provider_override
+        ? (formState.agent_api_key_dirty ? (formState.agent_api_key.trim() || null) : undefined)
+        : null;
 
       const payload: Record<string, unknown> = {
         user_memory: formState.user_memory,
@@ -190,7 +199,8 @@ export function SettingsPage() {
         agent_base_url: nextAgentBaseUrl,
       };
       
-      // Only include agent_api_key if it was explicitly changed
+      // Only include agent_api_key if it was explicitly changed while custom override is enabled,
+      // or always clear it when the override toggle is disabled.
       if (nextAgentApiKey !== undefined) {
         payload.agent_api_key = nextAgentApiKey;
       }
@@ -316,7 +326,7 @@ export function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Agent Runtime</CardTitle>
-            <CardDescription>Controls model selection and guardrails for new runs. Provider credentials can be set via environment variables or custom endpoint below.</CardDescription>
+            <CardDescription>Controls model selection and guardrails for new runs.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <FormField label="Agent model">
@@ -326,34 +336,64 @@ export function SettingsPage() {
               />
             </FormField>
 
-            <FormField label="Custom API endpoint" hint="Optional custom base URL for the model provider (e.g., https://api.example.com/v1).">
-              <Input
-                type="url"
-                placeholder="https://api.example.com/v1"
-                value={formState.agent_base_url}
-                onChange={(event) => setFormState((state) => (state ? { ...state, agent_base_url: event.target.value } : state))}
-              />
-            </FormField>
-
-            <FormField
-              label="Custom API key"
-              hint={
-                formState.agent_api_key_configured
-                  ? "A custom API key override is configured. Enter a new value to change it, or leave this empty to remove the stored override (environment settings can still apply)."
-                  : "Optional API key override for the custom endpoint. Leave empty to use environment settings when available."
-              }
-            >
-              <Input
-                type="password"
-                placeholder={
-                  formState.agent_api_key_configured
-                    ? "•••••••• (stored override; clear to use environment settings)"
-                    : "Leave empty to use environment settings (if configured)"
+            <div className="flex items-start justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 px-4 py-3">
+              <div className="grid gap-1">
+                <p className="text-sm font-medium text-foreground">Custom provider override</p>
+                <p className="text-xs text-muted-foreground">
+                  Off uses server env. On stores a custom endpoint and API key in runtime settings.
+                </p>
+              </div>
+              <Switch
+                aria-label="Use custom provider override"
+                checked={formState.use_custom_provider_override}
+                onCheckedChange={(checked) =>
+                  setFormState((state) =>
+                    state
+                      ? {
+                          ...state,
+                          use_custom_provider_override: checked,
+                        }
+                      : state
+                  )
                 }
-                value={formState.agent_api_key}
-                onChange={(event) => setFormState((state) => (state ? { ...state, agent_api_key: event.target.value, agent_api_key_dirty: true } : state))}
               />
-            </FormField>
+            </div>
+
+            {formState.use_custom_provider_override ? (
+              <>
+                <FormField
+                  label="Custom API endpoint"
+                  hint="Optional custom base URL for the model provider."
+                >
+                  <Input
+                    aria-label="Custom API endpoint"
+                    type="url"
+                    placeholder="https://api.example.com/v1"
+                    value={formState.agent_base_url}
+                    onChange={(event) => setFormState((state) => (state ? { ...state, agent_base_url: event.target.value } : state))}
+                  />
+                </FormField>
+
+                <FormField
+                  label="Custom API key"
+                  hint={
+                    formState.agent_api_key_configured
+                      ? "A stored API key exists. Enter a new value to replace it, or leave this empty to keep it."
+                      : "API key for the custom provider."
+                  }
+                >
+                  <Input
+                    aria-label="Custom API key"
+                    type="password"
+                    placeholder={formState.agent_api_key_configured ? "••••••••" : "Enter API key"}
+                    value={formState.agent_api_key}
+                    onChange={(event) =>
+                      setFormState((state) => (state ? { ...state, agent_api_key: event.target.value, agent_api_key_dirty: true } : state))
+                    }
+                  />
+                </FormField>
+              </>
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="Max steps">

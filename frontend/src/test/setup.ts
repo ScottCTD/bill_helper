@@ -6,3 +6,16 @@ if (typeof document.elementsFromPoint !== "function") {
     value: () => []
   });
 }
+
+if (typeof window.ResizeObserver !== "function") {
+  class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  Object.defineProperty(window, "ResizeObserver", {
+    configurable: true,
+    value: ResizeObserver
+  });
+}
