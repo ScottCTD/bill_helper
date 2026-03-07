@@ -91,6 +91,7 @@ export function AccountsTableSection(props: AccountsTableSectionProps) {
                       className="cursor-pointer"
                       data-state={account.id === selectedAccountId ? "selected" : undefined}
                       onClick={() => onSelectAccount(account.id)}
+                      onDoubleClick={() => onEditAccount(account.id)}
                     >
                       <TableCell className="font-medium">{account.name}</TableCell>
                       <TableCell>{ownerNameForId(account.owner_user_id)}</TableCell>
@@ -116,19 +117,9 @@ export function AccountsTableSection(props: AccountsTableSectionProps) {
                             variant="outline"
                             onClick={(event) => {
                               event.stopPropagation();
-                              onEditAccount(account.id);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={(event) => {
-                              event.stopPropagation();
                               onDeleteAccount(account.id);
                             }}
+                            onDoubleClick={(event) => event.stopPropagation()}
                           >
                             Delete
                           </Button>

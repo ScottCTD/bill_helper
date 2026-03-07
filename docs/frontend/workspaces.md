@@ -39,6 +39,7 @@
 - page is a thin orchestrator; domain state lives in `frontend/src/features/accounts/useAccountsPageModel.ts`
 - UI is split into `AccountsTableSection`, `ReconciliationSection`, `SnapshotsSection`, and `AccountDialogs`
 - create, edit, and delete flows are dialog-driven
+- account rows single-select on click and open edit on double-click; delete remains the only explicit row action
 - account ids are shared entity-root ids; generic entity management does not expose them as editable entity rows
 - account dialogs edit `Owner`, `Name`, `Currency`, `Notes`, and `Active`
 - legacy `institution` and `type` fields are removed
@@ -53,6 +54,7 @@
 - section navigation and content rendering are split into dedicated components
 - section state, form state, queries, and filtered data live in focused hooks
 - editable sections use modal-driven create and edit flows
+- users, entities, and tags open edit modals on row double-click instead of explicit row Edit buttons
 - taxonomy term tables expose `Entity Categories` and `Tag Types`
 - account-backed entities are hidden from the generic `Entities` table
 - the generic `Entities` table now stays compact and shows only `Name`, `Category`, and row actions

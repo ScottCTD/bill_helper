@@ -129,15 +129,18 @@ export function EntitiesSection(props: EntitiesSectionProps) {
             </TableHeader>
             <TableBody>
               {entities.map((entity) => (
-                <TableRow key={entity.id}>
+                <TableRow key={entity.id} className="cursor-pointer" onDoubleClick={() => onStartEditEntity(entity)}>
                   <TableCell>{entity.name}</TableCell>
                   <TableCell>{entity.category || "(none)"}</TableCell>
                   <TableCell>
                     <div className="table-actions">
-                      <Button type="button" size="sm" variant="outline" onClick={() => onStartEditEntity(entity)}>
-                        Edit
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => onStartDeleteEntity(entity)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onStartDeleteEntity(entity)}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                      >
                         Delete
                       </Button>
                     </div>

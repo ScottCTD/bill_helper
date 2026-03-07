@@ -15,10 +15,10 @@ This doc is the fast path for understanding account management UX, snapshot chec
 
 ## Current Frontend Behavior
 
-- Accounts are displayed in a table workspace (search + row selection + row-level edit/delete actions).
+- Accounts are displayed in a table workspace (search + single-click row selection + double-click row editing + row-level delete action).
 - Accounts are entity-root records; each account id is also the backing entity id.
 - Account creation is handled by the icon-only `+` action, which opens a modal.
-- Account edits are handled by the `Edit` button in each row, which opens a modal.
+- Account edits are handled by double-clicking a table row, which opens the shared edit modal.
 - Account deletion starts from a subdued row-level delete action and is finalized in a confirmation dialog.
 - Account metadata now excludes legacy `institution` and `type`; dialogs focus on owner/name/currency/notes/active state.
 - Account create/edit modals include optional markdown notes (`markdown_body`) for richer account-level context.

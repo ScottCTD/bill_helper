@@ -108,16 +108,12 @@ export function UsersSection(props: UsersSectionProps) {
             </TableHeader>
             <TableBody>
               {users.map((user) => (
-                <TableRow key={user.id}>
+                <TableRow key={user.id} className="cursor-pointer" onDoubleClick={() => onStartEditUser(user)}>
                   <TableCell>{user.name}</TableCell>
                   <TableCell>{user.is_current_user ? <Badge variant="secondary">Current</Badge> : null}</TableCell>
                   <TableCell>{user.account_count ?? 0}</TableCell>
                   <TableCell>{user.entry_count ?? 0}</TableCell>
-                  <TableCell>
-                    <Button type="button" size="sm" variant="outline" onClick={() => onStartEditUser(user)}>
-                      Edit
-                    </Button>
-                  </TableCell>
+                  <TableCell />
                 </TableRow>
               ))}
             </TableBody>

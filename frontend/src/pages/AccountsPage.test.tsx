@@ -152,6 +152,68 @@ describe("AccountsPage", () => {
     );
   });
 
+  it("opens account editing on row double-click and keeps delete isolated", async () => {
+    vi.mocked(listAccounts).mockResolvedValue([
+      {
+        id: "acc-1",
+        owner_user_id: "user-1",
+        name: "Main",
+        markdown_body: null,
+        currency_code: "CAD",
+        is_active: true,
+        created_at: "2026-02-15T00:00:00Z",
+        updated_at: "2026-02-15T00:00:00Z"
+      }
+    ]);
+    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
+    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true, account_count: 1, entry_count: 0 }]);
+    vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
+    vi.mocked(listSnapshots).mockResolvedValue([]);
+    vi.mocked(getReconciliation).mockResolvedValue({
+      account_id: "acc-1",
+      account_name: "Main",
+      currency_code: "CAD",
+      as_of: "2026-02-15",
+      ledger_balance_minor: 100_00,
+      snapshot_balance_minor: 100_00,
+      snapshot_at: "2026-02-15",
+      delta_minor: 0
+    });
+    vi.mocked(updateAccount).mockResolvedValue({
+      id: "acc-1",
+      owner_user_id: "user-1",
+      name: "Main",
+      markdown_body: null,
+      currency_code: "CAD",
+      is_active: true,
+      created_at: "2026-02-15T00:00:00Z",
+      updated_at: "2026-02-15T00:00:00Z"
+    });
+    vi.mocked(deleteAccount).mockResolvedValue(undefined);
+
+    renderWithQueryClient(<AccountsPage />);
+
+    const nameCell = await screen.findByText("Main");
+    const row = nameCell.closest("tr");
+    expect(row).not.toBeNull();
+    if (!row) {
+      throw new Error("Expected account row");
+    }
+
+    await userEvent.dblClick(row);
+    const editDialog = await screen.findByRole("dialog", { name: "Edit Account" });
+    expect(within(editDialog).getByLabelText("Name")).toHaveValue("Main");
+
+    await userEvent.click(within(editDialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Edit Account" })).not.toBeInTheDocument();
+    });
+
+    await userEvent.dblClick(screen.getByRole("button", { name: "Delete" }));
+    expect(await screen.findByRole("dialog", { name: "Delete Main?" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Edit Account" })).not.toBeInTheDocument();
+  });
+
   it("creates snapshots for the selected account", async () => {
     vi.mocked(listAccounts).mockResolvedValue([
       {

@@ -150,7 +150,7 @@ export function TagsSection(props: TagsSectionProps) {
             </TableHeader>
             <TableBody>
               {tags.map((tag) => (
-                <TableRow key={tag.id}>
+                <TableRow key={tag.id} className="cursor-pointer" onDoubleClick={() => onStartEditTag(tag)}>
                   <TableCell>
                     <span className="tag-color-cell">
                       <span className="tag-color-dot" style={{ backgroundColor: tag.color || "hsl(var(--muted))" }} />
@@ -161,10 +161,13 @@ export function TagsSection(props: TagsSectionProps) {
                   <TableCell>{tag.description || "(none)"}</TableCell>
                   <TableCell>
                     <div className="table-actions">
-                      <Button type="button" size="sm" variant="outline" onClick={() => onStartEditTag(tag)}>
-                        Edit
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => onStartDeleteTag(tag)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onStartDeleteTag(tag)}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                      >
                         Delete
                       </Button>
                     </div>

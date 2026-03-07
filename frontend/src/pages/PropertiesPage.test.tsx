@@ -186,6 +186,34 @@ describe("PropertiesPage", () => {
     });
   });
 
+  it("opens entity editing on row double-click and keeps delete isolated", async () => {
+    mockBasePropertiesApi();
+    renderWithQueryClient(<PropertiesPage />);
+
+    await screen.findByText("Property Databases");
+    await userEvent.click(screen.getByRole("button", { name: "Entities" }));
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+
+    const entityRow = screen.getByText("Grocer").closest("tr");
+    expect(entityRow).not.toBeNull();
+    if (!entityRow) {
+      throw new Error("Expected entity row");
+    }
+
+    await userEvent.dblClick(entityRow);
+    const editDialog = await screen.findByRole("dialog", { name: "Edit Entity" });
+    expect(within(editDialog).getByLabelText("Name")).toHaveValue("Grocer");
+
+    await userEvent.click(within(editDialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Edit Entity" })).not.toBeInTheDocument();
+    });
+
+    await userEvent.dblClick(screen.getByRole("button", { name: "Delete" }));
+    expect(await screen.findByRole("dialog", { name: "Delete Grocer?" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Edit Entity" })).not.toBeInTheDocument();
+  });
+
   it("deletes tags from the warning dialog", async () => {
     mockBasePropertiesApi();
     renderWithQueryClient(<PropertiesPage />);
@@ -203,5 +231,52 @@ describe("PropertiesPage", () => {
     await waitFor(() => {
       expect(vi.mocked(deleteTag).mock.calls[0]?.[0]).toBe(1);
     });
+  });
+
+  it("opens tag editing on row double-click and keeps delete isolated", async () => {
+    mockBasePropertiesApi();
+    renderWithQueryClient(<PropertiesPage />);
+
+    await screen.findByText("Property Databases");
+    await userEvent.click(screen.getByRole("button", { name: "Tags" }));
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+
+    const tagRow = screen.getByText("groceries").closest("tr");
+    expect(tagRow).not.toBeNull();
+    if (!tagRow) {
+      throw new Error("Expected tag row");
+    }
+
+    await userEvent.dblClick(tagRow);
+    const editDialog = await screen.findByRole("dialog", { name: "Edit Tag" });
+    expect(within(editDialog).getByLabelText("Name")).toHaveValue("groceries");
+
+    await userEvent.click(within(editDialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Edit Tag" })).not.toBeInTheDocument();
+    });
+
+    await userEvent.dblClick(screen.getByRole("button", { name: "Delete" }));
+    expect(await screen.findByRole("dialog", { name: "Delete groceries?" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Edit Tag" })).not.toBeInTheDocument();
+  });
+
+  it("opens user editing on row double-click", async () => {
+    mockBasePropertiesApi();
+    renderWithQueryClient(<PropertiesPage />);
+
+    await screen.findByText("Property Databases");
+    await userEvent.click(screen.getByRole("button", { name: "Users" }));
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+
+    const userRow = screen.getByText("Alice").closest("tr");
+    expect(userRow).not.toBeNull();
+    if (!userRow) {
+      throw new Error("Expected user row");
+    }
+
+    await userEvent.dblClick(userRow);
+    const editDialog = await screen.findByRole("dialog", { name: "Edit User" });
+    expect(within(editDialog).getByLabelText("Name")).toHaveValue("Alice");
   });
 });
