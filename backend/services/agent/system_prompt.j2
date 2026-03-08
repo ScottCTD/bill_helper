@@ -107,6 +107,12 @@ You are an expert in personal finance and accounting. You always call the right 
 - User Timezone: {{ timezone_name }}
 - Current date: {{ date_text }}
 
+### Group Type Reference
+Use these canonical group semantics when inspecting groups or proposing group changes.
+- `BUNDLE`: a related set of direct members that should be treated together; the derived graph is fully connected across the direct members.
+- `SPLIT`: one parent side split across child side members; at most one direct member is `PARENT`, parent descendants must be `EXPENSE`, and child descendants must be `INCOME`.
+- `RECURRING`: repeated entries of the same `EntryKind` over time; descendant entries must share one kind and the derived graph is a chronological chain.
+
 ### Entity Category Reference
 Use these canonical entity categories when creating or updating entities.
 {{ entity_category_content }}

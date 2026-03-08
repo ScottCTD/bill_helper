@@ -66,7 +66,7 @@
 ## Prompt And Tooling Rules
 
 - prompt policy is organized into explicit sections for tool discipline, proposal workflows, execution, and final response behavior
-- `Current User Context` includes timezone/date bullets plus `Account Context` and `Entity Category Reference`
+- `Current User Context` includes timezone/date bullets plus a static `Group Type Reference`, `Entity Category Reference`, and `Account Context`
 - `Agent Memory` is rendered as a markdown unordered list built from persisted runtime-setting memory items
 - duplicate-entry checks should happen before new entry proposals
 - tag/entity naming should stay canonical and generalized
