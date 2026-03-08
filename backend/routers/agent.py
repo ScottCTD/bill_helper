@@ -126,6 +126,7 @@ async def _create_user_message_run_or_503(
     content: str,
     files: list[UploadFile],
     db: Session,
+    model_name: str | None,
 ) -> AgentRun:
     try:
         return await create_user_message_and_start_run(
@@ -134,6 +135,7 @@ async def _create_user_message_run_or_503(
             files=files,
             upload_root=_agent_upload_root(),
             db=db,
+            model_name=model_name,
         )
     except AgentRuntimeUnavailable as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
@@ -240,6 +242,7 @@ def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThr
 async def send_thread_message(
     thread_id: str,
     content: str = Form(default=""),
+    model_name: str | None = Form(default=None),
     files: list[UploadFile] = File(default_factory=list),
     db: Session = Depends(get_db),
 ) -> AgentRunRead:
@@ -248,6 +251,7 @@ async def send_thread_message(
         content=content,
         files=files,
         db=db,
+        model_name=model_name,
     )
     Thread(
         target=run_agent_in_background,
@@ -261,6 +265,7 @@ async def send_thread_message(
 async def send_thread_message_stream(
     thread_id: str,
     content: str = Form(default=""),
+    model_name: str | None = Form(default=None),
     files: list[UploadFile] = File(default_factory=list),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
@@ -269,6 +274,7 @@ async def send_thread_message_stream(
         content=content,
         files=files,
         db=db,
+        model_name=model_name,
     )
 
     def stream_events() -> Iterator[str]:

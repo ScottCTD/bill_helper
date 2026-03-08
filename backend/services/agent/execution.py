@@ -30,6 +30,7 @@ from backend.services.agent.tools import (
     execute_tool,
 )
 from backend.services.runtime_settings import ResolvedRuntimeSettings, resolve_runtime_settings
+from backend.services.runtime_settings_normalization import normalize_text_or_none
 
 
 @dataclass(slots=True)
@@ -61,9 +62,19 @@ def current_context_tokens_for_thread(
         if run.context_tokens is not None:
             return run.context_tokens
 
-    current_messages = build_llm_messages(db, thread.id, current_user_message_id=None)
+    fallback_model_name = next(
+        (run.model_name for run in runs_by_newest if run.model_name),
+        model_name,
+    )
+
+    current_messages = build_llm_messages(
+        db,
+        thread.id,
+        current_user_message_id=None,
+        model_name=fallback_model_name,
+    )
     current_context_tokens = count_context_tokens(
-        model_name=model_name,
+        model_name=fallback_model_name,
         messages=current_messages,
         tools=build_openai_tool_schemas(),
     )
@@ -79,10 +90,19 @@ async def create_user_message_and_start_run(
     files: list[UploadFile],
     upload_root: Path,
     db: Session,
+    model_name: str | None = None,
 ) -> AgentRun:
-    ensure_agent_available(db)
-
     settings = resolve_runtime_settings(db)
+    selected_model_name = normalize_text_or_none(model_name) or settings.agent_model
+    if selected_model_name.casefold() not in {
+        available_model.casefold() for available_model in settings.available_agent_models
+    }:
+        raise AgentExecutionPolicyError(
+            detail="Selected model is not enabled in runtime settings.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    ensure_agent_available(db, model_name=selected_model_name)
+
     thread = db.get(AgentThread, thread_id)
     if thread is None:
         raise AgentExecutionPolicyError(
@@ -144,7 +164,7 @@ async def create_user_message_and_start_run(
     db.commit()
     db.refresh(user_message)
     db.refresh(user_message, attribute_names=["attachments"])
-    return start_agent_run(db, thread, user_message)
+    return start_agent_run(db, thread, user_message, model_name=selected_model_name)
 
 
 def run_agent_in_background(
