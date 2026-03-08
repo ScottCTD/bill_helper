@@ -622,6 +622,8 @@ def test_system_prompt_includes_group_proposal_workflow_rules():
     prompt = system_prompt()
     assert "Before mutating an existing group, use list_groups" in prompt
     assert "Before proposing group membership changes involving entries, use list_entries" in prompt
+    assert "After proposing a new entry, check whether it should join an existing recurring, split, or bundle group." in prompt
+    assert "inspect the likely group with list_groups and propose_update_group_membership to add the entry." in prompt
     assert "pending create_group and create_entry proposal ids" in prompt
     assert "dependencies must be approved and applied" in prompt
 
