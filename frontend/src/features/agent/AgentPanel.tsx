@@ -20,6 +20,7 @@ import {
   getRuntimeSettings,
   interruptAgentRun,
   listAgentThreads,
+  reopenAgentChangeItem,
   renameAgentThread,
   rejectAgentChangeItem,
   sendAgentMessage,
@@ -425,13 +426,22 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
   });
 
+  const reopenMutation = useMutation({
+    mutationFn: reopenAgentChangeItem,
+    onSuccess: () => {
+      invalidateAgentThreadData(queryClient, selectedThreadId || undefined);
+      setActionError(null);
+    }
+  });
+
   const isMutating =
     createThreadMutation.isPending ||
     deleteThreadMutation.isPending ||
     renameThreadMutation.isPending ||
     interruptRunMutation.isPending ||
     approveMutation.isPending ||
-    rejectMutation.isPending;
+    rejectMutation.isPending ||
+    reopenMutation.isPending;
 
   const runsByAssistantMessageId = useMemo(() => runsByAssistantMessage(threadQuery.data), [threadQuery.data]);
   const pendingAssistantRuns = useMemo(() => runsWithoutAssistantMessage(threadQuery.data), [threadQuery.data]);
@@ -1080,10 +1090,32 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
   }
 
-  async function handleRejectItem(payload: { itemId: string }): Promise<AgentChangeItem> {
+  async function handleRejectItem(payload: {
+    itemId: string;
+    payloadOverride?: Record<string, unknown>;
+  }): Promise<AgentChangeItem> {
     setActionError(null);
     try {
-      return await rejectMutation.mutateAsync({ itemId: payload.itemId });
+      return await rejectMutation.mutateAsync({
+        itemId: payload.itemId,
+        payload_override: payload.payloadOverride
+      });
+    } catch (error) {
+      setActionError((error as Error).message);
+      throw error;
+    }
+  }
+
+  async function handleReopenItem(payload: {
+    itemId: string;
+    payloadOverride?: Record<string, unknown>;
+  }): Promise<AgentChangeItem> {
+    setActionError(null);
+    try {
+      return await reopenMutation.mutateAsync({
+        itemId: payload.itemId,
+        payload_override: payload.payloadOverride
+      });
     } catch (error) {
       setActionError((error as Error).message);
       throw error;
@@ -1247,6 +1279,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
           onOpenChange={setIsThreadReviewOpen}
           onApproveItem={handleApproveItem}
           onRejectItem={handleRejectItem}
+          onReopenItem={handleReopenItem}
           isBusy={isMutating}
         />
       </aside>

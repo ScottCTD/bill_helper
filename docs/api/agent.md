@@ -193,8 +193,8 @@ Body:
 
 State rules:
 
-- allowed only for `PENDING_REVIEW`
-- returns `409` if already applied or rejected
+- allowed for any non-`APPLIED` item
+- returns `409` if already applied
 - transitions to `APPLY_FAILED` on apply failure
 
 Apply behavior covers:
@@ -207,6 +207,7 @@ Apply behavior covers:
 Notes:
 
 - the endpoint shape is unchanged; reviewer edits are sent through `payload_override`
+- invalid `payload_override` payloads return `422` and leave the item unchanged
 - group-member proposals that reference pending `create_group` or `create_entry` proposals return `422` until those dependencies are approved and applied
 - when reviewer edits are present, later agent turns receive a compact `review_override=...` summary in the prepended review-results context
 
@@ -219,11 +220,39 @@ Authorization: admin principal only.
 Body:
 
 - `note` (optional)
+- `payload_override` (optional; supported for the same editable change types as approve)
 
 State rules:
 
-- allowed only for `PENDING_REVIEW`
-- returns `409` if already applied or rejected
+- allowed for any non-`APPLIED` item
+- returns `409` if already applied
+
+Behavior:
+
+- stores reviewer edits back onto the proposal payload before marking it `REJECTED`
+- does not apply domain changes
+
+### `POST /agent/change-items/{item_id}/reopen`
+
+Move one non-applied proposal item back to pending review. Response: `AgentChangeItemRead`
+
+Authorization: admin principal only.
+
+Body:
+
+- `note` (optional)
+- `payload_override` (optional; supported for the same editable change types as approve)
+
+State rules:
+
+- allowed for any non-`APPLIED` item
+- returns `409` if already applied
+
+Behavior:
+
+- stores reviewer edits back onto the proposal payload
+- sets status back to `PENDING_REVIEW`
+- does not apply domain changes
 
 ## Attachments
 

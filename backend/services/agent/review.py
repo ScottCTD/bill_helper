@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session, selectinload
 from backend.enums_agent import AgentChangeStatus, AgentChangeType, AgentReviewActionType
 from backend.models_agent import AgentChangeItem, AgentReviewAction, AgentRun
 from backend.services.agent.change_apply import apply_change_item_payload
+from backend.services.agent.tool_handlers_propose import normalize_payload_for_change_type
+from backend.services.agent.tool_types import ToolContext
 from backend.services.entities import find_entity_by_name, normalize_entity_name
 
 
@@ -261,6 +263,44 @@ def _validate_group_dependencies_ready_for_approval(
         )
 
 
+EDITABLE_CHANGE_TYPES = {
+    AgentChangeType.CREATE_TAG,
+    AgentChangeType.UPDATE_TAG,
+    AgentChangeType.CREATE_ENTITY,
+    AgentChangeType.UPDATE_ENTITY,
+    AgentChangeType.CREATE_ENTRY,
+    AgentChangeType.UPDATE_ENTRY,
+    AgentChangeType.CREATE_GROUP,
+    AgentChangeType.UPDATE_GROUP,
+    AgentChangeType.CREATE_GROUP_MEMBER,
+}
+
+
+def _validate_payload_override_supported(item: AgentChangeItem, payload_override: dict[str, Any] | None) -> None:
+    if payload_override is None:
+        return
+    if item.change_type not in EDITABLE_CHANGE_TYPES:
+        raise ValueError(
+            "payload_override is only supported for editable create/update entry, tag, entity, and group items"
+        )
+
+
+def _normalized_payload_override(
+    db: Session,
+    *,
+    item: AgentChangeItem,
+    payload_override: dict[str, Any] | None,
+) -> dict[str, Any]:
+    _validate_payload_override_supported(item, payload_override)
+    if payload_override is None:
+        return item.payload_json
+    return normalize_payload_for_change_type(
+        ToolContext(db=db, run_id=item.run_id),
+        change_type=item.change_type,
+        payload=payload_override,
+    )
+
+
 def approve_change_item(
     db: Session,
     *,
@@ -272,25 +312,10 @@ def approve_change_item(
     item = _get_change_item_or_none(db, item_id)
     if item is None:
         return None
-    if item.status != AgentChangeStatus.PENDING_REVIEW:
-        raise ValueError("Only PENDING_REVIEW items can be approved")
+    if item.status == AgentChangeStatus.APPLIED:
+        raise ValueError("Applied items cannot be approved again")
 
-    if payload_override is not None and item.change_type not in {
-        AgentChangeType.CREATE_TAG,
-        AgentChangeType.UPDATE_TAG,
-        AgentChangeType.CREATE_ENTITY,
-        AgentChangeType.UPDATE_ENTITY,
-        AgentChangeType.CREATE_ENTRY,
-        AgentChangeType.UPDATE_ENTRY,
-        AgentChangeType.CREATE_GROUP,
-        AgentChangeType.UPDATE_GROUP,
-        AgentChangeType.CREATE_GROUP_MEMBER,
-    }:
-        raise ValueError(
-            "payload_override is only supported for editable create/update entry, tag, entity, and group items"
-        )
-
-    payload = payload_override if payload_override is not None else item.payload_json
+    payload = _normalized_payload_override(db, item=item, payload_override=payload_override)
     override_note = None
     if payload_override is not None:
         diff_summary = _summarize_payload_override_diff(item.payload_json, payload_override)
@@ -307,6 +332,8 @@ def approve_change_item(
         note=combined_note,
     )
     db.add(approval_action)
+    if payload_override is not None:
+        item.payload_json = payload
     item.status = AgentChangeStatus.APPROVED
     item.review_note = combined_note
 
@@ -338,23 +365,71 @@ def approve_change_item(
     return item
 
 
-def reject_change_item(db: Session, *, item_id: str, actor: str, note: str | None = None) -> AgentChangeItem | None:
+def reject_change_item(
+    db: Session,
+    *,
+    item_id: str,
+    actor: str,
+    note: str | None = None,
+    payload_override: dict[str, Any] | None = None,
+) -> AgentChangeItem | None:
     item = _get_change_item_or_none(db, item_id)
     if item is None:
         return None
-    if item.status != AgentChangeStatus.PENDING_REVIEW:
-        raise ValueError("Only PENDING_REVIEW items can be rejected")
+    if item.status == AgentChangeStatus.APPLIED:
+        raise ValueError("Applied items cannot be changed back to rejected")
+
+    payload = _normalized_payload_override(db, item=item, payload_override=payload_override)
+    override_note = None
+    if payload_override is not None:
+        diff_summary = _summarize_payload_override_diff(item.payload_json, payload_override)
+        if diff_summary:
+            override_note = f"payload_override: {diff_summary}"
+    combined_note = _combine_notes(note, override_note)
 
     action = AgentReviewAction(
         change_item_id=item.id,
         action=AgentReviewActionType.REJECT,
         actor=actor,
-        note=note,
+        note=combined_note,
     )
+    item.payload_json = payload
     item.status = AgentChangeStatus.REJECTED
-    item.review_note = note
+    item.review_note = combined_note
     item.updated_at = utc_now()
     db.add(action)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    db.refresh(item, attribute_names=["review_actions"])
+    return item
+
+
+def reopen_change_item(
+    db: Session,
+    *,
+    item_id: str,
+    actor: str,
+    note: str | None = None,
+    payload_override: dict[str, Any] | None = None,
+) -> AgentChangeItem | None:
+    item = _get_change_item_or_none(db, item_id)
+    if item is None:
+        return None
+    if item.status == AgentChangeStatus.APPLIED:
+        raise ValueError("Applied items cannot be reopened")
+
+    payload = _normalized_payload_override(db, item=item, payload_override=payload_override)
+    override_note = None
+    if payload_override is not None:
+        diff_summary = _summarize_payload_override_diff(item.payload_json, payload_override)
+        if diff_summary:
+            override_note = f"payload_override: {diff_summary}"
+    combined_note = _combine_notes(note, override_note)
+    item.payload_json = payload
+    item.status = AgentChangeStatus.PENDING_REVIEW
+    item.review_note = combined_note
+    item.updated_at = utc_now()
     db.add(item)
     db.commit()
     db.refresh(item)

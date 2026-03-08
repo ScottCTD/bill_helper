@@ -27,10 +27,12 @@ This document describes the architecture, prompts, tools, and usage workflow of 
   - Pending items appear first, with reviewed and failed items kept in a secondary audit section.
   - Entry proposals support structured edit-before-approve with unified payload diff.
   - Group proposals appear in their own `Groups` TOC section. Create/update group proposals edit `name` (and create-only `group_type`), while add-member proposals can edit existing refs plus split role when applicable.
-  - Pending create-proposal refs inside group-member proposals stay locked and render dependency chips with proposal summary plus status.
+  - Group membership diffs are rendered as relationship updates: the entry snapshot stays stable and only the `group` field changes, with split role shown when relevant.
+  - Pending create-proposal refs inside group-member proposals stay locked and render dependency chips with proposal summary plus status; once the dependency proposal is applied, the chip disappears and the resolved group or entry snapshot remains.
   - Tag proposals edit only `name` and `type`; entity proposals edit only `name` and `category`.
   - Review diff rows use friendly field labels/order and human-readable amount values.
-  - Use `Approve`, `Reject`, or `Skip` for focused step-through review.
+  - Non-applied items can be revised after rejection or apply failure, then moved back to pending or approved directly; applied items remain read-only.
+  - Use `Approve`, `Reject`, `Move to Pending`, or `Skip` for focused step-through review.
   - Use `Approve All` for deterministic sequential batch apply with saved reviewer edits reused automatically.
   - Use `Reject All` to discard all remaining pending proposals.
 
@@ -243,7 +245,7 @@ You are an expert in personal finance and accounting. You always call the right 
 
 Tool execution is composed from `backend/services/agent/tool_runtime.py` (registry + execution policy) with handlers in `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_memory.py`, `backend/services/agent/tool_handlers_threads.py`, and `backend/services/agent/tool_handlers_propose.py`, shared entry/group reference helpers in `backend/services/agent/entry_references.py` and `backend/services/agent/group_references.py`, proposal-domain metadata in `backend/services/agent/proposal_metadata.py`, argument contracts in `backend/services/agent/tool_args.py`, thread-title helpers in `backend/services/agent/threads.py`, and patch-map helpers in `backend/services/agent/proposal_patching.py`. `backend/services/agent/tools.py` is a thin facade that re-exports runtime interfaces. Each tool returns plain-text `content` to the model.
 
-`list_proposals` is the read-only lifecycle inspection tool for proposals in the current thread. Proposal tools (`propose_`*, `update_pending_proposal`, `remove_pending_proposal`) create or mutate `AgentChangeItem` rows while they remain under review. They do not mutate domain data; changes apply only after human approval via approve/reject endpoints.
+`list_proposals` is the read-only lifecycle inspection tool for proposals in the current thread. Proposal tools (`propose_`*, `update_pending_proposal`, `remove_pending_proposal`) create or mutate `AgentChangeItem` rows while they remain under review. They do not mutate domain data; changes apply only after human approval via approve/reject/reopen endpoints.
 
 ### Entries
 
@@ -445,6 +447,7 @@ Detail mode returns one `group` record with summary fields, `direct_members`, an
 Notes:
 
 - `remove` only supports existing applied `group_id` / `entry_id` / child `group_id` references.
+- Existing short ids and pending create-proposal ids are canonicalized into full ids before the proposal is stored, so later review/apply steps use stable references.
 - If a pending create proposal referenced by an add-member proposal is later rejected or fails, the member proposal remains pending but cannot be approved until edited or removed.
 
 ---
@@ -764,8 +767,9 @@ Pending proposals can be inspected, revised, or removed by id in later turns wit
 
 - `POST /api/v1/agent/change-items/{item_id}/approve`
 - `POST /api/v1/agent/change-items/{item_id}/reject`
+- `POST /api/v1/agent/change-items/{item_id}/reopen`
 
-`payload_override` is supported for `create_entry`, `update_entry`, `create_group`, `update_group`, `create_group_member`, `create_tag`, `update_tag`, `create_entity`, and `update_entity`. Group-member overrides can only adjust existing resource refs or split role; pending proposal refs remain locked in the review UI. On apply failure, item transitions to `APPLY_FAILED` with failure detail in review note.
+`payload_override` is supported for `create_entry`, `update_entry`, `create_group`, `update_group`, `create_group_member`, `create_tag`, `update_tag`, `create_entity`, and `update_entity` across approve, reject, and reopen. Group-member overrides can only adjust existing resource refs or split role; pending proposal refs remain locked in the review UI. Invalid reviewer overrides return `422` and leave the item unchanged. On domain apply failure, item transitions to `APPLY_FAILED` with failure detail in review note.
 
 **Continuation context:** For follow-up turns, `message_history.py` prepends before the latest user feedback message text: (1) a compact review block per item: `tool_name proposal_id=... proposal_short_id=... review_action=... review_item_status=... review_note=... review_override=...`, and (2) when the previous run was interrupted, an interruption note describing the interrupted request. Review context remains outside dynamic system-injected text; account context is intentionally included in system prompt.
 

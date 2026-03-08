@@ -24,6 +24,7 @@ from backend.models_agent import (
 )
 from backend.schemas_agent import (
     AgentChangeItemApproveRequest,
+    AgentChangeItemReopenRequest,
     AgentChangeItemRead,
     AgentChangeItemRejectRequest,
     AgentRunRead,
@@ -45,7 +46,7 @@ from backend.services.agent.execution import (
     run_agent_in_background,
 )
 from backend.services.agent.threads import AgentThreadNotFoundError, rename_thread_by_id
-from backend.services.agent.review import approve_change_item, reject_change_item
+from backend.services.agent.review import approve_change_item, reject_change_item, reopen_change_item
 from backend.services.agent.runtime import (
     AgentRuntimeUnavailable,
     interrupt_agent_run,
@@ -347,7 +348,7 @@ def approve_item(
         )
     except ValueError as exc:
         detail = str(exc)
-        if detail.startswith("Only PENDING_REVIEW"):
+        if detail.endswith("cannot be approved again"):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
         if "payload_override" in detail:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
@@ -370,11 +371,41 @@ def reject_item(
             item_id=item_id,
             actor=principal.user_name,
             note=payload.note,
+            payload_override=payload.payload_override,
         )
     except ValueError as exc:
         detail = str(exc)
-        if detail.startswith("Only PENDING_REVIEW"):
+        if detail.endswith("cannot be changed back to rejected"):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
+        if "payload_override" in detail:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Change item not found")
+    return change_item_to_schema(item)
+
+
+@router.post("/change-items/{item_id}/reopen", response_model=AgentChangeItemRead)
+def reopen_item(
+    item_id: str,
+    payload: AgentChangeItemReopenRequest,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> AgentChangeItemRead:
+    try:
+        item = reopen_change_item(
+            db,
+            item_id=item_id,
+            actor=principal.user_name,
+            note=payload.note,
+            payload_override=payload.payload_override,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail.endswith("cannot be reopened"):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
+        if "payload_override" in detail:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Change item not found")
