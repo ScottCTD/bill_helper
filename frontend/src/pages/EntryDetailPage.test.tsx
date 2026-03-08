@@ -134,4 +134,48 @@ describe("EntryDetailPage", () => {
     await screen.findByText("Entry Details");
     expect(screen.getAllByText("Missing entity")).toHaveLength(2);
   });
+
+  it("renders icon delete controls for links with accessible labels", async () => {
+    vi.mocked(getEntry).mockResolvedValue({
+      ...entryFixture,
+      links: [
+        {
+          id: "link-1",
+          source_entry_id: "entry-1",
+          target_entry_id: "entry-2",
+          link_type: "BUNDLE",
+          note: null,
+          created_at: "2026-03-05T00:00:00Z"
+        }
+      ]
+    });
+    vi.mocked(getGroup).mockResolvedValue({ group_id: "group-1", nodes: [], edges: [] });
+    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]);
+    vi.mocked(listEntities).mockResolvedValue([]);
+    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true }]);
+    vi.mocked(listTags).mockResolvedValue([]);
+    vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
+    vi.mocked(listEntries).mockResolvedValue({ items: [], total: 0, limit: 200, offset: 0 });
+    vi.mocked(updateEntry).mockResolvedValue(entryFixture);
+    vi.mocked(createLink).mockResolvedValue({
+      id: "link-2",
+      source_entry_id: "entry-1",
+      target_entry_id: "entry-3",
+      link_type: "BUNDLE",
+      note: null,
+      created_at: "2026-03-05T00:00:00Z"
+    });
+    vi.mocked(deleteLink).mockResolvedValue(undefined);
+
+    renderWithQueryClient(
+      <MemoryRouter initialEntries={["/entries/entry-1"]}>
+        <Routes>
+          <Route path="/entries/:entryId" element={<EntryDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByText("Entry Details");
+    expect(screen.getByRole("button", { name: "Delete link entry-1 to entry-2" })).toBeInTheDocument();
+  });
 });

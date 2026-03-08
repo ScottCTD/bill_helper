@@ -209,7 +209,7 @@ describe("AccountsPage", () => {
       expect(screen.queryByRole("dialog", { name: "Edit Account" })).not.toBeInTheDocument();
     });
 
-    await userEvent.dblClick(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.dblClick(screen.getByRole("button", { name: "Delete account Main" }));
     expect(await screen.findByRole("dialog", { name: "Delete Main?" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Edit Account" })).not.toBeInTheDocument();
   });
@@ -346,7 +346,7 @@ describe("AccountsPage", () => {
     renderWithQueryClient(<AccountsPage />);
 
     await screen.findByText("Main");
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete account Main" }));
 
     const deleteDialog = await screen.findByRole("dialog", { name: "Delete Main?" });
     expect(within(deleteDialog).getByText(/snapshot history for this account is deleted/i)).toBeInTheDocument();

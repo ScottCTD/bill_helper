@@ -7,10 +7,12 @@
 - lists, filters, edits, and deletes entries
 - create action is a compact `+` beside the `Source text` filter
 - `Tag` and `Currency` filters use chip-based multi-select controls
-- group column hides UUID-only unnamed groups
 - date column is fixed-width and no-wrap
 - name cells show the primary name plus a compact `from -> to` secondary line
+- amount cells combine the kind marker with the numeric value, reusing the existing `+ / - / ~` tone colors on the symbol itself with tight inline spacing
 - tag cells render colored chips using configured tag colors or the shared deterministic fallback color
+- the name and tags columns use balanced preferred widths so tags can expand when there is room, while still yielding space before the name column on tighter layouts
+- row delete actions use compact trash-can icon buttons with accessible labels instead of inline `Delete` text, and their icon-only action headers are visually hidden to keep the column minimal
 - rows show a `Missing entity` badge when preserved labels remain after entity or account deletion
 - entry create modal resolves default currency from runtime settings
 
@@ -30,6 +32,7 @@
 - left summary list comes from `GET /groups`
 - selected graph detail comes from `GET /groups/{group_id}`
 - group topology changes remain link-driven only
+- link removal actions use compact icon buttons, with the action header visually hidden so the column can stay minimal
 - `GroupGraphView.tsx` locally filters React Flow warning `002` because it is a false positive for this graph
 
 ## Accounts
@@ -39,7 +42,7 @@
 - page is a thin orchestrator; domain state lives in `frontend/src/features/accounts/useAccountsPageModel.ts`
 - UI is split into `AccountsTableSection`, `ReconciliationSection`, `SnapshotsSection`, and `AccountDialogs`
 - create, edit, and delete flows are dialog-driven
-- account rows single-select on click and open edit on double-click; delete remains the only explicit row action
+- account rows single-select on click and open edit on double-click; delete remains the only explicit row action and is rendered as a compact icon button
 - account ids are shared entity-root ids; generic entity management does not expose them as editable entity rows
 - account dialogs edit `Owner`, `Name`, `Currency`, `Notes`, and `Active`
 - legacy `institution` and `type` fields are removed
@@ -59,7 +62,7 @@
 - account-backed entities are hidden from the generic `Entities` table
 - the generic `Entities` table now stays compact and shows only `Name`, `Category`, and row actions
 - entities and tags have destructive confirmation dialogs
-- account, entity, and tag row delete controls use the subdued shared table action styling; destructive emphasis is reserved for confirmation
+- account, entity, and tag row delete controls use compact icon buttons with subdued shared table action styling; destructive emphasis is reserved for confirmation
 - entity delete warns when preserved entry labels will become missing markers
 - tag delete warns when existing entry-tag associations will be removed
 - currencies remain read-only

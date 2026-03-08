@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
+import { DeleteIconButton } from "../components/DeleteIconButton";
 import { EntryEditorModal, type EntryEditorSubmitPayload } from "../components/EntryEditorModal";
 import { GroupGraphView } from "../components/GroupGraphView";
 import { LinkEditorModal } from "../components/LinkEditorModal";
@@ -201,9 +202,7 @@ export function EntryDetailPage() {
                     {" -> "}
                     {link.target_entry_id.slice(0, 6)} ({link.link_type})
                   </span>
-                  <Button type="button" variant="destructive" size="sm" onClick={() => deleteLinkMutation.mutate(link.id)}>
-                    Remove
-                  </Button>
+                  <DeleteIconButton label={`Delete link ${link.source_entry_id} to ${link.target_entry_id}`} onClick={() => deleteLinkMutation.mutate(link.id)} />
                 </li>
               ))}
             </ul>

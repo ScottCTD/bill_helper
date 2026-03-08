@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 import { Plus } from "lucide-react";
 
+import { DeleteIconButton } from "../../../components/DeleteIconButton";
 import type { Entity } from "../../../lib/types";
 import { DeleteConfirmDialog } from "../../../components/DeleteConfirmDialog";
 import { CreatableSingleSelect } from "../../../components/CreatableSingleSelect";
@@ -124,7 +125,9 @@ export function EntitiesSection(props: EntitiesSectionProps) {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Category</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className="icon-action-column">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -132,17 +135,13 @@ export function EntitiesSection(props: EntitiesSectionProps) {
                 <TableRow key={entity.id} className="cursor-pointer" onDoubleClick={() => onStartEditEntity(entity)}>
                   <TableCell>{entity.name}</TableCell>
                   <TableCell>{entity.category || "(none)"}</TableCell>
-                  <TableCell>
+                  <TableCell className="icon-action-column">
                     <div className="table-actions">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
+                      <DeleteIconButton
+                        label={`Delete entity ${entity.name}`}
                         onClick={() => onStartDeleteEntity(entity)}
                         onDoubleClick={(event) => event.stopPropagation()}
-                      >
-                        Delete
-                      </Button>
+                      />
                     </div>
                   </TableCell>
                 </TableRow>

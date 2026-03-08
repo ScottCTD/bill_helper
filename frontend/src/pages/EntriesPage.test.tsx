@@ -2,6 +2,7 @@ import { screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EntriesPage } from "./EntriesPage";
+import { formatMinorCompact } from "../lib/format";
 import { fallbackTagColor } from "../lib/tagColors";
 import { renderWithQueryClient } from "../test/renderWithQueryClient";
 import type { Entry, RuntimeSettings } from "../lib/types";
@@ -126,6 +127,16 @@ describe("EntriesPage", () => {
 
     await screen.findByText("Coffee");
     expect(screen.getByText("Missing entity")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete entry Coffee" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Kind" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Group" })).not.toBeInTheDocument();
+    expect(screen.queryByText("group-1")).not.toBeInTheDocument();
+
+    const amountCell = screen.getByText(formatMinorCompact(entryFixture.amount_minor)).closest(".entries-amount-cell");
+    const amountMarker = amountCell?.querySelector(".entries-amount-marker");
+    expect(amountMarker).not.toBeNull();
+    expect(amountMarker).toHaveTextContent("-");
+    expect(amountMarker).toHaveClass("entries-amount-marker-expense");
   });
 
   it("renders explicit and fallback tag colors in the entries table", async () => {
@@ -142,8 +153,8 @@ describe("EntriesPage", () => {
 
     await screen.findByText("travel");
 
-    const coffeeChip = screen.getByText("coffee").closest(".entries-tag-pill");
-    const travelChip = screen.getByText("travel").closest(".entries-tag-pill");
+    const coffeeChip = screen.getByText("coffee").closest(".entries-tag-pill") as HTMLElement | null;
+    const travelChip = screen.getByText("travel").closest(".entries-tag-pill") as HTMLElement | null;
     const coffeeDot = coffeeChip?.querySelector(".entries-tag-pill-color");
     const travelDot = travelChip?.querySelector(".entries-tag-pill-color");
     const fallbackColor = fallbackTagColor("travel");
@@ -157,5 +168,21 @@ describe("EntriesPage", () => {
     expect(coffeeDot?.getAttribute("style")).toContain(normalizeCssColor("#5f6caf"));
     expect(travelChip?.style.borderColor).toBe(normalizeCssColor(fallbackColor));
     expect(travelDot?.getAttribute("style")).toContain(normalizeCssColor(fallbackColor));
+  });
+
+  it("gives the tags column a constrained width so the name column keeps more space", async () => {
+    mockEntriesPageData(entryFixture);
+
+    renderWithQueryClient(<EntriesPage />);
+
+    await screen.findByText("Coffee");
+
+    expect(screen.getByRole("table")).toHaveClass("entries-table", "table-fixed");
+    expect(screen.getByRole("columnheader", { name: "Name" })).toHaveClass("entries-name-column");
+    expect(screen.getByRole("columnheader", { name: "Tags" })).toHaveClass("entries-tags-column");
+    expect(screen.getByRole("columnheader", { name: "Amount" })).toHaveClass("entries-amount-column");
+    expect(screen.getByRole("columnheader", { name: "Actions" })).toHaveClass("entries-actions-column");
+    expect(screen.queryByRole("columnheader", { name: "Kind" })).not.toBeInTheDocument();
+    expect(screen.getByText("coffee")).toHaveClass("entries-tag-pill-label");
   });
 });

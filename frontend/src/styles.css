@@ -408,6 +408,10 @@
     @apply inline-flex flex-wrap items-center gap-2;
   }
 
+  .icon-action-column {
+    @apply w-10 min-w-10 whitespace-nowrap px-1 text-right;
+  }
+
   .entries-table thead th {
     @apply h-9 py-2;
   }
@@ -422,6 +426,24 @@
 
   .entries-date-column {
     @apply w-28 whitespace-nowrap;
+  }
+
+  .entries-name-column {
+    @apply min-w-0;
+    width: 30%;
+  }
+
+  .entries-amount-column {
+    @apply w-36 whitespace-nowrap;
+  }
+
+  .entries-tags-column {
+    @apply min-w-0;
+    width: 22%;
+  }
+
+  .entries-actions-column {
+    @apply w-10 min-w-10 whitespace-nowrap px-1 text-right;
   }
 
   .entries-name-cell {
@@ -444,6 +466,22 @@
     @apply inline-flex items-baseline gap-1 whitespace-nowrap;
   }
 
+  .entries-amount-marker {
+    @apply shrink-0 text-base font-bold leading-none;
+  }
+
+  .entries-amount-marker-income {
+    color: hsl(var(--success));
+  }
+
+  .entries-amount-marker-expense {
+    color: hsl(var(--warning));
+  }
+
+  .entries-amount-marker-transfer {
+    color: hsl(var(--muted-foreground));
+  }
+
   .entries-amount-value {
     @apply font-medium tabular-nums;
   }
@@ -453,23 +491,23 @@
   }
 
   .entries-tag-list {
-    @apply flex flex-wrap items-center gap-1.5;
+    @apply flex w-full max-w-full flex-wrap items-center gap-1.5 overflow-hidden;
   }
 
   .entries-tag-pill {
-    @apply inline-flex items-center gap-1.5 bg-muted px-2 py-0.5 text-xs font-medium;
+    @apply inline-flex max-w-full items-center gap-1.5 bg-muted px-2 py-0.5 text-xs font-medium;
   }
 
   .entries-tag-pill-color {
     @apply h-2.5 w-2.5 shrink-0 rounded-full border border-black/10;
   }
 
-  .entries-tag-empty {
-    @apply text-xs text-muted-foreground;
+  .entries-tag-pill-label {
+    @apply min-w-0 truncate;
   }
 
-  .entry-delete-button {
-    @apply text-muted-foreground hover:text-foreground;
+  .entries-tag-empty {
+    @apply text-xs text-muted-foreground;
   }
 
   .properties-layout {

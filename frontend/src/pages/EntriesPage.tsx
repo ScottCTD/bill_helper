@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
+import { DeleteIconButton } from "../components/DeleteIconButton";
 import { EntryEditorModal, type EntryEditorSubmitPayload } from "../components/EntryEditorModal";
 import { TagMultiSelect } from "../components/TagMultiSelect";
 import { Badge } from "../components/ui/badge";
@@ -32,15 +33,22 @@ const ENTRY_FLOW_LABEL_MAX_LENGTH = 18;
 const MISSING_ENTITY_LABEL = "(unspecified)";
 const MISSING_ENTITY_MARKER_LABEL = "Missing entity";
 
+function kindLabel(kind: string) {
+  if (kind === "INCOME") return "Income";
+  if (kind === "TRANSFER") return "Transfer";
+  return "Expense";
+}
+
 function kindSymbol(kind: string) {
   if (kind === "INCOME") return "+";
   if (kind === "TRANSFER") return "~";
   return "-";
 }
 
-function groupLabel(groupId: string) {
-  const isUuidGroupId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(groupId);
-  return isUuidGroupId ? "" : groupId;
+function kindToneClass(kind: string) {
+  if (kind === "INCOME") return "entries-amount-marker-income";
+  if (kind === "TRANSFER") return "entries-amount-marker-transfer";
+  return "entries-amount-marker-expense";
 }
 
 function normalizedCurrencyCode(currencyCode: string) {
@@ -275,16 +283,16 @@ export function EntriesPage() {
             {entriesQuery.isError ? <p className="error">{(entriesQuery.error as Error).message}</p> : null}
 
             {entriesQuery.data ? (
-              <Table className="entries-table">
+              <Table className="entries-table table-fixed">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="entries-date-column">Date</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Kind</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Tags</TableHead>
-                    <TableHead>Group</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead className="entries-name-column">Name</TableHead>
+                    <TableHead className="entries-amount-column">Amount</TableHead>
+                    <TableHead className="entries-tags-column">Tags</TableHead>
+                    <TableHead className="entries-actions-column">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -298,7 +306,7 @@ export function EntriesPage() {
                         onDoubleClick={() => setEditorState({ mode: "edit", entryId: entry.id })}
                       >
                         <TableCell className="entries-date-column">{entry.occurred_at}</TableCell>
-                        <TableCell className="entries-name-cell">
+                        <TableCell className="entries-name-column entries-name-cell">
                           <div className="entries-name-stack">
                             <span className="entries-name-title">{entry.name}</span>
                             {flowLabel ? (
@@ -313,26 +321,25 @@ export function EntriesPage() {
                             ) : null}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`kind-indicator ${entry.kind === "INCOME" ? "kind-indicator-income" : entry.kind === "TRANSFER" ? "kind-indicator-transfer" : "kind-indicator-expense"}`}>
-                            {kindSymbol(entry.kind)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
+                        <TableCell className="entries-amount-column">
                           <span className="entries-amount-cell">
+                            <span className={`entries-amount-marker ${kindToneClass(entry.kind)}`} aria-hidden="true">
+                              {kindSymbol(entry.kind)}
+                            </span>
+                            <span className="sr-only">{kindLabel(entry.kind)}</span>
                             <span className="entries-amount-value">{formatMinorCompact(entry.amount_minor)}</span>
                             <span className="entries-amount-currency">{normalizedCurrencyCode(entry.currency_code)}</span>
                           </span>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="entries-tags-column">
                           {entry.tags.length > 0 ? (
                             <div className="entries-tag-list">
                               {entry.tags.map((tag) => {
                                 const color = resolveTagColor(tag.name, tag.color);
                                 return (
-                                  <Badge key={tag.id} variant="outline" className="entries-tag-pill" style={{ borderColor: color }}>
+                                  <Badge key={tag.id} variant="outline" className="entries-tag-pill" style={{ borderColor: color }} title={tag.name}>
                                     <span className="entries-tag-pill-color" aria-hidden="true" style={{ backgroundColor: color }} />
-                                    {tag.name}
+                                    <span className="entries-tag-pill-label">{tag.name}</span>
                                   </Badge>
                                 );
                               })}
@@ -341,22 +348,16 @@ export function EntriesPage() {
                             <span className="entries-tag-empty">-</span>
                           )}
                         </TableCell>
-                        <TableCell>{groupLabel(entry.group_id)}</TableCell>
-                        <TableCell>
+                        <TableCell className="entries-actions-column">
                           <div className="table-actions">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="entry-delete-button"
+                            <DeleteIconButton
+                              label={`Delete entry ${entry.name}`}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 deleteEntryMutation.mutate(entry.id);
                               }}
                               onDoubleClick={(event) => event.stopPropagation()}
-                            >
-                              Delete
-                            </Button>
+                            />
                           </div>
                         </TableCell>
                       </TableRow>

@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
 
+import { DeleteIconButton } from "../../components/DeleteIconButton";
 import type { Account } from "../../lib/types";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -81,7 +82,9 @@ export function AccountsTableSection(props: AccountsTableSectionProps) {
                     <TableHead>Currency</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Updated</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead className="icon-action-column">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -109,20 +112,16 @@ export function AccountsTableSection(props: AccountsTableSectionProps) {
                         </Badge>
                       </TableCell>
                       <TableCell>{toDateLabel(account.updated_at)}</TableCell>
-                      <TableCell>
+                      <TableCell className="icon-action-column">
                         <div className="table-actions">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
+                          <DeleteIconButton
+                            label={`Delete account ${account.name}`}
                             onClick={(event) => {
                               event.stopPropagation();
                               onDeleteAccount(account.id);
                             }}
                             onDoubleClick={(event) => event.stopPropagation()}
-                          >
-                            Delete
-                          </Button>
+                          />
                         </div>
                       </TableCell>
                     </TableRow>

@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 import { Plus } from "lucide-react";
 
+import { DeleteIconButton } from "../../../components/DeleteIconButton";
 import type { Tag } from "../../../lib/types";
 import { DeleteConfirmDialog } from "../../../components/DeleteConfirmDialog";
 import { CreatableSingleSelect } from "../../../components/CreatableSingleSelect";
@@ -145,7 +146,9 @@ export function TagsSection(props: TagsSectionProps) {
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className="icon-action-column">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -159,17 +162,13 @@ export function TagsSection(props: TagsSectionProps) {
                   </TableCell>
                   <TableCell>{tag.type || "(none)"}</TableCell>
                   <TableCell>{tag.description || "(none)"}</TableCell>
-                  <TableCell>
+                  <TableCell className="icon-action-column">
                     <div className="table-actions">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
+                      <DeleteIconButton
+                        label={`Delete tag ${tag.name}`}
                         onClick={() => onStartDeleteTag(tag)}
                         onDoubleClick={(event) => event.stopPropagation()}
-                      >
-                        Delete
-                      </Button>
+                      />
                     </div>
                   </TableCell>
                 </TableRow>

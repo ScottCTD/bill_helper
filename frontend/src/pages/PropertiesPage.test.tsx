@@ -174,7 +174,7 @@ describe("PropertiesPage", () => {
     expect(screen.getByText("Grocer")).toBeInTheDocument();
     expect(screen.queryByText("Checking")).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete entity Grocer" }));
 
     const deleteDialog = await screen.findByRole("dialog", { name: "Delete Grocer?" });
     expect(screen.getByText(/missing-entity marker/i)).toBeInTheDocument();
@@ -209,7 +209,7 @@ describe("PropertiesPage", () => {
       expect(screen.queryByRole("dialog", { name: "Edit Entity" })).not.toBeInTheDocument();
     });
 
-    await userEvent.dblClick(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.dblClick(screen.getByRole("button", { name: "Delete entity Grocer" }));
     expect(await screen.findByRole("dialog", { name: "Delete Grocer?" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Edit Entity" })).not.toBeInTheDocument();
   });
@@ -221,7 +221,7 @@ describe("PropertiesPage", () => {
     await screen.findByText("Property Databases");
     await userEvent.click(screen.getByRole("button", { name: "Tags" }));
 
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete tag groceries" }));
 
     const deleteDialog = await screen.findByRole("dialog", { name: "Delete groceries?" });
     expect(within(deleteDialog).getByText(/removed from those entries/i)).toBeInTheDocument();
@@ -256,7 +256,7 @@ describe("PropertiesPage", () => {
       expect(screen.queryByRole("dialog", { name: "Edit Tag" })).not.toBeInTheDocument();
     });
 
-    await userEvent.dblClick(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.dblClick(screen.getByRole("button", { name: "Delete tag groceries" }));
     expect(await screen.findByRole("dialog", { name: "Delete groceries?" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Edit Tag" })).not.toBeInTheDocument();
   });

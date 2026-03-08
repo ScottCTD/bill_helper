@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
+import { DeleteIconButton } from "../components/DeleteIconButton";
 import { GroupGraphView } from "../components/GroupGraphView";
 import { LinkEditorModal } from "../components/LinkEditorModal";
 import { Badge } from "../components/ui/badge";
@@ -268,7 +269,9 @@ export function GroupsPage() {
                           <TableHead>Target</TableHead>
                           <TableHead>Type</TableHead>
                           <TableHead>Note</TableHead>
-                          <TableHead>Actions</TableHead>
+                          <TableHead className="icon-action-column">
+                            <span className="sr-only">Actions</span>
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -278,16 +281,12 @@ export function GroupsPage() {
                             <TableCell>{nodeLabel(edge.target_entry_id, selectedGroupNodeById)}</TableCell>
                             <TableCell>{edge.link_type}</TableCell>
                             <TableCell>{edge.note || "-"}</TableCell>
-                            <TableCell>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
+                            <TableCell className="icon-action-column">
+                              <DeleteIconButton
+                                label={`Delete link ${nodeLabel(edge.source_entry_id, selectedGroupNodeById)} to ${nodeLabel(edge.target_entry_id, selectedGroupNodeById)}`}
                                 disabled={deleteLinkMutation.isPending}
                                 onClick={() => deleteLinkMutation.mutate(edge.id)}
-                              >
-                                Remove
-                              </Button>
+                              />
                             </TableCell>
                           </TableRow>
                         ))}
