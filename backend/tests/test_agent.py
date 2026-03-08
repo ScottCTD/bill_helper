@@ -581,6 +581,16 @@ def test_system_prompt_includes_group_proposal_workflow_rules():
     assert "dependencies must be approved and applied" in prompt
 
 
+def test_system_prompt_includes_group_type_reference():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    assert "### Group Type Reference" in prompt
+    assert "`BUNDLE`: a related set of direct members that should be treated together" in prompt
+    assert "`SPLIT`: one parent side split across child side members" in prompt
+    assert "`RECURRING`: repeated entries of the same `EntryKind` over time" in prompt
+
+
 def test_system_prompt_includes_error_recovery_and_core_identity():
     from backend.services.agent.prompts import system_prompt
 

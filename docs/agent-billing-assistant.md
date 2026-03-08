@@ -123,6 +123,7 @@ The agent receives a markdown-structured system prompt at the start of each run.
 - `## Rules` (sectioned policy groups)
 - `## Current User Context` (runtime-generated timezone/date bullets, account summaries, and optional account `notes_markdown` from `markdown_body`)
 - `## Agent Memory` (optional; when `user_memory` is set via runtime settings as persistent list items)
+- a static `Group Type Reference` describing the canonical meaning of `BUNDLE`, `SPLIT`, and `RECURRING`
 - rules now include a dedicated Group Proposal Workflow section covering `list_groups`, `list_entries` before entry membership edits, and dependency blocking for pending create proposals
 
 ```markdown
