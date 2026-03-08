@@ -189,7 +189,7 @@ Authorization: admin principal only.
 Body:
 
 - `note` (optional)
-- `payload_override` (optional; supported for `create_entry`, `update_entry`, `create_tag`, `update_tag`, `create_entity`, and `update_entity`)
+- `payload_override` (optional; supported for `create_entry`, `update_entry`, `create_group`, `update_group`, `create_group_member`, `create_tag`, `update_tag`, `create_entity`, and `update_entity`)
 
 State rules:
 
@@ -200,12 +200,14 @@ State rules:
 Apply behavior covers:
 
 - entry create, update, and soft-delete
+- group create, rename, delete, and direct-member add/remove
 - tag create, update, and delete
 - entity create, update, and delete
 
 Notes:
 
 - the endpoint shape is unchanged; reviewer edits are sent through `payload_override`
+- group-member proposals that reference pending `create_group` or `create_entry` proposals return `422` until those dependencies are approved and applied
 - when reviewer edits are present, later agent turns receive a compact `review_override=...` summary in the prepended review-results context
 
 ### `POST /agent/change-items/{item_id}/reject`

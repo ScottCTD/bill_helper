@@ -30,6 +30,10 @@
   - proposal CRUD tools and pending-proposal edit or remove tools
 - `backend/services/agent/entry_references.py`
   - shared entry lookup helpers for `entry_id` aliases, selector fallback, and public entry snapshots
+- `backend/services/agent/group_references.py`
+  - shared group-id alias lookup plus public group summary/detail formatting for `list_groups` and group proposals
+- `backend/services/agent/proposal_metadata.py`
+  - canonical mapping from `change_type` to proposal domain/action/tool name for `list_proposals`, history, and review summaries
 - `backend/services/agent/proposal_patching.py`
   - patch-map helpers for pending proposal edits
 - `backend/services/agent/tool_runtime.py`
@@ -71,6 +75,8 @@
 - `add_user_memory` is an add-only tool for explicit remember-this requests; mutate/remove requests must be declined
 - `rename_thread` should run right after the first user message in a new thread, then only when the user explicitly asks or the topic materially changes
 - model-facing tool interfaces avoid requiring full domain IDs; entry mutations prefer `entry_id` aliases from `list_entries` with selector fallback
+- existing-group mutations prefer `group_id` aliases from `list_groups`
+- group membership proposals may reference pending `create_group` and `create_entry` proposal ids in the same thread; approval is blocked until those dependencies are applied
 
 ## Agent Router
 
@@ -120,8 +126,9 @@ Endpoints:
 
 ## Review And Apply Behavior
 
-- `backend/services/agent/review.py` accepts reviewer `payload_override` for create/update entry, tag, and entity proposals while keeping the approve endpoint contract unchanged
-- `backend/services/agent/change_apply.py` still owns the actual domain mutation after approval
+- `backend/services/agent/review.py` accepts reviewer `payload_override` for create/update entry, tag, entity, and group proposals while keeping the approve endpoint contract unchanged
+- group-member approvals that reference pending `create_group` / `create_entry` proposals are blocked until those dependencies are applied; rejected or failed dependencies leave the member proposal unapprovable until edited or removed
+- `backend/services/agent/change_apply.py` still owns the actual domain mutation after approval, including group create/rename/delete and group membership add/remove
 - `backend/services/agent/message_history.py` prepends compact review outcome lines before the next user feedback message and includes `review_override=...` when reviewer edits changed the applied payload
 - `backend/services/agent/tool_handlers_read.py` includes `markdown_notes` in public entry snapshots so thread review editors can initialize full merged entry forms for update proposals
 

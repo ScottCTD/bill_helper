@@ -108,6 +108,8 @@
   - `user_context.py`: account/user prompt-context normalization and truncation helpers.
   - `runtime_state.py`: run-event/tool-call persistence helpers used by runtime coordinator.
   - `entry_references.py`: shared entry-id alias, selector lookup, and public entry snapshot helpers.
+  - `group_references.py`: shared group-id alias lookup plus public group summary/detail formatting for group tools and review payloads.
+  - `proposal_metadata.py`: canonical proposal domain/action/tool-name mapping shared by list/history/review surfaces.
   - `benchmark_interface.py`: stable benchmark execution contract returning normalized predictions/trace data.
   - `change_contracts.py`: shared payload contract validation/normalization for proposal + apply paths.
 
@@ -153,6 +155,7 @@
 - `MarkdownBlockEditor.tsx`: BlockNote wrapper for markdown + pasted images.
 - `agent/AgentRunBlock.tsx`: extracted run activity/summary renderer used by `AgentPanel`.
 - `agent/activity.ts`: extracted run/activity derivation helpers for agent timeline state.
+- `agent/review/model.ts`: review-item summaries, proposal-domain grouping, and shared change-type labels.
 - `agent/panel/*`: agent panel presentation layer (`AgentThreadList`, `AgentThreadPanel`, `AgentTimeline`, `AgentComposer`, `AgentThreadUsageBar`, `AgentAttachmentPreviewDialog`) plus panel-local hooks (`useResizablePanel`, `useStickToBottom`, `useAgentDraftAttachments`), type and format helpers.
 
 #### Pages (`/frontend/src/pages`)

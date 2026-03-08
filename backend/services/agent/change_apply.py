@@ -8,15 +8,23 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from backend.enums_agent import AgentChangeType
-from backend.models_finance import Entry, Tag
+from backend.models_agent import AgentChangeItem
+from backend.models_finance import Entry, EntryGroup, EntryGroupMember, Tag
 from backend.services.agent.change_contracts import (
+    CreateGroupMemberPayload,
+    CreateGroupPayload,
     CreateEntryPayload,
     CreateEntityPayload,
     CreateTagPayload,
+    DeleteGroupMemberPayload,
+    DeleteGroupPayload,
     DeleteEntryPayload,
     DeleteEntityPayload,
     DeleteTagPayload,
+    EntryReferencePayload,
     EntrySelectorPayload,
+    GroupReferencePayload,
+    UpdateGroupPayload,
     UpdateEntryPayload,
     UpdateEntityPayload,
     UpdateTagPayload,
@@ -27,6 +35,7 @@ from backend.services.agent.entry_references import (
     find_entries_by_id,
     find_entries_by_selector,
 )
+from backend.services.agent.group_references import group_owner_condition
 from backend.services.crud_policy import PolicyViolation
 from backend.services.entries import set_entry_tags, soft_delete_entry
 from backend.services.entities import (
@@ -38,6 +47,15 @@ from backend.services.entities import (
 )
 from backend.services.tags import delete_tag
 from backend.services.runtime_settings import resolve_runtime_settings
+from backend.services.groups import (
+    add_group_member,
+    create_group,
+    delete_group,
+    group_tree_options,
+    load_group_tree,
+    remove_group_member,
+    rename_group,
+)
 from backend.services.tags import resolve_tag_color
 from backend.services.taxonomy_constants import (
     ENTITY_CATEGORY_SUBJECT_TYPE,
@@ -94,6 +112,53 @@ def _find_unique_entry_by_id(db: Session, entry_id: str) -> Entry:
         candidates = "; ".join(entry.id for entry in matches)
         raise ValueError(f"Entry id is ambiguous ({len(matches)} matches): {candidates}")
     return matches[0]
+
+
+def _find_change_item_by_id(db: Session, change_item_id: str) -> AgentChangeItem:
+    item = db.get(AgentChangeItem, change_item_id)
+    if item is None:
+        raise ValueError(f"Referenced proposal not found: {change_item_id}")
+    return item
+
+
+def _resolve_applied_group_id(db: Session, reference: GroupReferencePayload) -> str:
+    if reference.group_id is not None:
+        return reference.group_id
+
+    assert reference.create_group_proposal_id is not None
+    item = _find_change_item_by_id(db, reference.create_group_proposal_id)
+    if item.change_type != AgentChangeType.CREATE_GROUP:
+        raise ValueError("Referenced proposal is not a create_group proposal")
+    if item.applied_resource_type != "group" or item.applied_resource_id is None:
+        raise ValueError("Referenced group proposal has not been applied yet")
+    return item.applied_resource_id
+
+
+def _resolve_applied_entry_id(db: Session, reference: EntryReferencePayload) -> str:
+    if reference.entry_id is not None:
+        return reference.entry_id
+
+    assert reference.create_entry_proposal_id is not None
+    item = _find_change_item_by_id(db, reference.create_entry_proposal_id)
+    if item.change_type != AgentChangeType.CREATE_ENTRY:
+        raise ValueError("Referenced proposal is not a create_entry proposal")
+    if item.applied_resource_type != "entry" or item.applied_resource_id is None:
+        raise ValueError("Referenced entry proposal has not been applied yet")
+    return item.applied_resource_id
+
+
+def _find_scoped_group_by_id(db: Session, *, group_id: str, current_user_id: str) -> EntryGroup:
+    group = db.scalar(
+        select(EntryGroup)
+        .where(
+            EntryGroup.id == group_id,
+            group_owner_condition(current_user_id),
+        )
+        .options(*group_tree_options())
+    )
+    if group is None:
+        raise ValueError("Group not found")
+    return group
 
 
 def apply_create_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
@@ -301,10 +366,121 @@ def apply_delete_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
     return AppliedResource(resource_type="entry", resource_id=entry.id)
 
 
+def apply_create_group(db: Session, payload: dict[str, Any]) -> AppliedResource:
+    parsed = _parse_payload(payload, change_type=AgentChangeType.CREATE_GROUP, model_type=CreateGroupPayload)
+
+    settings = resolve_runtime_settings(db)
+    owner_user = ensure_current_user(db, settings.current_user_name)
+    group = create_group(
+        db,
+        name=parsed.name,
+        group_type=parsed.group_type,
+        owner_user_id=owner_user.id,
+    )
+    db.flush()
+    return AppliedResource(resource_type="group", resource_id=group.id)
+
+
+def apply_update_group(db: Session, payload: dict[str, Any]) -> AppliedResource:
+    parsed = _parse_payload(payload, change_type=AgentChangeType.UPDATE_GROUP, model_type=UpdateGroupPayload)
+
+    settings = resolve_runtime_settings(db)
+    current_user = ensure_current_user(db, settings.current_user_name)
+    group = _find_scoped_group_by_id(db, group_id=parsed.group_id, current_user_id=current_user.id)
+    updated = rename_group(db, group=group, name=parsed.patch.name or group.name)
+    db.flush()
+    return AppliedResource(resource_type="group", resource_id=updated.id)
+
+
+def apply_delete_group(db: Session, payload: dict[str, Any]) -> AppliedResource:
+    parsed = _parse_payload(payload, change_type=AgentChangeType.DELETE_GROUP, model_type=DeleteGroupPayload)
+
+    settings = resolve_runtime_settings(db)
+    current_user = ensure_current_user(db, settings.current_user_name)
+    group = _find_scoped_group_by_id(db, group_id=parsed.group_id, current_user_id=current_user.id)
+    resource_id = group.id
+    delete_group(db, group=group)
+    db.flush()
+    return AppliedResource(resource_type="group", resource_id=resource_id)
+
+
+def apply_create_group_member(db: Session, payload: dict[str, Any]) -> AppliedResource:
+    parsed = _parse_payload(
+        payload,
+        change_type=AgentChangeType.CREATE_GROUP_MEMBER,
+        model_type=CreateGroupMemberPayload,
+    )
+
+    settings = resolve_runtime_settings(db)
+    current_user = ensure_current_user(db, settings.current_user_name)
+    group_id = _resolve_applied_group_id(db, parsed.group_ref)
+    group = _find_scoped_group_by_id(db, group_id=group_id, current_user_id=current_user.id)
+
+    entry = None
+    child_group = None
+    if parsed.entry_ref is not None:
+        entry_id = _resolve_applied_entry_id(db, parsed.entry_ref)
+        entry = _find_unique_entry_by_id(db, entry_id)
+    if parsed.child_group_ref is not None:
+        child_group_id = _resolve_applied_group_id(db, parsed.child_group_ref)
+        child_group = _find_scoped_group_by_id(db, group_id=child_group_id, current_user_id=current_user.id)
+
+    membership = add_group_member(
+        db,
+        group=group,
+        entry=entry,
+        child_group=child_group,
+        member_role=parsed.member_role,
+    )
+    db.flush()
+    return AppliedResource(resource_type="group_membership", resource_id=membership.id)
+
+
+def apply_delete_group_member(db: Session, payload: dict[str, Any]) -> AppliedResource:
+    parsed = _parse_payload(
+        payload,
+        change_type=AgentChangeType.DELETE_GROUP_MEMBER,
+        model_type=DeleteGroupMemberPayload,
+    )
+
+    settings = resolve_runtime_settings(db)
+    current_user = ensure_current_user(db, settings.current_user_name)
+    group = _find_scoped_group_by_id(
+        db,
+        group_id=parsed.group_ref.group_id or "",
+        current_user_id=current_user.id,
+    )
+
+    target_entry_id = _resolve_applied_entry_id(db, parsed.entry_ref) if parsed.entry_ref is not None else None
+    target_child_group_id = (
+        _resolve_applied_group_id(db, parsed.child_group_ref) if parsed.child_group_ref is not None else None
+    )
+    membership = next(
+        (
+            item
+            for item in group.memberships
+            if (target_entry_id is not None and item.entry_id == target_entry_id)
+            or (target_child_group_id is not None and item.child_group_id == target_child_group_id)
+        ),
+        None,
+    )
+    if membership is None:
+        raise ValueError("Group membership not found")
+    membership_id = membership.id
+    remove_group_member(db, group=group, membership_id=membership_id)
+    db.flush()
+    return AppliedResource(resource_type="group_membership", resource_id=membership_id)
+
+
 APPLY_CHANGE_HANDLERS: dict[AgentChangeType, ChangeApplyHandler] = {
     AgentChangeType.CREATE_ENTRY: apply_create_entry,
     AgentChangeType.UPDATE_ENTRY: apply_update_entry,
     AgentChangeType.DELETE_ENTRY: apply_delete_entry,
+    AgentChangeType.CREATE_GROUP: apply_create_group,
+    AgentChangeType.UPDATE_GROUP: apply_update_group,
+    AgentChangeType.DELETE_GROUP: apply_delete_group,
+    AgentChangeType.CREATE_GROUP_MEMBER: apply_create_group_member,
+    AgentChangeType.DELETE_GROUP_MEMBER: apply_delete_group_member,
     AgentChangeType.CREATE_TAG: apply_create_tag,
     AgentChangeType.UPDATE_TAG: apply_update_tag,
     AgentChangeType.DELETE_TAG: apply_delete_tag,

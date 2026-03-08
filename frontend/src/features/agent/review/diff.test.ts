@@ -88,4 +88,48 @@ describe("proposal diff", () => {
     expect(diff.lines.find((line) => line.path === "amount")?.value).toBe("12.3");
     expect(diff.lines.find((line) => line.path === "currency")?.value).toBe("CAD");
   });
+
+  it("builds reviewer override diff for create-group-member proposals", () => {
+    const diff = buildProposalDiff(
+      "create_group_member",
+      {
+        action: "add",
+        group_ref: { group_id: "group-1234" },
+        entry_ref: { entry_id: "entry-1111" },
+        child_group_ref: null,
+        member_role: "CHILD",
+        group_preview: { name: "Rent Timeline", group_type: "SPLIT" },
+        member_preview: { name: "March Rent" }
+      },
+      {
+        action: "add",
+        group_ref: { group_id: "group-1234" },
+        entry_ref: { entry_id: "entry-2222" },
+        child_group_ref: null,
+        member_role: "PARENT"
+      }
+    );
+
+    expect(diff.mode).toBe("update");
+    expect(diff.note).toContain("reviewer-edited payload");
+    expect(diff.lines.some((line) => line.path === "member ref" && line.value === "entry-2222")).toBe(true);
+    expect(diff.metadata.some((line) => line.label === "Group type" && line.value === "SPLIT")).toBe(true);
+  });
+
+  it("builds update-group diffs from current group snapshots", () => {
+    const diff = buildProposalDiff("update_group", {
+      group_id: "group-1234",
+      current: {
+        name: "Monthly Bills",
+        group_type: "RECURRING"
+      },
+      patch: {
+        name: "Core Bills"
+      }
+    });
+
+    expect(diff.mode).toBe("update");
+    expect(diff.lines.some((line) => line.path === "name" && line.value === "Core Bills")).toBe(true);
+    expect(diff.metadata.some((line) => line.label === "Group ID" && line.value === "group-1234")).toBe(true);
+  });
 });

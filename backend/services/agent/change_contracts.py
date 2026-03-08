@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from datetime import date as DateValue
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.enums_agent import AgentChangeType
-from backend.enums_finance import EntryKind
+from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
 from backend.services.entries import normalize_tag_name
 from backend.services.entities import normalize_entity_category, normalize_entity_name
 
@@ -49,6 +49,10 @@ def normalize_optional_reference_id(value: str | None) -> str | None:
         return None
     normalized = normalize_loose_text(value)
     return normalized.lower() if normalized is not None else None
+
+
+def normalize_optional_proposal_id(value: str | None) -> str | None:
+    return normalize_optional_reference_id(value)
 
 
 def normalize_entry_reference_payload(value: Any) -> Any:
@@ -333,6 +337,164 @@ class DeleteEntryPayload(BaseModel):
         return self
 
 
+class GroupReferencePayload(BaseModel):
+    group_id: str | None = Field(default=None, min_length=4, max_length=36)
+    create_group_proposal_id: str | None = Field(default=None, min_length=4, max_length=36)
+
+    @field_validator("group_id")
+    @classmethod
+    def normalize_group_id(cls, value: str | None) -> str | None:
+        return normalize_optional_reference_id(value)
+
+    @field_validator("create_group_proposal_id")
+    @classmethod
+    def normalize_create_group_proposal_id(cls, value: str | None) -> str | None:
+        return normalize_optional_proposal_id(value)
+
+    @model_validator(mode="after")
+    def ensure_reference_present(self) -> GroupReferencePayload:
+        if (self.group_id is None) == (self.create_group_proposal_id is None):
+            raise ValueError("exactly one of group_id or create_group_proposal_id is required")
+        return self
+
+
+class EntryReferencePayload(BaseModel):
+    entry_id: str | None = Field(default=None, min_length=4, max_length=36)
+    create_entry_proposal_id: str | None = Field(default=None, min_length=4, max_length=36)
+
+    @field_validator("entry_id")
+    @classmethod
+    def normalize_entry_id(cls, value: str | None) -> str | None:
+        return normalize_optional_reference_id(value)
+
+    @field_validator("create_entry_proposal_id")
+    @classmethod
+    def normalize_create_entry_proposal_id(cls, value: str | None) -> str | None:
+        return normalize_optional_proposal_id(value)
+
+    @model_validator(mode="after")
+    def ensure_reference_present(self) -> EntryReferencePayload:
+        if (self.entry_id is None) == (self.create_entry_proposal_id is None):
+            raise ValueError("exactly one of entry_id or create_entry_proposal_id is required")
+        return self
+
+
+class CreateGroupPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    group_type: GroupType
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        return normalize_required_text(value)
+
+
+class UpdateGroupPatchPayload(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_required_text(value)
+
+    @model_validator(mode="after")
+    def ensure_any_field_set(self) -> UpdateGroupPatchPayload:
+        if not self.model_fields_set:
+            raise ValueError("patch must include at least one field")
+        return self
+
+
+class UpdateGroupPayload(BaseModel):
+    group_id: str = Field(min_length=4, max_length=36)
+    patch: UpdateGroupPatchPayload
+
+    @field_validator("group_id")
+    @classmethod
+    def normalize_group_id(cls, value: str) -> str:
+        normalized = normalize_optional_reference_id(value)
+        if normalized is None:
+            raise ValueError("group_id is required")
+        return normalized
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_nested_object_args(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        normalized["patch"] = normalize_object_json_string(normalized.get("patch"))
+        return normalized
+
+
+class DeleteGroupPayload(BaseModel):
+    group_id: str = Field(min_length=4, max_length=36)
+
+    @field_validator("group_id")
+    @classmethod
+    def normalize_group_id(cls, value: str) -> str:
+        normalized = normalize_optional_reference_id(value)
+        if normalized is None:
+            raise ValueError("group_id is required")
+        return normalized
+
+
+class CreateGroupMemberPayload(BaseModel):
+    action: Literal["add"] = "add"
+    group_ref: GroupReferencePayload
+    entry_ref: EntryReferencePayload | None = None
+    child_group_ref: GroupReferencePayload | None = None
+    member_role: GroupMemberRole | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_nested_object_args(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        normalized["group_ref"] = normalize_object_json_string(normalized.get("group_ref"))
+        normalized["entry_ref"] = normalize_object_json_string(normalized.get("entry_ref"))
+        normalized["child_group_ref"] = normalize_object_json_string(normalized.get("child_group_ref"))
+        return normalized
+
+    @model_validator(mode="after")
+    def ensure_target_present(self) -> CreateGroupMemberPayload:
+        if (self.entry_ref is None) == (self.child_group_ref is None):
+            raise ValueError("exactly one of entry_ref or child_group_ref is required")
+        return self
+
+
+class DeleteGroupMemberPayload(BaseModel):
+    action: Literal["remove"] = "remove"
+    group_ref: GroupReferencePayload
+    entry_ref: EntryReferencePayload | None = None
+    child_group_ref: GroupReferencePayload | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_nested_object_args(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        normalized["group_ref"] = normalize_object_json_string(normalized.get("group_ref"))
+        normalized["entry_ref"] = normalize_object_json_string(normalized.get("entry_ref"))
+        normalized["child_group_ref"] = normalize_object_json_string(normalized.get("child_group_ref"))
+        return normalized
+
+    @model_validator(mode="after")
+    def ensure_existing_target_present(self) -> DeleteGroupMemberPayload:
+        if (self.entry_ref is None) == (self.child_group_ref is None):
+            raise ValueError("exactly one of entry_ref or child_group_ref is required")
+        if self.group_ref.create_group_proposal_id is not None:
+            raise ValueError("remove action only supports existing group_id references")
+        if self.entry_ref is not None and self.entry_ref.create_entry_proposal_id is not None:
+            raise ValueError("remove action only supports existing entry_id references")
+        if self.child_group_ref is not None and self.child_group_ref.create_group_proposal_id is not None:
+            raise ValueError("remove action only supports existing child group_id references")
+        return self
+
+
 CHANGE_PAYLOAD_MODELS: dict[AgentChangeType, type[BaseModel]] = {
     AgentChangeType.CREATE_TAG: CreateTagPayload,
     AgentChangeType.UPDATE_TAG: UpdateTagPayload,
@@ -343,6 +505,11 @@ CHANGE_PAYLOAD_MODELS: dict[AgentChangeType, type[BaseModel]] = {
     AgentChangeType.CREATE_ENTRY: CreateEntryPayload,
     AgentChangeType.UPDATE_ENTRY: UpdateEntryPayload,
     AgentChangeType.DELETE_ENTRY: DeleteEntryPayload,
+    AgentChangeType.CREATE_GROUP: CreateGroupPayload,
+    AgentChangeType.UPDATE_GROUP: UpdateGroupPayload,
+    AgentChangeType.DELETE_GROUP: DeleteGroupPayload,
+    AgentChangeType.CREATE_GROUP_MEMBER: CreateGroupMemberPayload,
+    AgentChangeType.DELETE_GROUP_MEMBER: DeleteGroupMemberPayload,
 }
 
 
@@ -373,6 +540,11 @@ PROPOSAL_MUTABLE_ROOTS: dict[AgentChangeType, set[str]] = {
     },
     AgentChangeType.UPDATE_ENTRY: {"entry_id", "selector", "patch"},
     AgentChangeType.DELETE_ENTRY: {"entry_id", "selector"},
+    AgentChangeType.CREATE_GROUP: {"name", "group_type"},
+    AgentChangeType.UPDATE_GROUP: {"group_id", "patch"},
+    AgentChangeType.DELETE_GROUP: {"group_id"},
+    AgentChangeType.CREATE_GROUP_MEMBER: {"action", "group_ref", "entry_ref", "child_group_ref", "member_role"},
+    AgentChangeType.DELETE_GROUP_MEMBER: {"action", "group_ref", "entry_ref", "child_group_ref"},
 }
 
 

@@ -16,6 +16,10 @@ import { queryKeys } from "../../../lib/queryKeys";
 import type { AgentChangeItem, AgentChangeStatus, AgentChangeType, AgentRun, Currency, Entity, Tag } from "../../../lib/types";
 import { cn } from "../../../lib/utils";
 import {
+  buildGroupMembershipOverrideState,
+  buildGroupMembershipReviewDraft,
+  buildGroupOverrideState,
+  buildGroupReviewDraft,
   buildEntityOverrideState,
   buildEntityReviewDraft,
   buildEntryOverrideState,
@@ -24,12 +28,22 @@ import {
   buildTagReviewDraft,
   type EntityReviewDraft,
   type EntryReviewDraft,
+  type GroupMembershipReviewDraft,
+  type GroupReviewDraft,
   type ReviewOverrideState,
   type TagReviewDraft,
   uniqueEntityOptionNames
 } from "./drafts";
 import { buildProposalDiff } from "./diff";
-import { buildReviewItemSummary, buildThreadReviewItems, changeTypeLabel, isPendingReviewStatus, shortId, type ThreadReviewItem } from "./model";
+import {
+  buildReviewItemSummary,
+  buildThreadReviewItems,
+  changeTypeLabel,
+  isPendingReviewStatus,
+  proposalDomain,
+  shortId,
+  type ThreadReviewItem
+} from "./model";
 
 interface AgentThreadReviewModalProps {
   open: boolean;
@@ -47,7 +61,7 @@ interface BatchSummary {
   failedItemIds: string[];
 }
 
-type TocProposalGroupKey = "entry" | "entity" | "tag";
+type TocProposalGroupKey = "entry" | "entity" | "tag" | "group";
 
 interface TocProposalGroup {
   key: TocProposalGroupKey;
@@ -66,6 +80,39 @@ const KIND_OPTIONS = [
   { value: "INCOME", label: "Income" },
   { value: "TRANSFER", label: "Transfer" }
 ] as const;
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function proposalReferenceId(record: Record<string, unknown>, idKey: string, proposalKey: string): string | null {
+  const directId = record[idKey];
+  if (typeof directId === "string" && directId.trim()) {
+    return directId;
+  }
+  const proposalId = record[proposalKey];
+  if (typeof proposalId === "string" && proposalId.trim()) {
+    return proposalId;
+  }
+  return null;
+}
+
+function proposalReferenceIsPending(record: Record<string, unknown>, proposalKey: string): boolean {
+  const proposalId = record[proposalKey];
+  return typeof proposalId === "string" && proposalId.trim().length > 0;
+}
+
+function proposalReferenceLabel(record: Record<string, unknown>, idKey: string, proposalKey: string): string {
+  const directId = record[idKey];
+  if (typeof directId === "string" && directId.trim()) {
+    return directId;
+  }
+  const proposalId = record[proposalKey];
+  if (typeof proposalId === "string" && proposalId.trim()) {
+    return `Pending ${shortId(proposalId)}`;
+  }
+  return "Unresolved";
+}
 
 function statusBadgeClass(status: AgentChangeStatus): string {
   switch (status) {
@@ -98,26 +145,22 @@ function reviewModeClass(changeType: ThreadReviewItem["item"]["change_type"]): s
 }
 
 function proposalGroupKey(changeType: AgentChangeType): TocProposalGroupKey {
-  if (changeType.endsWith("_entry")) {
-    return "entry";
-  }
-  if (changeType.endsWith("_entity")) {
-    return "entity";
-  }
-  return "tag";
+  return proposalDomain(changeType);
 }
 
 function groupReviewItems(items: ThreadReviewItem[]): TocProposalGroup[] {
   const grouped: Record<TocProposalGroupKey, ThreadReviewItem[]> = {
     entry: [],
     entity: [],
-    tag: []
+    tag: [],
+    group: []
   };
   for (const reviewItem of items) {
     grouped[proposalGroupKey(reviewItem.item.change_type)].push(reviewItem);
   }
   const groups: TocProposalGroup[] = [
     { key: "entry", label: "Entries", items: grouped.entry },
+    { key: "group", label: "Groups", items: grouped.group },
     { key: "entity", label: "Entities", items: grouped.entity },
     { key: "tag", label: "Tags", items: grouped.tag }
   ];
@@ -469,6 +512,179 @@ function ReviewEntityEditor({
   );
 }
 
+function resolveProposalItemByReference(items: ThreadReviewItem[], referenceId: string | null): ThreadReviewItem | null {
+  if (!referenceId) {
+    return null;
+  }
+  const normalizedReference = referenceId.toLowerCase();
+  const exactMatch = items.find((item) => item.item.id.toLowerCase() === normalizedReference);
+  if (exactMatch) {
+    return exactMatch;
+  }
+  return items.find((item) => item.item.id.toLowerCase().startsWith(normalizedReference)) ?? null;
+}
+
+function PendingDependencyChip({
+  label,
+  proposal
+}: {
+  label: string;
+  proposal: ThreadReviewItem;
+}) {
+  return (
+    <div className="agent-review-dependency-chip">
+      <div className="agent-review-dependency-chip-copy">
+        <span className="agent-review-dependency-chip-label">{label}</span>
+        <span className="agent-review-dependency-chip-title">{buildReviewItemSummary(proposal.item)}</span>
+      </div>
+      <Badge variant="outline" className={cn("agent-review-status-badge", statusBadgeClass(proposal.item.status))}>
+        {proposal.item.status}
+      </Badge>
+    </div>
+  );
+}
+
+function ReviewGroupEditor({
+  draft,
+  isUpdate,
+  validationError,
+  isDisabled,
+  onDraftChange
+}: {
+  draft: GroupReviewDraft;
+  isUpdate: boolean;
+  validationError: string | null;
+  isDisabled: boolean;
+  onDraftChange: (nextDraft: GroupReviewDraft) => void;
+}) {
+  return (
+    <div className="agent-review-editor-grid">
+      <FormField label="Group name" error={validationError}>
+        <Input value={draft.name} disabled={isDisabled} onChange={(event) => onDraftChange({ ...draft, name: event.target.value })} />
+      </FormField>
+      <FormField label="Group type">
+        <NativeSelect
+          value={draft.groupType}
+          disabled={isDisabled || isUpdate}
+          onChange={(event) => onDraftChange({ ...draft, groupType: event.target.value as GroupReviewDraft["groupType"] })}
+        >
+          <option value="BUNDLE">Bundle</option>
+          <option value="SPLIT">Split</option>
+          <option value="RECURRING">Recurring</option>
+        </NativeSelect>
+      </FormField>
+    </div>
+  );
+}
+
+function ReviewGroupMembershipEditor({
+  item,
+  draft,
+  validationError,
+  isDisabled,
+  items,
+  onDraftChange
+}: {
+  item: AgentChangeItem;
+  draft: GroupMembershipReviewDraft;
+  validationError: string | null;
+  isDisabled: boolean;
+  items: ThreadReviewItem[];
+  onDraftChange: (nextDraft: GroupMembershipReviewDraft) => void;
+}) {
+  const payload = item.payload_json;
+  const groupRef = asRecord(payload.group_ref);
+  const entryRef = asRecord(payload.entry_ref);
+  const childGroupRef = asRecord(payload.child_group_ref);
+  const groupPreview = asRecord(payload.group_preview);
+  const memberPreview = asRecord(payload.member_preview);
+  const isEntryTarget = Object.keys(entryRef).length > 0;
+  const groupDependency = proposalReferenceIsPending(groupRef, "create_group_proposal_id")
+    ? resolveProposalItemByReference(items, proposalReferenceId(groupRef, "group_id", "create_group_proposal_id"))
+    : null;
+  const memberDependency = isEntryTarget
+    ? proposalReferenceIsPending(entryRef, "create_entry_proposal_id")
+      ? resolveProposalItemByReference(items, proposalReferenceId(entryRef, "entry_id", "create_entry_proposal_id"))
+      : null
+    : proposalReferenceIsPending(childGroupRef, "create_group_proposal_id")
+      ? resolveProposalItemByReference(items, proposalReferenceId(childGroupRef, "group_id", "create_group_proposal_id"))
+      : null;
+  const groupType = typeof groupPreview.group_type === "string" ? groupPreview.group_type : "BUNDLE";
+
+  return (
+    <div className="agent-review-editor-grid">
+      {(groupDependency || memberDependency) ? (
+        <div className="agent-review-dependency-list">
+          {groupDependency ? <PendingDependencyChip label="Parent group dependency" proposal={groupDependency} /> : null}
+          {memberDependency ? (
+            <PendingDependencyChip label={isEntryTarget ? "Entry dependency" : "Child group dependency"} proposal={memberDependency} />
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="agent-review-editor-row">
+        <FormField
+          label="Parent group ref"
+          error={validationError && !draft.groupId ? validationError : undefined}
+          hint={typeof groupPreview.name === "string" ? `Current target: ${groupPreview.name}` : undefined}
+        >
+          <Input
+            value={draft.groupId}
+            disabled={isDisabled || Boolean(groupDependency)}
+            onChange={(event) => onDraftChange({ ...draft, groupId: event.target.value })}
+            placeholder={proposalReferenceLabel(groupRef, "group_id", "create_group_proposal_id")}
+          />
+        </FormField>
+        <FormField label={isEntryTarget ? "Entry ref" : "Child group ref"} hint={typeof memberPreview.name === "string" ? `Current target: ${memberPreview.name}` : undefined}>
+          <Input
+            value={isEntryTarget ? draft.entryId : draft.childGroupId}
+            disabled={isDisabled || Boolean(memberDependency)}
+            onChange={(event) =>
+              onDraftChange(
+                isEntryTarget
+                  ? { ...draft, entryId: event.target.value }
+                  : { ...draft, childGroupId: event.target.value }
+              )
+            }
+            placeholder={
+              isEntryTarget
+                ? proposalReferenceLabel(entryRef, "entry_id", "create_entry_proposal_id")
+                : proposalReferenceLabel(childGroupRef, "group_id", "create_group_proposal_id")
+            }
+          />
+        </FormField>
+      </div>
+
+      <div className="agent-review-editor-row">
+        <FormField label="Member type">
+          <Input value={isEntryTarget ? "Entry" : "Child group"} disabled />
+        </FormField>
+        <FormField
+          label="Split role"
+          error={validationError && groupType === "SPLIT" ? validationError : undefined}
+          hint={groupType === "SPLIT" ? "Required for split-group adds." : `Parent group type: ${groupType}`}
+        >
+          <NativeSelect
+            value={draft.memberRole}
+            disabled={isDisabled || groupType !== "SPLIT"}
+            onChange={(event) => onDraftChange({ ...draft, memberRole: event.target.value as GroupMembershipReviewDraft["memberRole"] })}
+          >
+            {groupType === "SPLIT" ? (
+              <>
+                <option value="">Select role</option>
+                <option value="PARENT">Parent</option>
+                <option value="CHILD">Child</option>
+              </>
+            ) : (
+              <option value="">Not used</option>
+            )}
+          </NativeSelect>
+        </FormField>
+      </div>
+    </div>
+  );
+}
+
 export function AgentThreadReviewModal({
   open,
   runs,
@@ -482,6 +698,8 @@ export function AgentThreadReviewModal({
   const [entryDrafts, setEntryDrafts] = useState<Record<string, EntryReviewDraft>>({});
   const [tagDrafts, setTagDrafts] = useState<Record<string, TagReviewDraft>>({});
   const [entityDrafts, setEntityDrafts] = useState<Record<string, EntityReviewDraft>>({});
+  const [groupDrafts, setGroupDrafts] = useState<Record<string, GroupReviewDraft>>({});
+  const [groupMembershipDrafts, setGroupMembershipDrafts] = useState<Record<string, GroupMembershipReviewDraft>>({});
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [batchSummary, setBatchSummary] = useState<BatchSummary | null>(null);
@@ -518,6 +736,8 @@ export function AgentThreadReviewModal({
       setEntryDrafts({});
       setTagDrafts({});
       setEntityDrafts({});
+      setGroupDrafts({});
+      setGroupMembershipDrafts({});
       setActionError(null);
       setActionNotice(null);
       setBatchSummary(null);
@@ -592,6 +812,15 @@ export function AgentThreadReviewModal({
       return buildEntityOverrideState(
         reviewItem.item,
         entityDrafts[reviewItem.item.id] ?? buildEntityReviewDraft(reviewItem.item)
+      );
+    }
+    if (reviewItem.item.change_type === "create_group" || reviewItem.item.change_type === "update_group") {
+      return buildGroupOverrideState(reviewItem.item, groupDrafts[reviewItem.item.id] ?? buildGroupReviewDraft(reviewItem.item));
+    }
+    if (reviewItem.item.change_type === "create_group_member") {
+      return buildGroupMembershipOverrideState(
+        reviewItem.item,
+        groupMembershipDrafts[reviewItem.item.id] ?? buildGroupMembershipReviewDraft(reviewItem.item)
       );
     }
     return { hasChanges: false, validationError: null };
@@ -766,6 +995,14 @@ export function AgentThreadReviewModal({
   const activeEntityDraft =
     activeReviewItem && (activeReviewItem.item.change_type === "create_entity" || activeReviewItem.item.change_type === "update_entity")
       ? entityDrafts[activeReviewItem.item.id] ?? buildEntityReviewDraft(activeReviewItem.item)
+      : null;
+  const activeGroupDraft =
+    activeReviewItem && (activeReviewItem.item.change_type === "create_group" || activeReviewItem.item.change_type === "update_group")
+      ? groupDrafts[activeReviewItem.item.id] ?? buildGroupReviewDraft(activeReviewItem.item)
+      : null;
+  const activeGroupMembershipDraft =
+    activeReviewItem && activeReviewItem.item.change_type === "create_group_member"
+      ? groupMembershipDrafts[activeReviewItem.item.id] ?? buildGroupMembershipReviewDraft(activeReviewItem.item)
       : null;
 
   return (
@@ -1042,6 +1279,64 @@ export function AgentThreadReviewModal({
                             }))
                           }
                         />
+                      </section>
+                    ) : null}
+
+                    {isActivePending && activeGroupDraft ? (
+                      <section className="agent-review-panel-section">
+                        <div className="agent-review-section-heading">
+                          <h4>Review edits</h4>
+                          <p>{activeReviewItem.item.change_type === "create_group" ? "Adjust the proposed group before approval." : "Rename the proposed group before approval."}</p>
+                        </div>
+                        <ReviewGroupEditor
+                          draft={activeGroupDraft}
+                          isUpdate={activeReviewItem.item.change_type === "update_group"}
+                          validationError={activeOverrideState.validationError}
+                          isDisabled={isBusy || isBatchRunning}
+                          onDraftChange={(nextDraft) =>
+                            setGroupDrafts((current) => ({
+                              ...current,
+                              [activeReviewItem.item.id]: nextDraft
+                            }))
+                          }
+                        />
+                      </section>
+                    ) : null}
+
+                    {isActivePending && activeGroupMembershipDraft ? (
+                      <section className="agent-review-panel-section">
+                        <div className="agent-review-section-heading">
+                          <h4>Review edits</h4>
+                          <p>Adjust the direct membership proposal before approval. Pending dependencies stay locked.</p>
+                        </div>
+                        <ReviewGroupMembershipEditor
+                          item={activeReviewItem.item}
+                          draft={activeGroupMembershipDraft}
+                          validationError={activeOverrideState.validationError}
+                          isDisabled={isBusy || isBatchRunning}
+                          items={items}
+                          onDraftChange={(nextDraft) =>
+                            setGroupMembershipDrafts((current) => ({
+                              ...current,
+                              [activeReviewItem.item.id]: nextDraft
+                            }))
+                          }
+                        />
+                      </section>
+                    ) : null}
+
+                    {isActivePending &&
+                    (activeReviewItem.item.change_type === "delete_group" || activeReviewItem.item.change_type === "delete_group_member") ? (
+                      <section className="agent-review-panel-section">
+                        <div className="agent-review-section-heading">
+                          <h4>Confirmation</h4>
+                          <p>This proposal is confirmation-only. Approve to apply exactly what is shown above.</p>
+                        </div>
+                        <p className="agent-review-rationale">
+                          {activeReviewItem.item.change_type === "delete_group"
+                            ? "Delete-group proposals are not reviewer-editable in v1."
+                            : "Remove-member proposals are not reviewer-editable in v1."}
+                        </p>
                       </section>
                     ) : null}
 

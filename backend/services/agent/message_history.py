@@ -28,6 +28,7 @@ from backend.services.agent.user_context import (
     build_current_user_context as _build_current_user_context,
 )
 from backend.services.agent.prompts import SystemPromptContext, system_prompt
+from backend.services.agent.proposal_metadata import proposal_metadata_for_change_type
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.taxonomy import list_term_name_description_pairs
 
@@ -146,17 +147,7 @@ def _review_window_actions(
 
 
 def _proposal_tool_name_for_change_type(change_type_value: str) -> str:
-    return {
-        "create_tag": "propose_create_tag",
-        "update_tag": "propose_update_tag",
-        "delete_tag": "propose_delete_tag",
-        "create_entity": "propose_create_entity",
-        "update_entity": "propose_update_entity",
-        "delete_entity": "propose_delete_entity",
-        "create_entry": "propose_create_entry",
-        "update_entry": "propose_update_entry",
-        "delete_entry": "propose_delete_entry",
-    }.get(change_type_value, "proposal_tool_result")
+    return proposal_metadata_for_change_type(change_type_value).proposal_tool_name
 
 
 def _proposal_tool_calls_for_runs(

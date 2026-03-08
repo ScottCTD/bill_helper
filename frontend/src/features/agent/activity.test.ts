@@ -242,11 +242,12 @@ describe("activity helpers", () => {
     const changeSummary = summarizeRunChangeTypes([
       buildChangeItem({ id: "change-1", change_type: "create_entry" }),
       buildChangeItem({ id: "change-2", change_type: "update_entry" }),
-      buildChangeItem({ id: "change-3", change_type: "create_tag" }),
-      buildChangeItem({ id: "change-4", change_type: "delete_entity" })
+      buildChangeItem({ id: "change-3", change_type: "create_group_member" }),
+      buildChangeItem({ id: "change-4", change_type: "create_tag" }),
+      buildChangeItem({ id: "change-5", change_type: "delete_entity" })
     ]);
 
-    expect(changeSummary).toEqual({ entryCount: 2, tagCount: 1, entityCount: 1 });
+    expect(changeSummary).toEqual({ entryCount: 2, groupCount: 1, tagCount: 1, entityCount: 1 });
   });
 
   it("sorts runs in chronological order", () => {

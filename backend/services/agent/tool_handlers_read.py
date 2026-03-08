@@ -8,17 +8,29 @@ from sqlalchemy.orm import selectinload
 
 from backend.enums_agent import AgentChangeType
 from backend.models_agent import AgentChangeItem, AgentReviewAction, AgentRun
-from backend.models_finance import Entity, Entry, Tag
+from backend.models_finance import Entity, Entry, EntryGroup, Tag
 from backend.services.agent.entry_references import entry_to_public_record
+from backend.services.agent.group_references import (
+    find_groups_by_id,
+    group_detail_public_record,
+    group_id_ambiguity_details,
+    group_owner_condition,
+    group_summary_to_public_record,
+)
+from backend.services.agent.proposal_metadata import proposal_metadata_for_change_type
 from backend.services.agent.tool_args import (
     ListEntitiesArgs,
     ListEntriesArgs,
+    ListGroupsArgs,
     ListProposalsArgs,
     ListTagsArgs,
     SendIntermediateUpdateArgs,
     normalize_loose_text,
 )
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
+from backend.services.groups import build_group_summary, group_tree_options
+from backend.services.runtime_settings import resolve_runtime_settings
+from backend.services.users import ensure_current_user
 from backend.services.entries import normalize_tag_name
 from backend.services.taxonomy import get_single_term_name_map
 
@@ -86,9 +98,8 @@ def proposal_short_id(item_id: str) -> str:
 
 
 def proposal_change_parts(change_type: AgentChangeType | str) -> tuple[str, str]:
-    raw_value = change_type.value if isinstance(change_type, AgentChangeType) else str(change_type)
-    action, _, proposal_type = raw_value.partition("_")
-    return action, proposal_type
+    metadata = proposal_metadata_for_change_type(change_type)
+    return metadata.change_action, metadata.proposal_type
 
 
 def proposal_summary(item: AgentChangeItem) -> str:
@@ -106,6 +117,23 @@ def proposal_summary(item: AgentChangeItem) -> str:
     if change_type == AgentChangeType.DELETE_ENTRY.value:
         target = payload.get("target") or payload.get("entry_id") or payload.get("selector")
         return f"delete entry target={target}"
+    if change_type == AgentChangeType.CREATE_GROUP.value:
+        return f"create group name={payload.get('name')} group_type={payload.get('group_type')}"
+    if change_type == AgentChangeType.UPDATE_GROUP.value:
+        return f"update group group_id={payload.get('group_id')} patch={payload.get('patch') or {}}"
+    if change_type == AgentChangeType.DELETE_GROUP.value:
+        return f"delete group group_id={payload.get('group_id')}"
+    if change_type == AgentChangeType.CREATE_GROUP_MEMBER.value:
+        return (
+            f"add group member group_ref={payload.get('group_ref')} "
+            f"entry_ref={payload.get('entry_ref')} child_group_ref={payload.get('child_group_ref')} "
+            f"member_role={payload.get('member_role')}"
+        )
+    if change_type == AgentChangeType.DELETE_GROUP_MEMBER.value:
+        return (
+            f"remove group member group_ref={payload.get('group_ref')} "
+            f"entry_ref={payload.get('entry_ref')} child_group_ref={payload.get('child_group_ref')}"
+        )
     if change_type == AgentChangeType.CREATE_TAG.value:
         return f"create tag name={payload.get('name')} type={payload.get('type')}"
     if change_type == AgentChangeType.UPDATE_TAG.value:
@@ -131,14 +159,14 @@ def review_action_to_public_record(action: AgentReviewAction) -> dict[str, Any]:
 
 
 def proposal_to_public_record(item: AgentChangeItem) -> dict[str, Any]:
-    change_action, proposal_type = proposal_change_parts(item.change_type)
+    metadata = proposal_metadata_for_change_type(item.change_type)
     return {
         "proposal_id": item.id,
         "proposal_short_id": proposal_short_id(item.id),
-        "proposal_type": proposal_type,
-        "change_action": change_action,
+        "proposal_type": metadata.proposal_type,
+        "change_action": metadata.change_action,
         "change_type": item.change_type.value,
-        "proposal_tool_name": f"propose_{item.change_type.value}",
+        "proposal_tool_name": metadata.proposal_tool_name,
         "status": item.status.value,
         "proposal_summary": proposal_summary(item),
         "rationale_text": item.rationale_text,
@@ -452,6 +480,84 @@ def list_entities(context: ToolContext, args: ListEntitiesArgs) -> ToolExecution
                 "OK",
                 f"summary: returned {len(records)} of {total_available} matching entities",
                 f"entities: {entities_text}",
+            ]
+        ),
+        output_json=output_json,
+        status="ok",
+    )
+
+
+def list_groups(context: ToolContext, args: ListGroupsArgs) -> ToolExecutionResult:
+    settings = resolve_runtime_settings(context.db)
+    current_user = ensure_current_user(context.db, settings.current_user_name)
+
+    if args.group_id is not None:
+        matches = find_groups_by_id(context.db, group_id=args.group_id, owner_user_id=current_user.id)
+        if not matches:
+            return error_result("no group matched group_id", details={"group_id": args.group_id})
+        if len(matches) > 1:
+            return error_result(
+                "ambiguous group_id matched multiple groups; retry with one of the candidate ids",
+                details=group_id_ambiguity_details(matches, group_id=args.group_id),
+            )
+
+        record = group_detail_public_record(matches[0])
+        output_json = {
+            "status": "OK",
+            "summary": f"returned details for group {record['group_id']}",
+            "group": record,
+        }
+        return ToolExecutionResult(
+            output_text=format_lines(
+                [
+                    "OK",
+                    f"summary: returned details for group {record['group_id']}",
+                    f"group: {record}",
+                ]
+            ),
+            output_json=output_json,
+            status="ok",
+        )
+
+    groups = list(
+        context.db.scalars(
+            select(EntryGroup)
+            .where(group_owner_condition(current_user.id))
+            .options(*group_tree_options())
+            .order_by(EntryGroup.created_at.desc())
+        )
+    )
+
+    ranked: list[tuple[tuple[int, int, str], dict[str, Any]]] = []
+    for group in groups:
+        summary = build_group_summary(group)
+        name_rank, name_ok = string_match_rank(summary.name, args.name)
+        type_rank, type_ok = string_match_rank(summary.group_type.value, args.group_type.value if args.group_type is not None else None)
+        if not (name_ok and type_ok):
+            continue
+        record = group_summary_to_public_record(summary)
+        ranked.append(((name_rank, type_rank, summary.name.lower()), record))
+
+    ranked.sort(key=lambda pair: pair[0])
+    total_available = len(ranked)
+    records = [record for _, record in ranked[: args.limit]]
+    groups_text = "; ".join(
+        f"{row['group_id']} {row['name']} ({row['group_type']}, members={row['direct_member_count']})"
+        for row in records
+    ) if records else "(none)"
+    output_json = {
+        "status": "OK",
+        "summary": f"returned {len(records)} of {total_available} matching groups",
+        "returned_count": len(records),
+        "total_available": total_available,
+        "groups": records,
+    }
+    return ToolExecutionResult(
+        output_text=format_lines(
+            [
+                "OK",
+                f"summary: returned {len(records)} of {total_available} matching groups",
+                f"groups: {groups_text}",
             ]
         ),
         output_json=output_json,

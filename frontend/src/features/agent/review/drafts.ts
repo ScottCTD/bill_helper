@@ -1,4 +1,4 @@
-import type { AgentChangeItem, Entity, EntryKind } from "../../../lib/types";
+import type { AgentChangeItem, Entity, EntryKind, GroupMemberRole, GroupType } from "../../../lib/types";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -22,6 +22,18 @@ export interface TagReviewDraft {
 export interface EntityReviewDraft {
   name: string;
   category: string;
+}
+
+export interface GroupReviewDraft {
+  name: string;
+  groupType: GroupType;
+}
+
+export interface GroupMembershipReviewDraft {
+  groupId: string;
+  entryId: string;
+  childGroupId: string;
+  memberRole: GroupMemberRole | "";
 }
 
 export interface ReviewOverrideState {
@@ -52,6 +64,19 @@ interface EntityRecord {
   category: string | null;
 }
 
+interface GroupRecord {
+  name: string;
+  group_type: GroupType;
+}
+
+interface GroupMembershipRecord {
+  action: "add";
+  group_ref: JsonRecord;
+  entry_ref: JsonRecord | null;
+  child_group_ref: JsonRecord | null;
+  member_role: GroupMemberRole | null;
+}
+
 const ENTRY_UPDATE_KEYS = [
   "kind",
   "date",
@@ -66,6 +91,7 @@ const ENTRY_UPDATE_KEYS = [
 
 const TAG_UPDATE_KEYS = ["name", "type"] as const;
 const ENTITY_UPDATE_KEYS = ["name", "category"] as const;
+const GROUP_UPDATE_KEYS = ["name"] as const;
 
 function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -98,6 +124,10 @@ function normalizeOptionalText(value: string): string | null {
 
 function normalizeRequiredText(value: string): string {
   return value.trim();
+}
+
+function normalizeReferenceId(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 function normalizeTags(tags: string[]): string[] {
@@ -140,6 +170,26 @@ function normalizeEntityRecord(record: EntityRecord): EntityRecord {
   return {
     name: normalizeRequiredText(record.name),
     category: normalizeOptionalText(record.category ?? "")
+  };
+}
+
+function normalizeGroupRecord(record: GroupRecord): GroupRecord {
+  return {
+    name: normalizeRequiredText(record.name),
+    group_type: record.group_type
+  };
+}
+
+function normalizeGroupMembershipRecord(record: GroupMembershipRecord): GroupMembershipRecord {
+  const normalizedGroupRef = asRecord(record.group_ref);
+  const normalizedEntryRef = record.entry_ref ? asRecord(record.entry_ref) : null;
+  const normalizedChildGroupRef = record.child_group_ref ? asRecord(record.child_group_ref) : null;
+  return {
+    action: "add",
+    group_ref: normalizedGroupRef,
+    entry_ref: normalizedEntryRef,
+    child_group_ref: normalizedChildGroupRef,
+    member_role: record.member_role ?? null
   };
 }
 
@@ -233,6 +283,48 @@ function buildCreateEntityRecord(payload: JsonRecord): EntityRecord {
   });
 }
 
+function buildCreateGroupRecord(payload: JsonRecord): GroupRecord {
+  const rawType = asString(payload.group_type, "BUNDLE");
+  const groupType: GroupType =
+    rawType === "SPLIT" || rawType === "RECURRING" ? rawType : "BUNDLE";
+  return normalizeGroupRecord({
+    name: asString(payload.name),
+    group_type: groupType
+  });
+}
+
+function buildUpdateGroupCurrentRecord(payload: JsonRecord): GroupRecord {
+  const current = asRecord(payload.current);
+  const rawType = asString(current.group_type, "BUNDLE");
+  const groupType: GroupType =
+    rawType === "SPLIT" || rawType === "RECURRING" ? rawType : "BUNDLE";
+  return normalizeGroupRecord({
+    name: asString(current.name ?? asRecord(payload.target).name),
+    group_type: groupType
+  });
+}
+
+function buildUpdateGroupEffectiveRecord(payload: JsonRecord): GroupRecord {
+  const current = buildUpdateGroupCurrentRecord(payload);
+  const patch = asRecord(payload.patch);
+  return normalizeGroupRecord({
+    name: asString(patch.name ?? current.name),
+    group_type: current.group_type
+  });
+}
+
+function buildCreateGroupMembershipRecord(payload: JsonRecord): GroupMembershipRecord {
+  return normalizeGroupMembershipRecord({
+    action: "add",
+    group_ref: asRecord(payload.group_ref),
+    entry_ref: payload.entry_ref ? asRecord(payload.entry_ref) : null,
+    child_group_ref: payload.child_group_ref ? asRecord(payload.child_group_ref) : null,
+    member_role: (payload.member_role === "PARENT" || payload.member_role === "CHILD" ? payload.member_role : null) as
+      | GroupMemberRole
+      | null
+  });
+}
+
 function buildUpdateEntityCurrentRecord(payload: JsonRecord): EntityRecord {
   const current = asRecord(payload.current);
   return normalizeEntityRecord({
@@ -271,7 +363,7 @@ function buildEntryPatch(target: EntryRecord, next: EntryRecord, originalPatch: 
   return patch;
 }
 
-function buildSimplePatch<TRecord extends TagRecord | EntityRecord>(
+function buildSimplePatch<TRecord extends TagRecord | EntityRecord | GroupRecord>(
   keys: readonly string[],
   current: TRecord,
   next: TRecord,
@@ -329,6 +421,24 @@ export function buildEntityReviewDraft(item: AgentChangeItem): EntityReviewDraft
   return {
     name: record.name,
     category: record.category ?? ""
+  };
+}
+
+export function buildGroupReviewDraft(item: AgentChangeItem): GroupReviewDraft {
+  const record = item.change_type === "update_group" ? buildUpdateGroupEffectiveRecord(item.payload_json) : buildCreateGroupRecord(item.payload_json);
+  return {
+    name: record.name,
+    groupType: record.group_type
+  };
+}
+
+export function buildGroupMembershipReviewDraft(item: AgentChangeItem): GroupMembershipReviewDraft {
+  const record = buildCreateGroupMembershipRecord(item.payload_json);
+  return {
+    groupId: typeof record.group_ref.group_id === "string" ? record.group_ref.group_id : "",
+    entryId: record.entry_ref && typeof record.entry_ref.entry_id === "string" ? record.entry_ref.entry_id : "",
+    childGroupId: record.child_group_ref && typeof record.child_group_ref.group_id === "string" ? record.child_group_ref.group_id : "",
+    memberRole: record.member_role ?? ""
   };
 }
 
@@ -486,6 +596,109 @@ export function buildEntityOverrideState(item: AgentChangeItem, draft: EntityRev
       name: asString(item.payload_json.name),
       patch: buildSimplePatch(ENTITY_UPDATE_KEYS, currentRecord, normalizedRecord, asRecord(item.payload_json.patch))
     },
+    validationError: null
+  };
+}
+
+export function buildGroupOverrideState(item: AgentChangeItem, draft: GroupReviewDraft): ReviewOverrideState {
+  const normalizedRecord = normalizeGroupRecord({
+    name: draft.name,
+    group_type: draft.groupType
+  });
+  if (!normalizedRecord.name) {
+    return { hasChanges: false, validationError: "Name is required." };
+  }
+
+  if (item.change_type === "create_group") {
+    const baseRecord = buildCreateGroupRecord(item.payload_json);
+    const hasChanges = !recordsEqual(baseRecord, normalizedRecord);
+    return {
+      hasChanges,
+      payloadOverride: hasChanges ? { name: normalizedRecord.name, group_type: normalizedRecord.group_type } : undefined,
+      validationError: null
+    };
+  }
+
+  const currentRecord = buildUpdateGroupCurrentRecord(item.payload_json);
+  const effectiveRecord = buildUpdateGroupEffectiveRecord(item.payload_json);
+  const hasChanges = !recordsEqual(effectiveRecord, normalizedRecord);
+  if (!hasChanges) {
+    return { hasChanges: false, validationError: null };
+  }
+
+  return {
+    hasChanges,
+    payloadOverride: {
+      group_id: asString(item.payload_json.group_id),
+      patch: buildSimplePatch(GROUP_UPDATE_KEYS, currentRecord, normalizedRecord, asRecord(item.payload_json.patch))
+    },
+    validationError: null
+  };
+}
+
+export function buildGroupMembershipOverrideState(
+  item: AgentChangeItem,
+  draft: GroupMembershipReviewDraft
+): ReviewOverrideState {
+  const payload = item.payload_json;
+  const baseRecord = buildCreateGroupMembershipRecord(payload);
+  const groupRef = { ...baseRecord.group_ref };
+  const entryRef = baseRecord.entry_ref ? { ...baseRecord.entry_ref } : null;
+  const childGroupRef = baseRecord.child_group_ref ? { ...baseRecord.child_group_ref } : null;
+
+  if (groupRef.create_group_proposal_id == null) {
+    const nextGroupId = normalizeReferenceId(draft.groupId);
+    if (!nextGroupId) {
+      return { hasChanges: false, validationError: "Group ID is required." };
+    }
+    groupRef.group_id = nextGroupId;
+  }
+
+  if (entryRef) {
+    if (entryRef.create_entry_proposal_id == null) {
+      const nextEntryId = normalizeReferenceId(draft.entryId);
+      if (!nextEntryId) {
+        return { hasChanges: false, validationError: "Entry ID is required." };
+      }
+      entryRef.entry_id = nextEntryId;
+    }
+  } else if (childGroupRef) {
+    if (childGroupRef.create_group_proposal_id == null) {
+      const nextChildGroupId = normalizeReferenceId(draft.childGroupId);
+      if (!nextChildGroupId) {
+        return { hasChanges: false, validationError: "Child group ID is required." };
+      }
+      childGroupRef.group_id = nextChildGroupId;
+    }
+  }
+
+  const groupType = asString(asRecord(payload.group_preview).group_type);
+  const normalizedRole = draft.memberRole || "";
+  if (groupType === "SPLIT") {
+    if (normalizedRole !== "PARENT" && normalizedRole !== "CHILD") {
+      return { hasChanges: false, validationError: "Split role is required." };
+    }
+  }
+
+  const normalizedRecord = normalizeGroupMembershipRecord({
+    action: "add",
+    group_ref: groupRef,
+    entry_ref: entryRef,
+    child_group_ref: childGroupRef,
+    member_role: normalizedRole === "PARENT" || normalizedRole === "CHILD" ? normalizedRole : null
+  });
+  const hasChanges = !recordsEqual(baseRecord, normalizedRecord);
+  return {
+    hasChanges,
+    payloadOverride: hasChanges
+      ? {
+          action: "add",
+          group_ref: normalizedRecord.group_ref,
+          entry_ref: normalizedRecord.entry_ref,
+          child_group_ref: normalizedRecord.child_group_ref,
+          member_role: normalizedRecord.member_role
+        }
+      : undefined,
     validationError: null
   };
 }
