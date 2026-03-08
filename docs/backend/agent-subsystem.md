@@ -132,7 +132,7 @@ Endpoints:
 - group-member approvals that reference pending `create_group` / `create_entry` proposals are blocked until those dependencies are applied; rejected or failed dependencies leave the member proposal unapprovable until edited or removed
 - `backend/services/agent/change_apply.py` still owns the actual domain mutation after approval, including group create/rename/delete and group membership add/remove
 - `backend/services/agent/message_history.py` prepends compact review outcome lines before the next user feedback message and includes `review_override=...` when reviewer edits changed the applied payload
-- `backend/services/agent/tool_handlers_read.py` includes `markdown_notes` in public entry snapshots so thread review editors can initialize full merged entry forms for update proposals
+- group-member proposal previews now carry enough entry fields, including `markdown_notes`, for the frontend to render a locked full-entry snapshot during review
 
 ## Related Docs
 

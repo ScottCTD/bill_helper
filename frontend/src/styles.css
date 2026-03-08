@@ -1931,6 +1931,10 @@
     @apply text-sm font-medium text-foreground;
   }
 
+  .agent-review-member-preview {
+    @apply grid gap-3;
+  }
+
   .agent-review-diff-stat {
     @apply border-border/85 bg-muted/65 text-xs font-medium text-muted-foreground;
   }

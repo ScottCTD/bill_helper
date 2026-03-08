@@ -294,7 +294,15 @@ describe("AgentThreadReviewModal", () => {
               group_type: "SPLIT"
             },
             member_preview: {
-              name: "March Rent"
+              date: "2026-03-01",
+              kind: "EXPENSE",
+              name: "March Rent",
+              amount_minor: 250000,
+              currency_code: "USD",
+              from_entity: "Main Checking",
+              to_entity: "Landlord",
+              tags: ["housing"],
+              markdown_notes: "Statement imported"
             }
           }
         })
@@ -323,6 +331,14 @@ describe("AgentThreadReviewModal", () => {
 
     expect(screen.getByText("Parent group dependency")).toBeInTheDocument();
     expect(screen.getAllByText("Create Group: Monthly Bills").length).toBeGreaterThan(0);
-    expect(screen.getByRole("combobox")).toHaveValue("CHILD");
+    expect(screen.getByLabelText("Parent group")).toHaveValue("Monthly Bills");
+    expect(screen.getByLabelText("Parent group type")).toHaveValue("SPLIT");
+    expect(screen.getByLabelText("Date")).toHaveValue("2026-03-01");
+    expect(screen.getByLabelText("Name")).toHaveValue("March Rent");
+    expect(screen.getByLabelText("Amount")).toHaveValue(2500);
+    expect(screen.queryByLabelText("Parent group ref")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Entry ref")).not.toBeInTheDocument();
+    const comboboxes = screen.getAllByRole("combobox");
+    expect(comboboxes.at(-1)).toHaveValue("CHILD");
   });
 });

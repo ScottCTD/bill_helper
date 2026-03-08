@@ -3867,6 +3867,11 @@ def test_group_membership_approval_blocks_pending_and_rejected_dependencies(clie
     patch_model(monkeypatch, propose_membership_model)
     membership_run = send_message(client, thread["id"], "Attach the pending entry to the pending group")
     membership_item = membership_run["change_items"][0]
+    assert membership_item["payload_json"]["group_preview"]["name"] == "Rent Bundle"
+    assert membership_item["payload_json"]["member_preview"]["name"] == "March Rent"
+    assert membership_item["payload_json"]["member_preview"]["kind"] == "EXPENSE"
+    assert membership_item["payload_json"]["member_preview"]["currency_code"] == "USD"
+    assert membership_item["payload_json"]["member_preview"]["markdown_notes"] is None
 
     pending_approve = client.post(f"/api/v1/agent/change-items/{membership_item['id']}/approve", json={})
     assert pending_approve.status_code == 422

@@ -23,6 +23,7 @@ import {
   buildEntityOverrideState,
   buildEntityReviewDraft,
   buildEntryOverrideState,
+  buildEntryReviewDraftFromPreview,
   buildEntryReviewDraft,
   buildTagOverrideState,
   buildTagReviewDraft,
@@ -583,6 +584,10 @@ function ReviewGroupMembershipEditor({
   validationError,
   isDisabled,
   items,
+  currencies,
+  entities,
+  tags,
+  defaultCurrencyCode,
   onDraftChange
 }: {
   item: AgentChangeItem;
@@ -590,6 +595,10 @@ function ReviewGroupMembershipEditor({
   validationError: string | null;
   isDisabled: boolean;
   items: ThreadReviewItem[];
+  currencies: Currency[];
+  entities: Entity[];
+  tags: Tag[];
+  defaultCurrencyCode: string;
   onDraftChange: (nextDraft: GroupMembershipReviewDraft) => void;
 }) {
   const payload = item.payload_json;
@@ -610,6 +619,16 @@ function ReviewGroupMembershipEditor({
       ? resolveProposalItemByReference(items, proposalReferenceId(childGroupRef, "group_id", "create_group_proposal_id"))
       : null;
   const groupType = typeof groupPreview.group_type === "string" ? groupPreview.group_type : "BUNDLE";
+  const parentGroupName =
+    typeof groupPreview.name === "string" && groupPreview.name.trim()
+      ? groupPreview.name
+      : proposalReferenceLabel(groupRef, "group_id", "create_group_proposal_id");
+  const memberEntryDraft = isEntryTarget ? buildEntryReviewDraftFromPreview(memberPreview, defaultCurrencyCode) : null;
+  const childGroupName =
+    typeof memberPreview.name === "string" && memberPreview.name.trim()
+      ? memberPreview.name
+      : proposalReferenceLabel(childGroupRef, "group_id", "create_group_proposal_id");
+  const childGroupType = typeof memberPreview.group_type === "string" ? memberPreview.group_type : "Unknown";
 
   return (
     <div className="agent-review-editor-grid">
@@ -623,37 +642,42 @@ function ReviewGroupMembershipEditor({
       ) : null}
 
       <div className="agent-review-editor-row">
-        <FormField
-          label="Parent group ref"
-          error={validationError && !draft.groupId ? validationError : undefined}
-          hint={typeof groupPreview.name === "string" ? `Current target: ${groupPreview.name}` : undefined}
-        >
-          <Input
-            value={draft.groupId}
-            disabled={isDisabled || Boolean(groupDependency)}
-            onChange={(event) => onDraftChange({ ...draft, groupId: event.target.value })}
-            placeholder={proposalReferenceLabel(groupRef, "group_id", "create_group_proposal_id")}
-          />
+        <FormField label="Parent group">
+          <Input value={parentGroupName} disabled />
         </FormField>
-        <FormField label={isEntryTarget ? "Entry ref" : "Child group ref"} hint={typeof memberPreview.name === "string" ? `Current target: ${memberPreview.name}` : undefined}>
-          <Input
-            value={isEntryTarget ? draft.entryId : draft.childGroupId}
-            disabled={isDisabled || Boolean(memberDependency)}
-            onChange={(event) =>
-              onDraftChange(
-                isEntryTarget
-                  ? { ...draft, entryId: event.target.value }
-                  : { ...draft, childGroupId: event.target.value }
-              )
-            }
-            placeholder={
-              isEntryTarget
-                ? proposalReferenceLabel(entryRef, "entry_id", "create_entry_proposal_id")
-                : proposalReferenceLabel(childGroupRef, "group_id", "create_group_proposal_id")
-            }
-          />
+        <FormField label="Parent group type">
+          <Input value={groupType} disabled />
         </FormField>
       </div>
+
+      {isEntryTarget && memberEntryDraft ? (
+        <div className="agent-review-member-preview">
+          <div className="agent-review-section-heading">
+            <h4>Member entry</h4>
+            <p>Read-only snapshot of the entry being added to this group.</p>
+          </div>
+          <ReviewEntryEditor
+            draft={memberEntryDraft}
+            currencies={currencies}
+            entities={entities}
+            tags={tags}
+            validationError={null}
+            isDisabled
+            onDraftChange={() => undefined}
+          />
+        </div>
+      ) : null}
+
+      {!isEntryTarget ? (
+        <div className="agent-review-editor-row">
+          <FormField label="Child group">
+            <Input value={childGroupName} disabled />
+          </FormField>
+          <FormField label="Child group type">
+            <Input value={childGroupType} disabled />
+          </FormField>
+        </div>
+      ) : null}
 
       <div className="agent-review-editor-row">
         <FormField label="Member type">
@@ -1307,7 +1331,7 @@ export function AgentThreadReviewModal({
                       <section className="agent-review-panel-section">
                         <div className="agent-review-section-heading">
                           <h4>Review edits</h4>
-                          <p>Adjust the direct membership proposal before approval. Pending dependencies stay locked.</p>
+                          <p>Review the group and member details before approval. Only split role is editable; pending dependencies stay locked.</p>
                         </div>
                         <ReviewGroupMembershipEditor
                           item={activeReviewItem.item}
@@ -1315,6 +1339,10 @@ export function AgentThreadReviewModal({
                           validationError={activeOverrideState.validationError}
                           isDisabled={isBusy || isBatchRunning}
                           items={items}
+                          currencies={currenciesQuery.data ?? []}
+                          entities={entitiesQuery.data ?? []}
+                          tags={tagsQuery.data ?? []}
+                          defaultCurrencyCode={defaultCurrencyCode}
                           onDraftChange={(nextDraft) =>
                             setGroupMembershipDrafts((current) => ({
                               ...current,

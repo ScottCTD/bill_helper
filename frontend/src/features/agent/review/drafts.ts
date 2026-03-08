@@ -394,16 +394,24 @@ export function buildEntryReviewDraft(item: AgentChangeItem, defaultCurrencyCode
   const effectiveRecord =
     item.change_type === "update_entry" ? buildUpdateEntryTargetRecord(payload) : buildCreateEntryRecord(payload, defaultCurrencyCode);
 
+  return buildEntryReviewDraftFromRecord(effectiveRecord, defaultCurrencyCode);
+}
+
+export function buildEntryReviewDraftFromPreview(preview: JsonRecord, defaultCurrencyCode: string): EntryReviewDraft {
+  return buildEntryReviewDraftFromRecord(buildCreateEntryRecord(preview, defaultCurrencyCode), defaultCurrencyCode);
+}
+
+function buildEntryReviewDraftFromRecord(record: EntryRecord, defaultCurrencyCode: string): EntryReviewDraft {
   return {
-    kind: effectiveRecord.kind,
-    date: effectiveRecord.date,
-    name: effectiveRecord.name,
-    amountMajor: amountMinorToMajor(effectiveRecord.amount_minor),
-    currencyCode: effectiveRecord.currency_code,
-    fromEntity: effectiveRecord.from_entity,
-    toEntity: effectiveRecord.to_entity,
-    tags: effectiveRecord.tags,
-    markdownNotes: effectiveRecord.markdown_notes ?? ""
+    kind: record.kind,
+    date: record.date,
+    name: record.name,
+    amountMajor: amountMinorToMajor(record.amount_minor),
+    currencyCode: record.currency_code || defaultCurrencyCode || "USD",
+    fromEntity: record.from_entity,
+    toEntity: record.to_entity,
+    tags: record.tags,
+    markdownNotes: record.markdown_notes ?? ""
   };
 }
 
