@@ -19,9 +19,15 @@ def test_settings_endpoint_returns_effective_defaults(client):
     assert payload["default_currency_code"] == settings.default_currency_code
     assert payload["dashboard_currency_code"] == settings.dashboard_currency_code
     assert payload["agent_model"] == settings.agent_model
+    assert payload["available_agent_models"] == [
+        settings.agent_model,
+        "openai/gpt-4.1-mini",
+        "openrouter/qwen/qwen3.5-27b",
+    ]
     assert payload["agent_bulk_max_concurrent_threads"] == settings.agent_bulk_max_concurrent_threads
     assert payload["overrides"]["user_memory"] is None
     assert payload["overrides"]["agent_model"] is None
+    assert payload["overrides"]["available_agent_models"] is None
     assert payload["overrides"]["agent_bulk_max_concurrent_threads"] is None
 
 
@@ -53,8 +59,41 @@ def test_settings_model_override_and_clear(client):
     clear_override = client.patch("/api/v1/settings", json={"agent_model": ""})
     clear_override.raise_for_status()
     clear_payload = clear_override.json()
-    assert clear_payload["agent_model"] == "openrouter/qwen/qwen3.5-27b"
+    assert clear_payload["agent_model"] == "bedrock/us.anthropic.claude-sonnet-4-6"
     assert clear_payload["overrides"]["agent_model"] is None
+
+
+def test_settings_available_models_override_and_clear(client):
+    set_override = client.patch(
+        "/api/v1/settings",
+        json={
+            "available_agent_models": [
+                "openai/gpt-4.1-mini",
+                "google/gemini-2.5-pro",
+            ]
+        },
+    )
+    set_override.raise_for_status()
+    set_payload = set_override.json()
+    assert set_payload["available_agent_models"] == [
+        "openai/gpt-4.1-mini",
+        "google/gemini-2.5-pro",
+        "bedrock/us.anthropic.claude-sonnet-4-6",
+    ]
+    assert set_payload["overrides"]["available_agent_models"] == [
+        "openai/gpt-4.1-mini",
+        "google/gemini-2.5-pro",
+    ]
+
+    clear_override = client.patch("/api/v1/settings", json={"available_agent_models": []})
+    clear_override.raise_for_status()
+    clear_payload = clear_override.json()
+    assert clear_payload["available_agent_models"] == [
+        "bedrock/us.anthropic.claude-sonnet-4-6",
+        "openai/gpt-4.1-mini",
+        "openrouter/qwen/qwen3.5-27b",
+    ]
+    assert clear_payload["overrides"]["available_agent_models"] is None
 
 
 def test_settings_bulk_concurrency_override_and_clear(client):
@@ -110,7 +149,7 @@ def test_settings_endpoint_reports_openrouter_env_provider_config(client, monkey
     try:
         with patch(
             "backend.services.runtime_settings.validate_litellm_environment",
-            return_value=(True, [], "openrouter/qwen/qwen3.5-27b"),
+            return_value=(True, [], get_settings().agent_model),
         ):
             response = client.get("/api/v1/settings")
             response.raise_for_status()

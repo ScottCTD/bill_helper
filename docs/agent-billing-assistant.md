@@ -64,6 +64,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 ## Runtime Flow
 
 1. User sends message to `POST /api/v1/agent/threads/{thread_id}/messages` (non-streaming) or `POST /api/v1/agent/threads/{thread_id}/messages/stream` (SSE streaming).
+   - optional multipart field `model_name` can select any runtime-enabled model from the `/api/v1/settings` response field `available_agent_models`
 2. Backend persists user message/attachments and creates run (`running`).
 3. Runtime builds model messages:
   - system prompt (including current-user account context; optional `## Agent Memory` list when `user_memory` is set)
@@ -89,6 +90,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 - `POST /api/v1/agent/threads/{thread_id}/messages`: send message and run agent (non-streaming)
   - used by Bulk mode after creating one fresh thread per attached file
 - `POST /api/v1/agent/threads/{thread_id}/messages/stream`: send message and run agent (SSE streaming)
+  - both send endpoints accept optional multipart `model_name`
 - `GET /api/v1/agent/runs/{run_id}`: fetch run detail
 - `POST /api/v1/agent/runs/{run_id}/interrupt`: interrupt a running agent
 - `GET /api/v1/agent/attachments/{attachment_id}`: fetch attachment file
@@ -98,7 +100,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 
 | Setting                            | Env                                                           | Default                       | Notes                                                                                           |
 | ---------------------------------- | ------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------- |
-| `agent_model`                      | `BILL_HELPER_AGENT_MODEL`                                     | `openrouter/qwen/qwen3.5-27b` | Model name; runtime override supported via `/api/v1/settings`                                   |
+| `agent_model`                      | `BILL_HELPER_AGENT_MODEL`                                     | `bedrock/us.anthropic.claude-sonnet-4-6` | Default model name; runtime override supported via `/api/v1/settings`                           |
 | `agent_max_steps`                  | `BILL_HELPER_AGENT_MAX_STEPS`                                 | `100`                         | Max tool loop iterations                                                                        |
 | `agent_bulk_max_concurrent_threads` | `BILL_HELPER_AGENT_BULK_MAX_CONCURRENT_THREADS`               | `4`                           | Max fresh threads Bulk mode starts concurrently                                                 |
 | `current_user_timezone`            | `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` | `America/Toronto`             | User-local date basis for the system-prompt current-date section                                |

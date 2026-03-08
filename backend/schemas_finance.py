@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
 from backend.services.runtime_settings_normalization import (
+    normalize_agent_model_items_or_none,
     normalize_currency_code_or_none,
     normalize_text_or_none,
     normalize_user_memory_items_or_none,
@@ -439,6 +440,7 @@ class RuntimeSettingsOverridesRead(BaseModel):
     default_currency_code: str | None = None
     dashboard_currency_code: str | None = None
     agent_model: str | None = None
+    available_agent_models: list[str] | None = None
     agent_max_steps: int | None = None
     agent_bulk_max_concurrent_threads: int | None = None
     agent_retry_max_attempts: int | None = None
@@ -457,6 +459,7 @@ class RuntimeSettingsRead(BaseModel):
     default_currency_code: str
     dashboard_currency_code: str
     agent_model: str
+    available_agent_models: list[str]
     agent_max_steps: int
     agent_bulk_max_concurrent_threads: int
     agent_retry_max_attempts: int
@@ -479,6 +482,7 @@ class RuntimeSettingsUpdate(BaseModel):
         default=None, min_length=3, max_length=3
     )
     agent_model: str | None = Field(default=None, max_length=255)
+    available_agent_models: list[str] | None = None
     agent_max_steps: int | None = Field(default=None, ge=1, le=500)
     agent_bulk_max_concurrent_threads: int | None = Field(default=None, ge=1, le=16)
     agent_retry_max_attempts: int | None = Field(default=None, ge=1, le=10)
@@ -514,6 +518,17 @@ class RuntimeSettingsUpdate(BaseModel):
         return validate_user_memory_size(
             normalize_user_memory_items_or_none(str(item) for item in value)
         )
+
+    @field_validator("available_agent_models", mode="before")
+    @classmethod
+    def normalize_optional_available_agent_models(cls, value: Any) -> list[str] | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            raise ValueError("available_agent_models must be a list of strings")
+        if not isinstance(value, list):
+            raise ValueError("available_agent_models must be a list of strings")
+        return normalize_agent_model_items_or_none(str(item) for item in value)
 
     @field_validator("default_currency_code", "dashboard_currency_code", mode="before")
     @classmethod
