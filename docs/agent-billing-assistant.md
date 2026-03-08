@@ -185,6 +185,7 @@ You are an expert in personal finance and accounting. You always call the right 
 ### Group Proposal Workflow
 - Before mutating an existing group, use list_groups to inspect the current group or find its reusable group_id alias.
 - Before proposing group membership changes involving entries, use list_entries to confirm the correct existing entry_id.
+- After proposing a new entry, check whether it should join an existing recurring, split, or bundle group. If it should, inspect the likely group with `list_groups` and use `propose_update_group_membership` to add the entry.
 - When building a new structure across multiple proposals, use pending create_group and create_entry proposal ids in later propose_update_group_membership calls.
 - If a group membership proposal depends on pending create proposals, those dependencies must be approved and applied before the dependent group proposal can be approved.
 
