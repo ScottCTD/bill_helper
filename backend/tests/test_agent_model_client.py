@@ -273,12 +273,13 @@ def test_complete_injects_prompt_cache_control_points_when_supported(monkeypatch
     )
 
     assert captured_request["cache_control_injection_points"] == [
-        {"location": "message", "role": "system"},
+        {"location": "message", "index": 0},
         {"location": "message", "index": -1},
     ]
 
 
-def test_complete_injects_latest_user_index_for_tool_loop_histories(monkeypatch):
+def test_complete_injects_boundary_before_latest_assistant_tool_batch(monkeypatch):
+    """First tool-loop iteration: boundary is the user message (just before assistant)."""
     captured_request: dict[str, object] = {}
     client = _build_model_client()
 
@@ -322,8 +323,136 @@ def test_complete_injects_latest_user_index_for_tool_loop_histories(monkeypatch)
     )
 
     assert captured_request["cache_control_injection_points"] == [
-        {"location": "message", "role": "system"},
+        {"location": "message", "index": 0},
         {"location": "message", "index": -3},
+        {"location": "message", "index": -1},
+    ]
+
+
+def test_complete_injects_boundary_at_prev_tool_result_in_continued_loop(monkeypatch):
+    """Second tool-loop iteration: boundary is the previous iteration's last tool result."""
+    captured_request: dict[str, object] = {}
+    client = _build_model_client()
+
+    monkeypatch.setattr(
+        "backend.services.agent.model_client.litellm.utils.supports_prompt_caching",
+        lambda _model: True,
+    )
+
+    def fake_completion(**kwargs):
+        captured_request.update(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="Hello", tool_calls=[])
+                )
+            ],
+            usage={"input_tokens": 5, "output_tokens": 2},
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    client.complete(
+        [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Process receipt."},
+            {"role": "assistant", "content": "", "tool_calls": [
+                {"id": "c1", "type": "function", "function": {"name": "list_entities", "arguments": "{}"}},
+            ]},
+            {"role": "tool", "tool_call_id": "c1", "name": "list_entities", "content": "OK"},
+            {"role": "assistant", "content": "", "tool_calls": [
+                {"id": "c2", "type": "function", "function": {"name": "list_tags", "arguments": "{}"}},
+            ]},
+            {"role": "tool", "tool_call_id": "c2", "name": "list_tags", "content": "OK"},
+        ]
+    )
+
+    # Boundary at index 3 (tool result from iter 1) = -3, last message = -1
+    assert captured_request["cache_control_injection_points"] == [
+        {"location": "message", "index": 0},
+        {"location": "message", "index": -3},
+        {"location": "message", "index": -1},
+    ]
+
+
+def test_complete_injects_second_to_last_user_for_multi_turn(monkeypatch):
+    """New turn with history: second-to-last user message enables cross-turn cache reuse."""
+    captured_request: dict[str, object] = {}
+    client = _build_model_client()
+
+    monkeypatch.setattr(
+        "backend.services.agent.model_client.litellm.utils.supports_prompt_caching",
+        lambda _model: True,
+    )
+
+    def fake_completion(**kwargs):
+        captured_request.update(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="Hello", tool_calls=[])
+                )
+            ],
+            usage={"input_tokens": 5, "output_tokens": 2},
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    client.complete(
+        [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "First question"},
+            {"role": "assistant", "content": "First answer"},
+            {"role": "user", "content": "Second question"},
+        ]
+    )
+
+    # Second-to-last user = index 1 = -3, last message = -1
+    assert captured_request["cache_control_injection_points"] == [
+        {"location": "message", "index": 0},
+        {"location": "message", "index": -3},
+        {"location": "message", "index": -1},
+    ]
+
+
+def test_complete_tool_loop_with_multiple_tool_results(monkeypatch):
+    """Tool loop with parallel tool calls: boundary still before the assistant."""
+    captured_request: dict[str, object] = {}
+    client = _build_model_client()
+
+    monkeypatch.setattr(
+        "backend.services.agent.model_client.litellm.utils.supports_prompt_caching",
+        lambda _model: True,
+    )
+
+    def fake_completion(**kwargs):
+        captured_request.update(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="Done", tool_calls=[])
+                )
+            ],
+            usage={"input_tokens": 5, "output_tokens": 2},
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    client.complete(
+        [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Process receipt."},
+            {"role": "assistant", "content": "", "tool_calls": [
+                {"id": "c1", "type": "function", "function": {"name": "list_entities", "arguments": "{}"}},
+                {"id": "c2", "type": "function", "function": {"name": "list_tags", "arguments": "{}"}},
+            ]},
+            {"role": "tool", "tool_call_id": "c1", "name": "list_entities", "content": "OK"},
+            {"role": "tool", "tool_call_id": "c2", "name": "list_tags", "content": "OK"},
+        ]
+    )
+
+    # Boundary at user (index 1) = -4, last tool result = -1
+    assert captured_request["cache_control_injection_points"] == [
+        {"location": "message", "index": 0},
+        {"location": "message", "index": -4},
+        {"location": "message", "index": -1},
     ]
 
 

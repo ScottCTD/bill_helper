@@ -91,27 +91,46 @@ def _supports_prompt_caching(model_name: str) -> bool:
 def _cache_injection_points_for_messages(
     messages: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    # Prefer stable anchors for tool-heavy loops:
-    # 1) all system messages (long-lived instruction/context prefix)
-    # 2) latest user turn (stable across intra-run tool steps)
+    # Place breakpoints so every LLM call can READ the previous call's cache
+    # and WRITE a new cache for the next call.
+    #
+    # Tool-loop iteration (last message role == "tool"):
+    #   New messages since last call: [assistant(tc), tool, tool, ...]
+    #   Boundary = message just before that assistant = previous call's last msg.
+    #   Breakpoint there READs the previous call's cache.
+    #
+    # New user turn (last message role == "user"):
+    #   Second-to-last user message = previous turn's initial-call cache endpoint.
+    #   Breakpoint there READs the cross-turn cache.
+    #
+    # Always: system at index 0 (long-lived prefix) + last message (WRITE for next call).
     if len(messages) < 2:
         return []
 
+    n = len(messages)
     points: list[dict[str, Any]] = [
-        {"location": "message", "role": "system"},
+        {"location": "message", "index": 0},
     ]
 
-    latest_user_index = next(
-        (
-            index
-            for index in range(len(messages) - 1, -1, -1)
-            if messages[index].get("role") == "user"
-        ),
-        None,
-    )
-    if latest_user_index is not None:
-        negative_index = latest_user_index - len(messages)
-        points.append({"location": "message", "index": negative_index})
+    last_role = messages[-1].get("role")
+
+    if last_role == "tool":
+        # Walk backwards past trailing tool results, then past the assistant.
+        i = n - 1
+        while i >= 0 and messages[i].get("role") == "tool":
+            i -= 1
+        if i >= 1 and messages[i].get("role") == "assistant":
+            boundary = i - 1
+            if boundary > 0:
+                points.append({"location": "message", "index": boundary - n})
+    elif last_role == "user":
+        # Find second-to-last user message for cross-turn cache reuse.
+        for i in range(n - 2, -1, -1):
+            if messages[i].get("role") == "user":
+                points.append({"location": "message", "index": i - n})
+                break
+
+    points.append({"location": "message", "index": -1})
 
     unique_points: list[dict[str, Any]] = []
     seen: set[tuple[tuple[str, Any], ...]] = set()
