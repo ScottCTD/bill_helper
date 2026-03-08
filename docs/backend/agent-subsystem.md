@@ -31,7 +31,7 @@
 - `backend/services/agent/entry_references.py`
   - shared entry lookup helpers for `entry_id` aliases, selector fallback, and public entry snapshots
 - `backend/services/agent/group_references.py`
-  - shared group-id alias lookup plus public group summary/detail formatting for `list_groups` and group proposals
+  - shared group-id alias lookup plus compact public group summary/detail formatting for `list_groups` and group proposals
 - `backend/services/agent/proposal_metadata.py`
   - canonical mapping from `change_type` to proposal domain/action/tool name for `list_proposals`, history, and review summaries
 - `backend/services/agent/proposal_patching.py`
@@ -75,6 +75,7 @@
 - `add_user_memory` is an add-only tool for explicit remember-this requests; mutate/remove requests must be declined
 - `rename_thread` should run right after the first user message in a new thread, then only when the user explicitly asks or the topic materially changes
 - model-facing tool interfaces avoid requiring full domain IDs; entry mutations prefer `entry_id` aliases from `list_entries` with selector fallback
+- `list_entries(source=...)` mirrors the Entries table broad text search across entry name, from-entity, and to-entity
 - existing-group mutations prefer `group_id` aliases from `list_groups`
 - the prompt has a dedicated `Grouping` section that combines fixed `BUNDLE` / `SPLIT` / `RECURRING` semantics, examples, and workflow guidance
 - after proposing a new entry, the prompt instructs the agent to check whether an existing recurring, split, or bundle group should absorb it and to propose the membership change when needed

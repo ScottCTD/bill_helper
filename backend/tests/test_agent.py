@@ -1070,6 +1070,7 @@ def test_entry_tool_descriptions_prefer_entry_id_aliases():
     delete_description = str(tool_by_name["propose_delete_entry"]["description"])
 
     assert "entry_id alias" in list_description
+    assert "Use source for broad text search across entry name, from_entity, and to_entity" in list_description
     assert "Prefer entry_id from list_entries" in update_description
     assert "Prefer entry_id from list_entries" in delete_description
 
@@ -2182,6 +2183,87 @@ def test_update_entry_can_target_entry_id_from_list_entries(client, monkeypatch)
     entry_response = client.get(f"/api/v1/entries/{entry_id}")
     entry_response.raise_for_status()
     assert entry_response.json()["name"] == "Morning Coffee Updated"
+
+
+def test_list_entries_source_matches_name_and_counterparties(client, monkeypatch):
+    create_entity(client, "Scotiabank Credit", "account")
+    create_entity(client, "OpenAI", "merchant")
+    create_entity(client, "Apple App Store", "merchant")
+
+    for payload in [
+        {
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-06",
+            "name": "OpenAI ChatGPT Subscription",
+            "amount_minor": 3201,
+            "currency_code": "CAD",
+            "from_entity": "Scotiabank Credit",
+            "to_entity": "OpenAI",
+            "tags": ["subscriptions"],
+        },
+        {
+            "kind": "EXPENSE",
+            "occurred_at": "2026-02-06",
+            "name": "OpenAI ChatGPT Subscription",
+            "amount_minor": 3176,
+            "currency_code": "CAD",
+            "from_entity": "Scotiabank Credit",
+            "to_entity": "OpenAI",
+            "tags": ["subscriptions"],
+        },
+        {
+            "kind": "EXPENSE",
+            "occurred_at": "2026-03-06",
+            "name": "OpenAI ChatGPT Plus Subscription",
+            "amount_minor": 3178,
+            "currency_code": "CAD",
+            "from_entity": "Scotiabank Credit",
+            "to_entity": "OpenAI",
+            "tags": ["subscriptions"],
+        },
+        {
+            "kind": "EXPENSE",
+            "occurred_at": "2026-03-07",
+            "name": "ChatGPT Renewal",
+            "amount_minor": 3199,
+            "currency_code": "CAD",
+            "from_entity": "Scotiabank Credit",
+            "to_entity": "OpenAI",
+            "tags": ["subscriptions"],
+        },
+    ]:
+        response = client.post("/api/v1/entries", json=payload)
+        response.raise_for_status()
+
+    def source_search_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Found matching entries."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_list_entries_source",
+                    "type": "function",
+                    "function": {
+                        "name": "list_entries",
+                        "arguments": json.dumps({"source": "OpenAI", "limit": 10}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, source_search_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Find the OpenAI entries")
+
+    assert run["status"] == "completed"
+    output = run["tool_calls"][0]["output_json"]
+    assert output["status"] == "OK"
+    assert output["returned_count"] == 4
+    assert output["total_available"] == 4
+    names = [entry["name"] for entry in output["entries"]]
+    assert "ChatGPT Renewal" in names
 
 
 def test_list_entities_category_account_returns_account_backed_entities(client, monkeypatch):
@@ -3638,7 +3720,9 @@ def test_list_groups_tool_supports_list_and_detail_modes(client, monkeypatch):
     assert detail_output["status"] == "OK"
     assert detail_output["group"]["group_id"] == group_short_id
     assert detail_output["group"]["name"] == "Monthly Bills"
-    assert detail_output["group"]["derived_graph"]["node_count"] == 0
+    assert "derived_graph" not in detail_output["group"]
+    assert detail_output["group"]["direct_members"] == []
+    assert detail_output["group"]["derived_relationships"] == []
 
 
 def test_list_proposals_tool_can_filter_group_domain(client, monkeypatch):

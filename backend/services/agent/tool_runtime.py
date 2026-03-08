@@ -117,8 +117,9 @@ TOOLS: dict[str, AgentToolDefinition] = {
     "list_entries": AgentToolDefinition(
         name="list_entries",
         description=(
-            "List/query entries by date, date range, name, from_entity, to_entity, tags, and kind. "
-            "When name/from/to filters are present, exact matches are ranked higher than substring matches. "
+            "List/query entries by date, date range, source, name, from_entity, to_entity, tags, and kind. "
+            "Use source for broad text search across entry name, from_entity, and to_entity, matching the Entries table search. "
+            "When source/name/from/to filters are present, exact matches are ranked higher than substring matches. "
             "Each returned entry includes an entry_id alias you can reuse in propose_update_entry "
             "or propose_delete_entry. This tool is read-only and never mutates data."
         ),
@@ -149,8 +150,8 @@ TOOLS: dict[str, AgentToolDefinition] = {
         description=(
             "List/query entry groups by name or group_type, or inspect one group in detail with group_id. "
             "In list mode, each returned row includes a reusable group_id alias. "
-            "In detail mode, provide only group_id and this tool returns the selected group's direct members "
-            "plus derived graph metadata. This tool is read-only."
+            "In detail mode, provide only group_id and this tool returns the selected group's summary, "
+            "direct members, and compact derived relationships. This tool is read-only."
         ),
         args_model=ListGroupsArgs,
         handler=list_groups,
