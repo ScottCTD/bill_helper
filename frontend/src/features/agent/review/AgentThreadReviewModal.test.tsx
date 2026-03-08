@@ -260,4 +260,69 @@ describe("AgentThreadReviewModal", () => {
 
     expect(onApproveItem).not.toHaveBeenCalled();
   });
+
+  it("renders group proposal editors and dependency chips", async () => {
+    const run = buildRun({
+      id: "run-group",
+      created_at: "2026-03-06T10:00:00Z",
+      change_items: [
+        buildChangeItem({
+          id: "proposal-group-create",
+          run_id: "run-group",
+          change_type: "create_group",
+          payload_json: {
+            name: "Monthly Bills",
+            group_type: "RECURRING"
+          }
+        }),
+        buildChangeItem({
+          id: "proposal-group-member",
+          run_id: "run-group",
+          change_type: "create_group_member",
+          payload_json: {
+            action: "add",
+            group_ref: {
+              create_group_proposal_id: "proposal-group-create"
+            },
+            entry_ref: {
+              entry_id: "entry-1234"
+            },
+            child_group_ref: null,
+            member_role: "CHILD",
+            group_preview: {
+              name: "Monthly Bills",
+              group_type: "SPLIT"
+            },
+            member_preview: {
+              name: "March Rent"
+            }
+          }
+        })
+      ]
+    });
+    const onApproveItem = vi.fn().mockResolvedValue(run.change_items[1]);
+
+    renderWithQueryClient(
+      <AgentThreadReviewModal
+        open
+        runs={[run]}
+        onOpenChange={() => undefined}
+        onApproveItem={onApproveItem}
+        onRejectItem={vi.fn()}
+      />
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    const pendingSection = within(dialog.querySelector(".agent-review-sidebar") as HTMLElement).getByLabelText("Pending");
+    expect(within(pendingSection).getByText("Groups")).toBeInTheDocument();
+
+    expect(screen.getByLabelText("Group name")).toHaveValue("Monthly Bills");
+    expect(screen.getByLabelText("Group type")).toHaveValue("RECURRING");
+
+    await userEvent.click(screen.getByText("Add Group Member: Monthly Bills -> March Rent"));
+
+    expect(screen.getByText("Parent group dependency")).toBeInTheDocument();
+    expect(screen.getAllByText("Create Group: Monthly Bills").length).toBeGreaterThan(0);
+    expect(screen.getByRole("combobox")).toHaveValue("CHILD");
+  });
 });

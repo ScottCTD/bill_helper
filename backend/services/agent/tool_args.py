@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.enums_agent import AgentChangeStatus
+from backend.enums_finance import GroupMemberRole, GroupType
 from backend.services.agent.threads import THREAD_TITLE_MAX_LENGTH, validate_thread_title
 from backend.services.runtime_settings_normalization import (
     normalize_user_memory_items_or_none,
@@ -14,15 +15,22 @@ from backend.services.runtime_settings_normalization import (
 from backend.services.agent.change_contracts import (
     CreateEntityPayload as ProposeCreateEntityArgs,
     CreateEntryPayload as ProposeCreateEntryArgs,
+    CreateGroupPayload as ProposeCreateGroupArgs,
     CreateTagPayload as ProposeCreateTagArgs,
     DeleteEntityPayload as ProposeDeleteEntityArgs,
     DeleteEntryPayload as ProposeDeleteEntryArgs,
+    DeleteGroupPayload as ProposeDeleteGroupArgs,
     DeleteTagPayload as ProposeDeleteTagArgs,
+    EntryReferencePayload,
     EntrySelectorPayload as EntrySelectorArgs,
+    GroupReferencePayload,
+    normalize_object_json_string,
     UpdateEntityPatchPayload as EntityPatchArgs,
     UpdateEntityPayload as ProposeUpdateEntityArgs,
     UpdateEntryPatchPayload as EntryPatchArgs,
     UpdateEntryPayload as ProposeUpdateEntryArgs,
+    UpdateGroupPatchPayload as GroupPatchArgs,
+    UpdateGroupPayload as ProposeUpdateGroupArgs,
     UpdateTagPatchPayload as TagPatchArgs,
     UpdateTagPayload as ProposeUpdateTagArgs,
 )
@@ -183,14 +191,52 @@ class ListEntitiesArgs(BaseModel):
         return normalize_optional_category(value)
 
 
-ProposalType = Literal["entry", "tag", "entity"]
+class ListGroupsArgs(BaseModel):
+    group_id: str | None = Field(
+        default=None,
+        min_length=4,
+        max_length=36,
+        description=(
+            "Optional full group id or unique short-id prefix to inspect one group in detail. "
+            "When provided, do not also send name/group_type/limit."
+        ),
+    )
+    name: str | None = None
+    group_type: GroupType | None = None
+    limit: int = Field(
+        default=10,
+        ge=1,
+        description="Max groups to return in list mode. No upper bound; be cautious with very large values.",
+    )
+
+    @field_validator("group_id")
+    @classmethod
+    def normalize_group_id(cls, value: str | None) -> str | None:
+        normalized = normalize_loose_text(value)
+        return normalized.lower() if normalized is not None else None
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        return normalize_loose_text(value)
+
+    @model_validator(mode="after")
+    def validate_mode(self) -> ListGroupsArgs:
+        if self.group_id is not None and (
+            self.name is not None or self.group_type is not None or self.limit != 10
+        ):
+            raise ValueError("group_id cannot be combined with name, group_type, or limit")
+        return self
+
+
+ProposalType = Literal["entry", "tag", "entity", "group"]
 ProposalAction = Literal["create", "update", "delete"]
 
 
 class ListProposalsArgs(BaseModel):
     proposal_type: ProposalType | None = Field(
         default=None,
-        description="Filter by proposal domain: entry, tag, or entity.",
+        description="Filter by proposal domain: entry, group, tag, or entity.",
     )
     proposal_status: AgentChangeStatus | None = Field(
         default=None,
@@ -281,3 +327,36 @@ class RemovePendingProposalArgs(BaseModel):
         normalized = normalize_required_text(value)
         return normalized.lower()
 
+
+class ProposeUpdateGroupMembershipArgs(BaseModel):
+    action: Literal["add", "remove"]
+    group_ref: GroupReferencePayload
+    entry_ref: EntryReferencePayload | None = None
+    child_group_ref: GroupReferencePayload | None = None
+    member_role: GroupMemberRole | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_nested_object_args(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        normalized["group_ref"] = normalize_object_json_string(normalized.get("group_ref"))
+        normalized["entry_ref"] = normalize_object_json_string(normalized.get("entry_ref"))
+        normalized["child_group_ref"] = normalize_object_json_string(normalized.get("child_group_ref"))
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_targets(self) -> ProposeUpdateGroupMembershipArgs:
+        if (self.entry_ref is None) == (self.child_group_ref is None):
+            raise ValueError("exactly one of entry_ref or child_group_ref is required")
+        if self.action == "remove":
+            if self.member_role is not None:
+                raise ValueError("member_role is only valid for add action")
+            if self.group_ref.create_group_proposal_id is not None:
+                raise ValueError("remove action only supports existing group_id references")
+            if self.entry_ref is not None and self.entry_ref.create_entry_proposal_id is not None:
+                raise ValueError("remove action only supports existing entry_id references")
+            if self.child_group_ref is not None and self.child_group_ref.create_group_proposal_id is not None:
+                raise ValueError("remove action only supports existing child group_id references")
+        return self

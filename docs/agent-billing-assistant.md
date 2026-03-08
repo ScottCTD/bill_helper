@@ -26,6 +26,8 @@ This document describes the architecture, prompts, tools, and usage workflow of 
 6. Open the thread review modal from the persistent header `Review` button and process proposals:
   - Pending items appear first, with reviewed and failed items kept in a secondary audit section.
   - Entry proposals support structured edit-before-approve with unified payload diff.
+  - Group proposals appear in their own `Groups` TOC section. Create/update group proposals edit `name` (and create-only `group_type`), while add-member proposals can edit existing refs plus split role when applicable.
+  - Pending create-proposal refs inside group-member proposals stay locked and render dependency chips with proposal summary plus status.
   - Tag proposals edit only `name` and `type`; entity proposals edit only `name` and `category`.
   - Review diff rows use friendly field labels/order and human-readable amount values.
   - Use `Approve`, `Reject`, or `Skip` for focused step-through review.
@@ -39,7 +41,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 - The agent reads data with read tools.
 - The agent can rename the current conversation thread with `rename_thread`.
 - The agent can publish concise user-visible progress notes with `send_intermediate_update`.
-- The agent proposes CRUD changes for entries, tags, and entities.
+- The agent proposes CRUD changes for entries, groups, tags, and entities.
 - The agent does not directly mutate domain tables.
 - Domain mutations occur only through human review apply endpoints.
 
@@ -52,7 +54,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | Model client    | `backend/services/agent/model_client.py`                                                                                                                                                                                                                             | LiteLLM adapter, tool wiring, retry-enabled model completion, explicit prompt-cache breakpoint injection (system role anchor, boundary before latest assistant+tool batch for tool-loop cache reads, last message for cache writes, second-to-last user for cross-turn reuse) for cache-capable models                                                                                                                                                                                                                                                                                           |
 | Prompts         | `backend/services/agent/prompts.py`                                                                                                                                                                                                                                  | Behavioral policy for duplicate checks (including duplicate enrichment via `propose_update_entry`), proposal ordering, explicit new entry/tag/entity specifications, canonical tag/entity normalization (including general tag examples and non-location/default anti-collision rules), error recovery, and current-user context section                                                                                                                                      |
 | Message history | `backend/services/agent/message_history.py`                                                                                                                                                                                                                          | Converts thread + attachments to model messages; parses PDF attachments to text via PyMuPDF (line-trimmed and internal-whitespace-normalized); when model vision is supported, includes one rendered image per PDF page; builds current-user account context for system prompt (including account `notes_markdown` from `markdown_body` with truncation safeguards); prepends review outcomes and interruption prefix before current user feedback in the latest user message |
-| Tools           | `backend/services/agent/tool_args.py`, `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_memory.py`, `backend/services/agent/tool_handlers_threads.py`, `backend/services/agent/tool_handlers_propose.py`, `backend/services/agent/proposal_patching.py`, `backend/services/agent/tool_runtime.py`, `backend/services/agent/tools.py`, `backend/services/agent/threads.py` | Split tool contract/runtime stack: argument schemas + normalization, read/progress handlers, add-only memory appends, thread-title validation/rename helpers, proposal/mutation handlers, patch-map helpers, execution/retry registry, and thin facade |
+| Tools           | `backend/services/agent/tool_args.py`, `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_memory.py`, `backend/services/agent/tool_handlers_threads.py`, `backend/services/agent/tool_handlers_propose.py`, `backend/services/agent/entry_references.py`, `backend/services/agent/group_references.py`, `backend/services/agent/proposal_metadata.py`, `backend/services/agent/proposal_patching.py`, `backend/services/agent/tool_runtime.py`, `backend/services/agent/tools.py`, `backend/services/agent/threads.py` | Split tool contract/runtime stack: argument schemas + normalization, read/progress handlers, add-only memory appends, thread-title validation/rename helpers, shared entry/group lookup helpers, proposal metadata mapping, proposal/mutation handlers, patch-map helpers, execution/retry registry, and thin facade |
 | Review/apply    | `backend/services/agent/review.py`, `backend/services/agent/change_apply.py`                                                                                                                                                                                         | Approval/rejection, apply handlers for proposed CRUD changes                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | API router      | `backend/routers/agent.py`                                                                                                                                                                                                                                           | Threads/runs/send/review/attachment endpoints                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
@@ -121,6 +123,7 @@ The agent receives a markdown-structured system prompt at the start of each run.
 - `## Rules` (sectioned policy groups)
 - `## Current User Context` (runtime-generated timezone/date bullets, account summaries, and optional account `notes_markdown` from `markdown_body`)
 - `## Agent Memory` (optional; when `user_memory` is set via runtime settings as persistent list items)
+- rules now include a dedicated Group Proposal Workflow section covering `list_groups`, `list_entries` before entry membership edits, and dependency blocking for pending create proposals
 
 ```markdown
 ## Identity
@@ -179,6 +182,12 @@ You are an expert in personal finance and accounting. You always call the right 
 - Prefer normalized names such as IKEA (not IKEA TORONTO DOWNTWON 6423TORONTO), Toronto (not Toronto ON),
   Starbucks (not SBUX), and Apple (not Apple Store #R121).
 
+### Group Proposal Workflow
+- Before mutating an existing group, use list_groups to inspect the current group or find its reusable group_id alias.
+- Before proposing group membership changes involving entries, use list_entries to confirm the correct existing entry_id.
+- When building a new structure across multiple proposals, use pending create_group and create_entry proposal ids in later propose_update_group_membership calls.
+- If a group membership proposal depends on pending create proposals, those dependencies must be approved and applied before the dependent group proposal can be approved.
+
 ### Tag Deletion Workflow
 - Check whether entries still reference the tag.
 - If referenced, surface the impact clearly in the proposal preview so the reviewer can see which entries will lose the tag association.
@@ -222,7 +231,7 @@ You are an expert in personal finance and accounting. You always call the right 
 
 ## Tools
 
-Tool execution is composed from `backend/services/agent/tool_runtime.py` (registry + execution policy) with handlers in `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_memory.py`, `backend/services/agent/tool_handlers_threads.py`, and `backend/services/agent/tool_handlers_propose.py`, shared entry reference helpers in `backend/services/agent/entry_references.py`, argument contracts in `backend/services/agent/tool_args.py`, thread-title helpers in `backend/services/agent/threads.py`, and patch-map helpers in `backend/services/agent/proposal_patching.py`. `backend/services/agent/tools.py` is a thin facade that re-exports runtime interfaces. Each tool returns plain-text `content` to the model.
+Tool execution is composed from `backend/services/agent/tool_runtime.py` (registry + execution policy) with handlers in `backend/services/agent/tool_handlers_read.py`, `backend/services/agent/tool_handlers_memory.py`, `backend/services/agent/tool_handlers_threads.py`, and `backend/services/agent/tool_handlers_propose.py`, shared entry/group reference helpers in `backend/services/agent/entry_references.py` and `backend/services/agent/group_references.py`, proposal-domain metadata in `backend/services/agent/proposal_metadata.py`, argument contracts in `backend/services/agent/tool_args.py`, thread-title helpers in `backend/services/agent/threads.py`, and patch-map helpers in `backend/services/agent/proposal_patching.py`. `backend/services/agent/tools.py` is a thin facade that re-exports runtime interfaces. Each tool returns plain-text `content` to the model.
 
 `list_proposals` is the read-only lifecycle inspection tool for proposals in the current thread. Proposal tools (`propose_`*, `update_pending_proposal`, `remove_pending_proposal`) create or mutate `AgentChangeItem` rows while they remain under review. They do not mutate domain data; changes apply only after human approval via approve/reject endpoints.
 
@@ -332,6 +341,100 @@ entries: entry_id=abcd1234 YYYY-MM-DD name amount_minor CURRENCY from=from_entit
 
 - If an `entry_id` alias/prefix matches multiple entries, `details` includes the original `entry_id`, `candidate_count`, `candidate_entry_ids` with full entry ids, and `candidates` where each candidate record also uses the full-form `entry_id`.
 - If a `selector` matches multiple entries, `details` includes `candidate_count` and `candidates` in the normal public record shape, which means candidate `entry_id` values remain the short public aliases.
+
+---
+
+### Groups
+
+#### `list_groups` (read)
+
+**Description:** List/query groups by name or `group_type`, or inspect one group in detail with `group_id`. In list mode, each returned row includes a reusable short `group_id` alias. In detail mode, provide only `group_id` and the tool returns the selected group's direct members plus derived graph metadata.
+
+**Arguments:**
+
+| Parameter    | Type          | Required | Default | Constraints                                                |
+| ------------ | ------------- | -------- | ------- | ---------------------------------------------------------- |
+| `group_id`   | string | null | no       | null    | short alias or full group id; mutually exclusive with all other filters |
+| `name`       | string | null | no       | null    | substring filter in list mode                              |
+| `group_type` | string | null | no       | null    | `BUNDLE`, `SPLIT`, or `RECURRING` in list mode             |
+| `limit`      | integer       | no       | 10      | ≥1; list mode only                                         |
+
+**Expected output (text):**
+
+```
+OK
+summary: returned N of M matching groups
+groups: group_id=abcd1234 Monthly Bills (RECURRING, members=3); ...
+```
+
+Detail mode returns one `group` record with summary fields, `direct_members`, and `derived_graph`.
+
+---
+
+#### `propose_create_group` (proposal)
+
+**Description:** Create a review-gated proposal to add a new named group. Use this before proposing membership changes for a new group.
+
+**Arguments:**
+
+| Parameter    | Type   | Required | Constraints                         |
+| ------------ | ------ | -------- | ----------------------------------- |
+| `name`       | string | yes      | 1–255 chars, normalized             |
+| `group_type` | string | yes      | `BUNDLE`, `SPLIT`, or `RECURRING`   |
+
+**Expected output:** `OK` with status and preview.
+
+---
+
+#### `propose_update_group` (proposal)
+
+**Description:** Create a review-gated proposal to rename an existing group. Prefer the `group_id` alias returned by `list_groups`.
+
+**Arguments:**
+
+| Parameter  | Type   | Required | Constraints                                 |
+| ---------- | ------ | -------- | ------------------------------------------- |
+| `group_id` | string | yes      | short alias from `list_groups` or full id   |
+| `patch`    | object | yes      | rename-only; currently supports `name`      |
+
+**Expected output:** `OK` with status and preview. Returns `ERROR` if the group is missing or ambiguous.
+
+---
+
+#### `propose_delete_group` (proposal)
+
+**Description:** Create a review-gated proposal to delete an existing group. Prefer the `group_id` alias returned by `list_groups`. Apply succeeds only when the group has no direct members and is not attached as a child group.
+
+**Arguments:**
+
+| Parameter  | Type   | Required | Constraints                               |
+| ---------- | ------ | -------- | ----------------------------------------- |
+| `group_id` | string | yes      | short alias from `list_groups` or full id |
+
+**Expected output:** `OK` with status and preview. Returns `ERROR` if the group is missing or ambiguous.
+
+---
+
+#### `propose_update_group_membership` (proposal)
+
+**Description:** Create a review-gated proposal to add or remove one direct group member. Use `action="add"` or `action="remove"`. `group_ref` points to the parent group and may reference an existing `group_id` or, for adds only, a pending `create_group` proposal in the current thread. `entry_ref` may reference an existing `entry_id` or, for adds only, a pending `create_entry` proposal in the current thread. `member_role` is required for `SPLIT`-group adds and rejected otherwise.
+
+**Arguments:**
+
+| Parameter         | Type              | Required | Constraints |
+| ----------------- | ----------------- | -------- | ----------- |
+| `action`          | string            | yes      | `add` or `remove` |
+| `group_ref`       | object            | yes      | exactly one of `group_id` or `create_group_proposal_id` |
+| `entry_ref`       | object | null     | no       | exactly one of `entry_ref` or `child_group_ref` |
+| `child_group_ref` | object | null     | no       | exactly one of `entry_ref` or `child_group_ref` |
+| `member_role`     | string | null     | no       | `PARENT` or `CHILD`; add-only and only for split groups |
+
+**Expected output:** `OK` with status and preview. Returns `ERROR` for invalid references, duplicate/conflicting pending membership proposals, or invalid group-type rules.
+
+Notes:
+
+- `remove` only supports existing applied `group_id` / `entry_id` / child `group_id` references.
+- If a pending create proposal referenced by an add-member proposal is later rejected or fails, the member proposal remains pending but cannot be approved until edited or removed.
 
 ---
 
@@ -506,7 +609,7 @@ entities: name (category or uncategorized); ...
 
 | Parameter         | Type          | Required | Default | Constraints                                                                                             |
 | ----------------- | ------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------- |
-| `proposal_type`   | string | null | no       | null    | `entry`, `tag`, or `entity`                                                                             |
+| `proposal_type`   | string | null | no       | null    | `entry`, `group`, `tag`, or `entity`                                                                    |
 | `proposal_status` | string | null | no       | null    | case-insensitive; supports `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `APPLIED`, `APPLY_FAILED`; `pending` also maps to `PENDING_REVIEW`, `failed` to `APPLY_FAILED` |
 | `change_action`   | string | null | no       | null    | `create`, `update`, or `delete`                                                                         |
 | `proposal_id`     | string | null | no       | null    | full proposal id or unique short-id prefix                                                              |
@@ -651,7 +754,7 @@ Pending proposals can be inspected, revised, or removed by id in later turns wit
 - `POST /api/v1/agent/change-items/{item_id}/approve`
 - `POST /api/v1/agent/change-items/{item_id}/reject`
 
-`payload_override` is supported for `create_entry`, `update_entry`, `create_tag`, `update_tag`, `create_entity`, and `update_entity`. On apply failure, item transitions to `APPLY_FAILED` with failure detail in review note.
+`payload_override` is supported for `create_entry`, `update_entry`, `create_group`, `update_group`, `create_group_member`, `create_tag`, `update_tag`, `create_entity`, and `update_entity`. Group-member overrides can only adjust existing resource refs or split role; pending proposal refs remain locked in the review UI. On apply failure, item transitions to `APPLY_FAILED` with failure detail in review note.
 
 **Continuation context:** For follow-up turns, `message_history.py` prepends before the latest user feedback message text: (1) a compact review block per item: `tool_name proposal_id=... proposal_short_id=... review_action=... review_item_status=... review_note=... review_override=...`, and (2) when the previous run was interrupted, an interruption note describing the interrupted request. Review context remains outside dynamic system-injected text; account context is intentionally included in system prompt.
 
@@ -674,6 +777,11 @@ In `change_apply.py`:
 - `create_entry`: create entry directly
 - `update_entry`: update uniquely-selected entry by `entry_id` (preferred) or selector
 - `delete_entry`: soft-delete uniquely-selected entry
+- `create_group`: create a new named typed group owned by the runtime current user
+- `update_group`: rename an existing scoped group
+- `delete_group`: delete an existing scoped group if it has no direct members and no parent membership
+- `create_group_member`: resolve existing or approved pending refs and add one direct member to a group
+- `delete_group_member`: resolve direct membership by group + member target and remove it
 - `create_tag`: create/reuse normalized tag + assign type
 - `update_tag`: rename and/or update type
 - `delete_tag`: delete tag, clear taxonomy-backed type assignment, and remove entry junction rows by cascade

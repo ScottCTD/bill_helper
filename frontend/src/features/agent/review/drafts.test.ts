@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { buildChangeItem } from "../../../test/factories/agent";
 import {
+  buildGroupMembershipOverrideState,
+  buildGroupMembershipReviewDraft,
+  buildGroupOverrideState,
+  buildGroupReviewDraft,
   buildEntityOverrideState,
   buildEntityReviewDraft,
   buildEntryOverrideState,
@@ -259,6 +263,106 @@ describe("review draft serialization", () => {
         patch: {
           category: "merchant"
         }
+      },
+      validationError: null
+    });
+  });
+
+  it("serializes create and update group drafts within the review contract", () => {
+    const createItem = buildChangeItem({
+      change_type: "create_group",
+      payload_json: {
+        name: "Monthly Bills",
+        group_type: "RECURRING"
+      }
+    });
+    const updateItem = buildChangeItem({
+      change_type: "update_group",
+      payload_json: {
+        group_id: "group-1234",
+        current: {
+          name: "Monthly Bills",
+          group_type: "RECURRING"
+        },
+        patch: {
+          name: "Core Bills"
+        }
+      }
+    });
+
+    expect(
+      buildGroupOverrideState(createItem, {
+        ...buildGroupReviewDraft(createItem),
+        name: "Core Bills"
+      })
+    ).toEqual({
+      hasChanges: true,
+      payloadOverride: {
+        name: "Core Bills",
+        group_type: "RECURRING"
+      },
+      validationError: null
+    });
+
+    expect(
+      buildGroupOverrideState(updateItem, {
+        ...buildGroupReviewDraft(updateItem),
+        name: "Monthly Bills"
+      })
+    ).toEqual({
+      hasChanges: true,
+      payloadOverride: {
+        group_id: "group-1234",
+        patch: {
+          name: "Monthly Bills"
+        }
+      },
+      validationError: null
+    });
+  });
+
+  it("serializes add-member group drafts within the review contract while keeping pending refs locked", () => {
+    const item = buildChangeItem({
+      change_type: "create_group_member",
+      payload_json: {
+        action: "add",
+        group_ref: {
+          create_group_proposal_id: "proposal-group-1234"
+        },
+        entry_ref: {
+          entry_id: "entry-1234"
+        },
+        child_group_ref: null,
+        member_role: "CHILD",
+        group_preview: {
+          name: "Rent Timeline",
+          group_type: "SPLIT"
+        },
+        member_preview: {
+          name: "March Rent",
+          resource_type: "entry"
+        }
+      }
+    });
+
+    expect(
+      buildGroupMembershipOverrideState(item, {
+        ...buildGroupMembershipReviewDraft(item),
+        entryId: "entry-5678",
+        memberRole: "PARENT"
+      })
+    ).toEqual({
+      hasChanges: true,
+      payloadOverride: {
+        action: "add",
+        group_ref: {
+          create_group_proposal_id: "proposal-group-1234"
+        },
+        entry_ref: {
+          entry_id: "entry-5678"
+        },
+        child_group_ref: null,
+        member_role: "PARENT"
       },
       validationError: null
     });

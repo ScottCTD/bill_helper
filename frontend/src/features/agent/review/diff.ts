@@ -47,7 +47,14 @@ const ENTRY_FIELD_ORDER: Record<string, number> = {
   from_entity: 5,
   to_entity: 6,
   tags: 7,
-  markdown_notes: 8
+  markdown_notes: 8,
+  group_type: 9,
+  parent_group: 10,
+  parent_group_ref: 11,
+  member_kind: 12,
+  member: 13,
+  member_ref: 14,
+  member_role: 15
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -55,7 +62,13 @@ const FIELD_LABELS: Record<string, string> = {
   currency_code: "currency",
   from_entity: "from",
   to_entity: "to",
-  markdown_notes: "notes"
+  markdown_notes: "notes",
+  group_type: "group type",
+  parent_group: "parent group",
+  parent_group_ref: "parent group ref",
+  member_kind: "member type",
+  member_ref: "member ref",
+  member_role: "split role"
 };
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -384,6 +397,108 @@ function buildDeleteDiff(
   });
 }
 
+function buildRecordUpdateDiff(
+  before: JsonRecord,
+  after: JsonRecord,
+  metadata: DiffMetadata[],
+  options: { reviewerEdited?: boolean } = {}
+): ProposalDiff {
+  const { reviewerEdited = false } = options;
+  const lines = buildDeltaLines(before, after);
+  return withComputedStats({
+    mode: "update",
+    title: "Changed fields",
+    lines,
+    metadata,
+    note:
+      lines.length === 0
+        ? "Patch did not change any visible fields."
+        : reviewerEdited
+          ? "Preview reflects reviewer-edited payload."
+          : undefined
+  });
+}
+
+function shortProposalId(value: string): string {
+  return value.slice(0, 8);
+}
+
+function referenceDisplayValue(record: JsonRecord, options: { idKey: string; proposalKey: string }): string {
+  const { idKey, proposalKey } = options;
+  const directId = record[idKey];
+  if (typeof directId === "string" && directId.trim()) {
+    return directId;
+  }
+  const proposalId = record[proposalKey];
+  if (typeof proposalId === "string" && proposalId.trim()) {
+    return `pending:${shortProposalId(proposalId)}`;
+  }
+  return "-";
+}
+
+function previewName(preview: JsonRecord, fallback: string): string {
+  const name = preview.name;
+  return typeof name === "string" && name.trim() ? name : fallback;
+}
+
+function buildGroupRecord(payload: JsonRecord): JsonRecord {
+  return {
+    name: typeof payload.name === "string" ? payload.name : "",
+    group_type: typeof payload.group_type === "string" ? payload.group_type : "BUNDLE"
+  };
+}
+
+function buildUpdateGroupBeforeRecord(payload: JsonRecord): JsonRecord {
+  const current = asRecord(payload.current);
+  const target = asRecord(payload.target);
+  return {
+    name: typeof current.name === "string" ? current.name : typeof target.name === "string" ? target.name : "",
+    group_type:
+      typeof current.group_type === "string"
+        ? current.group_type
+        : typeof target.group_type === "string"
+          ? target.group_type
+          : "BUNDLE"
+  };
+}
+
+function buildUpdateGroupAfterRecord(payload: JsonRecord, reviewerOverride?: JsonRecord): { before: JsonRecord; after: JsonRecord; reviewerEdited: boolean } {
+  const before = buildUpdateGroupBeforeRecord(payload);
+  const effectivePatch =
+    reviewerOverride && !jsonRecordsAreEquivalent(payload, reviewerOverride) ? asRecord(reviewerOverride.patch) : asRecord(payload.patch);
+  return {
+    before,
+    after: {
+      ...before,
+      ...(typeof effectivePatch.name === "string" ? { name: effectivePatch.name } : {})
+    },
+    reviewerEdited: Boolean(reviewerOverride && !jsonRecordsAreEquivalent(payload, reviewerOverride))
+  };
+}
+
+function buildGroupMemberRecord(payload: JsonRecord): JsonRecord {
+  const groupRef = asRecord(payload.group_ref);
+  const entryRef = asRecord(payload.entry_ref);
+  const childGroupRef = asRecord(payload.child_group_ref);
+  const groupPreview = asRecord(payload.group_preview);
+  const memberPreview = asRecord(payload.member_preview);
+  const isEntryMember = Object.keys(entryRef).length > 0;
+  const memberRef = isEntryMember
+    ? referenceDisplayValue(entryRef, { idKey: "entry_id", proposalKey: "create_entry_proposal_id" })
+    : referenceDisplayValue(childGroupRef, { idKey: "group_id", proposalKey: "create_group_proposal_id" });
+  const record: JsonRecord = {
+    parent_group: previewName(groupPreview, "Unknown group"),
+    parent_group_ref: referenceDisplayValue(groupRef, { idKey: "group_id", proposalKey: "create_group_proposal_id" }),
+    member_kind: isEntryMember ? "entry" : "group",
+    member: previewName(memberPreview, isEntryMember ? "Unknown entry" : "Unknown group"),
+    member_ref: memberRef
+  };
+  if (typeof payload.member_role === "string" && payload.member_role.trim()) {
+    record.member_role = payload.member_role;
+  }
+  return record;
+}
+
 export function jsonRecordsAreEquivalent(left: JsonRecord, right: JsonRecord): boolean {
   const normalizedLeft = normalizeForComparison(left);
   const normalizedRight = normalizeForComparison(right);
@@ -435,12 +550,26 @@ export function buildProposalDiff(
     case "create_tag":
     case "create_entity":
       return buildCreateDiff(payload, metadata, reviewerOverride);
+    case "create_group": {
+      pushMetadata(metadata, "Group type", (reviewerOverride?.group_type as unknown) ?? payload.group_type);
+      return buildCreateDiff(buildGroupRecord(payload), metadata, reviewerOverride ? buildGroupRecord(reviewerOverride) : undefined);
+    }
     case "update_entry":
     case "update_tag":
     case "update_entity":
       return buildUpdateDiff(payload, metadata, reviewerOverride);
+    case "update_group": {
+      pushMetadata(metadata, "Group ID", payload.group_id);
+      pushMetadata(metadata, "Group type", asRecord(payload.current).group_type);
+      const { before, after, reviewerEdited } = buildUpdateGroupAfterRecord(payload, reviewerOverride);
+      return buildRecordUpdateDiff(before, after, metadata, { reviewerEdited });
+    }
     case "delete_entry":
       return buildDeleteDiff(payload, metadata, selector);
+    case "delete_group": {
+      pushMetadata(metadata, "Group ID", payload.group_id);
+      return buildDeleteDiff(payload, metadata, buildUpdateGroupBeforeRecord(payload));
+    }
     case "delete_tag":
     case "delete_entity": {
       const identity: JsonRecord = {};
@@ -448,6 +577,29 @@ export function buildProposalDiff(
         identity.name = payload.name;
       }
       return buildDeleteDiff(payload, metadata, identity);
+    }
+    case "create_group_member": {
+      const effectiveRecord =
+        reviewerOverride && !jsonRecordsAreEquivalent(payload, reviewerOverride)
+          ? buildGroupMemberRecord(reviewerOverride)
+          : undefined;
+      const record = buildGroupMemberRecord(payload);
+      const parentGroup = asRecord(payload.group_preview);
+      const memberPreview = asRecord(payload.member_preview);
+      pushMetadata(metadata, "Parent group", previewName(parentGroup, "Unknown group"));
+      pushMetadata(metadata, "Member", previewName(memberPreview, "Unknown member"));
+      pushMetadata(metadata, "Group type", parentGroup.group_type);
+      if (typeof payload.member_role === "string") {
+        pushMetadata(metadata, "Split role", payload.member_role);
+      }
+      return buildCreateDiff(record, metadata, effectiveRecord);
+    }
+    case "delete_group_member": {
+      const parentGroup = asRecord(payload.group_preview);
+      const memberPreview = asRecord(payload.member_preview);
+      pushMetadata(metadata, "Parent group", previewName(parentGroup, "Unknown group"));
+      pushMetadata(metadata, "Member", previewName(memberPreview, "Unknown member"));
+      return buildDeleteDiff(payload, metadata, buildGroupMemberRecord(payload));
     }
     default:
       return withComputedStats({

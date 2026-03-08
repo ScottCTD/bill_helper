@@ -133,14 +133,20 @@ export function summarizeRunChangeTypes(changeItems: AgentChangeItem[]): {
   entryCount: number;
   tagCount: number;
   entityCount: number;
+  groupCount: number;
 } {
   let entryCount = 0;
   let tagCount = 0;
   let entityCount = 0;
+  let groupCount = 0;
 
   changeItems.forEach((item) => {
     if (item.change_type.endsWith("_entry")) {
       entryCount += 1;
+      return;
+    }
+    if (item.change_type.includes("group")) {
+      groupCount += 1;
       return;
     }
     if (item.change_type.endsWith("_tag")) {
@@ -152,7 +158,7 @@ export function summarizeRunChangeTypes(changeItems: AgentChangeItem[]): {
     }
   });
 
-  return { entryCount, tagCount, entityCount };
+  return { entryCount, tagCount, entityCount, groupCount };
 }
 
 function sortRunEvents(events: AgentRunEvent[]): AgentRunEvent[] {

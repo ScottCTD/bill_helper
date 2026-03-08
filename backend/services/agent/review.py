@@ -205,6 +205,62 @@ def _validate_entry_dependencies_ready_for_approval(
         )
 
 
+def _group_dependency_proposal_ids(payload: dict[str, Any]) -> list[str]:
+    dependency_ids: list[str] = []
+    for key in ("group_ref", "entry_ref", "child_group_ref"):
+        value = payload.get(key)
+        if not isinstance(value, dict):
+            continue
+        for proposal_key in ("create_group_proposal_id", "create_entry_proposal_id"):
+            raw = value.get(proposal_key)
+            if isinstance(raw, str) and raw:
+                dependency_ids.append(raw)
+    return dependency_ids
+
+
+def _validate_group_dependencies_ready_for_approval(
+    db: Session,
+    *,
+    item: AgentChangeItem,
+    payload: dict[str, Any],
+) -> None:
+    if item.change_type != AgentChangeType.CREATE_GROUP_MEMBER:
+        return
+
+    dependency_ids = _group_dependency_proposal_ids(payload)
+    if not dependency_ids:
+        return
+
+    pending_blockers: list[str] = []
+    failed_blockers: list[str] = []
+    missing_blockers: list[str] = []
+    for dependency_id in dependency_ids:
+        dependency_item = _get_change_item_or_none(db, dependency_id)
+        if dependency_item is None:
+            missing_blockers.append(dependency_id)
+            continue
+        if dependency_item.status in {AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED}:
+            pending_blockers.append(dependency_id[:8])
+            continue
+        if dependency_item.status in {AgentChangeStatus.REJECTED, AgentChangeStatus.APPLY_FAILED}:
+            failed_blockers.append(f"{dependency_id[:8]}:{dependency_item.status.value}")
+
+    if pending_blockers:
+        raise ValueError(
+            "Group proposal depends on pending create proposals. Approve and apply those proposals first: "
+            + ", ".join(sorted(pending_blockers))
+        )
+    if failed_blockers:
+        raise ValueError(
+            "Group proposal depends on rejected or failed create proposals and cannot be approved until edited or removed: "
+            + ", ".join(sorted(failed_blockers))
+        )
+    if missing_blockers:
+        raise ValueError(
+            "Group proposal references missing proposal dependencies: " + ", ".join(sorted(missing_blockers))
+        )
+
+
 def approve_change_item(
     db: Session,
     *,
@@ -226,9 +282,12 @@ def approve_change_item(
         AgentChangeType.UPDATE_ENTITY,
         AgentChangeType.CREATE_ENTRY,
         AgentChangeType.UPDATE_ENTRY,
+        AgentChangeType.CREATE_GROUP,
+        AgentChangeType.UPDATE_GROUP,
+        AgentChangeType.CREATE_GROUP_MEMBER,
     }:
         raise ValueError(
-            "payload_override is only supported for create/update entry, tag, and entity items"
+            "payload_override is only supported for editable create/update entry, tag, entity, and group items"
         )
 
     payload = payload_override if payload_override is not None else item.payload_json
@@ -239,6 +298,7 @@ def approve_change_item(
             override_note = f"payload_override: {diff_summary}"
     combined_note = _combine_notes(note, override_note)
     _validate_entry_dependencies_ready_for_approval(db, item=item, payload=payload)
+    _validate_group_dependencies_ready_for_approval(db, item=item, payload=payload)
 
     approval_action = AgentReviewAction(
         change_item_id=item.id,

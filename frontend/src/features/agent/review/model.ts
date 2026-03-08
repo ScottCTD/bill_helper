@@ -7,18 +7,42 @@ export interface ThreadReviewItem {
   runIndex: number;
 }
 
+export type ProposalDomain = "entry" | "entity" | "tag" | "group";
+
 type JsonRecord = Record<string, unknown>;
 
 const CHANGE_TYPE_LABEL: Record<AgentChangeType, string> = {
   create_entry: "Create Entry",
   update_entry: "Update Entry",
   delete_entry: "Delete Entry",
+  create_group: "Create Group",
+  update_group: "Update Group",
+  delete_group: "Delete Group",
+  create_group_member: "Add Group Member",
+  delete_group_member: "Remove Group Member",
   create_tag: "Create Tag",
   update_tag: "Update Tag",
   delete_tag: "Delete Tag",
   create_entity: "Create Entity",
   update_entity: "Update Entity",
   delete_entity: "Delete Entity"
+};
+
+const CHANGE_TYPE_DOMAIN: Record<AgentChangeType, ProposalDomain> = {
+  create_entry: "entry",
+  update_entry: "entry",
+  delete_entry: "entry",
+  create_group: "group",
+  update_group: "group",
+  delete_group: "group",
+  create_group_member: "group",
+  delete_group_member: "group",
+  create_tag: "tag",
+  update_tag: "tag",
+  delete_tag: "tag",
+  create_entity: "entity",
+  update_entity: "entity",
+  delete_entity: "entity"
 };
 
 function asRecord(value: unknown): JsonRecord {
@@ -46,6 +70,30 @@ function itemSummaryFromPayload(changeType: AgentChangeType, payload: JsonRecord
     case "delete_tag": {
       const name = typeof payload.name === "string" ? payload.name : "Untitled";
       return `${CHANGE_TYPE_LABEL[changeType]}: ${name}`;
+    }
+    case "create_group":
+    case "delete_group": {
+      const target = asRecord(payload.target);
+      const name =
+        typeof payload.name === "string"
+          ? payload.name
+          : typeof target.name === "string"
+            ? target.name
+            : "Untitled";
+      return `${CHANGE_TYPE_LABEL[changeType]}: ${name}`;
+    }
+    case "update_group": {
+      const current = asRecord(payload.current);
+      const name = typeof current.name === "string" ? current.name : "Untitled";
+      return `Update Group: ${name}`;
+    }
+    case "create_group_member":
+    case "delete_group_member": {
+      const groupPreview = asRecord(payload.group_preview);
+      const memberPreview = asRecord(payload.member_preview);
+      const groupName = typeof groupPreview.name === "string" ? groupPreview.name : "Group";
+      const memberName = typeof memberPreview.name === "string" ? memberPreview.name : "Member";
+      return `${CHANGE_TYPE_LABEL[changeType]}: ${groupName} -> ${memberName}`;
     }
     case "update_tag": {
       const currentName = typeof payload.name === "string" ? payload.name : "Untitled";
@@ -100,4 +148,8 @@ export function shortId(value: string): string {
 
 export function changeTypeLabel(changeType: AgentChangeType): string {
   return CHANGE_TYPE_LABEL[changeType];
+}
+
+export function proposalDomain(changeType: AgentChangeType): ProposalDomain {
+  return CHANGE_TYPE_DOMAIN[changeType];
 }

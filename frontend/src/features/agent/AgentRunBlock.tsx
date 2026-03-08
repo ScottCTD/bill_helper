@@ -349,6 +349,7 @@ export function AgentRunBlock({
           </p>
           <div className="agent-run-change-chips">
             <span className="agent-run-change-chip">Entry x{typeSummary.entryCount}</span>
+            <span className="agent-run-change-chip">Group x{typeSummary.groupCount}</span>
             <span className="agent-run-change-chip">Tag x{typeSummary.tagCount}</span>
             <span className="agent-run-change-chip">Entity x{typeSummary.entityCount}</span>
           </div>

@@ -616,6 +616,16 @@ def test_system_prompt_guides_pending_proposal_revisions_and_removals():
     assert prompt.index(inspect_phrase) < prompt.index(revise_phrase) < prompt.index(remove_phrase)
 
 
+def test_system_prompt_includes_group_proposal_workflow_rules():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    assert "Before mutating an existing group, use list_groups" in prompt
+    assert "Before proposing group membership changes involving entries, use list_entries" in prompt
+    assert "pending create_group and create_entry proposal ids" in prompt
+    assert "dependencies must be approved and applied" in prompt
+
+
 def test_system_prompt_includes_error_recovery_and_core_identity():
     from backend.services.agent.prompts import system_prompt
 
@@ -894,10 +904,15 @@ def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
     assert "list_accounts" not in names
     assert "search_entries" not in names
     assert "list_entries" in names
+    assert "list_groups" in names
     assert "list_proposals" in names
     assert "add_user_memory" in names
     assert "rename_thread" in names
     assert "send_intermediate_update" in names
+    assert "propose_create_group" in names
+    assert "propose_update_group" in names
+    assert "propose_delete_group" in names
+    assert "propose_update_group_membership" in names
     assert "propose_update_entry" in names
     assert "propose_delete_entry" in names
     assert "propose_update_tag" in names
@@ -1085,6 +1100,24 @@ def test_entry_tool_descriptions_prefer_entry_id_aliases():
     assert "entry_id alias" in list_description
     assert "Prefer entry_id from list_entries" in update_description
     assert "Prefer entry_id from list_entries" in delete_description
+
+
+def test_group_tool_descriptions_define_group_lookup_and_membership_dependencies():
+    from backend.services.agent.tools import build_openai_tool_schemas
+
+    tool_by_name = {
+        tool["function"]["name"]: tool["function"]
+        for tool in build_openai_tool_schemas()
+    }
+
+    list_description = str(tool_by_name["list_groups"]["description"])
+    membership_description = str(tool_by_name["propose_update_group_membership"]["description"])
+
+    assert "group_id alias" in list_description
+    assert "detail mode" in list_description
+    assert "pending create_group proposal" in membership_description
+    assert "pending create_entry proposal" in membership_description
+    assert "member_role is required for SPLIT-group adds" in membership_description
 
 
 def test_entry_tool_schemas_inline_local_refs():
@@ -3569,6 +3602,130 @@ def test_list_proposals_tool_filters_by_status_and_type_in_current_thread(client
     assert proposal["review_actions"][0]["action"] == "reject"
 
 
+def test_list_groups_tool_supports_list_and_detail_modes(client, monkeypatch):
+    create_response = client.post(
+        "/api/v1/groups",
+        json={"name": "Monthly Bills", "group_type": "BUNDLE"},
+    )
+    create_response.raise_for_status()
+    group = create_response.json()
+    group_short_id = group["id"][:8]
+
+    def list_groups_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Listed groups."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_list_groups",
+                    "type": "function",
+                    "function": {
+                        "name": "list_groups",
+                        "arguments": json.dumps({"name": "monthly"}),
+                    },
+                }
+            ],
+        }
+
+    def get_group_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Loaded group detail."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_get_group",
+                    "type": "function",
+                    "function": {
+                        "name": "list_groups",
+                        "arguments": json.dumps({"group_id": group_short_id}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, list_groups_model)
+    thread = create_thread(client)
+    list_run = send_message(client, thread["id"], "List matching groups")
+
+    assert list_run["status"] == "completed"
+    list_output = list_run["tool_calls"][0]["output_json"]
+    assert list_output["status"] == "OK"
+    assert list_output["returned_count"] == 1
+    assert list_output["groups"][0]["group_id"] == group_short_id
+    assert list_output["groups"][0]["name"] == "Monthly Bills"
+
+    patch_model(monkeypatch, get_group_model)
+    detail_run = send_message(client, thread["id"], "Show that group")
+
+    assert detail_run["status"] == "completed"
+    detail_output = detail_run["tool_calls"][0]["output_json"]
+    assert detail_output["status"] == "OK"
+    assert detail_output["group"]["group_id"] == group_short_id
+    assert detail_output["group"]["name"] == "Monthly Bills"
+    assert detail_output["group"]["derived_graph"]["node_count"] == 0
+
+
+def test_list_proposals_tool_can_filter_group_domain(client, monkeypatch):
+    def propose_group_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Group proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_group",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_group",
+                        "arguments": json.dumps({"name": "Rent Bundle", "group_type": "BUNDLE"}),
+                    },
+                }
+            ],
+        }
+
+    def list_groups_proposals_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_list_group_proposals",
+                    "type": "function",
+                    "function": {
+                        "name": "list_proposals",
+                        "arguments": json.dumps({"proposal_type": "group", "proposal_status": "pending"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_group_model)
+    thread = create_thread(client)
+    create_run = send_message(client, thread["id"], "Create a new group proposal")
+    created_item = create_run["change_items"][0]
+    assert created_item["change_type"] == "create_group"
+
+    patch_model(monkeypatch, list_groups_proposals_model)
+    list_run = send_message(client, thread["id"], "Show pending group proposals")
+
+    assert list_run["status"] == "completed"
+    output = list_run["tool_calls"][0]["output_json"]
+    assert output["status"] == "OK"
+    assert output["returned_count"] == 1
+    proposal = output["proposals"][0]
+    assert proposal["proposal_id"] == created_item["id"]
+    assert proposal["proposal_type"] == "group"
+    assert proposal["change_type"] == "create_group"
+    assert proposal["proposal_tool_name"] == "propose_create_group"
+
+
 def test_list_proposals_tool_can_lookup_single_proposal_by_short_id(client, monkeypatch):
     def propose_tag_model(messages):
         if messages[-1]["role"] == "tool":
@@ -3649,6 +3806,219 @@ def test_list_proposals_tool_can_lookup_single_proposal_by_short_id(client, monk
     assert proposal["review_actions"][0]["action"] == "approve"
     assert proposal["review_actions"][0]["note"] == "Looks good"
     assert proposal["review_actions"][0]["actor"]
+
+
+def test_group_membership_approval_blocks_pending_and_rejected_dependencies(client, monkeypatch):
+    create_entity(client, "Main Checking", "account")
+    create_entity(client, "Landlord", "merchant")
+
+    thread = create_thread(client)
+
+    def propose_group_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Group proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_group",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_group",
+                        "arguments": json.dumps({"name": "Rent Bundle", "group_type": "BUNDLE"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_group_model)
+    group_run = send_message(client, thread["id"], "Create a group proposal")
+    group_item = group_run["change_items"][0]
+
+    def propose_entry_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Entry proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entry",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entry",
+                        "arguments": json.dumps(
+                            {
+                                "kind": "EXPENSE",
+                                "date": "2026-03-01",
+                                "name": "March Rent",
+                                "amount_minor": 250000,
+                                "currency_code": "USD",
+                                "from_entity": "Main Checking",
+                                "to_entity": "Landlord",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_entry_model)
+    entry_run = send_message(client, thread["id"], "Create an entry proposal")
+    entry_item = entry_run["change_items"][0]
+
+    def propose_membership_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Membership proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_membership",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_group_membership",
+                        "arguments": json.dumps(
+                            {
+                                "action": "add",
+                                "group_ref": {"create_group_proposal_id": group_item["id"]},
+                                "entry_ref": {"create_entry_proposal_id": entry_item["id"]},
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_membership_model)
+    membership_run = send_message(client, thread["id"], "Attach the pending entry to the pending group")
+    membership_item = membership_run["change_items"][0]
+
+    pending_approve = client.post(f"/api/v1/agent/change-items/{membership_item['id']}/approve", json={})
+    assert pending_approve.status_code == 422
+    assert "pending create proposals" in pending_approve.json()["detail"]
+
+    approve_group = client.post(f"/api/v1/agent/change-items/{group_item['id']}/approve", json={})
+    approve_group.raise_for_status()
+    reject_entry = client.post(
+        f"/api/v1/agent/change-items/{entry_item['id']}/reject",
+        json={"note": "Reject dependency"},
+    )
+    reject_entry.raise_for_status()
+
+    failed_approve = client.post(f"/api/v1/agent/change-items/{membership_item['id']}/approve", json={})
+    assert failed_approve.status_code == 422
+    assert "rejected or failed create proposals" in failed_approve.json()["detail"]
+
+
+def test_group_membership_apply_resolves_pending_group_and_entry_references(client, monkeypatch):
+    create_entity(client, "Main Checking", "account")
+    create_entity(client, "Landlord", "merchant")
+
+    thread = create_thread(client)
+
+    def propose_group_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Group proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_group",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_group",
+                        "arguments": json.dumps({"name": "Rent Bundle", "group_type": "BUNDLE"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_group_model)
+    group_run = send_message(client, thread["id"], "Create a group proposal")
+    group_item = group_run["change_items"][0]
+
+    def propose_entry_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Entry proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entry",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entry",
+                        "arguments": json.dumps(
+                            {
+                                "kind": "EXPENSE",
+                                "date": "2026-03-01",
+                                "name": "March Rent",
+                                "amount_minor": 250000,
+                                "currency_code": "USD",
+                                "from_entity": "Main Checking",
+                                "to_entity": "Landlord",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_entry_model)
+    entry_run = send_message(client, thread["id"], "Create an entry proposal")
+    entry_item = entry_run["change_items"][0]
+
+    def propose_membership_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Membership proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_membership",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_group_membership",
+                        "arguments": json.dumps(
+                            {
+                                "action": "add",
+                                "group_ref": {"create_group_proposal_id": group_item["id"]},
+                                "entry_ref": {"create_entry_proposal_id": entry_item["id"]},
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_membership_model)
+    membership_run = send_message(client, thread["id"], "Attach the pending entry to the pending group")
+    membership_item = membership_run["change_items"][0]
+
+    approved_group = client.post(f"/api/v1/agent/change-items/{group_item['id']}/approve", json={})
+    approved_group.raise_for_status()
+    approved_entry = client.post(f"/api/v1/agent/change-items/{entry_item['id']}/approve", json={})
+    approved_entry.raise_for_status()
+    approved_membership = client.post(f"/api/v1/agent/change-items/{membership_item['id']}/approve", json={})
+    approved_membership.raise_for_status()
+
+    approved_payload = approved_membership.json()
+    assert approved_payload["status"] == "APPLIED"
+    assert approved_payload["applied_resource_type"] == "group_membership"
+    assert approved_payload["applied_resource_id"]
+
+    group_id = approved_group.json()["applied_resource_id"]
+    detail_response = client.get(f"/api/v1/groups/{group_id}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    assert detail["direct_member_count"] == 1
+    assert detail["descendant_entry_count"] == 1
 
 
 def test_create_entry_uses_default_currency_when_omitted(client, monkeypatch):

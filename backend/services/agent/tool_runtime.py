@@ -12,16 +12,21 @@ from backend.services.agent.tool_args import (
     INTERMEDIATE_UPDATE_TOOL_NAME,
     ListEntitiesArgs,
     ListEntriesArgs,
+    ListGroupsArgs,
     ListProposalsArgs,
     ListTagsArgs,
     ProposeCreateEntityArgs,
     ProposeCreateEntryArgs,
+    ProposeCreateGroupArgs,
     ProposeCreateTagArgs,
     ProposeDeleteEntityArgs,
     ProposeDeleteEntryArgs,
+    ProposeDeleteGroupArgs,
     ProposeDeleteTagArgs,
     ProposeUpdateEntityArgs,
     ProposeUpdateEntryArgs,
+    ProposeUpdateGroupArgs,
+    ProposeUpdateGroupMembershipArgs,
     ProposeUpdateTagArgs,
     RenameThreadArgs,
     RemovePendingProposalArgs,
@@ -32,12 +37,16 @@ from backend.services.agent.tool_handlers_memory import add_user_memory
 from backend.services.agent.tool_handlers_propose import (
     propose_create_entity,
     propose_create_entry,
+    propose_create_group,
     propose_create_tag,
     propose_delete_entity,
     propose_delete_entry,
+    propose_delete_group,
     propose_delete_tag,
     propose_update_entity,
     propose_update_entry,
+    propose_update_group,
+    propose_update_group_membership,
     propose_update_tag,
     remove_pending_proposal,
     update_pending_proposal,
@@ -46,6 +55,7 @@ from backend.services.agent.tool_handlers_read import (
     error_result,
     list_entities,
     list_entries,
+    list_groups,
     list_proposals,
     list_tags,
     send_intermediate_update,
@@ -133,6 +143,17 @@ TOOLS: dict[str, AgentToolDefinition] = {
         ),
         args_model=ListEntitiesArgs,
         handler=list_entities,
+    ),
+    "list_groups": AgentToolDefinition(
+        name="list_groups",
+        description=(
+            "List/query entry groups by name or group_type, or inspect one group in detail with group_id. "
+            "In list mode, each returned row includes a reusable group_id alias. "
+            "In detail mode, provide only group_id and this tool returns the selected group's direct members "
+            "plus derived graph metadata. This tool is read-only."
+        ),
+        args_model=ListGroupsArgs,
+        handler=list_groups,
     ),
     "list_proposals": AgentToolDefinition(
         name="list_proposals",
@@ -243,6 +264,51 @@ TOOLS: dict[str, AgentToolDefinition] = {
         ),
         args_model=ProposeCreateEntryArgs,
         handler=propose_create_entry,
+    ),
+    "propose_create_group": AgentToolDefinition(
+        name="propose_create_group",
+        description=(
+            "Create a review-gated proposal to add a new named group. "
+            "Use this before proposing membership changes for a new group. "
+            "This does not mutate groups immediately; it creates a pending review item only."
+        ),
+        args_model=ProposeCreateGroupArgs,
+        handler=propose_create_group,
+    ),
+    "propose_update_group": AgentToolDefinition(
+        name="propose_update_group",
+        description=(
+            "Create a review-gated proposal to rename an existing group. "
+            "Prefer group_id from list_groups. This does not mutate groups immediately; "
+            "it creates a pending review item only."
+        ),
+        args_model=ProposeUpdateGroupArgs,
+        handler=propose_update_group,
+    ),
+    "propose_delete_group": AgentToolDefinition(
+        name="propose_delete_group",
+        description=(
+            "Create a review-gated proposal to delete an existing group. "
+            "Prefer group_id from list_groups. Delete succeeds only when the group has no direct members "
+            "and is not attached as a child group. This does not mutate groups immediately; "
+            "it creates a pending review item only."
+        ),
+        args_model=ProposeDeleteGroupArgs,
+        handler=propose_delete_group,
+    ),
+    "propose_update_group_membership": AgentToolDefinition(
+        name="propose_update_group_membership",
+        description=(
+            "Create a review-gated proposal to add or remove one direct group member. "
+            "Use action='add' or action='remove'. Provide exactly one member target: entry_ref or child_group_ref. "
+            "group_ref points to the parent group and may reference an existing group_id or, for add only, "
+            "a pending create_group proposal in the current thread. entry_ref may reference an existing entry_id "
+            "or, for add only, a pending create_entry proposal in the current thread. "
+            "member_role is required for SPLIT-group adds and rejected otherwise. "
+            "This does not mutate groups immediately; it creates a pending review item only."
+        ),
+        args_model=ProposeUpdateGroupMembershipArgs,
+        handler=propose_update_group_membership,
     ),
     "propose_update_entry": AgentToolDefinition(
         name="propose_update_entry",

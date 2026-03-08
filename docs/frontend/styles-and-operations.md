@@ -71,7 +71,8 @@ Includes:
 
 - no pagination controls in the agent thread or timeline UI yet
 - thread review is the only review entry point; per-run timeline cards do not expose their own review CTA
-- entry/tag/entity edit-before-approve now uses structured review forms, but delete proposals remain read-only confirmation cards
+- entry/tag/entity/group edit-before-approve now uses structured review forms, while delete-group and delete-member proposals remain read-only confirmation cards
+- group add-member review can edit existing resource refs, but pending create-proposal refs stay locked behind dependency chips
 - `Approve All` and `Reject All` are sequential per-item calls
 - entry popup auto-save requires valid required fields
 - entry popup can assign at most one direct group; broader group topology remains managed in the groups workspace

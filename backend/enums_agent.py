@@ -45,6 +45,11 @@ class AgentChangeType(StrEnum):
     CREATE_ENTRY = "create_entry"
     UPDATE_ENTRY = "update_entry"
     DELETE_ENTRY = "delete_entry"
+    CREATE_GROUP = "create_group"
+    UPDATE_GROUP = "update_group"
+    DELETE_GROUP = "delete_group"
+    CREATE_GROUP_MEMBER = "create_group_member"
+    DELETE_GROUP_MEMBER = "delete_group_member"
     CREATE_TAG = "create_tag"
     UPDATE_TAG = "update_tag"
     DELETE_TAG = "delete_tag"
@@ -82,4 +87,3 @@ class AgentChangeStatus(StrEnum):
 class AgentReviewActionType(StrEnum):
     APPROVE = "approve"
     REJECT = "reject"
-
