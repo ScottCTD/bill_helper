@@ -5,33 +5,31 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from backend.auth import RequestPrincipal, get_current_principal
 from backend.database import get_db
 from backend.enums_finance import EntryKind
-from backend.models_finance import Entity, Entry, EntryLink, Tag
+from backend.models_finance import Entity, Entry, EntryGroup, Tag
 from backend.schemas_finance import (
     EntryCreate,
     EntryDetailRead,
     EntryListResponse,
     EntryRead,
     EntryUpdate,
-    LinkCreate,
-    LinkRead,
 )
 from backend.services.access_scope import (
     ensure_principal_can_assign_user,
     entry_owner_filter,
     get_account_for_principal_or_404,
     get_entry_for_principal_or_404,
+    get_group_for_principal_or_404,
     get_user_for_principal_or_404,
 )
 from backend.services.entries import normalize_tag_name, set_entry_tags, soft_delete_entry
 from backend.services.entities import ensure_entity_by_name, normalize_entity_name
-from backend.services.groups import assign_initial_group, recompute_entry_groups
-from backend.services.serializers import entry_to_detail_schema, entry_to_schema, link_to_schema
+from backend.services.groups import entry_group_options, group_tree_options, set_entry_direct_group
+from backend.services.serializers import entry_to_detail_schema, entry_to_schema
 from backend.services.users import ensure_user_by_name, normalize_user_name
 
 router = APIRouter(prefix="/entries", tags=["entries"])
@@ -67,9 +65,21 @@ def _get_entry_or_404(
         principal=principal,
         stmt=select(Entry).options(
             selectinload(Entry.tags),
-            selectinload(Entry.outgoing_links),
-            selectinload(Entry.incoming_links),
+            *entry_group_options(),
         ),
+    )
+
+
+def _get_group_tree_or_404(
+    db: Session,
+    group_id: str,
+    principal: RequestPrincipal,
+) -> EntryGroup:
+    return get_group_for_principal_or_404(
+        db,
+        group_id=group_id,
+        principal=principal,
+        stmt=select(EntryGroup).options(*group_tree_options()),
     )
 
 
@@ -147,6 +157,10 @@ def create_entry(
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_current_principal),
 ) -> EntryRead:
+    target_group = None
+    if payload.direct_group_id is not None:
+        target_group = _get_group_tree_or_404(db, payload.direct_group_id, principal)
+
     _ensure_account_exists(db, payload.account_id, principal)
     from_entity_id, from_entity_name = _resolve_entity_value(
         db,
@@ -191,16 +205,24 @@ def create_entry(
         to_entity=to_entity_name,
         owner=owner_name,
         markdown_body=payload.markdown_body,
-        group_id="",
     )
     db.add(entry)
-    assign_initial_group(db, entry)
+    db.flush()
     set_entry_tags(db, entry, payload.tags)
 
+    try:
+        set_entry_direct_group(
+            db,
+            entry=entry,
+            group=target_group,
+            member_role=payload.direct_group_member_role,
+        )
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     db.commit()
-    db.refresh(entry)
-    db.refresh(entry, attribute_names=["tags"])
-    return entry_to_schema(entry)
+    return entry_to_schema(_get_entry_or_404(db, entry.id, principal))
 
 
 @router.get("", response_model=EntryListResponse)
@@ -234,7 +256,7 @@ def list_entries(
     stmt = (
         select(Entry)
         .where(*conditions)
-        .options(selectinload(Entry.tags))
+        .options(selectinload(Entry.tags), *entry_group_options())
         .order_by(Entry.occurred_at.desc(), Entry.created_at.desc())
     )
     count_stmt = select(func.count(func.distinct(Entry.id))).where(*conditions)
@@ -262,12 +284,7 @@ def get_entry(
     principal: RequestPrincipal = Depends(get_current_principal),
 ) -> EntryDetailRead:
     entry = _get_entry_or_404(db, entry_id, principal)
-
-    links = sorted(
-        [*entry.outgoing_links, *entry.incoming_links],
-        key=lambda link: link.created_at,
-    )
-    return entry_to_detail_schema(entry, links)
+    return entry_to_detail_schema(entry)
 
 
 @router.patch("/{entry_id}", response_model=EntryRead)
@@ -281,6 +298,8 @@ def update_entry(
     update_data = payload.model_dump(exclude_unset=True)
 
     tags = update_data.pop("tags", None)
+    group_value = update_data.pop("direct_group_id", Ellipsis)
+    role_value = update_data.pop("direct_group_member_role", Ellipsis)
     if "account_id" in update_data:
         _ensure_account_exists(db, update_data["account_id"], principal)
 
@@ -317,11 +336,36 @@ def update_entry(
     if tags is not None:
         set_entry_tags(db, entry, tags)
 
+    group_update_requested = group_value is not Ellipsis or role_value is not Ellipsis
+    if group_update_requested:
+        existing_membership = entry.group_membership
+        target_group_id = (
+            existing_membership.group_id if group_value is Ellipsis and existing_membership is not None else None
+        ) if group_value is Ellipsis else group_value
+        target_role = (
+            existing_membership.member_role if role_value is Ellipsis and existing_membership is not None else None
+        ) if role_value is Ellipsis else role_value
+        if target_group_id is None:
+            target_role = None
+
+        target_group = None
+        if target_group_id is not None:
+            target_group = _get_group_tree_or_404(db, target_group_id, principal)
+
+        try:
+            set_entry_direct_group(
+                db,
+                entry=entry,
+                group=target_group,
+                member_role=target_role,
+            )
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     db.add(entry)
     db.commit()
-    db.refresh(entry)
-    db.refresh(entry, attribute_names=["tags"])
-    return entry_to_schema(entry)
+    return entry_to_schema(_get_entry_or_404(db, entry.id, principal))
 
 
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -332,43 +376,4 @@ def delete_entry(
 ) -> None:
     entry = _get_entry_or_404(db, entry_id, principal)
     soft_delete_entry(db, entry)
-    recompute_entry_groups(db)
     db.commit()
-
-
-@router.post("/{entry_id}/links", response_model=LinkRead, status_code=status.HTTP_201_CREATED)
-def create_link(
-    entry_id: str,
-    payload: LinkCreate,
-    db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
-) -> LinkRead:
-    if entry_id == payload.target_entry_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot link entry to itself")
-
-    source_entry = db.scalar(_entry_query(principal).where(Entry.id == entry_id))
-    if source_entry is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source entry not found")
-
-    target_entry = db.scalar(_entry_query(principal).where(Entry.id == payload.target_entry_id))
-    if target_entry is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target entry not found")
-
-    link = EntryLink(
-        source_entry_id=entry_id,
-        target_entry_id=payload.target_entry_id,
-        link_type=payload.link_type,
-        note=payload.note,
-    )
-    db.add(link)
-
-    try:
-        db.flush()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Link already exists") from exc
-
-    recompute_entry_groups(db)
-    db.commit()
-    db.refresh(link)
-    return link_to_schema(link)

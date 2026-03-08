@@ -40,6 +40,7 @@
 - `versions/0023_add_agent_provider_config.py`: adds custom provider configuration fields to runtime settings (`agent_base_url`, `agent_api_key`).
 - `versions/0024_entity_root_accounts.py`: rebuilds accounts as entity-root records by rekeying `accounts.id` to shared `entities.id` values and updating dependent account references.
 - `versions/0025_user_memory_json_list.py`: normalizes persisted runtime user memory into JSON list form for prompt rendering and add-only appends.
+- `versions/0026_entry_groups_v2.py`: replaces link-derived groups with first-class typed groups and membership rows, migrates compatible legacy linked components, and removes `entries.group_id` plus `entry_links`.
 - `versions/0027_add_agent_bulk_concurrency_setting.py`: adds persisted Bulk mode concurrency control to runtime settings (`agent_bulk_max_concurrent_threads`).
 - `versions/__init__.py`: package marker.
 
@@ -51,7 +52,7 @@
 - `db_meta.py`: side-effect-free SQLAlchemy metadata root (`Base`).
 - `database.py`: explicit SQLAlchemy engine/session factories plus cached runtime accessors/dependencies.
 - `enums.py`: compatibility facade for domain enum modules (application code imports `enums_finance.py` / `enums_agent.py` directly).
-- `enums_finance.py`: ledger enums (`EntryKind`, `LinkType`).
+- `enums_finance.py`: ledger enums (`EntryKind`, `GroupType`, `GroupMemberRole`, plus legacy migration-only `LinkType`).
 - `enums_agent.py`: agent run/review/message enums.
 - `models.py`: compatibility facade for ORM contract modules (application code imports `models_finance.py` / `models_agent.py` directly).
 - `models_finance.py`: ledger/account/entity/tag/taxonomy/entry ORM models.
@@ -67,13 +68,12 @@
 
 - `accounts.py`: accounts, account deletion, snapshots, reconciliation endpoints.
 - `users.py`: system-level user list/create/update endpoints.
-- `entries.py`: entry CRUD, filtering, link creation.
+- `entries.py`: entry CRUD, filtering, and direct group-context reads.
 - `entities.py`: entity list/create/update/delete endpoints for entry selectors/properties.
 - `tags.py`: tag list/create/update/delete endpoints for property/tag selectors.
 - `taxonomies.py`: taxonomy/term list and term create/rename endpoints.
 - `currencies.py`: currency catalog placeholder endpoint for selector/property tables.
-- `links.py`: link deletion endpoint.
-- `groups.py`: derived entry-group read models (`GET /groups` summary + `GET /groups/{id}` graph).
+- `groups.py`: first-class group CRUD, membership mutation, and derived direct-member graph reads.
 - `dashboard.py`: monthly analytics endpoint.
 - `agent.py`: append-only agent thread/message/run/review endpoints.
 - `settings.py`: runtime settings read/update endpoints for user overrides with env fallback where applicable and DB-backed list-form `user_memory`.
@@ -87,7 +87,7 @@
 - `tags.py`: tag CRUD helpers, taxonomy cleanup, and random default color generation.
 - `entities.py`: entity normalization, account-backed guards, and preserve-label delete helpers.
 - `users.py`: user normalization, lookup, and current-user helpers.
-- `groups.py`: connected-component recomputation for `group_id`.
+- `groups.py`: group CRUD, membership validation, depth-1 nesting enforcement, and derived graph generation.
 - `finance.py`: reconciliation, CAD dashboard analytics, projections, and chart-ready breakdown aggregations.
 - `crud_policy.py`: shared CRUD validation/conflict policy primitives and standardized error-translation helpers.
 - `serializers.py`: ORM-to-schema mapping helpers.
@@ -115,8 +115,9 @@
 
 - `conftest.py`: test app/client setup with isolated SQLite DB.
 - `agent_test_utils.py`: shared agent test harness helpers (model patching, thread/message flows, SSE parsing, PDF fixture builders).
-- `test_entries.py`: entry/link/group/delete behavior tests.
+- `test_entries.py`: entry/group/delete behavior tests, including typed-group validation and principal scoping.
 - `test_finance.py`: reconciliation and dashboard aggregation tests.
+- `test_migrations_core.py`: migration regression coverage, including legacy link-to-typed-group conversion.
 - `test_taxonomies.py`: taxonomy endpoints and tag/entity category assignment behavior tests.
 - `test_auth_boundaries.py`: app-level principal dependency boundary regression tests.
 - `test_benchmark_seed_workflows.py`: benchmark/seed workflow regression tests.
@@ -144,9 +145,11 @@
 - `MetricCard.tsx`: reusable metric container.
 - `LineChart.tsx`: legacy SVG daily expense chart helper (dashboard now uses Recharts).
 - `GroupGraphView.tsx`: React Flow-based graph rendering for entry groups.
+- `GroupEditorModal.tsx`: create/rename dialog for named typed groups.
+- `GroupMemberEditorModal.tsx`: add-member dialog for entries and child groups.
 - `TagMultiSelect.tsx`: Notion-style chip/dropdown multi-select for entry tags.
 - `DeleteConfirmDialog.tsx`: shared destructive confirmation dialog for account, entity, and tag deletes.
-- `EntryEditorModal.tsx`: shared popup for entry create/edit.
+- `EntryEditorModal.tsx`: shared popup for entry create/edit, including direct-group assignment and split-role selection when needed.
 - `MarkdownBlockEditor.tsx`: BlockNote wrapper for markdown + pasted images.
 - `agent/AgentRunBlock.tsx`: extracted run activity/summary renderer used by `AgentPanel`.
 - `agent/activity.ts`: extracted run/activity derivation helpers for agent timeline state.
@@ -157,13 +160,12 @@
 - `DashboardPage.tsx`: tabbed interactive analytics dashboard (overview/daily/breakdowns/insights) backed by Recharts.
 - `SettingsPage.tsx`: responsive runtime settings workspace (general, persistent agent memory, agent runtime, reliability).
 - `EntriesPage.tsx`: list/filter/delete entries and open popup create/edit editor.
-- `EntryDetailPage.tsx`: manage links/group graph and open popup editor for updates.
-- `GroupsPage.tsx`: derived group workspace (group list, graph detail, and link-driven topology edits).
+- `EntryDetailPage.tsx`: show entry detail, direct-group context, direct-group graph, and popup editing.
+- `GroupsPage.tsx`: first-class group workspace for create/rename/delete plus entry/child-group membership editing.
 - `AccountsPage.tsx`: thin page orchestrator that composes accounts feature modules.
 - `PropertiesPage.tsx`: thin page orchestrator that composes properties feature modules.
 - `AccountsPage.test.tsx`: page-level integration tests for account create, snapshot, and delete flows.
 - `EntriesPage.test.tsx`: page-level integration tests for missing-entity markers in the entries table.
-- `EntryDetailPage.test.tsx`: page-level integration tests for missing-entity markers in entry detail.
 - `PropertiesPage.test.tsx`: page-level integration tests for users, taxonomy, and property delete flows.
 
 #### Feature Modules (`/frontend/src/features`)
@@ -187,10 +189,10 @@
 #### Frontend Lib (`/frontend/src/lib`)
 
 - `types.ts`: shared TS API/data types.
-- `api.ts`: fetch wrappers and API request functions, including account/entity/tag delete helpers.
+- `api.ts`: fetch wrappers and API request functions, including group CRUD and membership helpers.
 - `format.ts`: money formatting and date helpers.
 - `queryKeys.ts`: centralized TanStack Query key factory for all domains.
-- `queryInvalidation.ts`: shared cache invalidation rules after mutations/review actions, including delete-driven property and entry refresh.
+- `queryInvalidation.ts`: shared cache invalidation rules after mutations/review actions, including group-driven entry/group refresh.
 
 ## Supporting Directories
 

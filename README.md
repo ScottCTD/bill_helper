@@ -21,7 +21,7 @@ The goal is an all-in-one place to view and analyze personal finances — a cent
 - Accounts workspace with entity-root account records, optional markdown notes, reconciliation snapshots, and destructive delete flow that preserves ledger history labels
 - Dashboard analytics with interactive charts (daily spend, breakdowns, projections)
 - Taxonomy system for categorizing entities and tags, including delete flows for non-account entities and tags
-- Entry grouping with link-driven graph visualization (React Flow)
+- Entry grouping with first-class typed groups and derived graph visualization (React Flow)
 
 **Developer Experience**
 - SQLite database with Alembic migrations — no external DB required

@@ -1,56 +1,57 @@
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 
 import { DeleteIconButton } from "../components/DeleteIconButton";
+import { GroupEditorModal } from "../components/GroupEditorModal";
 import { GroupGraphView } from "../components/GroupGraphView";
-import { LinkEditorModal } from "../components/LinkEditorModal";
+import { GroupMemberEditorModal } from "../components/GroupMemberEditorModal";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
-import { createLink, deleteLink, getGroup, listEntries, listGroups } from "../lib/api";
-import { formatMinor } from "../lib/format";
-import { invalidateEntryLinkReadModels } from "../lib/queryInvalidation";
+import { addGroupMember, createGroup, deleteGroup, deleteGroupMember, getGroup, listEntries, listGroups, updateGroup } from "../lib/api";
+import { invalidateGroupReadModels } from "../lib/queryInvalidation";
 import { queryKeys } from "../lib/queryKeys";
-import type { GroupEdge, GroupNode, GroupSummary } from "../lib/types";
+import type { GroupMemberRole, GroupNode, GroupSummary } from "../lib/types";
 
 const ENTRY_PICKER_FILTERS = {
   limit: 200,
   offset: 0
 } as const;
 
-function groupSummaryLabel(summary: GroupSummary): string {
-  return summary.latest_entry_name || `Group ${summary.group_id.slice(0, 8)}`;
-}
-
 function groupRangeLabel(summary: GroupSummary): string {
+  if (!summary.first_occurred_at || !summary.last_occurred_at) {
+    return "No entries yet";
+  }
   if (summary.first_occurred_at === summary.last_occurred_at) {
     return summary.first_occurred_at;
   }
   return `${summary.first_occurred_at} to ${summary.last_occurred_at}`;
 }
 
-function kindSymbol(kind: string): string {
-  if (kind === "INCOME") return "+";
-  if (kind === "TRANSFER") return "~";
-  return "-";
-}
-
-function nodeLabel(nodeId: string, nodeById: Map<string, GroupNode>): string {
-  const node = nodeById.get(nodeId);
-  if (!node) {
-    return nodeId.slice(0, 8);
+function nodeMetaLabel(node: GroupNode): string {
+  if (node.node_type === "ENTRY") {
+    return node.occurred_at ?? node.representative_occurred_at ?? "No date";
   }
-  return `${node.name} (${node.id.slice(0, 8)})`;
+  if (node.first_occurred_at && node.last_occurred_at) {
+    if (node.first_occurred_at === node.last_occurred_at) {
+      return node.first_occurred_at;
+    }
+    return `${node.first_occurred_at} to ${node.last_occurred_at}`;
+  }
+  return "No entries yet";
 }
 
 export function GroupsPage() {
   const queryClient = useQueryClient();
   const [groupSearch, setGroupSearch] = useState("");
+  const deferredGroupSearch = useDeferredValue(groupSearch);
   const [selectedGroupId, setSelectedGroupId] = useState("");
-  const [isLinkEditorOpen, setIsLinkEditorOpen] = useState(false);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [isRenameGroupOpen, setIsRenameGroupOpen] = useState(false);
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
 
   const groupsQuery = useQuery({
     queryKey: queryKeys.groups.list,
@@ -76,104 +77,169 @@ export function GroupsPage() {
       return;
     }
 
-    const selectionStillExists = groupsQuery.data.some((group) => group.group_id === selectedGroupId);
+    const selectionStillExists = groupsQuery.data.some((group) => group.id === selectedGroupId);
     if (!selectionStillExists) {
-      setSelectedGroupId(groupsQuery.data[0].group_id);
+      setSelectedGroupId(groupsQuery.data[0].id);
     }
   }, [groupsQuery.data, selectedGroupId]);
 
-  const createLinkMutation = useMutation({
-    mutationFn: (payload: { source_entry_id: string; target_entry_id: string; link_type: string; note?: string }) =>
-      createLink(payload.source_entry_id, {
-        target_entry_id: payload.target_entry_id,
-        link_type: payload.link_type,
-        note: payload.note
-      }),
-    onSuccess: () => {
-      invalidateEntryLinkReadModels(queryClient);
-      setIsLinkEditorOpen(false);
+  const createGroupMutation = useMutation({
+    mutationFn: createGroup,
+    onSuccess: (group) => {
+      invalidateGroupReadModels(queryClient);
+      setSelectedGroupId(group.id);
+      setIsCreateGroupOpen(false);
     }
   });
 
-  const deleteLinkMutation = useMutation({
-    mutationFn: deleteLink,
+  const renameGroupMutation = useMutation({
+    mutationFn: (payload: { name: string }) => updateGroup(selectedGroupId, payload),
     onSuccess: () => {
-      invalidateEntryLinkReadModels(queryClient);
+      invalidateGroupReadModels(queryClient, undefined, selectedGroupId);
+      setIsRenameGroupOpen(false);
+    }
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: (groupId: string) => deleteGroup(groupId),
+    onSuccess: () => {
+      invalidateGroupReadModels(queryClient);
+      setSelectedGroupId("");
+    }
+  });
+
+  const addGroupMemberMutation = useMutation({
+    mutationFn: (payload: { entry_id?: string; child_group_id?: string; member_role?: GroupMemberRole }) =>
+      addGroupMember(selectedGroupId, payload),
+    onSuccess: () => {
+      invalidateGroupReadModels(queryClient, undefined, selectedGroupId);
+      setIsAddMemberOpen(false);
+    }
+  });
+
+  const deleteGroupMemberMutation = useMutation({
+    mutationFn: (membershipId: string) => deleteGroupMember(selectedGroupId, membershipId),
+    onSuccess: () => {
+      invalidateGroupReadModels(queryClient, undefined, selectedGroupId);
     }
   });
 
   const filteredGroups = useMemo(() => {
-    const normalizedSearch = groupSearch.trim().toLowerCase();
+    const normalizedSearch = deferredGroupSearch.trim().toLowerCase();
     if (!normalizedSearch) {
       return groupsQuery.data ?? [];
     }
     return (groupsQuery.data ?? []).filter((group) => {
       return (
-        group.latest_entry_name.toLowerCase().includes(normalizedSearch) ||
-        group.group_id.toLowerCase().includes(normalizedSearch)
+        group.name.toLowerCase().includes(normalizedSearch) ||
+        group.group_type.toLowerCase().includes(normalizedSearch) ||
+        group.id.toLowerCase().includes(normalizedSearch)
       );
     });
-  }, [groupSearch, groupsQuery.data]);
+  }, [deferredGroupSearch, groupsQuery.data]);
 
   const selectedGroupSummary = useMemo(
-    () => groupsQuery.data?.find((group) => group.group_id === selectedGroupId) ?? null,
+    () => groupsQuery.data?.find((group) => group.id === selectedGroupId) ?? null,
     [groupsQuery.data, selectedGroupId]
   );
+  const totalGroupCount = groupsQuery.data?.length ?? 0;
+  const topLevelGroupCount = useMemo(
+    () => (groupsQuery.data ?? []).filter((group) => group.parent_group_id === null).length,
+    [groupsQuery.data]
+  );
+  const childGroupCount = totalGroupCount - topLevelGroupCount;
 
-  const selectedGroupNodeById = useMemo(() => {
-    return new Map((groupGraphQuery.data?.nodes ?? []).map((node) => [node.id, node] as const));
-  }, [groupGraphQuery.data]);
+  const selectedParentGroup = useMemo(() => {
+    if (!selectedGroupSummary?.parent_group_id) {
+      return null;
+    }
+    return groupsQuery.data?.find((group) => group.id === selectedGroupSummary.parent_group_id) ?? null;
+  }, [groupsQuery.data, selectedGroupSummary]);
 
-  const sortedGroupNodes = useMemo(() => {
-    return [...(groupGraphQuery.data?.nodes ?? [])].sort((left, right) => left.occurred_at.localeCompare(right.occurred_at));
-  }, [groupGraphQuery.data]);
-
-  const sortedGroupEdges = useMemo(() => {
-    return [...(groupGraphQuery.data?.edges ?? [])].sort((left, right) => left.id.localeCompare(right.id));
-  }, [groupGraphQuery.data]);
-
-  const entryPickerOptions = useMemo(() => {
+  const entryOptions = useMemo(() => {
     return (entryPickerQuery.data?.items ?? [])
+      .filter((entry) => entry.direct_group === null)
       .map((entry) => ({
         id: entry.id,
-        label: `${entry.occurred_at} - ${entry.name} (${entry.id.slice(0, 8)})`
+        label: `${entry.occurred_at} · ${entry.name}`
       }))
       .sort((left, right) => left.label.localeCompare(right.label));
   }, [entryPickerQuery.data]);
 
-  const currencyByEntryId = useMemo(() => {
-    return new Map((entryPickerQuery.data?.items ?? []).map((entry) => [entry.id, entry.currency_code] as const));
-  }, [entryPickerQuery.data]);
+  const childGroupOptions = useMemo(() => {
+    if (!selectedGroupSummary || selectedGroupSummary.parent_group_id) {
+      return [];
+    }
+    return (groupsQuery.data ?? [])
+      .filter((group) => group.id !== selectedGroupSummary.id)
+      .filter((group) => group.parent_group_id === null)
+      .filter((group) => group.direct_child_group_count === 0)
+      .map((group) => ({
+        id: group.id,
+        label: `${group.name} · ${group.group_type}`
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [groupsQuery.data, selectedGroupSummary]);
 
   const selectedGroupError = groupGraphQuery.isError ? (groupGraphQuery.error as Error).message : null;
   const groupsError = groupsQuery.isError ? (groupsQuery.error as Error).message : null;
-  const entryPickerError = entryPickerQuery.isError ? (entryPickerQuery.error as Error).message : null;
-  const entryPickerIsPartial = (entryPickerQuery.data?.total ?? 0) > (entryPickerQuery.data?.items.length ?? 0);
-  const linkDeleteError = deleteLinkMutation.isError ? (deleteLinkMutation.error as Error).message : null;
+  const createGroupError = createGroupMutation.isError ? (createGroupMutation.error as Error).message : null;
+  const renameGroupError = renameGroupMutation.isError ? (renameGroupMutation.error as Error).message : null;
+  const addMemberError = addGroupMemberMutation.isError ? (addGroupMemberMutation.error as Error).message : null;
+  const deleteGroupError = deleteGroupMutation.isError ? (deleteGroupMutation.error as Error).message : null;
+  const deleteMemberError = deleteGroupMemberMutation.isError ? (deleteGroupMemberMutation.error as Error).message : null;
 
   return (
     <div className="stack-lg">
-      <Card>
-        <CardHeader>
-          <CardTitle>Entry Groups</CardTitle>
-          <CardDescription>
-            Groups are derived graph components. Link operations reshape groups; entries are never deleted by group edits.
-          </CardDescription>
+      <Card className="groups-hero-card">
+        <CardHeader className="groups-hero-header">
+          <div>
+            <CardTitle>Entry Groups</CardTitle>
+            <CardDescription>
+              Organize entries with one direct-group assignment, nested child groups where needed, and graph layouts derived from the selected group type.
+            </CardDescription>
+          </div>
         </CardHeader>
+        <CardContent className="groups-hero-content">
+          <div className="groups-hero-metrics">
+            <div className="groups-metric-card">
+              <span className="groups-metric-label">All groups</span>
+              <strong className="groups-metric-value">{totalGroupCount}</strong>
+              <span className="groups-metric-detail">{topLevelGroupCount} top level</span>
+            </div>
+            <div className="groups-metric-card">
+              <span className="groups-metric-label">Child groups</span>
+              <strong className="groups-metric-value">{childGroupCount}</strong>
+              <span className="groups-metric-detail">Shared parents are blocked</span>
+            </div>
+            <div className="groups-metric-card">
+              <span className="groups-metric-label">Eligible entries</span>
+              <strong className="groups-metric-value">{entryOptions.length}</strong>
+              <span className="groups-metric-detail">Ungrouped direct entries</span>
+            </div>
+          </div>
+          <div className="groups-hero-actions">
+            <Button type="button" size="sm" onClick={() => setIsCreateGroupOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New group
+            </Button>
+          </div>
+        </CardContent>
       </Card>
 
       <div className="groups-layout">
         <Card className="groups-list-card">
-          <CardHeader>
-            <CardTitle>Groups</CardTitle>
-            <CardDescription>
-              Derived from active entry links. Search by latest entry name or group id.
-            </CardDescription>
+          <CardHeader className="groups-sidebar-header">
+            <div>
+              <CardTitle>Browse Groups</CardTitle>
+              <CardDescription>Search by name or type, then switch the detail panel.</CardDescription>
+            </div>
+            <Badge variant="outline">{filteredGroups.length} visible</Badge>
           </CardHeader>
           <CardContent className="groups-list-content">
             <label className="field min-w-0">
               <span>Search groups</span>
-              <Input value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder="e.g. rent or 6c3a..." />
+              <Input value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder="e.g. rent or bundle" />
             </label>
 
             {groupsQuery.isLoading ? <p>Loading groups...</p> : null}
@@ -184,48 +250,111 @@ export function GroupsPage() {
             ) : null}
 
             {filteredGroups.length > 0 ? (
-              <Table className="groups-summary-table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Group</TableHead>
-                    <TableHead>Entries</TableHead>
-                    <TableHead>Links</TableHead>
-                    <TableHead>Date Range</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredGroups.map((group) => (
-                    <TableRow
-                      key={group.group_id}
-                      className={group.group_id === selectedGroupId ? "groups-summary-row-selected" : "groups-summary-row"}
-                      onClick={() => setSelectedGroupId(group.group_id)}
+              <div className="groups-list">
+                {filteredGroups.map((group) => {
+                  const isSelected = group.id === selectedGroupId;
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      className={isSelected ? "groups-list-item groups-list-item-selected" : "groups-list-item"}
+                      onClick={() => setSelectedGroupId(group.id)}
                     >
-                      <TableCell>
-                        <div className="space-y-1">
-                          <p className="font-medium">{groupSummaryLabel(group)}</p>
-                          <p className="groups-summary-id">{group.group_id.slice(0, 8)}</p>
+                      <div className="groups-list-item-header">
+                        <div className="min-w-0">
+                          <p className="groups-list-item-name">{group.name}</p>
+                          <p className="groups-summary-id">{group.id.slice(0, 8)}</p>
                         </div>
-                      </TableCell>
-                      <TableCell className="tabular-nums">{group.entry_count}</TableCell>
-                      <TableCell className="tabular-nums">{group.edge_count}</TableCell>
-                      <TableCell>{groupRangeLabel(group)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        <Badge variant={isSelected ? "secondary" : "outline"}>{group.group_type}</Badge>
+                      </div>
+                      <p className="groups-list-item-range">{groupRangeLabel(group)}</p>
+                      <div className="groups-list-item-stats">
+                        <span>{group.direct_member_count} direct</span>
+                        <span>{group.descendant_entry_count} entries</span>
+                        <span>{group.parent_group_id ? "Child group" : "Top level"}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             ) : null}
           </CardContent>
         </Card>
 
         <div className="stack-lg">
+          <Card className="groups-detail-card">
+            <CardHeader className="groups-detail-header">
+              <div>
+                <div className="groups-detail-title-row">
+                  <CardTitle>{selectedGroupSummary ? selectedGroupSummary.name : "Select a Group"}</CardTitle>
+                  {selectedGroupSummary ? <Badge variant="secondary">{selectedGroupSummary.group_type}</Badge> : null}
+                  {selectedParentGroup ? <Badge variant="outline">Parent: {selectedParentGroup.name}</Badge> : null}
+                </div>
+                <CardDescription>
+                  {selectedGroupSummary
+                    ? "Review the current structure first, then edit direct members below."
+                    : "Pick a group from the left to inspect and manage it."}
+                </CardDescription>
+              </div>
+              {selectedGroupSummary ? (
+                <div className="groups-detail-actions">
+                  <Button type="button" size="sm" variant="outline" onClick={() => setIsRenameGroupOpen(true)}>
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Rename
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => deleteGroupMutation.mutate(selectedGroupSummary.id)}
+                    disabled={deleteGroupMutation.isPending}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
+              ) : null}
+            </CardHeader>
+            <CardContent className="groups-detail-content">
+              {deleteGroupError ? <p className="error">{deleteGroupError}</p> : null}
+              {!selectedGroupSummary ? (
+                <div className="groups-empty-state">
+                  <p className="groups-empty-title">No group selected</p>
+                  <p className="muted">Use the left column to choose a group or create a new one.</p>
+                </div>
+              ) : (
+                <div className="groups-overview-grid">
+                  <div className="groups-overview-card">
+                    <span className="groups-overview-label">Direct members</span>
+                    <strong className="groups-overview-value">{selectedGroupSummary.direct_member_count}</strong>
+                    <span className="groups-overview-detail">
+                      {selectedGroupSummary.direct_entry_count} entries · {selectedGroupSummary.direct_child_group_count} child groups
+                    </span>
+                  </div>
+                  <div className="groups-overview-card">
+                    <span className="groups-overview-label">Descendant entries</span>
+                    <strong className="groups-overview-value">{selectedGroupSummary.descendant_entry_count}</strong>
+                    <span className="groups-overview-detail">Includes entries inside child groups</span>
+                  </div>
+                  <div className="groups-overview-card">
+                    <span className="groups-overview-label">Date range</span>
+                    <strong className="groups-overview-value">{groupRangeLabel(selectedGroupSummary)}</strong>
+                    <span className="groups-overview-detail">
+                      {selectedGroupSummary.parent_group_id ? "Nested in a parent group" : "Top-level group"}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
-            <CardHeader>
-              <CardTitle>{selectedGroupSummary ? groupSummaryLabel(selectedGroupSummary) : "Group Graph"}</CardTitle>
-              <CardDescription>
-                {selectedGroupSummary
-                  ? `${selectedGroupSummary.entry_count} entries, ${selectedGroupSummary.edge_count} links, ${groupRangeLabel(selectedGroupSummary)}`
-                  : "Select a group to inspect topology."}
-              </CardDescription>
+            <CardHeader className="groups-subsection-header">
+              <div>
+                <CardTitle>Derived Graph</CardTitle>
+                <CardDescription>Layout changes by group type. Edges are read-only and derived from direct membership.</CardDescription>
+              </div>
+              {selectedGroupSummary ? <Badge variant="outline">{selectedGroupSummary.group_type} layout</Badge> : null}
             </CardHeader>
             <CardContent>
               {!selectedGroupId ? <p className="muted">Select a group from the list.</p> : null}
@@ -236,135 +365,106 @@ export function GroupsPage() {
           </Card>
 
           <Card>
-            <CardHeader className="section-header">
+            <CardHeader className="groups-subsection-header">
               <div>
-                <CardTitle>Link Operations</CardTitle>
-                <CardDescription>Create or remove links to merge, split, or reshape derived groups.</CardDescription>
+                <CardTitle>Direct Members</CardTitle>
+                <CardDescription>
+                  Manage the top-level members of the selected group. Entry relationships are derived from this list and the group type.
+                </CardDescription>
               </div>
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                aria-label="Add link"
-                onClick={() => {
-                  createLinkMutation.reset();
-                  setIsLinkEditorOpen(true);
-                }}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
+              {selectedGroupSummary ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => setIsAddMemberOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add member
+                </Button>
+              ) : null}
             </CardHeader>
-            <CardContent className="space-y-5">
-              {linkDeleteError ? <p className="error">{linkDeleteError}</p> : null}
-
-              {groupGraphQuery.data ? (
-                <div className="table-shell">
-                  {sortedGroupEdges.length === 0 ? (
-                    <p className="muted">No links in this group.</p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Source</TableHead>
-                          <TableHead>Target</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Note</TableHead>
-                          <TableHead className="icon-action-column">
-                            <span className="sr-only">Actions</span>
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {sortedGroupEdges.map((edge: GroupEdge) => (
-                          <TableRow key={edge.id}>
-                            <TableCell>{nodeLabel(edge.source_entry_id, selectedGroupNodeById)}</TableCell>
-                            <TableCell>{nodeLabel(edge.target_entry_id, selectedGroupNodeById)}</TableCell>
-                            <TableCell>{edge.link_type}</TableCell>
-                            <TableCell>{edge.note || "-"}</TableCell>
-                            <TableCell className="icon-action-column">
-                              <DeleteIconButton
-                                label={`Delete link ${nodeLabel(edge.source_entry_id, selectedGroupNodeById)} to ${nodeLabel(edge.target_entry_id, selectedGroupNodeById)}`}
-                                disabled={deleteLinkMutation.isPending}
-                                onClick={() => deleteLinkMutation.mutate(edge.id)}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
+            <CardContent>
+              {deleteMemberError ? <p className="error">{deleteMemberError}</p> : null}
+              {!groupGraphQuery.data ? (
+                <p className="muted">Select a group to manage its members.</p>
+              ) : groupGraphQuery.data.nodes.length === 0 ? (
+                <div className="groups-empty-state">
+                  <p className="groups-empty-title">No direct members yet</p>
+                  <p className="muted">Add entries or child groups to define this group's structure.</p>
                 </div>
               ) : (
-                <p className="muted">Select a group to manage links.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {groupGraphQuery.data ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Entries in Group</CardTitle>
-                <CardDescription>Members currently connected by the selected graph component.</CardDescription>
-              </CardHeader>
-              <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Kind</TableHead>
-                      <TableHead>Amount</TableHead>
+                      <TableHead>Member</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Context</TableHead>
+                      <TableHead className="icon-action-column">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sortedGroupNodes.map((node) => {
-                      const currencyCode = currencyByEntryId.get(node.id);
-                      const amountText = currencyCode ? formatMinor(node.amount_minor, currencyCode) : `${node.amount_minor} minor units`;
-                      return (
-                        <TableRow key={node.id}>
-                          <TableCell>{node.occurred_at}</TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <p className="font-medium">{node.name}</p>
-                              <p className="groups-summary-id">{node.id.slice(0, 8)}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={`kind-indicator ${node.kind === "INCOME" ? "kind-indicator-income" : node.kind === "TRANSFER" ? "kind-indicator-transfer" : "kind-indicator-expense"}`}
-                            >
-                              {kindSymbol(node.kind)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{amountText}</TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {groupGraphQuery.data.nodes.map((node) => (
+                      <TableRow key={node.membership_id}>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="font-medium">{node.name}</p>
+                            <p className="groups-summary-id">{node.subject_id.slice(0, 8)}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{node.node_type === "ENTRY" ? node.kind ?? "ENTRY" : `${node.group_type} GROUP`}</Badge>
+                        </TableCell>
+                        <TableCell>{node.member_role ? <Badge variant="secondary">{node.member_role}</Badge> : "-"}</TableCell>
+                        <TableCell>{nodeMetaLabel(node)}</TableCell>
+                        <TableCell className="icon-action-column">
+                          <DeleteIconButton
+                            label={`Remove member ${node.name}`}
+                            disabled={deleteGroupMemberMutation.isPending}
+                            onClick={() => deleteGroupMemberMutation.mutate(node.membership_id)}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-          ) : null}
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      <LinkEditorModal
-        isOpen={isLinkEditorOpen}
-        title="Create Link"
-        description="Add a directional relation between two entries. Group membership updates automatically."
-        entryOptions={entryPickerOptions}
-        entryOptionsLoading={entryPickerQuery.isLoading}
-        entryOptionsError={entryPickerError}
-        entryOptionsNotice={entryPickerIsPartial ? "Entry picker is limited to the first 200 entries." : null}
-        isSaving={createLinkMutation.isPending}
-        saveError={createLinkMutation.isError ? (createLinkMutation.error as Error).message : null}
-        onClose={() => {
-          setIsLinkEditorOpen(false);
-          createLinkMutation.reset();
-        }}
-        onSubmit={(payload) => createLinkMutation.mutate(payload)}
+      <GroupEditorModal
+        isOpen={isCreateGroupOpen}
+        mode="create"
+        isSaving={createGroupMutation.isPending}
+        saveError={createGroupError}
+        onClose={() => setIsCreateGroupOpen(false)}
+        onSubmit={(payload) => createGroupMutation.mutate(payload)}
       />
+
+      <GroupEditorModal
+        isOpen={isRenameGroupOpen}
+        mode="rename"
+        initialName={selectedGroupSummary?.name ?? ""}
+        initialGroupType={selectedGroupSummary?.group_type ?? "BUNDLE"}
+        isSaving={renameGroupMutation.isPending}
+        saveError={renameGroupError}
+        onClose={() => setIsRenameGroupOpen(false)}
+        onSubmit={(payload) => renameGroupMutation.mutate({ name: payload.name })}
+      />
+
+      {selectedGroupSummary ? (
+        <GroupMemberEditorModal
+          isOpen={isAddMemberOpen}
+          groupName={selectedGroupSummary.name}
+          groupType={selectedGroupSummary.group_type}
+          entryOptions={entryOptions}
+          groupOptions={childGroupOptions}
+          isSaving={addGroupMemberMutation.isPending}
+          saveError={addMemberError}
+          onClose={() => setIsAddMemberOpen(false)}
+          onSubmit={(payload) => addGroupMemberMutation.mutate(payload)}
+        />
+      ) : null}
     </div>
   );
 }

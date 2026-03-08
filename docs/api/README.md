@@ -4,7 +4,7 @@ Use this directory when the top-level API index is still too broad.
 
 ## Files
 
-- `core-ledger.md`: accounts, snapshots, reconciliation, entries, links, groups, and dashboard.
+- `core-ledger.md`: accounts, snapshots, reconciliation, entries, groups, and dashboard.
 - `catalogs-and-settings.md`: users, entities, tags, taxonomies, currencies, and runtime settings.
 - `agent.md`: agent threads, messages, runs, tool calls, change-item review, and attachments.
 

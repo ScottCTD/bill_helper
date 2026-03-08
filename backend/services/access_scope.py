@@ -5,7 +5,7 @@ from sqlalchemy import Select, or_, select, true
 from sqlalchemy.orm import Session
 
 from backend.auth import RequestPrincipal
-from backend.models_finance import Account, Entry, User
+from backend.models_finance import Account, Entry, EntryGroup, User
 
 
 def is_admin_principal(principal: RequestPrincipal) -> bool:
@@ -22,6 +22,12 @@ def entry_owner_filter(principal: RequestPrincipal):
     if is_admin_principal(principal):
         return true()
     return or_(Entry.owner_user_id == principal.user_id, Entry.owner_user_id.is_(None))
+
+
+def group_owner_filter(principal: RequestPrincipal):
+    if is_admin_principal(principal):
+        return true()
+    return or_(EntryGroup.owner_user_id == principal.user_id, EntryGroup.owner_user_id.is_(None))
 
 
 def get_account_for_principal_or_404(
@@ -73,6 +79,25 @@ def get_user_for_principal_or_404(
     if not is_admin_principal(principal) and user.id != principal.user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
+
+
+def get_group_for_principal_or_404(
+    db: Session,
+    *,
+    group_id: str,
+    principal: RequestPrincipal,
+    stmt: Select[tuple[EntryGroup]] | None = None,
+) -> EntryGroup:
+    query = stmt if stmt is not None else select(EntryGroup)
+    group = db.scalar(
+        query.where(
+            EntryGroup.id == group_id,
+            group_owner_filter(principal),
+        )
+    )
+    if group is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+    return group
 
 
 def ensure_principal_can_assign_user(

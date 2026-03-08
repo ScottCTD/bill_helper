@@ -2,13 +2,14 @@
 
 ## Existing Shared Components
 
-- `EntryEditorModal.tsx`
+- `EntryEditorModal.tsx` (entry fields, direct-group picker, and conditional split-role picker)
 - `SingleSelect.tsx`
 - `CreatableSingleSelect.tsx`
 - `TagMultiSelect.tsx`
 - `MarkdownBlockEditor.tsx`
-- `LinkEditorModal.tsx`
 - `GroupGraphView.tsx`
+- `GroupEditorModal.tsx`
+- `GroupMemberEditorModal.tsx`
 - `MetricCard.tsx`
 - `ui/MarkdownRenderer.tsx`
 - `agent/AgentRunBlock.tsx`
@@ -47,7 +48,16 @@ Includes:
 
 ## Operational Impact
 
-- frontend depends on group read-model APIs (`GET /groups`, `GET /groups/{group_id}`)
+- frontend depends on entry group-context fields (`direct_group`, `group_path`) in entry read models
+- frontend also depends on entry read/write support for `direct_group_member_role` when editing split-group membership from the entry modal
+- frontend depends on group CRUD and graph APIs:
+  - `POST /groups`
+  - `GET /groups`
+  - `GET /groups/{group_id}`
+  - `PATCH /groups/{group_id}`
+  - `DELETE /groups/{group_id}`
+  - `POST /groups/{group_id}/members`
+  - `DELETE /groups/{group_id}/members/{membership_id}`
 - agent send depends on SSE parsing for `text_delta` and persisted `run_event`
 - query keys and invalidation logic are centralized and should be reused
 - page-level integration tests cover accounts and properties orchestration flows
@@ -64,6 +74,9 @@ Includes:
 - entry/tag/entity edit-before-approve now uses structured review forms, but delete proposals remain read-only confirmation cards
 - `Approve All` and `Reject All` are sequential per-item calls
 - entry popup auto-save requires valid required fields
+- entry popup can assign at most one direct group; broader group topology remains managed in the groups workspace
+- group edges are derived only; the UI does not provide manual edge editing
+- child-group nesting is limited to one level by the backend contract
 - streaming bubbles render plain text deltas until the final persisted assistant message is refetched
 - composer paste and drag-drop accept only images and PDFs
 - large bundle warnings can still appear because the editor and charting surfaces are heavy

@@ -11,7 +11,7 @@
 Core ledger models:
 
 - `Account`, `AccountSnapshot`
-- `Entry`, `EntryGroup`, `EntryLink`
+- `Entry`, `EntryGroup`, `EntryGroupMember`
 - `User`, `Entity`
 - `Tag`, `EntryTag`
 - `Taxonomy`, `TaxonomyTerm`, `TaxonomyAssignment`
@@ -36,13 +36,14 @@ Agent models:
 
 `backend/schemas.py` is a compatibility facade over:
 
-- `backend/schemas_finance.py`: accounts, entries, links, groups, dashboard, and settings contracts
+- `backend/schemas_finance.py`: accounts, entries, groups, dashboard, and settings contracts
 - `backend/schemas_agent.py`: thread, message, run, change-item, and review contracts
 
 Important read models:
 
 - `GroupSummaryRead` for `GET /groups`
 - `GroupGraphRead` for `GET /groups/{group_id}`
+- `EntryRead` / `EntryDetailRead` for entry list/detail reads with `direct_group`, `direct_group_member_role`, and `group_path`
 - `RuntimeSettingsRead` for `/settings`
 
 ## Core Services
@@ -94,7 +95,6 @@ Core routers:
 
 - `accounts.py`
 - `entries.py`
-- `links.py`
 - `groups.py`
 - `dashboard.py`
 - `users.py`
@@ -106,9 +106,9 @@ Core routers:
 
 Router behavior:
 
-- account, entry, and link handlers use shared principal-scoped helpers from `backend/services/access_scope.py`
+- account, entry, and group handlers use shared principal-scoped helpers from `backend/services/access_scope.py`
 - non-admin principals are restricted to their own owned resources; admin principal retains cross-user visibility and mutation
-- `groups.py` exposes read-only derived group summaries and group graphs
+- `groups.py` exposes first-class group CRUD, membership mutation, and derived group graphs
 - `dashboard.py` is principal-scoped by visible accounts and entries
 - `accounts.py` includes principal-scoped delete in addition to create, update, snapshots, and reconciliation
 - `entities.py` includes admin-only delete for non-account entities and returns `409` for account-backed roots

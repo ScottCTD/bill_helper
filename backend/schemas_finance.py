@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from backend.enums_finance import EntryKind, LinkType
+from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
 from backend.services.runtime_settings_normalization import (
     normalize_currency_code_or_none,
     normalize_text_or_none,
@@ -181,23 +181,6 @@ class ReconciliationRead(BaseModel):
     delta_minor: int | None = None
 
 
-class LinkCreate(BaseModel):
-    target_entry_id: str
-    link_type: LinkType
-    note: str | None = None
-
-
-class LinkRead(BaseModel):
-    id: str
-    source_entry_id: str
-    target_entry_id: str
-    link_type: LinkType
-    note: str | None = None
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class EntryBase(BaseModel):
     account_id: str | None = None
     kind: EntryKind
@@ -216,6 +199,14 @@ class EntryBase(BaseModel):
 
 class EntryCreate(EntryBase):
     tags: list[str] = Field(default_factory=list)
+    direct_group_id: str | None = None
+    direct_group_member_role: GroupMemberRole | None = None
+
+    @model_validator(mode="after")
+    def validate_direct_group_membership(self) -> EntryCreate:
+        if self.direct_group_id is None and self.direct_group_member_role is not None:
+            raise ValueError("direct_group_member_role requires direct_group_id.")
+        return self
 
 
 class EntryUpdate(BaseModel):
@@ -233,11 +224,12 @@ class EntryUpdate(BaseModel):
     owner: str | None = Field(default=None, max_length=255)
     markdown_body: str | None = None
     tags: list[str] | None = None
+    direct_group_id: str | None = None
+    direct_group_member_role: GroupMemberRole | None = None
 
 
 class EntryRead(BaseModel):
     id: str
-    group_id: str
     account_id: str | None = None
     kind: EntryKind
     occurred_at: date
@@ -256,10 +248,13 @@ class EntryRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     tags: list[TagRead] = Field(default_factory=list)
+    direct_group: EntryGroupRefRead | None = None
+    direct_group_member_role: GroupMemberRole | None = None
+    group_path: list[EntryGroupRefRead] = Field(default_factory=list)
 
 
 class EntryDetailRead(EntryRead):
-    links: list[LinkRead] = Field(default_factory=list)
+    pass
 
 
 class EntryListResponse(BaseModel):
@@ -269,35 +264,91 @@ class EntryListResponse(BaseModel):
     offset: int
 
 
-class GroupNode(BaseModel):
+class EntryGroupRefRead(BaseModel):
     id: str
     name: str
-    kind: EntryKind
-    amount_minor: int
-    occurred_at: date
+    group_type: GroupType
+
+
+class GroupCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=255)
+    group_type: GroupType
+
+
+class GroupUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+
+
+class GroupMemberCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entry_id: str | None = None
+    child_group_id: str | None = None
+    member_role: GroupMemberRole | None = None
+
+    @model_validator(mode="after")
+    def validate_target(self) -> GroupMemberCreate:
+        has_entry = self.entry_id is not None
+        has_child_group = self.child_group_id is not None
+        if has_entry == has_child_group:
+            raise ValueError("Provide exactly one of entry_id or child_group_id.")
+        return self
+
+
+class GroupNode(BaseModel):
+    graph_id: str
+    membership_id: str
+    subject_id: str
+    node_type: Literal["ENTRY", "GROUP"]
+    name: str
+    member_role: GroupMemberRole | None = None
+    representative_occurred_at: date | None = None
+    kind: EntryKind | None = None
+    amount_minor: int | None = None
+    occurred_at: date | None = None
+    group_type: GroupType | None = None
+    descendant_entry_count: int | None = None
+    first_occurred_at: date | None = None
+    last_occurred_at: date | None = None
 
 
 class GroupEdge(BaseModel):
     id: str
-    source_entry_id: str
-    target_entry_id: str
-    link_type: LinkType
-    note: str | None = None
+    source_graph_id: str
+    target_graph_id: str
+    group_type: GroupType
 
 
 class GroupGraphRead(BaseModel):
-    group_id: str
+    id: str
+    name: str
+    group_type: GroupType
+    parent_group_id: str | None = None
+    direct_member_count: int
+    direct_entry_count: int
+    direct_child_group_count: int
+    descendant_entry_count: int
+    first_occurred_at: date | None = None
+    last_occurred_at: date | None = None
     nodes: list[GroupNode]
     edges: list[GroupEdge]
 
 
 class GroupSummaryRead(BaseModel):
-    group_id: str
-    entry_count: int
-    edge_count: int
-    first_occurred_at: date
-    last_occurred_at: date
-    latest_entry_name: str
+    id: str
+    name: str
+    group_type: GroupType
+    parent_group_id: str | None = None
+    direct_member_count: int
+    direct_entry_count: int
+    direct_child_group_count: int
+    descendant_entry_count: int
+    first_occurred_at: date | None = None
+    last_occurred_at: date | None = None
 
 
 class DailyExpensePoint(BaseModel):

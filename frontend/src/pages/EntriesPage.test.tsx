@@ -71,7 +71,6 @@ const runtimeSettingsFixture: RuntimeSettings = {
 
 const entryFixture: Entry = {
   id: "entry-1",
-  group_id: "group-1",
   account_id: "acc-1",
   kind: "EXPENSE",
   occurred_at: "2026-03-05",
@@ -89,6 +88,9 @@ const entryFixture: Entry = {
   markdown_body: null,
   created_at: "2026-03-05T00:00:00Z",
   updated_at: "2026-03-05T00:00:00Z",
+  direct_group: null,
+  direct_group_member_role: null,
+  group_path: [],
   tags: [{ id: 1, name: "coffee", color: "#5f6caf", type: "Food", entry_count: 1 }]
 };
 

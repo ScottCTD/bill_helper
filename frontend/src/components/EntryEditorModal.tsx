@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import type { Currency, Entity, Entry, EntryKind, Tag, User } from "../lib/types";
+import type { Currency, Entity, Entry, EntryKind, GroupMemberRole, GroupSummary, Tag, User } from "../lib/types";
 import { CreatableSingleSelect } from "./CreatableSingleSelect";
 import { MarkdownBlockEditor } from "./MarkdownBlockEditor";
 import { SingleSelect } from "./SingleSelect";
@@ -18,6 +18,8 @@ interface EntryEditorFormState {
   from_entity_value: string;
   to_entity_value: string;
   owner_user_id: string;
+  direct_group_id: string;
+  direct_group_member_role: GroupMemberRole;
   tags: string[];
   markdown_body: string;
 }
@@ -33,6 +35,8 @@ export interface EntryEditorSubmitPayload {
   to_entity_id: string | null;
   to_entity: string | null;
   owner_user_id: string | null;
+  direct_group_id: string | null;
+  direct_group_member_role: GroupMemberRole | null;
   tags: string[];
   markdown_body: string | null;
 }
@@ -44,6 +48,7 @@ interface EntryEditorModalProps {
   currencies: Currency[];
   entities: Entity[];
   users: User[];
+  groups: GroupSummary[];
   tags: Tag[];
   currentUserId: string;
   defaultCurrencyCode: string;
@@ -58,6 +63,11 @@ const KIND_OPTIONS: Array<{ value: EntryKind; label: string }> = [
   { value: "INCOME", label: "+ Income" },
   { value: "EXPENSE", label: "- Expense" },
   { value: "TRANSFER", label: "~ Transfer" }
+];
+
+const SPLIT_ROLE_OPTIONS: Array<{ value: GroupMemberRole; label: string }> = [
+  { value: "CHILD", label: "Child" },
+  { value: "PARENT", label: "Parent" }
 ];
 
 function todayDateInputValue() {
@@ -77,6 +87,8 @@ function buildCreateForm(currentUserId: string, defaultCurrencyCode: string): En
     from_entity_value: "",
     to_entity_value: "",
     owner_user_id: currentUserId,
+    direct_group_id: "",
+    direct_group_member_role: "CHILD",
     tags: [],
     markdown_body: ""
   };
@@ -92,6 +104,8 @@ function buildEditForm(entry: Entry, currentUserId: string): EntryEditorFormStat
     from_entity_value: entry.from_entity ?? "",
     to_entity_value: entry.to_entity ?? "",
     owner_user_id: entry.owner_user_id ?? currentUserId,
+    direct_group_id: entry.direct_group?.id ?? "",
+    direct_group_member_role: entry.direct_group_member_role ?? "CHILD",
     tags: entry.tags.map((tag) => tag.name),
     markdown_body: entry.markdown_body ?? ""
   };
@@ -126,6 +140,8 @@ function normalizeFormStateForDiff(state: EntryEditorFormState) {
     from_entity_value: state.from_entity_value.trim(),
     to_entity_value: state.to_entity_value.trim(),
     owner_user_id: state.owner_user_id,
+    direct_group_id: state.direct_group_id,
+    direct_group_member_role: state.direct_group_id ? state.direct_group_member_role : null,
     tags: normalizeTagValues(state.tags),
     markdown_body: state.markdown_body.trim()
   };
@@ -176,6 +192,7 @@ export function EntryEditorModal({
   currencies,
   entities,
   users,
+  groups,
   tags,
   currentUserId,
   defaultCurrencyCode,
@@ -243,6 +260,42 @@ export function EntryEditorModal({
     () => uniqueNormalizedEntityNames([...(entities.map((entity) => entity.name) ?? []), ...createdEntityOptionNames]),
     [createdEntityOptionNames, entities]
   );
+  const groupOptions = useMemo(
+    () => {
+      const availableGroups = [...groups];
+      if (entry?.direct_group && !availableGroups.some((group) => group.id === entry.direct_group?.id)) {
+        availableGroups.push({
+          id: entry.direct_group.id,
+          name: entry.direct_group.name,
+          group_type: entry.direct_group.group_type,
+          parent_group_id: null,
+          direct_member_count: 0,
+          direct_entry_count: 0,
+          direct_child_group_count: 0,
+          descendant_entry_count: 0,
+          first_occurred_at: null,
+          last_occurred_at: null
+        });
+      }
+
+      return [
+        { value: "", label: "Ungrouped" },
+        ...availableGroups
+          .sort((left, right) => left.name.localeCompare(right.name))
+        .map((group) => ({
+          value: group.id,
+          label: `${group.name} · ${group.group_type}${group.parent_group_id ? " · child group" : ""}`
+        }))
+      ];
+    },
+    [entry?.direct_group, groups]
+  );
+  const selectedGroupType = useMemo(
+    () =>
+      groups.find((group) => group.id === formState.direct_group_id)?.group_type ??
+      (entry?.direct_group?.id === formState.direct_group_id ? entry.direct_group.group_type : null),
+    [entry?.direct_group, formState.direct_group_id, groups]
+  );
 
   const isDirty = useMemo(() => !areFormStatesEqual(formState, initialFormState), [formState, initialFormState]);
 
@@ -281,6 +334,8 @@ export function EntryEditorModal({
       to_entity_id: toEntityResolution.entityId,
       to_entity: toEntityResolution.entityName,
       owner_user_id: formState.owner_user_id || null,
+      direct_group_id: formState.direct_group_id || null,
+      direct_group_member_role: formState.direct_group_id ? (selectedGroupType === "SPLIT" ? formState.direct_group_member_role : null) : null,
       tags: formState.tags,
       markdown_body: formState.markdown_body.trim().length > 0 ? formState.markdown_body : null
     };
@@ -480,6 +535,48 @@ export function EntryEditorModal({
                     </option>
                   ))}
                 </NativeSelect>
+              </div>
+            </div>
+
+            <div className="entry-property-line entry-property-line-group">
+              <span className="entry-property-label">Group:</span>
+              <div className="grid gap-2">
+                <div className="entry-property-group entry-property-group-group">
+                  <SingleSelect
+                    value={formState.direct_group_id}
+                    options={groupOptions}
+                    ariaLabel="Group"
+                    placeholder="Ungrouped"
+                    searchable
+                    searchPlaceholder="Search groups..."
+                    emptyLabel="No matching groups."
+                    disabled={isSaving}
+                    onChange={(nextValue) =>
+                      setFormState((state) => ({
+                        ...state,
+                        direct_group_id: nextValue,
+                        direct_group_member_role: nextValue ? state.direct_group_member_role : "CHILD"
+                      }))
+                    }
+                  />
+                  {selectedGroupType === "SPLIT" ? (
+                    <>
+                      <span className="entry-property-inline-label">Split role:</span>
+                      <SingleSelect
+                        value={formState.direct_group_member_role}
+                        options={SPLIT_ROLE_OPTIONS}
+                        ariaLabel="Split role"
+                        disabled={isSaving}
+                        onChange={(nextValue) =>
+                          setFormState((state) => ({ ...state, direct_group_member_role: nextValue as GroupMemberRole }))
+                        }
+                      />
+                    </>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Each entry can belong to one direct group. Choose a child group here if you want the parent path to be derived automatically.
+                </p>
               </div>
             </div>
 

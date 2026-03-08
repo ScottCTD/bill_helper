@@ -19,6 +19,7 @@ import {
   listCurrencies,
   listEntities,
   listEntries,
+  listGroups,
   listTags,
   listUsers,
   updateEntry
@@ -101,6 +102,11 @@ export function EntriesPage() {
   const runtimeSettingsQuery = useQuery({ queryKey: queryKeys.settings.runtime, queryFn: getRuntimeSettings });
   const entitiesQuery = useQuery({ queryKey: queryKeys.properties.entities, queryFn: listEntities });
   const usersQuery = useQuery({ queryKey: queryKeys.properties.users, queryFn: listUsers });
+  const groupsQuery = useQuery({
+    queryKey: queryKeys.groups.list,
+    queryFn: listGroups,
+    enabled: editorState !== null
+  });
   const tagsQuery = useQuery({ queryKey: queryKeys.properties.tags, queryFn: listTags });
   const entryListFilters = useMemo(
     () => ({
@@ -210,6 +216,8 @@ export function EntriesPage() {
       to_entity_id: payload.to_entity_id || undefined,
       to_entity: payload.to_entity || undefined,
       owner_user_id: payload.owner_user_id || undefined,
+      direct_group_id: payload.direct_group_id || undefined,
+      direct_group_member_role: payload.direct_group_member_role ?? undefined,
       markdown_body: payload.markdown_body || undefined,
       tags: payload.tags
     });
@@ -377,6 +385,7 @@ export function EntriesPage() {
         currencies={currenciesQuery.data ?? []}
         entities={entitiesQuery.data ?? []}
         users={usersQuery.data ?? []}
+        groups={groupsQuery.data ?? []}
         tags={tagsQuery.data ?? []}
         currentUserId={currentUserId}
         defaultCurrencyCode={(runtimeSettingsQuery.data?.default_currency_code ?? "CAD").toUpperCase()}
