@@ -91,6 +91,7 @@ async def create_user_message_and_start_run(
     upload_root: Path,
     db: Session,
     model_name: str | None = None,
+    surface: str = "app",
 ) -> AgentRun:
     settings = resolve_runtime_settings(db)
     selected_model_name = normalize_text_or_none(model_name) or settings.agent_model
@@ -164,7 +165,13 @@ async def create_user_message_and_start_run(
     db.commit()
     db.refresh(user_message)
     db.refresh(user_message, attribute_names=["attachments"])
-    return start_agent_run(db, thread, user_message, model_name=selected_model_name)
+    return start_agent_run(
+        db,
+        thread,
+        user_message,
+        model_name=selected_model_name,
+        surface=surface,
+    )
 
 
 def run_agent_in_background(
@@ -184,9 +191,17 @@ def build_messages_for_thread(
     *,
     thread_id: str,
     current_user_message_id: str | None,
+    model_name: str | None = None,
+    surface: str = "app",
 ) -> list[dict[str, Any]]:
     """Stable entrypoint for benchmark/test harness message assembly."""
-    return build_llm_messages(db, thread_id, current_user_message_id=current_user_message_id)
+    return build_llm_messages(
+        db,
+        thread_id,
+        current_user_message_id=current_user_message_id,
+        model_name=model_name,
+        surface=surface,
+    )
 
 
 def complete_model_once(

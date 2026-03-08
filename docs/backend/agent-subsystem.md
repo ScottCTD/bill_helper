@@ -13,7 +13,7 @@
 - `backend/services/agent/context_tokens.py`
   - best-effort prompt-size estimation through LiteLLM `token_counter`
 - `backend/services/agent/prompts.py`
-  - system prompt composition and tool-discipline policy
+  - system prompt composition, tool-discipline policy, and response-surface guidance
 - `backend/services/agent/message_history.py`
   - persisted thread history to model-ready messages, including attachment ordering and interruption context
 - `backend/services/agent/model_client.py`
@@ -61,11 +61,12 @@
 - `backend/services/agent/change_apply.py`
   - concrete apply handlers for approved proposals
 - `backend/services/agent/serializers.py`
-  - timeline-ready serializer helpers, including compatibility filtering for legacy unsupported change-item rows
+  - timeline-ready serializer helpers, including compatibility filtering for legacy unsupported change-item rows and surface-aware terminal reply shaping
 
 ## Prompt And Tooling Rules
 
 - prompt policy is organized into explicit sections for tool discipline, proposal workflows, execution, and final response behavior
+- prompt rendering carries a run surface hint so Telegram-directed turns can request plain-text-friendly final answers
 - `Current User Context` includes timezone/date bullets plus `Entity Category Reference` and `Account Context`
 - `Agent Memory` is rendered as a markdown unordered list built from persisted runtime-setting memory items
 - duplicate-entry checks should happen before new entry proposals
@@ -86,6 +87,7 @@
 
 - `backend/routers/agent.py`
 - delegates message validation and run lifecycle policy to `backend/services/agent/execution.py`
+- accepts an optional `surface` form field on message-send routes and persists it onto the created run for background continuation
 - delegates attachment storage and cleanup to `backend/services/agent/attachments.py`
 - starts background runs with injected session factories from `get_session_maker()`
 - all agent endpoints require admin principal
@@ -122,6 +124,7 @@ Endpoints:
 ## Current Agent Execution Behavior
 
 - runs support both background execution and SSE execution
+- each run persists a `surface` hint so later execution and polling can distinguish Telegram-originated runs from default app runs
 - streamed runs emit transient `reasoning_delta`, `text_delta`, and ordered persisted `run_event` rows
 - streamed tool lifecycle `run_event` payloads include a compact top-level `tool_call` snapshot so clients can render the tool name immediately without fetching full payloads
 - clients may hydrate a streamed `rename_thread` tool call immediately and update the visible thread title before the final assistant message arrives
@@ -131,6 +134,7 @@ Endpoints:
 - interruption marks runs as `failed` and injects interruption context into the next turn
 - pending proposals can be updated or removed in later turns while still `PENDING_REVIEW`
 - reviewed proposal context now includes reviewer override values when `payload_override` changed the approved payload, so later turns can see concrete edited values instead of only changed field names
+- run snapshots expose `terminal_assistant_reply`, which formats the latest terminal assistant message for the run surface (or an explicit read override)
 
 ## Review And Apply Behavior
 

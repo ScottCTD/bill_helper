@@ -226,7 +226,7 @@ Deletion semantics:
 - soft-deleting an entry removes its direct `entry_group_members` row if one exists
 - deleting a group is allowed only when it has no direct members and is not attached as a child group
 
-## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`, `0020_add_agent_message_attachment_original_filename`, `0021_add_agent_run_context_tokens`, `0022_agent_run_events_and_tool_lifecycle`)
+## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`, `0020_add_agent_message_attachment_original_filename`, `0021_add_agent_run_context_tokens`, `0022_agent_run_events_and_tool_lifecycle`, `0029_add_agent_run_surface`)
 
 ## `agent_threads`
 
@@ -279,6 +279,7 @@ Fields:
 - `assistant_message_id` (nullable FK -> `agent_messages.id`)
 - `status` (`AgentRunStatus`)
 - `model_name`
+- `surface` (string execution surface; currently `app` or `telegram`)
 - `context_tokens` (nullable int; best-effort prompt-size snapshot for the run's current model-visible context, including tool schemas)
 - `input_tokens` (nullable int)
 - `output_tokens` (nullable int)
@@ -289,6 +290,7 @@ Fields:
 
 API-derived fields (not persisted in DB columns):
 
+- `terminal_assistant_reply` (latest terminal assistant reply formatted for the requested read surface)
 - `input_cost_usd` (nullable float)
 - `output_cost_usd` (nullable float)
 - `total_cost_usd` (nullable float)

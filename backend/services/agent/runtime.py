@@ -178,6 +178,7 @@ def _create_run(
     thread: AgentThread,
     user_message: AgentMessage,
     model_name: str | None = None,
+    surface: str = "app",
 ) -> AgentRun:
     settings = resolve_runtime_settings(db)
     selected_model_name = normalize_text_or_none(model_name) or settings.agent_model
@@ -186,12 +187,15 @@ def _create_run(
         thread.id,
         current_user_message_id=user_message.id,
         model_name=selected_model_name,
+        surface=surface,
     )
 
     run = AgentRun(
         thread_id=thread.id,
         user_message_id=user_message.id,
         status=AgentRunStatus.RUNNING,
+        model_name=selected_model_name,
+        surface=surface,
         model_name=selected_model_name,
         context_tokens=calculate_context_tokens(
             model_name=selected_model_name,
@@ -360,6 +364,7 @@ class _RuntimeRunLoopAdapterBase(AgentRunLoopAdapter[PreparedToolCall]):
             self.thread.id,
             current_user_message_id=self.run.user_message_id,
             model_name=self.run.model_name,
+            surface=self.run.surface,
         )
 
     def initial_usage_totals(self) -> dict[str, int | None]:
@@ -700,9 +705,16 @@ def start_agent_run(
     user_message: AgentMessage,
     *,
     model_name: str | None = None,
+    surface: str = "app",
 ) -> AgentRun:
     ensure_agent_available(db, model_name=model_name)
-    return _create_run(db, thread=thread, user_message=user_message, model_name=model_name)
+    return _create_run(
+        db,
+        thread=thread,
+        user_message=user_message,
+        model_name=model_name,
+        surface=surface,
+    )
 
 
 def run_existing_agent_run(db: Session, run_id: str) -> AgentRun | None:

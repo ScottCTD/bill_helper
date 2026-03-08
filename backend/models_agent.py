@@ -116,6 +116,7 @@ class AgentRun(Base):
         Enum(AgentRunStatus), nullable=False, index=True
     )
     model_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    surface: Mapped[str] = mapped_column(String(32), nullable=False, default="app")
     context_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)

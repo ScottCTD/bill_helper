@@ -45,6 +45,7 @@ class SystemPromptContext:
     user_memory: list[str] | None = None
     current_date: date | None = None
     current_timezone: str | None = None
+    response_surface: str | None = None
 
 
 def _format_markdown_unordered_list(items: list[str] | None) -> str:
@@ -69,6 +70,7 @@ def system_prompt(context: SystemPromptContext | None = None) -> str:
     timezone_name, timezone_info = _resolve_prompt_timezone(prompt_context.current_timezone)
     date_text = (prompt_context.current_date or datetime.now(timezone_info).date()).isoformat()
     return _system_prompt_template().render(
+        response_surface=(prompt_context.response_surface or "app"),
         timezone_name=timezone_name,
         date_text=date_text,
         account_context=account_context,

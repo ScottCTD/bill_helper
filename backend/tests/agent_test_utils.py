@@ -27,6 +27,7 @@ def send_message(
     thread_id: str,
     content: str,
     *,
+    surface: str = "app",
     files: list[tuple[str, bytes, str]] | None = None,
     model_name: str | None = None,
     wait_for_completion: bool = True,
@@ -42,7 +43,11 @@ def send_message(
     )
     response = client.post(
         f"/api/v1/agent/threads/{thread_id}/messages",
-        data={"content": content, "model_name": model_name or ""},
+        data={
+            "content": content,
+            "surface": surface,
+            "model_name": model_name or "",
+        },
         files=request_files,
     )
     response.raise_for_status()
@@ -112,11 +117,22 @@ def flatten_user_content(content: object) -> str:
     return ""
 
 
-def collect_sse_events(client, thread_id: str, content: str, *, model_name: str | None = None) -> list[dict]:
+def collect_sse_events(
+    client,
+    thread_id: str,
+    content: str,
+    *,
+    surface: str = "app",
+    model_name: str | None = None,
+) -> list[dict]:
     with client.stream(
         "POST",
         f"/api/v1/agent/threads/{thread_id}/messages/stream",
-        data={"content": content, "model_name": model_name or ""},
+        data={
+            "content": content,
+            "surface": surface,
+            "model_name": model_name or "",
+        },
     ) as response:
         response.raise_for_status()
         raw = "".join(response.iter_text())

@@ -44,8 +44,9 @@ Execution plans are not source-of-truth for current behavior. Promote stable con
 
 - `../backend/README.md`: backend-local navigation and change checklist.
 - `../frontend/README.md`: frontend-local navigation and change checklist.
+- `../telegram/README.md`: Telegram transport local overview, run/config notes, and links to `telegram/docs/`.
 
-These package READMEs intentionally stay thin and point back to canonical docs instead of duplicating architecture.
+These package-local READMEs stay close to the code and should point back to canonical docs instead of duplicating cross-repo architecture.
 
 ## Naming Rule
 

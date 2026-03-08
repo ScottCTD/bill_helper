@@ -244,6 +244,54 @@ cd /path/to/bill_helper/frontend
 npm run dev
 ```
 
+## Run Telegram Bot (Local Dev Polling)
+
+Required env/config:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_BACKEND_BASE_URL` (defaults to `http://localhost:8000/api/v1`)
+- `TELEGRAM_API_BASE_URL` (optional override; defaults to `https://api.telegram.org`)
+- `TELEGRAM_DATA_DIR` (optional; defaults to `~/.local/share/bill-helper/telegram`)
+- `TELEGRAM_STATE_PATH` (optional; defaults to `<TELEGRAM_DATA_DIR>/chat_state.json`)
+- backend auth for the bot via either `TELEGRAM_BACKEND_AUTH_TOKEN` or `TELEGRAM_BACKEND_AUTH_HEADERS`
+
+Notes:
+
+- `TELEGRAM_BACKEND_AUTH_HEADERS` must be a JSON object of header names to values.
+- If both `TELEGRAM_BACKEND_AUTH_TOKEN` and an explicit `Authorization` header are supplied, the explicit header wins.
+
+Run the polling worker:
+
+```bash
+cd /path/to/bill_helper
+uv run python -m telegram.polling
+```
+
+The polling worker uses a `python-telegram-bot` application with PTB command handlers plus a private-chat message handler that forwards non-command traffic into the shared Telegram content handler.
+
+Because this repository also has a top-level `telegram/` package, bot modules should import PTB symbols from `telegram.ptb`, not directly from the upstream `telegram` package. `telegram/ptb.py` bootstraps the installed `python-telegram-bot` distribution and re-exports the PTB types used inside this codebase.
+
+## Run Telegram Webhook Adapter
+
+Required env/config:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `TELEGRAM_BACKEND_BASE_URL` (defaults to `http://localhost:8000/api/v1`)
+- `TELEGRAM_API_BASE_URL` (optional override; defaults to `https://api.telegram.org`)
+- `TELEGRAM_DATA_DIR` (optional; defaults to `~/.local/share/bill-helper/telegram`)
+- `TELEGRAM_STATE_PATH` (optional; defaults to `<TELEGRAM_DATA_DIR>/chat_state.json`)
+- backend auth for the bot via either `TELEGRAM_BACKEND_AUTH_TOKEN` or `TELEGRAM_BACKEND_AUTH_HEADERS`
+
+Run the webhook app locally:
+
+```bash
+cd /path/to/bill_helper
+uv run python -m telegram.webhook
+```
+
+The webhook app listens on port `8081`, serves `GET /healthz`, validates `X-Telegram-Bot-Api-Secret-Token` on `POST /telegram/webhook`, and then hands the JSON payload to the PTB application for command/message routing.
+
 ## Verification Commands
 
 Backend tests:
@@ -251,6 +299,20 @@ Backend tests:
 ```bash
 cd /path/to/bill_helper
 uv run --extra dev pytest
+```
+
+Telegram transport compile check:
+
+```bash
+cd /path/to/bill_helper
+uv run --extra dev python -m py_compile telegram/__init__.py telegram/_http.py telegram/bill_helper_api.py telegram/commands.py telegram/config.py telegram/files.py telegram/formatting.py telegram/message_handler.py telegram/polling.py telegram/ptb.py telegram/state.py telegram/webhook.py
+```
+
+Backend + Telegram transport tests:
+
+```bash
+cd /path/to/bill_helper
+OPENROUTER_API_KEY=test uv run --extra dev pytest backend/tests telegram/tests -q
 ```
 
 Backend performance guard tests:
