@@ -149,6 +149,7 @@
 - `LineChart.tsx`: legacy SVG daily expense chart helper (dashboard now uses Recharts).
 - `GroupGraphView.tsx`: React Flow-based graph rendering for entry groups.
 - `GroupEditorModal.tsx`: create/rename dialog for named typed groups.
+- `GroupDetailModal.tsx`: wide group-detail modal for derived graph inspection and direct-member management.
 - `GroupMemberEditorModal.tsx`: add-member dialog for entries and child groups.
 - `TagMultiSelect.tsx`: Notion-style chip/dropdown multi-select for entry tags.
 - `DeleteConfirmDialog.tsx`: shared destructive confirmation dialog for account, entity, and tag deletes.
@@ -165,7 +166,8 @@
 - `SettingsPage.tsx`: responsive runtime settings workspace (general, persistent agent memory, agent runtime, reliability).
 - `EntriesPage.tsx`: list/filter/delete entries and open popup create/edit editor.
 - `EntryDetailPage.tsx`: show entry detail, direct-group context, direct-group graph, and popup editing.
-- `GroupsPage.tsx`: first-class group workspace for create/rename/delete plus entry/child-group membership editing.
+- `GroupsPage.tsx`: first-class group workspace with a table-first browser and detail modal for group editing.
+- `GroupsPage.test.tsx`: page-level integration test for table-first group browsing and detail-modal opening.
 - `AccountsPage.tsx`: thin page orchestrator that composes accounts feature modules.
 - `PropertiesPage.tsx`: thin page orchestrator that composes properties feature modules.
 - `AccountsPage.test.tsx`: page-level integration tests for account create, snapshot, and delete flows.

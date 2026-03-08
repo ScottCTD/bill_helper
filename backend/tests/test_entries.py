@@ -235,6 +235,7 @@ def test_bundle_group_graph_and_summary_include_empty_groups(client):
     assert len(graph["nodes"]) == 2
     assert len(graph["edges"]) == 1
     assert {node["node_type"] for node in graph["nodes"]} == {"ENTRY"}
+    assert {node["currency_code"] for node in graph["nodes"]} == {"USD"}
 
 
 def test_split_group_validation_and_graph(client):

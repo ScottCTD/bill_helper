@@ -371,6 +371,7 @@ def _membership_to_node(membership: EntryGroupMember) -> GroupNode:
             representative_occurred_at=representative_occurred_at,
             kind=entry.kind,
             amount_minor=entry.amount_minor,
+            currency_code=entry.currency_code,
             occurred_at=entry.occurred_at,
         )
 
