@@ -622,46 +622,46 @@ private struct SectionHeading: View {
 }
 
 private enum FinanceDisplay {
-    private static let currencyFormatter: NumberFormatter = {
+    private static func makeCurrencyFormatter(currencyCode: String) -> NumberFormatter {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
+        formatter.currencyCode = currencyCode
         return formatter
-    }()
+    }
 
-    private static let apiDayFormatter: DateFormatter = {
+    private static func makeAPIDayFormatter() -> DateFormatter {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
-    }()
+    }
 
-    private static let apiMonthFormatter: DateFormatter = {
+    private static func makeAPIMonthFormatter() -> DateFormatter {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM"
         return formatter
-    }()
+    }
 
-    private static let mediumDayFormatter: DateFormatter = {
+    private static func makeMediumDayFormatter() -> DateFormatter {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         return formatter
-    }()
+    }
 
-    private static let monthDisplayFormatter: DateFormatter = {
+    private static func makeMonthDisplayFormatter() -> DateFormatter {
         let formatter = DateFormatter()
         formatter.dateFormat = "LLLL yyyy"
         return formatter
-    }()
+    }
 
     static func currency(_ minor: Int, currencyCode: String) -> String {
-        currencyFormatter.currencyCode = currencyCode
         let amount = NSDecimalNumber(value: Double(minor) / 100.0)
-        return currencyFormatter.string(from: amount) ?? "\(currencyCode) \(minor)"
+        return makeCurrencyFormatter(currencyCode: currencyCode).string(from: amount) ?? "\(currencyCode) \(minor)"
     }
 
     static func signedCurrency(minor: Int, currencyCode: String) -> String {
@@ -684,13 +684,13 @@ private enum FinanceDisplay {
     }
 
     static func day(_ rawValue: String) -> String {
-        guard let date = apiDayFormatter.date(from: rawValue) else { return rawValue }
-        return mediumDayFormatter.string(from: date)
+        guard let date = makeAPIDayFormatter().date(from: rawValue) else { return rawValue }
+        return makeMediumDayFormatter().string(from: date)
     }
 
     static func month(_ rawValue: String) -> String {
-        guard let date = apiMonthFormatter.date(from: rawValue) else { return rawValue }
-        return monthDisplayFormatter.string(from: date)
+        guard let date = makeAPIMonthFormatter().date(from: rawValue) else { return rawValue }
+        return makeMonthDisplayFormatter().string(from: date)
     }
 }
 

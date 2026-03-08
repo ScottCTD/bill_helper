@@ -23,6 +23,7 @@ Agent:
   - entries: `create_entry`, `update_entry`, `delete_entry`
   - tags: `create_tag`, `update_tag`, `delete_tag`
   - entities: `create_entity`, `update_entity`, `delete_entity`
+  - compatibility: legacy persisted `CREATE_GROUP_MEMBER` rows may still exist in `agent_change_items`; backend hydration accepts them, but current API review payloads omit them because the active client contract no longer includes that proposal type
 - `AgentChangeStatus`: `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `APPLIED`, `APPLY_FAILED`
 - `AgentReviewActionType`: `approve`, `reject`
 

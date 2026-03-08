@@ -51,6 +51,24 @@ class AgentChangeType(StrEnum):
     CREATE_ENTITY = "create_entity"
     UPDATE_ENTITY = "update_entity"
     DELETE_ENTITY = "delete_entity"
+    CREATE_GROUP_MEMBER = "create_group_member"
+
+
+SUPPORTED_AGENT_CHANGE_TYPES: tuple[AgentChangeType, ...] = (
+    AgentChangeType.CREATE_ENTRY,
+    AgentChangeType.UPDATE_ENTRY,
+    AgentChangeType.DELETE_ENTRY,
+    AgentChangeType.CREATE_TAG,
+    AgentChangeType.UPDATE_TAG,
+    AgentChangeType.DELETE_TAG,
+    AgentChangeType.CREATE_ENTITY,
+    AgentChangeType.UPDATE_ENTITY,
+    AgentChangeType.DELETE_ENTITY,
+)
+
+
+def is_supported_agent_change_type(change_type: AgentChangeType) -> bool:
+    return change_type in SUPPORTED_AGENT_CHANGE_TYPES
 
 
 class AgentChangeStatus(StrEnum):

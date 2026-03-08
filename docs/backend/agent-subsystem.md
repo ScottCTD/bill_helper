@@ -57,7 +57,7 @@
 - `backend/services/agent/change_apply.py`
   - concrete apply handlers for approved proposals
 - `backend/services/agent/serializers.py`
-  - timeline-ready serializer helpers
+  - timeline-ready serializer helpers, including compatibility filtering for legacy unsupported change-item rows
 
 ## Prompt And Tooling Rules
 
@@ -103,6 +103,7 @@ Endpoints:
 - full tool payloads are fetched through `GET /api/v1/agent/tool-calls/{tool_call_id}`
 - runs persist ordered `events[]` rows for replayable timeline activity
 - runs also carry their `change_items`; the frontend flattens those per-run proposal lists into one thread review model
+- serializer output skips legacy persisted change rows whose enum values are still recognized for hydration but no longer part of the supported client review surface
 - run snapshots aggregate usage metrics and derived USD pricing; prompt-side costs use cache-aware LiteLLM rates when cache usage is present and stay folded into the existing `input_cost_usd`/`total_cost_usd` fields
 
 ## Current Agent Execution Behavior

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from backend.enums_agent import is_supported_agent_change_type
 from backend.models_agent import (
     AgentChangeItem,
     AgentMessage,
@@ -24,6 +26,9 @@ from backend.schemas_agent import (
     AgentToolCallRead,
 )
 from backend.services.agent.pricing import calculate_usage_costs
+
+
+logger = logging.getLogger(__name__)
 
 
 def attachment_to_schema(attachment: AgentMessageAttachment, *, api_prefix: str) -> AgentMessageAttachmentRead:
@@ -141,6 +146,22 @@ def change_item_to_schema(item: AgentChangeItem) -> AgentChangeItemRead:
     )
 
 
+def _serializable_change_items(run: AgentRun) -> list[AgentChangeItem]:
+    supported_items: list[AgentChangeItem] = []
+    for item in run.change_items:
+        if is_supported_agent_change_type(item.change_type):
+            supported_items.append(item)
+            continue
+        logger.warning(
+            "Skipping legacy agent change item from API response: scope=agent_run_serializer run_id=%s change_item_id=%s change_type=%s status=%s",
+            run.id,
+            item.id,
+            item.change_type.name,
+            item.status.value,
+        )
+    return supported_items
+
+
 def run_to_schema(run: AgentRun, *, include_tool_payload: bool = True) -> AgentRunRead:
     costs = calculate_usage_costs(
         model_name=run.model_name,
@@ -169,7 +190,7 @@ def run_to_schema(run: AgentRun, *, include_tool_payload: bool = True) -> AgentR
         completed_at=run.completed_at,
         events=[run_event_to_schema(event) for event in run.events],
         tool_calls=[tool_call_to_schema(call, include_payload=include_tool_payload) for call in run.tool_calls],
-        change_items=[change_item_to_schema(item) for item in run.change_items],
+        change_items=[change_item_to_schema(item) for item in _serializable_change_items(run)],
     )
 
 
