@@ -1,5 +1,8 @@
 import Foundation
+import os
 import SwiftUI
+
+private let appCompositionLogger = Logger(subsystem: "com.billhelper.ios", category: "AppComposition")
 
 enum BillHelperEnvironment: String, CaseIterable, Equatable {
     case local
@@ -49,7 +52,10 @@ struct AppComposition {
     }
 
     @MainActor @ViewBuilder var agentRoot: some View {
-        AgentPlaceholderView(configuration: configuration)
+        AgentPlaceholderView(
+            configuration: configuration,
+            client: .live(apiClient: apiClient, transport: agentRunTransport)
+        )
     }
 
     static func live(
@@ -60,7 +66,9 @@ struct AppComposition {
         do {
             try sessionStore.restore()
         } catch {
-            NSLog("BillHelper iOS: failed to restore persisted session during app startup: %@", String(describing: error))
+            appCompositionLogger.error(
+                "Failed to restore persisted session during app startup: \(String(describing: error), privacy: .public)"
+            )
         }
         let apiClient = APIClient(baseURL: configuration.apiBaseURL, sessionProvider: sessionStore)
         let agentRunTransport = AgentRunTransport(apiClient: apiClient)

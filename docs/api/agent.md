@@ -64,6 +64,7 @@ Includes:
 - `messages`
 - `runs`
 - per-run `change_items` used by the frontend to build the thread-scoped review surface
+- legacy persisted change rows with unsupported `change_type` values are skipped from `change_items` so thread history keeps loading on current clients
 - `configured_model_name`
 - `current_context_tokens`
 - compact tool-call snapshots by default
@@ -149,7 +150,7 @@ Returned payload includes:
 
 - lifecycle metadata
 - full tool calls (`has_full_payload=true`)
-- change items
+- change items (legacy unsupported persisted change rows are omitted)
 - usage counters
 - derived pricing fields, where `input_cost_usd` is the full prompt-side cost after cache-aware pricing, `output_cost_usd` remains the completion-side cost, and `total_cost_usd` is their sum
 

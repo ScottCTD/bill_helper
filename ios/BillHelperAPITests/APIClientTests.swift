@@ -50,11 +50,15 @@ final class APIClientTests: XCTestCase {
         )
 
         let request = await transport.recordedRequests.first
-        let url = try XCTUnwrap(request?.url?.absoluteString)
-        XCTAssertTrue(url.contains("kind=EXPENSE"))
-        XCTAssertTrue(url.contains("tag=groceries"))
-        XCTAssertTrue(url.contains("limit=10"))
-        XCTAssertTrue(url.contains("offset=20"))
+        let url = try XCTUnwrap(request?.url)
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: true))
+        let queryItems = components.queryItems ?? []
+
+        XCTAssertEqual(components.path, "/api/v1/entries")
+        XCTAssertTrue(queryItems.contains(URLQueryItem(name: "kind", value: "EXPENSE")))
+        XCTAssertTrue(queryItems.contains(URLQueryItem(name: "tag", value: "groceries")))
+        XCTAssertTrue(queryItems.contains(URLQueryItem(name: "limit", value: "10")))
+        XCTAssertTrue(queryItems.contains(URLQueryItem(name: "offset", value: "20")))
     }
 
     private static let dashboardPayload = """

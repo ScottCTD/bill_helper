@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, load_only, selectinload
 from backend.auth import RequestPrincipal, get_current_principal, require_admin_principal
 from backend.config import get_settings
 from backend.database import get_db, get_session_maker
-from backend.enums_agent import AgentChangeStatus, AgentRunStatus
+from backend.enums_agent import AgentChangeStatus, AgentRunStatus, SUPPORTED_AGENT_CHANGE_TYPES
 from backend.models_agent import (
     AgentChangeItem,
     AgentMessage,
@@ -92,6 +92,7 @@ def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:
                 .where(
                     AgentRun.thread_id == thread.id,
                     AgentChangeItem.status == AgentChangeStatus.PENDING_REVIEW,
+                    AgentChangeItem.change_type.in_(SUPPORTED_AGENT_CHANGE_TYPES),
                 )
             )
             or 0

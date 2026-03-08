@@ -76,20 +76,7 @@ struct EntriesPlaceholderView: View {
 
 struct AgentPlaceholderView: View {
     let configuration: AppConfiguration
-
-    private let client: AgentFeatureClient
-
-    init(configuration: AppConfiguration) {
-        self.configuration = configuration
-        let sessionStore = SessionStore(storage: KeychainSessionStorage())
-        do {
-            try sessionStore.restore()
-        } catch {
-            NSLog("BillHelper iOS agent feature: failed to restore persisted session: %@", String(describing: error))
-        }
-        let apiClient = APIClient(baseURL: configuration.apiBaseURL, sessionProvider: sessionStore)
-        client = .live(apiClient: apiClient, transport: AgentRunTransport(apiClient: apiClient))
-    }
+    let client: AgentFeatureClient
 
     var body: some View {
         AgentRootView(configuration: configuration, client: client)

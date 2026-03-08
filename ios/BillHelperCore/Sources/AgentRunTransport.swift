@@ -207,10 +207,6 @@ private struct StreamProgressError: Error {
 
 private extension String {
     func trimmingLeadingWhitespace() -> String {
-        var trimmed = self[...]
-        while let first = trimmed.first, first.isWhitespace {
-            trimmed = trimmed.dropFirst()
-        }
-        return String(trimmed)
+        String(trimmingPrefix(while: \.isWhitespace))
     }
 }

@@ -121,7 +121,7 @@ struct APIClient: @unchecked Sendable {
     }
 
     func createAgentThread(title: String? = nil) async throws -> AgentThread {
-        let body = title.map { try? encoder.encode(["title": $0]) } ?? Data("{}".utf8)
+        let body = try title.map { try encoder.encode(["title": $0]) } ?? Data("{}".utf8)
         return try await perform(path: "/agent/threads", method: "POST", body: body)
     }
 
