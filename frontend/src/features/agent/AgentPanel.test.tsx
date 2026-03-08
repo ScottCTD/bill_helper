@@ -613,6 +613,29 @@ describe("AgentPanel", () => {
     ]);
   });
 
+  it("keeps the composer model picker empty when no models are available", async () => {
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getRuntimeSettings).mockResolvedValue(
+      buildRuntimeSettings({
+        agent_model: "bedrock/us.anthropic.claude-sonnet-4-6",
+        available_agent_models: []
+      })
+    );
+    vi.mocked(api.getAgentThread).mockResolvedValue(
+      buildThreadDetail([
+        buildRun({ model_name: "openai/gpt-4.1-mini" })
+      ])
+    );
+
+    renderWithQueryClient(<AgentPanel isOpen />);
+
+    const modelPicker = await screen.findByRole("combobox", { name: "Agent model" });
+
+    await waitFor(() => expect(modelPicker).toHaveValue(""));
+    expect(modelPicker).toBeDisabled();
+    expect(screen.getByRole("option", { name: "Loading models…" })).toBeInTheDocument();
+  });
+
   it("updates the header model label immediately when the composer model picker changes", async () => {
     vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
     vi.mocked(api.getRuntimeSettings).mockResolvedValue(
