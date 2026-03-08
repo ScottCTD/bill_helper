@@ -347,6 +347,7 @@ def _entry_preview_from_proposal(item: AgentChangeItem) -> dict[str, Any]:
         "from_entity": payload.get("from_entity"),
         "to_entity": payload.get("to_entity"),
         "tags": payload.get("tags") or [],
+        "markdown_notes": payload.get("markdown_notes"),
     }
 
 

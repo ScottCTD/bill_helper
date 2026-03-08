@@ -419,23 +419,6 @@ function buildRecordUpdateDiff(
   });
 }
 
-function shortProposalId(value: string): string {
-  return value.slice(0, 8);
-}
-
-function referenceDisplayValue(record: JsonRecord, options: { idKey: string; proposalKey: string }): string {
-  const { idKey, proposalKey } = options;
-  const directId = record[idKey];
-  if (typeof directId === "string" && directId.trim()) {
-    return directId;
-  }
-  const proposalId = record[proposalKey];
-  if (typeof proposalId === "string" && proposalId.trim()) {
-    return `pending:${shortProposalId(proposalId)}`;
-  }
-  return "-";
-}
-
 function previewName(preview: JsonRecord, fallback: string): string {
   const name = preview.name;
   return typeof name === "string" && name.trim() ? name : fallback;
@@ -477,22 +460,47 @@ function buildUpdateGroupAfterRecord(payload: JsonRecord, reviewerOverride?: Jso
 }
 
 function buildGroupMemberRecord(payload: JsonRecord): JsonRecord {
-  const groupRef = asRecord(payload.group_ref);
   const entryRef = asRecord(payload.entry_ref);
-  const childGroupRef = asRecord(payload.child_group_ref);
   const groupPreview = asRecord(payload.group_preview);
   const memberPreview = asRecord(payload.member_preview);
   const isEntryMember = Object.keys(entryRef).length > 0;
-  const memberRef = isEntryMember
-    ? referenceDisplayValue(entryRef, { idKey: "entry_id", proposalKey: "create_entry_proposal_id" })
-    : referenceDisplayValue(childGroupRef, { idKey: "group_id", proposalKey: "create_group_proposal_id" });
   const record: JsonRecord = {
     parent_group: previewName(groupPreview, "Unknown group"),
-    parent_group_ref: referenceDisplayValue(groupRef, { idKey: "group_id", proposalKey: "create_group_proposal_id" }),
     member_kind: isEntryMember ? "entry" : "group",
-    member: previewName(memberPreview, isEntryMember ? "Unknown entry" : "Unknown group"),
-    member_ref: memberRef
+    member: previewName(memberPreview, isEntryMember ? "Unknown entry" : "Unknown group")
   };
+  if (typeof groupPreview.group_type === "string" && groupPreview.group_type.trim()) {
+    record.group_type = groupPreview.group_type;
+  }
+  if (isEntryMember) {
+    if (typeof memberPreview.date === "string" && memberPreview.date.trim()) {
+      record.date = memberPreview.date;
+    }
+    if (typeof memberPreview.name === "string" && memberPreview.name.trim()) {
+      record.name = memberPreview.name;
+    }
+    if (typeof memberPreview.kind === "string" && memberPreview.kind.trim()) {
+      record.kind = memberPreview.kind;
+    }
+    if (typeof memberPreview.amount_minor === "number") {
+      record.amount_minor = memberPreview.amount_minor;
+    }
+    if (typeof memberPreview.currency_code === "string" && memberPreview.currency_code.trim()) {
+      record.currency_code = memberPreview.currency_code;
+    }
+    if (typeof memberPreview.from_entity === "string" && memberPreview.from_entity.trim()) {
+      record.from_entity = memberPreview.from_entity;
+    }
+    if (typeof memberPreview.to_entity === "string" && memberPreview.to_entity.trim()) {
+      record.to_entity = memberPreview.to_entity;
+    }
+    if (Array.isArray(memberPreview.tags)) {
+      record.tags = memberPreview.tags;
+    }
+    if (typeof memberPreview.markdown_notes === "string" && memberPreview.markdown_notes.trim()) {
+      record.markdown_notes = memberPreview.markdown_notes;
+    }
+  }
   if (typeof payload.member_role === "string" && payload.member_role.trim()) {
     record.member_role = payload.member_role;
   }
@@ -581,7 +589,12 @@ export function buildProposalDiff(
     case "create_group_member": {
       const effectiveRecord =
         reviewerOverride && !jsonRecordsAreEquivalent(payload, reviewerOverride)
-          ? buildGroupMemberRecord(reviewerOverride)
+          ? buildGroupMemberRecord({
+              ...payload,
+              ...reviewerOverride,
+              group_preview: reviewerOverride.group_preview ?? payload.group_preview,
+              member_preview: reviewerOverride.member_preview ?? payload.member_preview
+            })
           : undefined;
       const record = buildGroupMemberRecord(payload);
       const parentGroup = asRecord(payload.group_preview);
