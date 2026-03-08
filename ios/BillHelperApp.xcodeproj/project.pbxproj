@@ -1,0 +1,480 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A1B2C3D40100000000000001 /* BillHelperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000011 /* BillHelperApp.swift */; };
+		A1B2C3D40100000000000002 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000012 /* AppConfiguration.swift */; };
+		A1B2C3D40100000000000003 /* AppShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000013 /* AppShellView.swift */; };
+		A1B2C3D40100000000000004 /* PlaceholderFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000014 /* PlaceholderFeatures.swift */; };
+		A1B2C3D40100000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000015 /* Assets.xcassets */; };
+		A1B2C3D40100000000000006 /* AppConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000016 /* AppConfigurationTests.swift */; };
+		A1B2C3D40100000000000007 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000019 /* XCTest.framework */; };
+			D1E2F3A40100000000000001 /* AgentFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A40100000000000011 /* AgentFeature.swift */; };
+			D1E2F3A40100000000000002 /* AgentFeatureViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A40100000000000012 /* AgentFeatureViewModelTests.swift */; };
+			C1D2E3F40100000000000001 /* DashboardEntriesFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F40100000000000011 /* DashboardEntriesFeatures.swift */; };
+			C1D2E3F40100000000000002 /* DashboardEntriesFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F40100000000000012 /* DashboardEntriesFeatureTests.swift */; };
+			B1C2D3E40100000000000001 /* FinanceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000011 /* FinanceModels.swift */; };
+			B1C2D3E40100000000000002 /* AgentModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000012 /* AgentModels.swift */; };
+			B1C2D3E40100000000000003 /* SessionInfrastructure.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000013 /* SessionInfrastructure.swift */; };
+			B1C2D3E40100000000000004 /* UploadSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000014 /* UploadSupport.swift */; };
+			B1C2D3E40100000000000005 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000015 /* APIClient.swift */; };
+			B1C2D3E40100000000000006 /* AgentRunTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000016 /* AgentRunTransport.swift */; };
+			B1C2D3E40100000000000007 /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000017 /* APIClientTests.swift */; };
+			B1C2D3E40100000000000008 /* UploadSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000018 /* UploadSupportTests.swift */; };
+			B1C2D3E40100000000000009 /* AgentRunTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000019 /* AgentRunTransportTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A1B2C3D40100000000000020 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1B2C3D40100000000000110 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1B2C3D40100000000000100;
+			remoteInfo = BillHelperApp;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A1B2C3D40100000000000011 /* BillHelperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillHelperApp.swift; sourceTree = "<group>"; };
+		A1B2C3D40100000000000012 /* AppConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfiguration.swift; sourceTree = "<group>"; };
+		A1B2C3D40100000000000013 /* AppShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellView.swift; sourceTree = "<group>"; };
+		A1B2C3D40100000000000014 /* PlaceholderFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderFeatures.swift; sourceTree = "<group>"; };
+		A1B2C3D40100000000000015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A1B2C3D40100000000000016 /* AppConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigurationTests.swift; sourceTree = "<group>"; };
+		A1B2C3D40100000000000017 /* BillHelperApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BillHelperApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D40100000000000018 /* BillHelperAPITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BillHelperAPITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D40100000000000019 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+			D1E2F3A40100000000000011 /* AgentFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFeature.swift; sourceTree = "<group>"; };
+			D1E2F3A40100000000000012 /* AgentFeatureViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFeatureViewModelTests.swift; sourceTree = "<group>"; };
+			C1D2E3F40100000000000011 /* DashboardEntriesFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardEntriesFeatures.swift; sourceTree = "<group>"; };
+			C1D2E3F40100000000000012 /* DashboardEntriesFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardEntriesFeatureTests.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000011 /* FinanceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceModels.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000012 /* AgentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentModels.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000013 /* SessionInfrastructure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionInfrastructure.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000014 /* UploadSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadSupport.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000015 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000016 /* AgentRunTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRunTransport.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000017 /* APIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientTests.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000018 /* UploadSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadSupportTests.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000019 /* AgentRunTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRunTransportTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1B2C3D40100000000000120 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D40100000000000121 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D40100000000000007 /* XCTest.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A1B2C3D40100000000000111 = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D40100000000000112 /* BillHelperApp */,
+				A1B2C3D40100000000000115 /* BillHelperFeatures */,
+				A1B2C3D40100000000000117 /* BillHelperCore */,
+				A1B2C3D40100000000000118 /* BillHelperAPITests */,
+				A1B2C3D40100000000000119 /* Frameworks */,
+				A1B2C3D40100000000000116 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A1B2C3D40100000000000112 /* BillHelperApp */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D40100000000000113 /* Sources */,
+				A1B2C3D40100000000000114 /* Resources */,
+			);
+			path = BillHelperApp;
+			sourceTree = "<group>";
+		};
+		A1B2C3D40100000000000113 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D40100000000000011 /* BillHelperApp.swift */,
+				A1B2C3D40100000000000012 /* AppConfiguration.swift */,
+				A1B2C3D40100000000000013 /* AppShellView.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		A1B2C3D40100000000000114 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D40100000000000015 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		A1B2C3D40100000000000115 /* BillHelperFeatures */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4010000000000011A /* Sources */,
+			);
+			path = BillHelperFeatures;
+			sourceTree = "<group>";
+		};
+		A1B2C3D40100000000000116 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D40100000000000017 /* BillHelperApp.app */,
+				A1B2C3D40100000000000018 /* BillHelperAPITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A1B2C3D40100000000000117 /* BillHelperCore */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4010000000000011B /* Sources */,
+			);
+			path = BillHelperCore;
+			sourceTree = "<group>";
+		};
+		A1B2C3D40100000000000118 /* BillHelperAPITests */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D40100000000000016 /* AppConfigurationTests.swift */,
+					D1E2F3A40100000000000012 /* AgentFeatureViewModelTests.swift */,
+					C1D2E3F40100000000000012 /* DashboardEntriesFeatureTests.swift */,
+					B1C2D3E40100000000000017 /* APIClientTests.swift */,
+					B1C2D3E40100000000000018 /* UploadSupportTests.swift */,
+					B1C2D3E40100000000000019 /* AgentRunTransportTests.swift */,
+			);
+			path = BillHelperAPITests;
+			sourceTree = "<group>";
+		};
+		A1B2C3D40100000000000119 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D40100000000000019 /* XCTest.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4010000000000011A /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+					D1E2F3A40100000000000011 /* AgentFeature.swift */,
+					C1D2E3F40100000000000011 /* DashboardEntriesFeatures.swift */,
+				A1B2C3D40100000000000014 /* PlaceholderFeatures.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4010000000000011B /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+					B1C2D3E40100000000000011 /* FinanceModels.swift */,
+					B1C2D3E40100000000000012 /* AgentModels.swift */,
+					B1C2D3E40100000000000013 /* SessionInfrastructure.swift */,
+					B1C2D3E40100000000000014 /* UploadSupport.swift */,
+					B1C2D3E40100000000000015 /* APIClient.swift */,
+					B1C2D3E40100000000000016 /* AgentRunTransport.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A1B2C3D40100000000000100 /* BillHelperApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D40100000000000130 /* Build configuration list for PBXNativeTarget "BillHelperApp" */;
+			buildPhases = (
+				A1B2C3D40100000000000122 /* Sources */,
+				A1B2C3D40100000000000120 /* Frameworks */,
+				A1B2C3D40100000000000124 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BillHelperApp;
+			productName = BillHelperApp;
+			productReference = A1B2C3D40100000000000017 /* BillHelperApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A1B2C3D40100000000000101 /* BillHelperAPITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D40100000000000131 /* Build configuration list for PBXNativeTarget "BillHelperAPITests" */;
+			buildPhases = (
+				A1B2C3D40100000000000123 /* Sources */,
+				A1B2C3D40100000000000121 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1B2C3D40100000000000125 /* PBXTargetDependency */,
+			);
+			name = BillHelperAPITests;
+			productName = BillHelperAPITests;
+			productReference = A1B2C3D40100000000000018 /* BillHelperAPITests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A1B2C3D40100000000000110 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					A1B2C3D40100000000000100 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					A1B2C3D40100000000000101 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = A1B2C3D40100000000000100;
+					};
+				};
+			};
+			buildConfigurationList = A1B2C3D40100000000000132 /* Build configuration list for PBXProject "BillHelperApp" */;
+			compatibilityVersion = "Xcode 13.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A1B2C3D40100000000000111;
+			productRefGroup = A1B2C3D40100000000000116 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A1B2C3D40100000000000100 /* BillHelperApp */,
+				A1B2C3D40100000000000101 /* BillHelperAPITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A1B2C3D40100000000000124 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D40100000000000005 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A1B2C3D40100000000000122 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D40100000000000001 /* BillHelperApp.swift in Sources */,
+				A1B2C3D40100000000000002 /* AppConfiguration.swift in Sources */,
+				A1B2C3D40100000000000003 /* AppShellView.swift in Sources */,
+					D1E2F3A40100000000000001 /* AgentFeature.swift in Sources */,
+					C1D2E3F40100000000000001 /* DashboardEntriesFeatures.swift in Sources */,
+				A1B2C3D40100000000000004 /* PlaceholderFeatures.swift in Sources */,
+					B1C2D3E40100000000000001 /* FinanceModels.swift in Sources */,
+					B1C2D3E40100000000000002 /* AgentModels.swift in Sources */,
+					B1C2D3E40100000000000003 /* SessionInfrastructure.swift in Sources */,
+					B1C2D3E40100000000000004 /* UploadSupport.swift in Sources */,
+					B1C2D3E40100000000000005 /* APIClient.swift in Sources */,
+					B1C2D3E40100000000000006 /* AgentRunTransport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D40100000000000123 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D40100000000000006 /* AppConfigurationTests.swift in Sources */,
+					D1E2F3A40100000000000002 /* AgentFeatureViewModelTests.swift in Sources */,
+					C1D2E3F40100000000000002 /* DashboardEntriesFeatureTests.swift in Sources */,
+					B1C2D3E40100000000000007 /* APIClientTests.swift in Sources */,
+					B1C2D3E40100000000000008 /* UploadSupportTests.swift in Sources */,
+					B1C2D3E40100000000000009 /* AgentRunTransportTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A1B2C3D40100000000000125 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1B2C3D40100000000000100 /* BillHelperApp */;
+			targetProxy = A1B2C3D40100000000000020 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A1B2C3D40100000000000140 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A1B2C3D40100000000000141 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+			};
+			name = Release;
+		};
+		A1B2C3D40100000000000142 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_BILL_HELPER_API_BASE_URL = "http://localhost:8000/api/v1";
+				INFOPLIST_KEY_BILL_HELPER_APP_ENVIRONMENT = local;
+				INFOPLIST_KEY_CFBundleDisplayName = "Bill Helper";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.billhelper.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A1B2C3D40100000000000143 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_BILL_HELPER_API_BASE_URL = "http://localhost:8000/api/v1";
+				INFOPLIST_KEY_BILL_HELPER_APP_ENVIRONMENT = local;
+				INFOPLIST_KEY_CFBundleDisplayName = "Bill Helper";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.billhelper.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		A1B2C3D40100000000000144 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.billhelper.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BillHelperApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BillHelperApp";
+			};
+			name = Debug;
+		};
+		A1B2C3D40100000000000145 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.billhelper.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BillHelperApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/BillHelperApp";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A1B2C3D40100000000000130 /* Build configuration list for PBXNativeTarget "BillHelperApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D40100000000000142 /* Debug */,
+				A1B2C3D40100000000000143 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D40100000000000131 /* Build configuration list for PBXNativeTarget "BillHelperAPITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D40100000000000144 /* Debug */,
+				A1B2C3D40100000000000145 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D40100000000000132 /* Build configuration list for PBXProject "BillHelperApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D40100000000000140 /* Debug */,
+				A1B2C3D40100000000000141 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A1B2C3D40100000000000110 /* Project object */;
+}
