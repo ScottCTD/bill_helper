@@ -3,10 +3,10 @@ from __future__ import annotations
 from functools import lru_cache
 import json
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from backend.config import SHARED_DATA_DIR, _env_files, ensure_env_file_variables_loaded
 
@@ -25,6 +25,13 @@ def _normalize_text_or_none(value: Any) -> str | None:
 class TelegramSettings(BaseSettings):
     bot_token: str = Field(
         validation_alias=AliasChoices("TELEGRAM_BOT_TOKEN", "BILL_HELPER_TELEGRAM_BOT_TOKEN")
+    )
+    allowed_user_ids: Annotated[frozenset[int], NoDecode] = Field(
+        default_factory=frozenset,
+        validation_alias=AliasChoices(
+            "TELEGRAM_ALLOWED_USER_IDS",
+            "BILL_HELPER_TELEGRAM_ALLOWED_USER_IDS",
+        ),
     )
     webhook_secret: str | None = Field(
         default=None,
@@ -82,6 +89,43 @@ class TelegramSettings(BaseSettings):
     @classmethod
     def normalize_optional_text(cls, value: Any) -> str | None:
         return _normalize_text_or_none(value)
+
+    @field_validator("allowed_user_ids", mode="before")
+    @classmethod
+    def parse_allowed_user_ids(cls, value: Any) -> frozenset[int]:
+        if value is None:
+            return frozenset()
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                return frozenset()
+            if normalized.startswith("["):
+                try:
+                    value = json.loads(normalized)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        "allowed user IDs must be a JSON array or comma-separated integers"
+                    ) from exc
+            else:
+                value = normalized.split(",")
+        if not isinstance(value, list | tuple | set | frozenset):
+            raise ValueError("allowed user IDs must be a JSON array or comma-separated integers")
+
+        normalized_ids: set[int] = set()
+        for raw_item in value:
+            if isinstance(raw_item, bool):
+                raise ValueError("allowed user IDs must be positive integers")
+            normalized_item = _normalize_text_or_none(raw_item)
+            if normalized_item is None:
+                raise ValueError("allowed user IDs must not contain empty values")
+            try:
+                user_id = int(normalized_item)
+            except ValueError as exc:
+                raise ValueError("allowed user IDs must be positive integers") from exc
+            if user_id <= 0:
+                raise ValueError("allowed user IDs must be positive integers")
+            normalized_ids.add(user_id)
+        return frozenset(normalized_ids)
 
     @field_validator("telegram_api_base_url", "backend_base_url", mode="before")
     @classmethod
