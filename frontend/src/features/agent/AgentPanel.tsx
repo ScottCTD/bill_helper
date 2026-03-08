@@ -36,7 +36,8 @@ import type {
   AgentThread,
   AgentThreadDetail,
   AgentThreadSummary,
-  AgentToolCall
+  AgentToolCall,
+  RuntimeSettings
 } from "../../lib/types";
 import {
   buildThreadUsageTotals,
@@ -96,6 +97,33 @@ function deriveThreadTitleFromFilename(filename: string): string {
   const normalized = stem.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
   const nextTitle = normalized || filename.trim() || "Bulk upload";
   return nextTitle.slice(0, 255);
+}
+
+function normalizeModelName(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function resolveComposerModelName(
+  availableModels: string[],
+  threadDetail?: AgentThreadDetail,
+  runtimeSettings?: RuntimeSettings
+): string {
+  const latestRunModelName = normalizeModelName(threadDetail?.runs.at(-1)?.model_name);
+  const configuredModelName = normalizeModelName(threadDetail?.configured_model_name);
+  const runtimeDefaultModelName = normalizeModelName(runtimeSettings?.agent_model);
+  const fallbackModelName = normalizeModelName(availableModels[0]);
+
+  for (const candidate of [latestRunModelName, configuredModelName, runtimeDefaultModelName, fallbackModelName]) {
+    if (candidate && availableModels.includes(candidate)) {
+      return candidate;
+    }
+  }
+
+  return latestRunModelName ?? configuredModelName ?? runtimeDefaultModelName ?? fallbackModelName ?? "";
 }
 
 function buildThreadSummary(thread: AgentThread, overrides: Partial<AgentThreadSummary> = {}): AgentThreadSummary {
@@ -158,6 +186,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const [isThreadReviewOpen, setIsThreadReviewOpen] = useState(false);
   const { containerRef: timelineScrollRef, isAtBottom, scrollToBottom, snapToBottom } = useStickToBottom<HTMLDivElement>();
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [composerModelOverride, setComposerModelOverride] = useState<string | null>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
   const threadRunsRef = useRef<AgentRun[]>([]);
   const optimisticToolCallsRef = useRef<Record<string, AgentToolCall[]>>({});
@@ -266,9 +295,26 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   }, [isOpen, selectedThreadId, threadsQuery.data]);
 
   const threadMessages = threadQuery.data?.messages;
+  const availableComposerModels = runtimeSettingsQuery.data?.available_agent_models ?? [];
+  const resolvedComposerModel = useMemo(
+    () => resolveComposerModelName(availableComposerModels, threadQuery.data, runtimeSettingsQuery.data),
+    [availableComposerModels, threadQuery.data, runtimeSettingsQuery.data]
+  );
+  const selectedComposerModel =
+    composerModelOverride && availableComposerModels.includes(composerModelOverride) ? composerModelOverride : resolvedComposerModel;
   const bulkLaunchConcurrencyLimit =
     runtimeSettingsQuery.data?.agent_bulk_max_concurrent_threads ?? DEFAULT_BULK_LAUNCH_CONCURRENCY_LIMIT;
   const lastSnappedThreadRef = useRef("");
+
+  useEffect(() => {
+    setComposerModelOverride(null);
+  }, [selectedThreadId]);
+
+  useEffect(() => {
+    if (composerModelOverride && !availableComposerModels.includes(composerModelOverride)) {
+      setComposerModelOverride(null);
+    }
+  }, [availableComposerModels, composerModelOverride]);
 
   useEffect(() => {
     threadRunsRef.current = threadQuery.data?.runs ?? [];
@@ -568,7 +614,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     setIsStreamHealthy(false);
   }, [pendingAssistantMessage, resetOptimisticRunState, selectedThreadId, threadQuery.data?.messages]);
 
-  const activeModelName = useMemo(() => {
+  const persistedActiveModelName = useMemo(() => {
     const runs = threadQuery.data?.runs ?? [];
     const latest = runs[runs.length - 1];
     const runModelName = latest?.model_name?.trim();
@@ -578,6 +624,10 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     const configuredModelName = threadQuery.data?.configured_model_name?.trim();
     return configuredModelName || "unknown model";
   }, [threadQuery.data?.runs, threadQuery.data?.configured_model_name]);
+  const activeModelName =
+    composerModelOverride && availableComposerModels.includes(composerModelOverride)
+      ? composerModelOverride
+      : persistedActiveModelName;
 
   const threadUsageTotals = useMemo(() => {
     return buildThreadUsageTotals(threadQuery.data);
@@ -612,6 +662,10 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       setIsStreamHealthy(false);
     }
   }, [isRunInFlight, pendingAssistantMessage, pendingUserMessage, resetOptimisticRunState, selectedThreadId]);
+
+  function handleComposerModelChange(event: ChangeEvent<HTMLSelectElement>) {
+    setComposerModelOverride(event.target.value);
+  }
 
   async function handleCreateThread() {
     setActionError(null);
@@ -834,7 +888,8 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
           await sendAgentMessage({
             threadId: createdThread.id,
             content,
-            files: [attachment.file]
+            files: [attachment.file],
+            modelName: selectedComposerModel || undefined
           });
           return { attachmentId: attachment.id, fileName: attachment.file.name, failed: false as const, errorMessage: null };
         } catch (error) {
@@ -950,6 +1005,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         threadId: activeThreadId,
         content,
         files: sendingDraftFiles.map((item) => item.file),
+        modelName: selectedComposerModel || undefined,
         signal: sendAbortController.signal,
         onEvent: (streamEvent) => handleAgentStreamEvent(activeThreadId, streamEvent)
       });
@@ -1215,6 +1271,9 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               composerTextareaRef={composerTextareaRef}
               fileInputRef={fileInputRef}
               draftMessage={draftMessage}
+              availableModels={availableComposerModels}
+              selectedModel={selectedComposerModel}
+              isModelPickerDisabled={isMutating || isBulkLaunching}
               isMutating={isMutating}
               isRunInFlight={isRunInFlight}
               isSendingMessage={isSendingMessage}
@@ -1230,6 +1289,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               onDragLeave={handleComposerDragLeave}
               onDrop={handleComposerDrop}
               onMessageChange={handleDraftMessageChange}
+              onModelChange={handleComposerModelChange}
               onComposerKeyDown={handleComposerKeyDown}
               onComposerPaste={handleComposerPaste}
               onFileSelection={handleDraftFileSelection}

@@ -16,6 +16,7 @@ Current contract highlights:
 - `Account` no longer exposes `entity_id`
 - `Entity` includes `is_account`
 - `Entry` and `EntryDetail` include `from_entity_missing` and `to_entity_missing`
+- runtime settings include both `agent_model` and ordered `available_agent_models`
 
 ### `frontend/src/lib/api.ts`
 
@@ -27,6 +28,7 @@ Responsibilities:
 - runtime settings client methods:
   - `getRuntimeSettings`
   - `updateRuntimeSettings`
+  - `updateRuntimeSettings` uses a typed runtime-settings patch payload that mirrors the backend `PATCH /settings` contract
 - taxonomy client methods:
   - `listTaxonomies`
   - `listTaxonomyTerms`

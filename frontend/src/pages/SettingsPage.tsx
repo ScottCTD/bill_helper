@@ -12,7 +12,7 @@ import { Textarea } from "../components/ui/textarea";
 import { getRuntimeSettings, listCurrencies, updateRuntimeSettings } from "../lib/api";
 import { invalidateRuntimeSettingsReadModels } from "../lib/queryInvalidation";
 import { queryKeys } from "../lib/queryKeys";
-import type { RuntimeSettings } from "../lib/types";
+import type { RuntimeSettings, RuntimeSettingsUpdatePayload } from "../lib/types";
 
 interface SettingsFormState {
   current_user_name: string;
@@ -20,6 +20,7 @@ interface SettingsFormState {
   default_currency_code: string;
   dashboard_currency_code: string;
   agent_model: string;
+  available_agent_models: string;
   agent_max_steps: string;
   agent_bulk_max_concurrent_threads: string;
   agent_max_images_per_message: string;
@@ -48,6 +49,10 @@ function hasStoredProviderOverride(data: RuntimeSettings): boolean {
 }
 
 function formatUserMemoryLines(items: string[] | null): string {
+  return (items ?? []).join("\n");
+}
+
+function formatAgentModelLines(items: string[] | null): string {
   return (items ?? []).join("\n");
 }
 
@@ -83,6 +88,29 @@ function parseUserMemoryLines(rawValue: string): string[] | null {
   return items.length > 0 ? items : null;
 }
 
+function normalizeAgentModelLine(rawValue: string): string | null {
+  const normalized = rawValue.trim();
+  return normalized || null;
+}
+
+function parseAgentModelLines(rawValue: string): string[] {
+  const items: string[] = [];
+  const seenKeys = new Set<string>();
+  for (const line of rawValue.split(/\r?\n/)) {
+    const item = normalizeAgentModelLine(line);
+    if (!item) {
+      continue;
+    }
+    const itemKey = item.toLocaleLowerCase();
+    if (seenKeys.has(itemKey)) {
+      continue;
+    }
+    seenKeys.add(itemKey);
+    items.push(item);
+  }
+  return items;
+}
+
 function buildFormState(data: RuntimeSettings): SettingsFormState {
   return {
     current_user_name: data.current_user_name,
@@ -90,6 +118,7 @@ function buildFormState(data: RuntimeSettings): SettingsFormState {
     default_currency_code: data.default_currency_code,
     dashboard_currency_code: data.dashboard_currency_code,
     agent_model: data.agent_model,
+    available_agent_models: formatAgentModelLines(data.available_agent_models),
     agent_max_steps: String(data.agent_max_steps),
     agent_bulk_max_concurrent_threads: String(data.agent_bulk_max_concurrent_threads),
     agent_max_images_per_message: String(data.agent_max_images_per_message),
@@ -230,13 +259,16 @@ export function SettingsPage() {
       const nextAgentApiKey = formState.use_custom_provider_override
         ? (formState.agent_api_key_dirty ? (formState.agent_api_key.trim() || null) : undefined)
         : null;
+      const nextAgentModel = formState.agent_model.trim();
+      const nextAvailableAgentModels = parseAgentModelLines(formState.available_agent_models);
       const nextUserMemory = parseUserMemoryLines(formState.user_memory);
 
-      const payload: Record<string, unknown> = {
+      const payload: RuntimeSettingsUpdatePayload = {
         user_memory: nextUserMemory,
         default_currency_code: nextDefaultCurrencyCode,
         dashboard_currency_code: nextDashboardCurrencyCode,
-        agent_model: formState.agent_model.trim(),
+        agent_model: nextAgentModel,
+        available_agent_models: nextAvailableAgentModels,
         agent_max_steps: nextAgentMaxSteps,
         agent_bulk_max_concurrent_threads: nextAgentBulkMaxConcurrentThreads,
         agent_max_images_per_message: nextAgentMaxImagesPerMessage,
@@ -247,7 +279,7 @@ export function SettingsPage() {
         agent_retry_backoff_multiplier: nextAgentRetryBackoffMultiplier,
         agent_base_url: nextAgentBaseUrl,
       };
-      
+
       // Only include agent_api_key if it was explicitly changed while custom override is enabled,
       // or always clear it when the override toggle is disabled.
       if (nextAgentApiKey !== undefined) {
@@ -266,6 +298,7 @@ export function SettingsPage() {
       default_currency_code: null,
       dashboard_currency_code: null,
       agent_model: null,
+      available_agent_models: [],
       agent_max_steps: null,
       agent_bulk_max_concurrent_threads: null,
       agent_max_images_per_message: null,
@@ -302,7 +335,7 @@ export function SettingsPage() {
               <CardDescription>Configure defaults for entries, dashboard analytics, and agent runtime behavior.</CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">Model: {settingsQuery.data.agent_model}</Badge>
+              <Badge variant="outline">Default model: {settingsQuery.data.agent_model}</Badge>
             </div>
           </div>
         </CardHeader>
@@ -379,10 +412,25 @@ export function SettingsPage() {
               />
             </FormField>
 
-            <FormField label="Agent model">
+            <FormField
+              label="Default model"
+              hint="Used for new chats and runs. If it is missing from Available models, the server adds it to the effective list."
+            >
               <Input
                 value={formState.agent_model}
                 onChange={(event) => setFormState((state) => (state ? { ...state, agent_model: event.target.value } : state))}
+              />
+            </FormField>
+
+            <FormField
+              label="Available models"
+              hint="Enter one model identifier per line. Blank lines are ignored and order is preserved."
+            >
+              <Textarea
+                value={formState.available_agent_models}
+                onChange={(event) =>
+                  setFormState((state) => (state ? { ...state, available_agent_models: event.target.value } : state))
+                }
               />
             </FormField>
 

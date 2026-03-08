@@ -70,12 +70,12 @@ At minimum, set the API key for your chosen model provider:
 
 ```env
 # Pick one provider credential for the agent model:
-OPENROUTER_API_KEY=your-key-here          # default model uses OpenRouter
+AWS_BEARER_TOKEN_BEDROCK=ABSK...          # default model uses Bedrock bearer-token auth
+# OPENROUTER_API_KEY=your-key-here        # if using openrouter/* models
 # OPENAI_API_KEY=your-key-here            # if using openai/* models
 # ANTHROPIC_API_KEY=your-key-here         # if using anthropic/* models
-# AWS_BEARER_TOKEN_BEDROCK=ABSK...        # if using bedrock/* bearer-token auth
 
-# Optional: change the model (default: openrouter/qwen/qwen3.5-27b)
+# Optional: change the model (default: bedrock/us.anthropic.claude-sonnet-4-6)
 # BILL_HELPER_AGENT_MODEL=openai/gpt-4.1-mini
 # BILL_HELPER_AGENT_API_KEY=provider-key   # explicit app-level override for a custom endpoint
 # BILL_HELPER_AGENT_BASE_URL=https://api.example.com/v1
@@ -121,7 +121,7 @@ All settings use a `BILL_HELPER_` prefix and can be set via `.env` or the in-app
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BILL_HELPER_AGENT_MODEL` | `openrouter/qwen/qwen3.5-27b` | LiteLLM model identifier |
+| `BILL_HELPER_AGENT_MODEL` | `bedrock/us.anthropic.claude-sonnet-4-6` | LiteLLM model identifier |
 | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool-call steps per run |
 | `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `CAD` | Default currency for new entries |
 | `BILL_HELPER_DASHBOARD_CURRENCY_CODE` | `CAD` | Currency used in dashboard analytics |

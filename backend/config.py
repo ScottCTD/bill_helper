@@ -24,6 +24,7 @@ _env_files: tuple[str, ...] = (
 DEFAULT_CORS_SCHEME = "http"
 DEFAULT_CORS_HOST = "localhost"
 DEFAULT_CORS_PORT = 5173
+DEFAULT_AGENT_MODEL = "bedrock/us.anthropic.claude-sonnet-4-6"
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:
@@ -98,7 +99,7 @@ class Settings(BaseSettings):
             "DASHBOARD_CURRENCY_CODE", "BILL_HELPER_DASHBOARD_CURRENCY_CODE"
         ),
     )
-    agent_model: str = "openrouter/qwen/qwen3.5-27b"
+    agent_model: str = DEFAULT_AGENT_MODEL
     agent_max_steps: int = 100
     agent_bulk_max_concurrent_threads: int = Field(default=4, ge=1, le=16)
     agent_retry_max_attempts: int = Field(default=3, ge=1, le=10)

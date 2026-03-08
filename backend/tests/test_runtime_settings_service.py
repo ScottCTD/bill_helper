@@ -58,6 +58,11 @@ def test_build_runtime_settings_read_prefers_request_principal_name() -> None:
         payload = build_runtime_settings_read(db, principal_name="alice")
         assert payload.current_user_name == "alice"
         assert payload.agent_model == "openai/gpt-4.1-mini"
+        assert payload.available_agent_models == [
+            get_settings().agent_model,
+            "openai/gpt-4.1-mini",
+            "openrouter/qwen/qwen3.5-27b",
+        ]
         assert payload.overrides.agent_model == "openai/gpt-4.1-mini"
         assert payload.agent_bulk_max_concurrent_threads == get_settings().agent_bulk_max_concurrent_threads
     finally:
@@ -92,11 +97,39 @@ def test_build_runtime_settings_read_reports_provider_credentials_without_custom
     try:
         with patch(
             "backend.services.runtime_settings.validate_litellm_environment",
-            return_value=(True, [], "openrouter/qwen/qwen3.5-27b"),
+            return_value=(True, [], get_settings().agent_model),
         ):
             payload = build_runtime_settings_read(db)
         assert payload.agent_api_key_configured is True
         assert payload.overrides.agent_api_key_configured is False
+    finally:
+        db.close()
+
+
+def test_resolve_runtime_settings_uses_override_available_agent_models_and_keeps_default_model_present() -> None:
+    make_session = get_session_maker()
+    db = make_session()
+    try:
+        update_runtime_settings_override(
+            db,
+            RuntimeSettingsUpdate(
+                agent_model="openai/gpt-4.1-mini",
+                available_agent_models=["bedrock/us.anthropic.claude-sonnet-4-6"],
+            ),
+        )
+        db.commit()
+
+        resolved = resolve_runtime_settings(db)
+        payload = build_runtime_settings_read(db)
+
+        assert resolved.available_agent_models == [
+            "bedrock/us.anthropic.claude-sonnet-4-6",
+            "openai/gpt-4.1-mini",
+        ]
+        assert payload.available_agent_models == resolved.available_agent_models
+        assert payload.overrides.available_agent_models == [
+            "bedrock/us.anthropic.claude-sonnet-4-6"
+        ]
     finally:
         db.close()
 

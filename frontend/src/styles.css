@@ -2125,8 +2125,16 @@
     @apply inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
 
+  .agent-composer-primary-actions {
+    @apply ml-auto flex items-center gap-2;
+  }
+
+  .agent-composer-model-select {
+    @apply min-w-[15rem] max-w-[20rem] text-xs;
+  }
+
   .agent-composer-send {
-    @apply ml-auto gap-1.5;
+    @apply gap-1.5;
   }
 
   .tooltip-root {

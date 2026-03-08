@@ -43,6 +43,7 @@
 - `versions/0025_user_memory_json_list.py`: normalizes persisted runtime user memory into JSON list form for prompt rendering and add-only appends.
 - `versions/0026_entry_groups_v2.py`: replaces link-derived groups with first-class typed groups and membership rows, migrates compatible legacy linked components, and removes `entries.group_id` plus `entry_links`.
 - `versions/0027_add_agent_bulk_concurrency_setting.py`: adds persisted Bulk mode concurrency control to runtime settings (`agent_bulk_max_concurrent_threads`).
+- `versions/0028_add_available_agent_models_to_runtime_settings.py`: adds persisted ordered runtime model-list overrides (`runtime_settings.available_agent_models`).
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
@@ -93,7 +94,7 @@
 - `crud_policy.py`: shared CRUD validation/conflict policy primitives and standardized error-translation helpers.
 - `serializers.py`: ORM-to-schema mapping helpers.
 - `taxonomy.py`: shared taxonomy normalization, term assignment, and usage-count helpers.
-- `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, plus DB-backed list-form `user_memory` append support.
+- `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, including DB-backed ordered `user_memory` and `available_agent_models` support.
 - `runtime_settings_normalization.py`: shared normalization/validation helpers used by runtime settings schemas + service resolver.
 - `agent/`: agent runtime, tool execution, prompt-size counting, serialization, prompt/model adapters, and review apply handlers.
   - `tool_handlers_memory.py`: add-only runtime memory append handler for explicit remember-this requests.
