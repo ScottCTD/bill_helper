@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from backend.enums_agent import AgentChangeType
@@ -58,6 +58,32 @@ def format_entry_record(record: dict[str, Any]) -> str:
         f"{record.get('amount_minor')} {record.get('currency_code')} "
         f"from={record.get('from_entity') or '-'} to={record.get('to_entity') or '-'} tags={tags}"
     )
+
+
+def format_group_member_record(record: dict[str, Any]) -> str:
+    member_type = record.get("member_type")
+    member_role = f" role={record.get('member_role')}" if record.get("member_role") else ""
+    if member_type == "entry":
+        return (
+            f"entry_id={record.get('entry_id')} {record.get('occurred_at')} {record.get('name')} "
+            f"{record.get('amount_minor')} {record.get('kind')}{member_role}"
+        )
+    date_range = record.get("date_range") or {}
+    return (
+        f"group_id={record.get('group_id')} {record.get('name')} ({record.get('group_type')}, "
+        f"descendants={record.get('descendant_entry_count')}, "
+        f"range={date_range.get('first_occurred_at') or '-'} to {date_range.get('last_occurred_at') or '-'}){member_role}"
+    )
+
+
+def format_group_relationship_record(record: dict[str, Any]) -> str:
+    source = record.get("source") or {}
+    target = record.get("target") or {}
+    source_id = source.get("entry_id") or source.get("group_id") or "?"
+    target_id = target.get("entry_id") or target.get("group_id") or "?"
+    source_name = source.get("name") or "Unknown"
+    target_name = target.get("name") or "Unknown"
+    return f"{source_id} {source_name} -> {target_id} {target_name} ({record.get('relation')})"
 
 
 def entry_ambiguity_details(entries: list[Entry]) -> dict[str, Any]:
@@ -311,6 +337,21 @@ def list_entries(context: ToolContext, args: ListEntriesArgs) -> ToolExecutionRe
         conditions.append(Entry.occurred_at <= args.end_date)
     if args.kind is not None:
         conditions.append(Entry.kind == args.kind)
+    if args.source is not None:
+        source_pattern = f"%{args.source}%"
+        conditions.append(
+            or_(
+                Entry.name.ilike(source_pattern),
+                Entry.from_entity.ilike(source_pattern),
+                Entry.to_entity.ilike(source_pattern),
+            )
+        )
+    if args.name is not None:
+        conditions.append(Entry.name.ilike(f"%{args.name}%"))
+    if args.from_entity is not None:
+        conditions.append(Entry.from_entity.ilike(f"%{args.from_entity}%"))
+    if args.to_entity is not None:
+        conditions.append(Entry.to_entity.ilike(f"%{args.to_entity}%"))
 
     candidate_rows = list(
         context.db.scalars(
@@ -322,12 +363,20 @@ def list_entries(context: ToolContext, args: ListEntriesArgs) -> ToolExecutionRe
         )
     )
 
-    ranked: list[tuple[tuple[int, int, int, int, int, int], Entry]] = []
+    ranked: list[tuple[tuple[int, int, int, int, int, int, int], Entry]] = []
     for entry in candidate_rows:
+        source_ranks = [
+            string_match_rank(entry.name, args.source),
+            string_match_rank(entry.from_entity, args.source),
+            string_match_rank(entry.to_entity, args.source),
+        ]
+        matching_source_ranks = [rank for rank, ok in source_ranks if ok]
+        source_ok = bool(matching_source_ranks) if args.source is not None else True
+        source_rank = min(matching_source_ranks) if matching_source_ranks else 0
         name_rank, name_ok = string_match_rank(entry.name, args.name)
         from_rank, from_ok = string_match_rank(entry.from_entity, args.from_entity)
         to_rank, to_ok = string_match_rank(entry.to_entity, args.to_entity)
-        if not (name_ok and from_ok and to_ok):
+        if not (source_ok and name_ok and from_ok and to_ok):
             continue
 
         entry_tags = [normalize_tag_name(tag.name) for tag in entry.tags]
@@ -351,6 +400,7 @@ def list_entries(context: ToolContext, args: ListEntriesArgs) -> ToolExecutionRe
         ranked.append(
             (
                 (
+                    source_rank,
                     name_rank,
                     from_rank,
                     to_rank,
@@ -507,12 +557,28 @@ def list_groups(context: ToolContext, args: ListGroupsArgs) -> ToolExecutionResu
             "summary": f"returned details for group {record['group_id']}",
             "group": record,
         }
+        direct_members_text = "; ".join(
+            format_group_member_record(member) for member in record.get("direct_members", [])
+        ) or "(none)"
+        relationships_text = "; ".join(
+            format_group_relationship_record(relationship) for relationship in record.get("derived_relationships", [])
+        ) or "(none)"
         return ToolExecutionResult(
             output_text=format_lines(
                 [
                     "OK",
                     f"summary: returned details for group {record['group_id']}",
-                    f"group: {record}",
+                    f"group: {record['group_id']} {record['name']} ({record['group_type']})",
+                    (
+                        "stats: "
+                        f"direct_members={record.get('direct_member_count')} "
+                        f"direct_entries={record.get('direct_entry_count')} "
+                        f"direct_child_groups={record.get('direct_child_group_count')} "
+                        f"descendants={record.get('descendant_entry_count')} "
+                        f"range={record.get('first_occurred_at') or '-'} to {record.get('last_occurred_at') or '-'}"
+                    ),
+                    f"direct_members: {direct_members_text}",
+                    f"derived_relationships: {relationships_text}",
                 ]
             ),
             output_json=output_json,

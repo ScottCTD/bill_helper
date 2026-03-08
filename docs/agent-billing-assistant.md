@@ -249,7 +249,7 @@ Tool execution is composed from `backend/services/agent/tool_runtime.py` (regist
 
 #### `list_entries` (read)
 
-**Description:** List/query entries by date, date range, name, from_entity, to_entity, tags, and kind. When name/from/to filters are present, exact matches are ranked higher than substring matches. Each returned entry includes an `entry_id` alias (the first 8 characters of the full entry id) that can be reused with `propose_update_entry` and `propose_delete_entry`. This tool is read-only and never mutates data.
+**Description:** List/query entries by date, date range, `source`, name, from_entity, to_entity, tags, and kind. Use `source` for broad text search across entry name, `from_entity`, and `to_entity`, matching the Entries table search. When source/name/from/to filters are present, exact matches are ranked higher than substring matches. Each returned entry includes an `entry_id` alias (the first 8 characters of the full entry id) that can be reused with `propose_update_entry` and `propose_delete_entry`. This tool is read-only and never mutates data.
 
 **Arguments:**
 
@@ -259,6 +259,7 @@ Tool execution is composed from `backend/services/agent/tool_runtime.py` (regist
 | `date`        | string (date) | null | no       | null    | ISO date, e.g. `"2026-03-02"`                                     |
 | `start_date`  | string (date) | null | no       | null    | ISO date, e.g. `"2026-03-01"`                                     |
 | `end_date`    | string (date) | null | no       | null    | ISO date, e.g. `"2026-03-31"`; must be ≥ start_date when both set |
+| `source`      | string | null        | no       | null    | broad substring filter across entry name, from_entity, and to_entity |
 | `name`        | string | null        | no       | null    | substring filter                                                  |
 | `from_entity` | string | null        | no       | null    | substring filter                                                  |
 | `to_entity`   | string | null        | no       | null    | substring filter                                                  |
@@ -358,7 +359,7 @@ entries: entry_id=abcd1234 YYYY-MM-DD name amount_minor CURRENCY from=from_entit
 
 #### `list_groups` (read)
 
-**Description:** List/query groups by name or `group_type`, or inspect one group in detail with `group_id`. In list mode, each returned row includes a reusable short `group_id` alias. In detail mode, provide only `group_id` and the tool returns the selected group's direct members plus derived graph metadata.
+**Description:** List/query groups by name or `group_type`, or inspect one group in detail with `group_id`. In list mode, each returned row includes a reusable short `group_id` alias. In detail mode, provide only `group_id` and the tool returns the selected group's summary, direct members, and compact derived relationships.
 
 **Arguments:**
 
@@ -377,7 +378,7 @@ summary: returned N of M matching groups
 groups: group_id=abcd1234 Monthly Bills (RECURRING, members=3); ...
 ```
 
-Detail mode returns one `group` record with summary fields, `direct_members`, and `derived_graph`.
+Detail mode returns one `group` record with summary fields, `direct_members`, and `derived_relationships`.
 
 ---
 

@@ -121,6 +121,7 @@ class ListEntriesArgs(BaseModel):
     date: DateValue | None = Field(default=None, description=_DATE_DESC)
     start_date: DateValue | None = Field(default=None, description=f"{_DATE_DESC}. When both start_date and end_date are set, end_date must be >= start_date.")
     end_date: DateValue | None = Field(default=None, description=_DATE_DESC)
+    source: str | None = None
     name: str | None = None
     from_entity: str | None = None
     to_entity: str | None = None
@@ -132,7 +133,7 @@ class ListEntriesArgs(BaseModel):
         description="Max entries to return. No upper bound; be cautious with very large values.",
     )
 
-    @field_validator("name", "from_entity", "to_entity")
+    @field_validator("source", "name", "from_entity", "to_entity")
     @classmethod
     def normalize_query_text(cls, value: str | None) -> str | None:
         return normalize_loose_text(value)
