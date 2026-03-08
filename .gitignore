@@ -242,3 +242,7 @@ benchmark/reports/
 # Desloppify artifacts
 .desloppify/
 scorecard.png
+
+# Xcode user-local state
+xcuserdata/
+*.xcuserstate

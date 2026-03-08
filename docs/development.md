@@ -275,6 +275,13 @@ cd /path/to/bill_helper/frontend
 npm run test
 ```
 
+iOS shell + API tests:
+
+```bash
+cd /path/to/bill_helper
+xcodebuild -project ios/BillHelperApp.xcodeproj -scheme BillHelperApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:BillHelperAPITests test
+```
+
 Migration state:
 
 ```bash

@@ -120,7 +120,7 @@ struct AgentThread: Codable, Equatable, Sendable {
     let updatedAt: String
 }
 
-struct AgentThreadSummary: Codable, Equatable, Sendable {
+struct AgentThreadSummary: Codable, Equatable, Hashable, Sendable {
     let id: String
     let title: String?
     let createdAt: String

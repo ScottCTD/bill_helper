@@ -147,6 +147,7 @@ frontend/                 # React + Vite application
   src/features/agent/     # Agent workspace, timeline, and review feature
   src/features/           # Feature modules (agent, accounts, properties)
   src/pages/              # Route pages
+ios/                      # SwiftUI iOS MVP shell, shared mobile core, and API tests
 alembic/                  # Database migrations
 scripts/                  # Dev and seed scripts
 docs/                     # Extended documentation
@@ -164,6 +165,9 @@ cd frontend && npm run test
 
 # Frontend build check
 cd frontend && npm run build
+
+# iOS shell + API tests
+xcodebuild -project ios/BillHelperApp.xcodeproj -scheme BillHelperApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:BillHelperAPITests test
 ```
 
 ## Documentation
