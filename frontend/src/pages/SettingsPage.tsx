@@ -1,7 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { FormField } from "../components/ui/form-field";
@@ -9,10 +8,12 @@ import { Input } from "../components/ui/input";
 import { Switch } from "../components/ui/switch";
 import { NativeSelect } from "../components/ui/native-select";
 import { Textarea } from "../components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { getRuntimeSettings, listCurrencies, updateRuntimeSettings } from "../lib/api";
 import { invalidateRuntimeSettingsReadModels } from "../lib/queryInvalidation";
 import { queryKeys } from "../lib/queryKeys";
 import type { RuntimeSettings, RuntimeSettingsUpdatePayload } from "../lib/types";
+import { cn } from "../lib/utils";
 
 interface SettingsFormState {
   current_user_name: string;
@@ -35,6 +36,29 @@ interface SettingsFormState {
   agent_api_key_configured: boolean;
   agent_api_key_dirty: boolean;
 }
+
+type SettingsTab = "general" | "agent";
+
+const SETTINGS_FIELD_IDS = {
+  agentMemory: "settings-agent-memory",
+  defaultModel: "settings-default-model",
+  availableModels: "settings-available-models",
+  bulkMaxThreads: "settings-bulk-max-threads",
+  maxAttachmentsPerMessage: "settings-max-attachments-per-message",
+};
+
+const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; description: string }> = [
+  {
+    id: "general",
+    label: "General",
+    description: "Identity context and workspace defaults used by entries and dashboard views."
+  },
+  {
+    id: "agent",
+    label: "Agent",
+    description: "Model selection, provider overrides, bulk limits, attachment guardrails, and reliability settings."
+  }
+];
 
 const USER_MEMORY_LINE_PREFIXES = ["- ", "* ", "+ "];
 
@@ -162,6 +186,8 @@ export function SettingsPage() {
   const [formState, setFormState] = useState<SettingsFormState | null>(null);
   const [initialState, setInitialState] = useState<SettingsFormState | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
 
   const updateMutation = useMutation({
     mutationFn: updateRuntimeSettings,
@@ -201,6 +227,7 @@ export function SettingsPage() {
     }
     return JSON.stringify(formState) !== JSON.stringify(initialState);
   }, [formState, initialState]);
+  const activeTabDefinition = SETTINGS_TABS.find((tab) => tab.id === activeTab) ?? SETTINGS_TABS[0];
 
   function submitSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -329,270 +356,418 @@ export function SettingsPage() {
       <Card className="overflow-hidden">
         <CardHeader className="relative gap-4 pb-4">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-muted/55 via-background to-secondary/45" />
-          <div className="relative flex flex-wrap items-start justify-between gap-3">
+          <div className="relative grid gap-3">
             <div>
               <CardTitle>Settings</CardTitle>
               <CardDescription>Configure defaults for entries, dashboard analytics, and agent runtime behavior.</CardDescription>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">Default model: {settingsQuery.data.agent_model}</Badge>
-            </div>
           </div>
         </CardHeader>
-        <CardContent className="relative flex flex-wrap items-center gap-2">
-          <Button form="runtime-settings-form" type="submit" disabled={!isDirty || updateMutation.isPending}>
-            {updateMutation.isPending ? "Saving..." : "Save changes"}
-          </Button>
-          <Button type="button" variant="outline" onClick={resetOverrides} disabled={updateMutation.isPending}>
-            Reset to server defaults
-          </Button>
-          {formError ? <p className="error w-full">{formError}</p> : null}
+        <CardContent className="relative grid gap-4">
+          {formError ? <p className="error">{formError}</p> : null}
+          <div className="settings-tab-list" role="tablist" aria-label="Settings sections">
+            {SETTINGS_TABS.map((tab) => (
+              <Button
+                key={tab.id}
+                id={`settings-tab-${tab.id}`}
+                type="button"
+                role="tab"
+                aria-controls={`settings-panel-${tab.id}`}
+                aria-selected={activeTab === tab.id}
+                variant={activeTab === tab.id ? "default" : "outline"}
+                size="sm"
+                className={cn("settings-tab-button", activeTab === tab.id ? "settings-tab-active" : "")}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </Button>
+            ))}
+          </div>
+          <p className="muted">{activeTabDefinition.description}</p>
         </CardContent>
       </Card>
 
-      <form id="runtime-settings-form" className="grid gap-4 xl:grid-cols-2" onSubmit={submitSettings}>
-        <Card>
-          <CardHeader>
-            <CardTitle>General</CardTitle>
-            <CardDescription>Defaults used by new ledger flows. Request identity is controlled by the active principal, not settings.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <FormField
-              label="Current user name"
-              hint="Read-only request principal for this session."
-            >
-              <Input value={formState.current_user_name} readOnly />
-            </FormField>
+      <form id="runtime-settings-form" className="grid gap-4 pb-28" onSubmit={submitSettings}>
+        {activeTab === "general" ? (
+          <div
+            id="settings-panel-general"
+            role="tabpanel"
+            aria-labelledby="settings-tab-general"
+            className="grid gap-4"
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle>Identity</CardTitle>
+                <CardDescription>Request identity comes from the active principal, not runtime settings overrides.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <FormField label="Current user name" hint="Read-only request principal for this session.">
+                  <Input value={formState.current_user_name} readOnly />
+                </FormField>
+              </CardContent>
+            </Card>
 
-            <FormField label="Default currency" hint="Used when entry currency is omitted in agent proposals and entry defaults.">
-              <NativeSelect
-                value={formState.default_currency_code}
-                onChange={(event) =>
-                  setFormState((state) => (state ? { ...state, default_currency_code: event.target.value.toUpperCase() } : state))
-                }
-              >
-                {currencyOptions.map((code) => (
-                  <option key={code} value={code}>
-                    {code}
-                  </option>
-                ))}
-              </NativeSelect>
-            </FormField>
+            <Card>
+              <CardHeader>
+                <CardTitle>Ledger defaults</CardTitle>
+                <CardDescription>Defaults used by new entry flows, agent proposals, and dashboard analytics.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField label="Default currency" hint="Used when entry currency is omitted in agent proposals and entry defaults.">
+                    <NativeSelect
+                      value={formState.default_currency_code}
+                      onChange={(event) =>
+                        setFormState((state) => (state ? { ...state, default_currency_code: event.target.value.toUpperCase() } : state))
+                      }
+                    >
+                      {currencyOptions.map((code) => (
+                        <option key={code} value={code}>
+                          {code}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </FormField>
 
-            <FormField label="Dashboard currency" hint="Used by dashboard analytics and reconciliation views.">
-              <NativeSelect
-                value={formState.dashboard_currency_code}
-                onChange={(event) =>
-                  setFormState((state) => (state ? { ...state, dashboard_currency_code: event.target.value.toUpperCase() } : state))
-                }
-              >
-                {currencyOptions.map((code) => (
-                  <option key={code} value={code}>
-                    {code}
-                  </option>
-                ))}
-              </NativeSelect>
-            </FormField>
-          </CardContent>
-        </Card>
+                  <FormField label="Dashboard currency" hint="Used by dashboard analytics and reconciliation views.">
+                    <NativeSelect
+                      value={formState.dashboard_currency_code}
+                      onChange={(event) =>
+                        setFormState((state) => (state ? { ...state, dashboard_currency_code: event.target.value.toUpperCase() } : state))
+                      }
+                    >
+                      {currencyOptions.map((code) => (
+                        <option key={code} value={code}>
+                          {code}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </FormField>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Agent Runtime</CardTitle>
-            <CardDescription>Controls model selection and guardrails for new runs and bulk launches.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <FormField
-              label="Agent memory"
-              hint="Persistent agent memory added to every system prompt. Enter one preference/rule/hint per line."
-            >
-              <Textarea
-                value={formState.user_memory}
-                onChange={(event) => setFormState((state) => (state ? { ...state, user_memory: event.target.value } : state))}
-              />
-            </FormField>
-
-            <FormField
-              label="Default model"
-              hint="Used for new chats and runs. If it is missing from Available models, the server adds it to the effective list."
-            >
-              <Input
-                value={formState.agent_model}
-                onChange={(event) => setFormState((state) => (state ? { ...state, agent_model: event.target.value } : state))}
-              />
-            </FormField>
-
-            <FormField
-              label="Available models"
-              hint="Enter one model identifier per line. Blank lines are ignored and order is preserved."
-            >
-              <Textarea
-                value={formState.available_agent_models}
-                onChange={(event) =>
-                  setFormState((state) => (state ? { ...state, available_agent_models: event.target.value } : state))
-                }
-              />
-            </FormField>
-
-            <div className="flex items-start justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 px-4 py-3">
-              <div className="grid gap-1">
-                <p className="text-sm font-medium text-foreground">Custom provider override</p>
-                <p className="text-xs text-muted-foreground">
-                  Off uses server env. On stores a custom endpoint and API key in runtime settings.
-                </p>
-              </div>
-              <Switch
-                aria-label="Use custom provider override"
-                checked={formState.use_custom_provider_override}
-                onCheckedChange={(checked) =>
-                  setFormState((state) =>
-                    state
-                      ? {
-                          ...state,
-                          use_custom_provider_override: checked,
-                        }
-                      : state
-                  )
-                }
-              />
-            </div>
-
-            {formState.use_custom_provider_override ? (
-              <>
+            <Card>
+              <CardHeader>
+                <CardTitle>Reset overrides</CardTitle>
+                <CardDescription>Clear all runtime overrides and fall back to the configured server defaults.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="settings-reset-row">
+                  <div className="grid gap-1">
+                    <p className="text-sm font-medium text-foreground">Reset to server defaults</p>
+                    <p className="text-sm text-muted-foreground">
+                      This clears saved overrides for currencies, agent settings, provider overrides, and reliability values.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="settings-reset-button"
+                    onClick={() => setIsResetDialogOpen(true)}
+                    disabled={updateMutation.isPending}
+                  >
+                    Reset to server defaults
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <div
+            id="settings-panel-agent"
+            role="tabpanel"
+            aria-labelledby="settings-tab-agent"
+            className="grid gap-4"
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle>Memory and models</CardTitle>
+                <CardDescription>Persistent prompt memory and model availability for new agent runs.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
                 <FormField
-                  label="Custom API endpoint"
-                  hint="Optional custom base URL for the model provider."
+                  label="Agent memory"
+                  htmlFor={SETTINGS_FIELD_IDS.agentMemory}
+                  hint="Persistent agent memory added to every system prompt. Enter one preference, rule, or hint per line."
                 >
-                  <Input
-                    aria-label="Custom API endpoint"
-                    type="url"
-                    placeholder="https://api.example.com/v1"
-                    value={formState.agent_base_url}
-                    onChange={(event) => setFormState((state) => (state ? { ...state, agent_base_url: event.target.value } : state))}
+                  <Textarea
+                    id={SETTINGS_FIELD_IDS.agentMemory}
+                    value={formState.user_memory}
+                    onChange={(event) => setFormState((state) => (state ? { ...state, user_memory: event.target.value } : state))}
                   />
                 </FormField>
 
                 <FormField
-                  label="Custom API key"
-                  hint={
-                    formState.agent_api_key_configured
-                      ? "A stored API key exists. Enter a new value to replace it, or leave this empty to keep it."
-                      : "API key for the custom provider."
-                  }
+                  label="Default model"
+                  htmlFor={SETTINGS_FIELD_IDS.defaultModel}
+                  hint="Used for new chats and runs. If it is missing from Available models, the server adds it to the effective list."
                 >
                   <Input
-                    aria-label="Custom API key"
-                    type="password"
-                    placeholder={formState.agent_api_key_configured ? "••••••••" : "Enter API key"}
-                    value={formState.agent_api_key}
+                    id={SETTINGS_FIELD_IDS.defaultModel}
+                    value={formState.agent_model}
+                    onChange={(event) => setFormState((state) => (state ? { ...state, agent_model: event.target.value } : state))}
+                  />
+                </FormField>
+
+                <FormField
+                  label="Available models"
+                  htmlFor={SETTINGS_FIELD_IDS.availableModels}
+                  hint="Enter one model identifier per line. Blank lines are ignored and order is preserved."
+                >
+                  <Textarea
+                    id={SETTINGS_FIELD_IDS.availableModels}
+                    value={formState.available_agent_models}
                     onChange={(event) =>
-                      setFormState((state) => (state ? { ...state, agent_api_key: event.target.value, agent_api_key_dirty: true } : state))
+                      setFormState((state) => (state ? { ...state, available_agent_models: event.target.value } : state))
                     }
                   />
                 </FormField>
-              </>
-            ) : null}
+              </CardContent>
+            </Card>
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <FormField label="Max steps">
-                <Input
-                  type="number"
-                  min={1}
-                  value={formState.agent_max_steps}
-                  onChange={(event) => setFormState((state) => (state ? { ...state, agent_max_steps: event.target.value } : state))}
-                />
-              </FormField>
-              <FormField label="Bulk max threads" hint="Maximum fresh threads Bulk mode starts at once.">
-                <Input
-                  type="number"
-                  min={1}
-                  max={16}
-                  value={formState.agent_bulk_max_concurrent_threads}
-                  onChange={(event) =>
-                    setFormState((state) =>
-                      state ? { ...state, agent_bulk_max_concurrent_threads: event.target.value } : state
-                    )
-                  }
-                />
-              </FormField>
-              <FormField label="Max attachments per message">
-                <Input
-                  type="number"
-                  min={1}
-                  value={formState.agent_max_images_per_message}
-                  onChange={(event) =>
-                    setFormState((state) => (state ? { ...state, agent_max_images_per_message: event.target.value } : state))
-                  }
-                />
-              </FormField>
-            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Provider override</CardTitle>
+                <CardDescription>Optional endpoint and API key override stored in runtime settings instead of server env.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="flex items-start justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 px-4 py-3">
+                  <div className="grid gap-1">
+                    <p className="text-sm font-medium text-foreground">Use custom provider override</p>
+                    <p className="text-xs text-muted-foreground">
+                      Off uses server env. On stores a custom endpoint and API key in runtime settings.
+                    </p>
+                  </div>
+                  <Switch
+                    aria-label="Use custom provider override"
+                    checked={formState.use_custom_provider_override}
+                    onCheckedChange={(checked) =>
+                      setFormState((state) =>
+                        state
+                          ? {
+                              ...state,
+                              use_custom_provider_override: checked,
+                            }
+                          : state
+                      )
+                    }
+                  />
+                </div>
 
-            <FormField label="Max attachment size (MB)">
-              <Input
-                type="number"
-                min={0.1}
-                step={0.1}
-                value={formState.agent_max_image_size_mb}
-                onChange={(event) =>
-                  setFormState((state) => (state ? { ...state, agent_max_image_size_mb: event.target.value } : state))
-                }
-              />
-            </FormField>
-          </CardContent>
-        </Card>
+                {formState.use_custom_provider_override ? (
+                  <>
+                    <FormField label="Custom API endpoint" hint="Optional custom base URL for the model provider.">
+                      <Input
+                        aria-label="Custom API endpoint"
+                        type="url"
+                        placeholder="https://api.example.com/v1"
+                        value={formState.agent_base_url}
+                        onChange={(event) => setFormState((state) => (state ? { ...state, agent_base_url: event.target.value } : state))}
+                      />
+                    </FormField>
 
-        <Card className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle>Reliability</CardTitle>
-            <CardDescription>Retry settings for model and tool-call orchestration.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <FormField label="Retry max attempts">
-              <Input
-                type="number"
-                min={1}
-                value={formState.agent_retry_max_attempts}
-                onChange={(event) =>
-                  setFormState((state) => (state ? { ...state, agent_retry_max_attempts: event.target.value } : state))
-                }
-              />
-            </FormField>
-            <FormField label="Retry initial wait (s)">
-              <Input
-                type="number"
-                min={0}
-                step={0.05}
-                value={formState.agent_retry_initial_wait_seconds}
-                onChange={(event) =>
-                  setFormState((state) => (state ? { ...state, agent_retry_initial_wait_seconds: event.target.value } : state))
-                }
-              />
-            </FormField>
-            <FormField label="Retry max wait (s)">
-              <Input
-                type="number"
-                min={0}
-                step={0.1}
-                value={formState.agent_retry_max_wait_seconds}
-                onChange={(event) =>
-                  setFormState((state) => (state ? { ...state, agent_retry_max_wait_seconds: event.target.value } : state))
-                }
-              />
-            </FormField>
-            <FormField label="Backoff multiplier">
-              <Input
-                type="number"
-                min={1}
-                step={0.1}
-                value={formState.agent_retry_backoff_multiplier}
-                onChange={(event) =>
-                  setFormState((state) => (state ? { ...state, agent_retry_backoff_multiplier: event.target.value } : state))
-                }
-              />
-            </FormField>
-          </CardContent>
-        </Card>
+                    <FormField
+                      label="Custom API key"
+                      hint={
+                        formState.agent_api_key_configured
+                          ? "A stored API key exists. Enter a new value to replace it, or leave this empty to keep it."
+                          : "API key for the custom provider."
+                      }
+                    >
+                      <Input
+                        aria-label="Custom API key"
+                        type="password"
+                        placeholder={formState.agent_api_key_configured ? "••••••••" : "Enter API key"}
+                        value={formState.agent_api_key}
+                        onChange={(event) =>
+                          setFormState((state) => (state ? { ...state, agent_api_key: event.target.value, agent_api_key_dirty: true } : state))
+                        }
+                      />
+                    </FormField>
+                  </>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Run limits</CardTitle>
+                <CardDescription>General limits that apply to individual agent runs.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <FormField label="Max steps" hint="Maximum model-tool orchestration steps allowed in one run.">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={formState.agent_max_steps}
+                    onChange={(event) => setFormState((state) => (state ? { ...state, agent_max_steps: event.target.value } : state))}
+                  />
+                </FormField>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Bulk mode and attachments</CardTitle>
+                <CardDescription>Controls bulk launch concurrency and per-message attachment guardrails.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    label="Bulk concurrent launches"
+                    htmlFor={SETTINGS_FIELD_IDS.bulkMaxThreads}
+                    hint="How many Bulk mode threads can start at once. Extra attachments wait until one launch request returns."
+                  >
+                    <Input
+                      id={SETTINGS_FIELD_IDS.bulkMaxThreads}
+                      type="number"
+                      min={1}
+                      max={16}
+                      value={formState.agent_bulk_max_concurrent_threads}
+                      onChange={(event) =>
+                        setFormState((state) =>
+                          state ? { ...state, agent_bulk_max_concurrent_threads: event.target.value } : state
+                        )
+                      }
+                    />
+                  </FormField>
+
+                  <FormField
+                    label="Max attachments per single message"
+                    htmlFor={SETTINGS_FIELD_IDS.maxAttachmentsPerMessage}
+                    hint="Applies to one normal message send. Bulk mode still starts one fresh thread per attachment."
+                  >
+                    <Input
+                      id={SETTINGS_FIELD_IDS.maxAttachmentsPerMessage}
+                      type="number"
+                      min={1}
+                      value={formState.agent_max_images_per_message}
+                      onChange={(event) =>
+                        setFormState((state) => (state ? { ...state, agent_max_images_per_message: event.target.value } : state))
+                      }
+                    />
+                  </FormField>
+                </div>
+
+                <FormField label="Max attachment size (MB)" hint="Per-file upload size limit for image and PDF attachments.">
+                  <Input
+                    type="number"
+                    min={0.1}
+                    step={0.1}
+                    value={formState.agent_max_image_size_mb}
+                    onChange={(event) =>
+                      setFormState((state) => (state ? { ...state, agent_max_image_size_mb: event.target.value } : state))
+                    }
+                  />
+                </FormField>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Reliability</CardTitle>
+                <CardDescription>Retry settings for model and tool-call orchestration.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField label="Retry max attempts">
+                    <Input
+                      type="number"
+                      min={1}
+                      value={formState.agent_retry_max_attempts}
+                      onChange={(event) =>
+                        setFormState((state) => (state ? { ...state, agent_retry_max_attempts: event.target.value } : state))
+                      }
+                    />
+                  </FormField>
+
+                  <FormField label="Backoff multiplier">
+                    <Input
+                      type="number"
+                      min={1}
+                      step={0.1}
+                      value={formState.agent_retry_backoff_multiplier}
+                      onChange={(event) =>
+                        setFormState((state) => (state ? { ...state, agent_retry_backoff_multiplier: event.target.value } : state))
+                      }
+                    />
+                  </FormField>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField label="Retry initial wait (s)">
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.05}
+                      value={formState.agent_retry_initial_wait_seconds}
+                      onChange={(event) =>
+                        setFormState((state) => (state ? { ...state, agent_retry_initial_wait_seconds: event.target.value } : state))
+                      }
+                    />
+                  </FormField>
+
+                  <FormField label="Retry max wait (s)">
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={formState.agent_retry_max_wait_seconds}
+                      onChange={(event) =>
+                        setFormState((state) => (state ? { ...state, agent_retry_max_wait_seconds: event.target.value } : state))
+                      }
+                    />
+                  </FormField>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </form>
+
+      <div className="settings-save-bar">
+        <div className="settings-save-bar-copy">
+          <p className="settings-save-bar-title">{isDirty ? "Unsaved changes" : "All changes saved"}</p>
+          <p className="settings-save-bar-text">
+            {isDirty ? "Save your runtime settings changes when you are ready." : "Edits will appear here once you change a setting."}
+          </p>
+        </div>
+        <Button form="runtime-settings-form" type="submit" disabled={!isDirty || updateMutation.isPending} className="settings-save-bar-button">
+          {updateMutation.isPending ? "Saving..." : "Save changes"}
+        </Button>
+      </div>
+
+      <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Reset all runtime overrides?</DialogTitle>
+            <DialogDescription>
+              This clears saved runtime overrides and restores the effective values from the server configuration.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 text-sm text-foreground">
+            <p className="muted">This affects currencies, agent models and memory, provider overrides, bulk limits, attachment limits, and reliability settings.</p>
+            <p className="muted">Use this when you want the app to follow the server defaults again.</p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsResetDialogOpen(false)} disabled={updateMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={updateMutation.isPending}
+              onClick={() => {
+                setIsResetDialogOpen(false);
+                resetOverrides();
+              }}
+            >
+              {updateMutation.isPending ? "Resetting..." : "Reset to server defaults"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

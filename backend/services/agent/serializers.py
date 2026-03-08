@@ -153,7 +153,7 @@ def _serializable_change_items(run: AgentRun) -> list[AgentChangeItem]:
             supported_items.append(item)
             continue
         logger.warning(
-            "Skipping legacy agent change item from API response: scope=agent_run_serializer run_id=%s change_item_id=%s change_type=%s status=%s",
+            "Skipping unsupported agent change item from API response: scope=agent_run_serializer run_id=%s change_item_id=%s change_type=%s status=%s",
             run.id,
             item.id,
             item.change_type.name,

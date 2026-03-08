@@ -5,9 +5,6 @@ import time
 from pathlib import Path
 from threading import Event
 
-from backend.database import SessionLocal
-from backend.enums_agent import AgentChangeStatus, AgentChangeType
-from backend.models_agent import AgentChangeItem
 from backend.tests.agent_test_utils import (
     build_pdf_bytes,
     collect_sse_events,
@@ -19,20 +16,6 @@ from backend.tests.agent_test_utils import (
     send_message,
 )
 from backend.tests.test_entries import create_account, create_entry, create_group
-
-
-def _insert_legacy_group_member_change_item(run_id: str) -> None:
-    with SessionLocal() as db:
-        db.add(
-            AgentChangeItem(
-                run_id=run_id,
-                change_type=AgentChangeType.CREATE_GROUP_MEMBER,
-                payload_json={"group_name": "Legacy household", "member_name": "Scott"},
-                rationale_text="Legacy group member proposal.",
-                status=AgentChangeStatus.PENDING_REVIEW,
-            )
-        )
-        db.commit()
 
 
 def test_thread_history_and_final_assistant_message(client, monkeypatch):
@@ -51,36 +34,6 @@ def test_thread_history_and_final_assistant_message(client, monkeypatch):
     detail_response.raise_for_status()
     detail = detail_response.json()
     assert [message["role"] for message in detail["messages"]] == ["user", "assistant"]
-
-
-def test_legacy_group_member_change_items_do_not_break_thread_detail_or_send(client, monkeypatch):
-    patch_model(
-        monkeypatch,
-        lambda _messages: {"role": "assistant", "content": "Here is the final answer with no proposals."},
-    )
-    thread = create_thread(client)
-    initial_run = send_message(client, thread["id"], "Show my history.")
-    _insert_legacy_group_member_change_item(initial_run["id"])
-
-    list_response = client.get("/api/v1/agent/threads")
-    list_response.raise_for_status()
-    summary = next(item for item in list_response.json() if item["id"] == thread["id"])
-    assert summary["pending_change_count"] == 0
-
-    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
-    detail_response.raise_for_status()
-    detail = detail_response.json()
-    assert [message["role"] for message in detail["messages"]] == ["user", "assistant"]
-    assert len(detail["runs"]) == 1
-    assert detail["runs"][0]["change_items"] == []
-
-    run_response = client.get(f"/api/v1/agent/runs/{initial_run['id']}")
-    run_response.raise_for_status()
-    assert run_response.json()["change_items"] == []
-
-    next_run = send_message(client, thread["id"], "Thanks — send another reply.")
-    assert next_run["status"] == "completed"
-    assert next_run["change_items"] == []
 
 
 def test_agent_routes_require_admin_principal(client):

@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -62,7 +62,26 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+async function openAgentTab() {
+  await userEvent.click(await screen.findByRole("tab", { name: "Agent" }));
+}
+
 describe("SettingsPage", () => {
+  it("shows tabbed sections and defaults to the General tab", async () => {
+    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
+    vi.mocked(getRuntimeSettings).mockResolvedValue(baseSettingsFixture);
+
+    renderWithQueryClient(<SettingsPage />);
+
+    expect(await screen.findByRole("tab", { name: "General" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Agent" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByText("Ledger defaults")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
+    expect(screen.getByText("All changes saved")).toBeInTheDocument();
+    expect(screen.queryByText(/^Default model:/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Memory and models")).not.toBeInTheDocument();
+  });
+
   it("shows server env state when no stored provider override exists", async () => {
     vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
     vi.mocked(getRuntimeSettings).mockResolvedValue({
@@ -73,6 +92,7 @@ describe("SettingsPage", () => {
     renderWithQueryClient(<SettingsPage />);
 
     expect(await screen.findByText("Settings")).toBeInTheDocument();
+    await openAgentTab();
     expect(screen.getByRole("switch", { name: "Use custom provider override" })).toHaveAttribute("aria-checked", "false");
     expect(screen.queryByRole("textbox", { name: "Custom API endpoint" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Custom API key")).not.toBeInTheDocument();
@@ -84,6 +104,7 @@ describe("SettingsPage", () => {
 
     renderWithQueryClient(<SettingsPage />);
 
+    await openAgentTab();
     expect(await screen.findByLabelText("Default model")).toHaveValue("openrouter/qwen/qwen3.5-27b");
     expect(screen.getByLabelText("Available models")).toHaveValue(
       "bedrock/us.anthropic.claude-sonnet-4-6\nopenai/gpt-4.1-mini\nopenrouter/qwen/qwen3.5-27b"
@@ -118,6 +139,7 @@ describe("SettingsPage", () => {
 
     renderWithQueryClient(<SettingsPage />);
 
+    await openAgentTab();
     const providerOverrideSwitch = await screen.findByRole("switch", { name: "Use custom provider override" });
     expect(providerOverrideSwitch).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("textbox", { name: "Custom API endpoint" })).toBeInTheDocument();
@@ -155,6 +177,7 @@ describe("SettingsPage", () => {
 
     renderWithQueryClient(<SettingsPage />);
 
+    await openAgentTab();
     await screen.findByText("Agent memory");
     const memoryInput = screen.getByLabelText("Agent memory");
     expect(memoryInput).toHaveValue("Prefers terse answers.");
@@ -193,6 +216,7 @@ describe("SettingsPage", () => {
 
     renderWithQueryClient(<SettingsPage />);
 
+    await openAgentTab();
     const defaultModelInput = await screen.findByLabelText("Default model");
     const availableModelsInput = screen.getByLabelText("Available models");
 
@@ -230,10 +254,8 @@ describe("SettingsPage", () => {
 
     renderWithQueryClient(<SettingsPage />);
 
-    await screen.findByText("Settings");
-    const bulkConcurrencyInput = screen.getByRole("spinbutton", {
-      name: "Bulk max threads Maximum fresh threads Bulk mode starts at once."
-    });
+    await openAgentTab();
+    const bulkConcurrencyInput = screen.getByLabelText("Bulk concurrent launches");
     await userEvent.clear(bulkConcurrencyInput);
     await userEvent.type(bulkConcurrencyInput, "6");
     fireEvent.submit(document.getElementById("runtime-settings-form") as HTMLFormElement);
@@ -248,15 +270,18 @@ describe("SettingsPage", () => {
     );
   });
 
-  it("resets available models and default model to server defaults", async () => {
+  it("resets available models and default model to server defaults from the General tab dialog", async () => {
     vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
     vi.mocked(getRuntimeSettings).mockResolvedValue(baseSettingsFixture);
     vi.mocked(updateRuntimeSettings).mockResolvedValue(baseSettingsFixture);
 
     renderWithQueryClient(<SettingsPage />);
 
-    await screen.findByText("Settings");
+    await screen.findByText("Reset overrides");
     await userEvent.click(screen.getByRole("button", { name: "Reset to server defaults" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Reset all runtime overrides?")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Reset to server defaults" }));
 
     await waitFor(() => {
       expect(updateRuntimeSettings).toHaveBeenCalled();

@@ -1120,6 +1120,11 @@ private func changeTypeLabel(_ changeType: AgentChangeType) -> String {
     case .createEntry: "Create Entry"
     case .updateEntry: "Update Entry"
     case .deleteEntry: "Delete Entry"
+    case .createGroup: "Create Group"
+    case .updateGroup: "Update Group"
+    case .deleteGroup: "Delete Group"
+    case .createGroupMember: "Create Group Member"
+    case .deleteGroupMember: "Delete Group Member"
     case .createTag: "Create Tag"
     case .updateTag: "Update Tag"
     case .deleteTag: "Delete Tag"
@@ -1138,6 +1143,20 @@ private func reviewSummary(_ item: AgentChangeItem) -> String {
     case .updateEntry, .deleteEntry:
         let selectorName = item.payloadJson["selector"]?.objectValue?["name"]?.stringValue ?? "Unknown entry"
         return "\(changeTypeLabel(item.changeType)): \(selectorName)"
+    case .createGroup, .deleteGroup:
+        let name = item.payloadJson["name"]?.stringValue ?? "Untitled group"
+        return "\(changeTypeLabel(item.changeType)): \(name)"
+    case .updateGroup:
+        let groupID = item.payloadJson["group_id"]?.stringValue ?? "Unknown group"
+        return "Update Group: \(groupID)"
+    case .createGroupMember, .deleteGroupMember:
+        let groupName = item.payloadJson["group_preview"]?.objectValue?["name"]?.stringValue
+            ?? item.payloadJson["group_ref"]?.objectValue?["group_id"]?.stringValue
+            ?? "Unknown group"
+        let memberName = item.payloadJson["member_preview"]?.objectValue?["name"]?.stringValue
+            ?? item.payloadJson["entry_ref"]?.objectValue?["entry_id"]?.stringValue
+            ?? "Unknown entry"
+        return "\(changeTypeLabel(item.changeType)): \(memberName) in \(groupName)"
     case .createTag, .deleteTag, .createEntity, .deleteEntity:
         let name = item.payloadJson["name"]?.stringValue ?? "Untitled"
         return "\(changeTypeLabel(item.changeType)): \(name)"

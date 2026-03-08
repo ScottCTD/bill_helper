@@ -119,16 +119,14 @@ def seed_accounts(db: Session) -> tuple["User", "Account", "Account"]:
     db.flush()
 
     debit_account = Account(
+        id=debit_entity.id,
         owner_user_id=user.id,
-        entity_id=debit_entity.id,
-        name="Scotiabank Debit",
         currency_code="CAD",
         is_active=True,
     )
     credit_account = Account(
+        id=credit_entity.id,
         owner_user_id=user.id,
-        entity_id=credit_entity.id,
-        name="Scotiabank Credit",
         currency_code="CAD",
         is_active=True,
     )

@@ -156,6 +156,25 @@ def test_seed_defaults_tag_color_is_stable():
     assert first.startswith("hsl(")
 
 
+def test_seed_defaults_seed_accounts_uses_entity_root_account_ids(tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    import backend.models_finance  # noqa: F401
+    from backend.db_meta import Base
+    from scripts import seed_defaults
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'seed-defaults.sqlite'}", future=True)
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine, future=True)
+    with SessionLocal() as db:
+        user, debit, credit = seed_defaults.seed_accounts(db)
+        assert debit.id == debit.entity.id
+        assert credit.id == credit.entity.id
+        assert debit.owner_user_id == user.id
+        assert credit.owner_user_id == user.id
+
+
 def test_seed_demo_parsers_and_location_detection():
     from backend.enums_finance import EntryKind
     from scripts import seed_demo

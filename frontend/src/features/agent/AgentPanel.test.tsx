@@ -63,6 +63,25 @@ type RuntimeSettingsOverrideInput = Partial<Omit<RuntimeSettingsResponse, "overr
 };
 
 function buildRuntimeSettings(overrides: RuntimeSettingsOverrideInput = {}) {
+  const baseOverrides: RuntimeSettingsResponse["overrides"] = {
+    current_user_name: null,
+    user_memory: null,
+    default_currency_code: null,
+    dashboard_currency_code: null,
+    agent_model: null,
+    available_agent_models: null,
+    agent_max_steps: null,
+    agent_bulk_max_concurrent_threads: null,
+    agent_retry_max_attempts: null,
+    agent_retry_initial_wait_seconds: null,
+    agent_retry_max_wait_seconds: null,
+    agent_retry_backoff_multiplier: null,
+    agent_max_image_size_bytes: null,
+    agent_max_images_per_message: null,
+    agent_base_url: null,
+    agent_api_key_configured: true
+  };
+
   return {
     current_user_name: "Admin",
     user_memory: null,
@@ -80,42 +99,9 @@ function buildRuntimeSettings(overrides: RuntimeSettingsOverrideInput = {}) {
     agent_max_images_per_message: 5,
     agent_base_url: null,
     agent_api_key_configured: true,
-    overrides: {
-      current_user_name: null,
-      user_memory: null,
-      default_currency_code: null,
-      dashboard_currency_code: null,
-      agent_model: null,
-      available_agent_models: null,
-      agent_max_steps: null,
-      agent_bulk_max_concurrent_threads: null,
-      agent_retry_max_attempts: null,
-      agent_retry_initial_wait_seconds: null,
-      agent_retry_max_wait_seconds: null,
-      agent_retry_backoff_multiplier: null,
-      agent_max_image_size_bytes: null,
-      agent_max_images_per_message: null,
-      agent_base_url: null,
-      agent_api_key_configured: true
-    },
     ...overrides,
     overrides: {
-      current_user_name: null,
-      user_memory: null,
-      default_currency_code: null,
-      dashboard_currency_code: null,
-      agent_model: null,
-      available_agent_models: null,
-      agent_max_steps: null,
-      agent_bulk_max_concurrent_threads: null,
-      agent_retry_max_attempts: null,
-      agent_retry_initial_wait_seconds: null,
-      agent_retry_max_wait_seconds: null,
-      agent_retry_backoff_multiplier: null,
-      agent_max_image_size_bytes: null,
-      agent_max_images_per_message: null,
-      agent_base_url: null,
-      agent_api_key_configured: true,
+      ...baseOverrides,
       ...overrides.overrides
     }
   };
