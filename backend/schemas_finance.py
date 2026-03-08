@@ -309,6 +309,7 @@ class GroupNode(BaseModel):
     representative_occurred_at: date | None = None
     kind: EntryKind | None = None
     amount_minor: int | None = None
+    currency_code: str | None = None
     occurred_at: date | None = None
     group_type: GroupType | None = None
     descendant_entry_count: int | None = None

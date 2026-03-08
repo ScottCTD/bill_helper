@@ -186,6 +186,7 @@ Behavior:
 
 - graph lookup is principal-scoped
 - nodes are discriminated as direct `ENTRY` or `GROUP` members
+- direct `ENTRY` nodes include `amount_minor` and `currency_code` so clients can render currency-aware stats
 - edges are derived from `group_type`; they are not stored or edited directly
 
 ### `PATCH /groups/{group_id}`

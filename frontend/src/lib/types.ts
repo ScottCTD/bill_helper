@@ -136,6 +136,7 @@ export interface GroupNode {
   representative_occurred_at: string | null;
   kind: EntryKind | null;
   amount_minor: number | null;
+  currency_code: string | null;
   occurred_at: string | null;
   group_type: GroupType | null;
   descendant_entry_count: number | null;

@@ -42,7 +42,7 @@ Agent models:
 Important read models:
 
 - `GroupSummaryRead` for `GET /groups`
-- `GroupGraphRead` for `GET /groups/{group_id}`
+- `GroupGraphRead` for `GET /groups/{group_id}` with entry-node `amount_minor` and `currency_code` for UI stats
 - `EntryRead` / `EntryDetailRead` for entry list/detail reads with `direct_group`, `direct_group_member_role`, and `group_path`
 - `RuntimeSettingsRead` for `/settings`
 

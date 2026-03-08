@@ -33,6 +33,7 @@ This doc is the fast path for understanding how entries are created, edited, gro
 
 1. Group create, rename, delete, and membership edits come from:
    - `frontend/src/pages/GroupsPage.tsx`
+   - `frontend/src/components/GroupDetailModal.tsx`
    - `frontend/src/components/GroupEditorModal.tsx`
    - `frontend/src/components/GroupMemberEditorModal.tsx`
 2. Requests go through:
@@ -48,7 +49,7 @@ This doc is the fast path for understanding how entries are created, edited, gro
 5. Entry detail uses the same graph read model when `direct_group` is present:
    - `frontend/src/pages/EntryDetailPage.tsx`
    - `frontend/src/components/GroupGraphView.tsx`
-6. Entry create/edit modal can assign one direct group without leaving the entry workflow; the dedicated groups workspace remains the place for broader structural edits and child-group management.
+6. Entry create/edit modal can assign one direct group without leaving the entry workflow; the dedicated groups workspace remains the place for broader structural edits and child-group management, now through a table-first group browser plus detail modal with direct-entry stats and a bottom-anchored graph section.
 7. No manual edge editing exists in v1; users edit direct membership and split roles only.
 
 ## Agent-Proposed Entry Flow
