@@ -5,13 +5,12 @@ from dataclasses import dataclass
 import json
 from typing import Any
 from urllib.parse import urlencode
-from uuid import uuid4
 
+import httpx
 from pydantic import TypeAdapter
 
 from backend.schemas_agent import AgentRunRead, AgentThreadDetailRead, AgentThreadRead, AgentThreadSummaryRead
 from backend.schemas_finance import RuntimeSettingsRead, RuntimeSettingsUpdate
-from telegram._http import HttpRequest, HttpResponse, HttpTransport, join_url, urllib_transport
 from telegram.config import TelegramSettings
 
 
@@ -35,25 +34,29 @@ class BillHelperApiClient:
         base_url: str,
         auth_headers: Mapping[str, str] | None = None,
         auth_token: str | None = None,
-        transport: HttpTransport = urllib_transport,
+        transport: httpx.BaseTransport | None = None,
+        timeout_seconds: float = 30.0,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._auth_headers = dict(auth_headers or {})
         self._auth_token = auth_token.strip() if auth_token else None
         self._transport = transport
+        self._timeout_seconds = timeout_seconds
 
     @classmethod
     def from_settings(
         cls,
         settings: TelegramSettings,
         *,
-        transport: HttpTransport = urllib_transport,
+        transport: httpx.BaseTransport | None = None,
+        timeout_seconds: float = 30.0,
     ) -> BillHelperApiClient:
         return cls(
             base_url=settings.backend_base_url,
             auth_headers=settings.backend_auth_headers,
             auth_token=settings.backend_auth_token,
             transport=transport,
+            timeout_seconds=timeout_seconds,
         )
 
     def list_threads(self) -> list[AgentThreadSummaryRead]:
@@ -83,22 +86,14 @@ class BillHelperApiClient:
         content: str = "",
         files: Sequence[AttachmentUpload] = (),
     ) -> AgentRunRead:
-        body, boundary = self._encode_multipart(
-            content=content,
-            surface="telegram",
-            files=files,
-        )
-        response = self._transport(
-            HttpRequest(
-                method="POST",
-                url=join_url(self._base_url, f"/agent/threads/{thread_id}/messages"),
-                headers={
-                    **self._build_headers(),
-                    "Accept": "application/json",
-                    "Content-Type": f"multipart/form-data; boundary={boundary}",
-                },
-                body=body,
-            )
+        response = self._request(
+            "POST",
+            f"/agent/threads/{thread_id}/messages",
+            files=[
+                ("content", (None, content)),
+                ("surface", (None, "telegram")),
+                *[("files", (upload.filename, upload.content, upload.mime_type)) for upload in files],
+            ],
         )
         payload = self._read_json_response(response, expected_status=200)
         return AgentRunRead.model_validate(payload)
@@ -131,20 +126,33 @@ class BillHelperApiClient:
         json_body: Mapping[str, Any] | None = None,
         query_params: Mapping[str, Any] | None = None,
     ) -> Any:
-        headers = {**self._build_headers(), "Accept": "application/json"}
-        body: bytes | None = None
-        if json_body is not None:
-            headers["Content-Type"] = "application/json"
-            body = json.dumps(json_body).encode("utf-8")
-        response = self._transport(
-            HttpRequest(
-                method=method,
-                url=self._build_url(path, query_params=query_params),
-                headers=headers,
-                body=body,
-            )
-        )
+        response = self._request(method, path, json_body=json_body, query_params=query_params)
         return self._read_json_response(response, expected_status=200 if method != "POST" or path.endswith("/interrupt") else 201)
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: Mapping[str, Any] | None = None,
+        query_params: Mapping[str, Any] | None = None,
+        files: Sequence[tuple[str, Any]] | None = None,
+    ) -> httpx.Response:
+        try:
+            with httpx.Client(
+                headers=self._build_headers(),
+                timeout=self._timeout_seconds,
+                transport=self._transport,
+            ) as client:
+                return client.request(
+                    method,
+                    self._build_url(path, query_params=query_params),
+                    headers={"Accept": "application/json"},
+                    json=json_body,
+                    files=files,
+                )
+        except httpx.RequestError as exc:
+            raise RuntimeError(f"HTTP request failed: {exc}") from exc
 
     def _build_url(
         self,
@@ -152,7 +160,7 @@ class BillHelperApiClient:
         *,
         query_params: Mapping[str, Any] | None = None,
     ) -> str:
-        url = join_url(self._base_url, path)
+        url = f"{self._base_url.rstrip('/')}/{path.lstrip('/')}"
         if not query_params:
             return url
         filtered = {key: value for key, value in query_params.items() if value is not None}
@@ -167,60 +175,20 @@ class BillHelperApiClient:
             headers["Authorization"] = f"Bearer {self._auth_token}"
         return headers
 
-    def _read_json_response(self, response: HttpResponse, *, expected_status: int) -> Any:
+    def _read_json_response(self, response: httpx.Response, *, expected_status: int) -> Any:
         if response.status_code != expected_status:
             raise BillHelperApiError(status_code=response.status_code, message=self._extract_error_message(response))
-        if not response.body:
+        if not response.content:
             return None
-        return json.loads(response.body.decode("utf-8"))
+        return response.json()
 
-    def _extract_error_message(self, response: HttpResponse) -> str:
-        if response.body:
+    def _extract_error_message(self, response: httpx.Response) -> str:
+        if response.content:
             try:
-                parsed = json.loads(response.body.decode("utf-8"))
+                parsed = response.json()
             except json.JSONDecodeError:
-                return response.body.decode("utf-8", errors="replace").strip() or "Bill Helper API request failed"
+                return response.text.strip() or "Bill Helper API request failed"
             detail = parsed.get("detail") if isinstance(parsed, dict) else None
             if isinstance(detail, str) and detail.strip():
                 return detail.strip()
         return f"Bill Helper API request failed with status {response.status_code}"
-
-    def _encode_multipart(
-        self,
-        *,
-        content: str,
-        surface: str,
-        files: Sequence[AttachmentUpload],
-    ) -> tuple[bytes, str]:
-        boundary = f"bill-helper-{uuid4().hex}"
-        chunks: list[bytes] = []
-        chunks.extend(
-            [
-                f"--{boundary}\r\n".encode("utf-8"),
-                b'Content-Disposition: form-data; name="content"\r\n\r\n',
-                content.encode("utf-8"),
-                b"\r\n",
-            ]
-        )
-        chunks.extend(
-            [
-                f"--{boundary}\r\n".encode("utf-8"),
-                b'Content-Disposition: form-data; name="surface"\r\n\r\n',
-                surface.encode("utf-8"),
-                b"\r\n",
-            ]
-        )
-        for file in files:
-            chunks.extend(
-                [
-                    f"--{boundary}\r\n".encode("utf-8"),
-                    (
-                        f'Content-Disposition: form-data; name="files"; filename="{file.filename}"\r\n'
-                    ).encode("utf-8"),
-                    f"Content-Type: {file.mime_type}\r\n\r\n".encode("utf-8"),
-                    file.content,
-                    b"\r\n",
-                ]
-            )
-        chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
-        return b"".join(chunks), boundary

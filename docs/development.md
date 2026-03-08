@@ -305,7 +305,7 @@ Telegram transport compile check:
 
 ```bash
 cd /path/to/bill_helper
-uv run --extra dev python -m py_compile telegram/__init__.py telegram/_http.py telegram/bill_helper_api.py telegram/commands.py telegram/config.py telegram/files.py telegram/formatting.py telegram/message_handler.py telegram/polling.py telegram/ptb.py telegram/state.py telegram/webhook.py
+uv run --extra dev python -m py_compile telegram/__init__.py telegram/bill_helper_api.py telegram/commands.py telegram/config.py telegram/files.py telegram/formatting.py telegram/message_handler.py telegram/polling.py telegram/ptb.py telegram/state.py telegram/webhook.py
 ```
 
 Backend + Telegram transport tests:

@@ -8,11 +8,11 @@ These notes describe the current Telegram transport implementation in this repos
 - `telegram/webhook.py` wraps the same PTB application in a small FastAPI app, exposes `GET /healthz`, and validates `X-Telegram-Bot-Api-Secret-Token` before handing the payload to PTB.
 - `telegram/commands.py` is the composition root for command routing, PTB handler registration, and application construction.
 - `telegram/message_handler.py` owns Telegram message intake, attachment download, backend run polling, and final reply delivery.
-- `telegram/bill_helper_api.py` stays thin: it calls the existing backend `/agent/threads`, `/agent/runs/{id}`, and `/settings` routes and tags message/run reads with `surface=telegram` where needed.
+- `telegram/bill_helper_api.py` stays thin: it uses `httpx` to call the existing backend `/agent/threads`, `/agent/runs/{id}`, and `/settings` routes and tags message/run reads with `surface=telegram` where needed.
 
 ## Important modules
 
-- `config.py`: `TelegramSettings`, env parsing, JSON header parsing, default data-dir/state-path derivation, and backend auth header synthesis.
+- `config.py`: `TelegramSettings`, env parsing, Telegram user allow-list parsing, JSON header parsing, default data-dir/state-path derivation, and backend auth header synthesis.
 - `state.py`: local JSON store keyed by Telegram `chat_id`, persisting `active_thread_id` and `active_run_id` with atomic file replacement.
 - `files.py`: downloads one Telegram photo or document attachment, enforces size limits, and accepts only image MIME types plus PDFs.
 - `formatting.py`: escapes Telegram HTML, chunks replies to the Telegram 4096-character limit, and strips Markdown-heavy formatting for fallback replies.
@@ -21,8 +21,8 @@ These notes describe the current Telegram transport implementation in this repos
 ## Request and reply flow
 
 1. The polling or webhook entrypoint calls `build_application_from_settings()` from `telegram/commands.py`.
-2. PTB command handlers register `/start`, `/help`, `/new`, `/reset`, `/threads`, `/use`, `/model`, `/stop`, and `/status`.
-3. The private-chat message handler accepts non-command text, photos, and documents.
+2. PTB command handlers register `/start`, `/help`, `/new`, `/reset`, `/threads`, `/use`, `/model`, `/stop`, and `/status`, then enforce the configured Telegram user allow-list before invoking router callbacks.
+3. The private-chat message handler accepts non-command text, photos, and documents only after the same allow-list check passes.
 4. `TelegramContentHandler` ensures the chat has an active backend thread, fetches backend runtime settings, and downloads supported attachments.
 5. `BillHelperApiClient.send_thread_message()` submits multipart content/files to the existing backend thread message route with `surface=telegram`.
 6. If the returned run is still running, the handler polls `GET /agent/runs/{run_id}?surface=telegram` until a terminal state or timeout.
@@ -44,9 +44,11 @@ When editing this package, import PTB symbols from `telegram.ptb`, not directly 
 ## Current constraints and behavior
 
 - private chats only; non-private chats are ignored by command and message handlers
+- private-chat commands and content messages are default-deny until `TELEGRAM_ALLOWED_USER_IDS` (or `BILL_HELPER_TELEGRAM_ALLOWED_USER_IDS`) is configured with authorized Telegram user IDs
 - only message updates are registered with PTB
 - one chat-state record is stored per Telegram chat, so thread/run selection is local to that chat ID
 - `/reset` and `/new` create a fresh backend thread; `/reset` keeps older threads discoverable via `/threads`
+- `/use` accepts a positive list index or backend thread UUID only; path-like selectors are rejected in the Telegram layer before backend URLs are built
 - `/model` patches the shared backend runtime settings record rather than a Telegram-only model setting
 - attachment support is limited to a single photo or document per message; media-group/album coalescing is not implemented
 - supported documents are image files and PDFs only

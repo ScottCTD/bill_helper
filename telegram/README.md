@@ -5,6 +5,7 @@ This package contains the Bill Helper Telegram private-chat transport. It keeps 
 ## Current behavior
 
 - uses `python-telegram-bot` (PTB) for commands, private-chat message intake, and polling/webhook execution
+- enforces a Telegram user allow-list before processing any private-chat command or content message
 - forwards text, photos, image documents, and PDFs into the existing Bill Helper agent thread/message flow
 - stores the active backend thread and active run per Telegram chat in a local JSON state file
 - renders replies as escaped Telegram HTML chunks instead of rich Markdown formatting
@@ -20,7 +21,7 @@ This package contains the Bill Helper Telegram private-chat transport. It keeps 
 ## Local development
 
 1. Start the backend API the bot should talk to.
-2. Set `TELEGRAM_BOT_TOKEN` plus backend access config.
+2. Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and backend access config.
 3. For polling, run `uv run python -m telegram.polling`.
 4. For webhook mode, also set `TELEGRAM_WEBHOOK_SECRET`, then run `uv run python -m telegram.webhook`.
 
@@ -29,6 +30,7 @@ The webhook module serves `GET /healthz` and accepts Telegram updates at `POST /
 ## Key configuration
 
 - `TELEGRAM_BOT_TOKEN`: required in both polling and webhook modes
+- `TELEGRAM_ALLOWED_USER_IDS`: required for real use; comma-separated integers or a JSON array of Telegram user IDs. The default is empty, which denies all private-chat commands and content messages.
 - `TELEGRAM_WEBHOOK_SECRET`: required only for webhook mode
 - `TELEGRAM_BACKEND_BASE_URL`: backend API base URL; defaults to `http://localhost:8000/api/v1`
 - `TELEGRAM_API_BASE_URL`: optional Telegram API override; defaults to `https://api.telegram.org`
@@ -42,8 +44,10 @@ The webhook module serves `GET /healthz` and accepts Telegram updates at `POST /
 ## Current constraints
 
 - private chats only; command and message handlers ignore non-private chats
+- private-chat commands and content messages are default-deny until `TELEGRAM_ALLOWED_USER_IDS` is configured with authorized Telegram user IDs
 - only PTB `message` updates are registered
 - uploads are limited to photos, image documents, and PDFs; media-group coalescing is not implemented
+- `/use` accepts only a positive list index or a backend thread UUID; invalid/path-like selectors are rejected before backend URL construction
 - `/model` updates the shared backend runtime `agent_model` setting for the current environment
 
 ## Local docs

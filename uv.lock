@@ -288,6 +288,7 @@ dependencies = [
     { name = "boto3" },
     { name = "desloppify", extra = ["full"] },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "ipywidgets" },
     { name = "jinja2" },
     { name = "langfuse" },
@@ -304,7 +305,6 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
 ]
 
@@ -314,7 +314,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.42.63" },
     { name = "desloppify", extras = ["full"], specifier = ">=0.9.1" },
     { name = "fastapi", specifier = ">=0.115.8" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.1" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "ipywidgets", specifier = ">=8.1.8" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "langfuse", specifier = ">=2.0.0,<3" },

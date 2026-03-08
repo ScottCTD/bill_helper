@@ -77,8 +77,9 @@ Behavior notes:
 
 - Telegram settings use `TELEGRAM_*` env names with `BILL_HELPER_TELEGRAM_*` aliases also accepted.
 - The Telegram adapter reads the same env cascade as the backend: working-tree `.env`, then `~/.config/bill-helper/.env`, then real environment variables.
-- Key settings: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_API_BASE_URL`, `TELEGRAM_BACKEND_BASE_URL`, `TELEGRAM_BACKEND_AUTH_TOKEN`, `TELEGRAM_BACKEND_AUTH_HEADERS`, `TELEGRAM_DATA_DIR`, and `TELEGRAM_STATE_PATH`.
+- Key settings: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_API_BASE_URL`, `TELEGRAM_BACKEND_BASE_URL`, `TELEGRAM_BACKEND_AUTH_TOKEN`, `TELEGRAM_BACKEND_AUTH_HEADERS`, `TELEGRAM_DATA_DIR`, and `TELEGRAM_STATE_PATH`.
 - Default Telegram data dir is `{SHARED_DATA_DIR}/telegram`; default state path is `{data_dir}/chat_state.json`.
+- `TELEGRAM_ALLOWED_USER_IDS` accepts either a comma-separated list or JSON array of positive Telegram user IDs. The default is empty, which denies all private-chat Telegram commands and content messages until an allow-list is configured.
 - `TELEGRAM_BACKEND_AUTH_HEADERS` must decode to a JSON object; if it already provides `Authorization`, that header is preserved instead of synthesizing a bearer token from `TELEGRAM_BACKEND_AUTH_TOKEN`.
 - `telegram.config.get_settings()` is cached with `lru_cache`, mirroring the backend settings access pattern.
 
