@@ -116,13 +116,17 @@ function resolveComposerModelName(
   const runtimeDefaultModelName = normalizeModelName(runtimeSettings?.agent_model);
   const fallbackModelName = normalizeModelName(availableModels[0]);
 
+  if (availableModels.length === 0) {
+    return "";
+  }
+
   for (const candidate of [latestRunModelName, configuredModelName, runtimeDefaultModelName, fallbackModelName]) {
     if (candidate && availableModels.includes(candidate)) {
       return candidate;
     }
   }
 
-  return latestRunModelName ?? configuredModelName ?? runtimeDefaultModelName ?? fallbackModelName ?? "";
+  return fallbackModelName ?? "";
 }
 
 function buildThreadSummary(thread: AgentThread, overrides: Partial<AgentThreadSummary> = {}): AgentThreadSummary {
