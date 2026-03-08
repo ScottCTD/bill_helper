@@ -616,10 +616,12 @@ def test_system_prompt_guides_pending_proposal_revisions_and_removals():
     assert prompt.index(inspect_phrase) < prompt.index(revise_phrase) < prompt.index(remove_phrase)
 
 
-def test_system_prompt_includes_group_proposal_workflow_rules():
+def test_system_prompt_includes_grouping_workflow_rules():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
+    assert "### Grouping" in prompt
+    assert "#### Group Proposal Workflow" in prompt
     assert "Before mutating an existing group, use list_groups" in prompt
     assert "Before proposing group membership changes involving entries, use list_entries" in prompt
     assert "After proposing a new entry, check whether it should join an existing recurring, split, or bundle group." in prompt
@@ -632,10 +634,15 @@ def test_system_prompt_includes_group_type_reference():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
-    assert "### Group Type Reference" in prompt
+    assert "### Grouping" in prompt
+    assert "#### Group Types" in prompt
     assert "`BUNDLE`: a related set of direct members that should be treated together" in prompt
+    assert "Examples: an Uber trip plus a separate Uber tip" in prompt
     assert "`SPLIT`: one parent side split across child side members" in prompt
+    assert "Example: the user paid for dinner and friends pay them back." in prompt
     assert "`RECURRING`: repeated entries of the same `EntryKind` over time" in prompt
+    assert "Examples: subscriptions, utility bills, or rent." in prompt
+    assert "### Group Type Reference" not in prompt
 
 
 def test_system_prompt_includes_error_recovery_and_core_identity():

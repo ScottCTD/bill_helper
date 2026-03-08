@@ -123,8 +123,7 @@ The agent receives a markdown-structured system prompt at the start of each run.
 - `## Rules` (sectioned policy groups)
 - `## Current User Context` (runtime-generated timezone/date bullets, account summaries, and optional account `notes_markdown` from `markdown_body`)
 - `## Agent Memory` (optional; when `user_memory` is set via runtime settings as persistent list items)
-- a static `Group Type Reference` describing the canonical meaning of `BUNDLE`, `SPLIT`, and `RECURRING`
-- rules now include a dedicated Group Proposal Workflow section covering `list_groups`, `list_entries` before entry membership edits, and dependency blocking for pending create proposals
+- rules now include a dedicated `Grouping` section that combines fixed `BUNDLE` / `SPLIT` / `RECURRING` semantics, examples, and the group proposal workflow
 
 ```markdown
 ## Identity
@@ -183,7 +182,16 @@ You are an expert in personal finance and accounting. You always call the right 
 - Prefer normalized names such as IKEA (not IKEA TORONTO DOWNTWON 6423TORONTO), Toronto (not Toronto ON),
   Starbucks (not SBUX), and Apple (not Apple Store #R121).
 
-### Group Proposal Workflow
+### Grouping
+#### Group Types
+- `BUNDLE`: a related set of direct members that should be treated together; the derived graph is fully connected across the direct members.
+  Examples: an Uber trip plus a separate Uber tip, or separate payments for the same bill such as two Loblaw payments with the same amount.
+- `SPLIT`: one parent side split across child side members; at most one direct member is `PARENT`, parent descendants must be `EXPENSE`, and child descendants must be `INCOME`.
+  Example: the user paid for dinner and friends pay them back.
+- `RECURRING`: repeated entries of the same `EntryKind` over time; descendant entries must share one kind and the derived graph is a chronological chain.
+  Examples: subscriptions, utility bills, or rent.
+
+#### Group Proposal Workflow
 - Before mutating an existing group, use list_groups to inspect the current group or find its reusable group_id alias.
 - Before proposing group membership changes involving entries, use list_entries to confirm the correct existing entry_id.
 - After proposing a new entry, check whether it should join an existing recurring, split, or bundle group. If it should, inspect the likely group with `list_groups` and use `propose_update_group_membership` to add the entry.
