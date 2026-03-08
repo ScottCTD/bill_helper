@@ -388,6 +388,7 @@ class RuntimeSettingsOverridesRead(BaseModel):
     dashboard_currency_code: str | None = None
     agent_model: str | None = None
     agent_max_steps: int | None = None
+    agent_bulk_max_concurrent_threads: int | None = None
     agent_retry_max_attempts: int | None = None
     agent_retry_initial_wait_seconds: float | None = None
     agent_retry_max_wait_seconds: float | None = None
@@ -405,6 +406,7 @@ class RuntimeSettingsRead(BaseModel):
     dashboard_currency_code: str
     agent_model: str
     agent_max_steps: int
+    agent_bulk_max_concurrent_threads: int
     agent_retry_max_attempts: int
     agent_retry_initial_wait_seconds: float
     agent_retry_max_wait_seconds: float
@@ -426,6 +428,7 @@ class RuntimeSettingsUpdate(BaseModel):
     )
     agent_model: str | None = Field(default=None, max_length=255)
     agent_max_steps: int | None = Field(default=None, ge=1, le=500)
+    agent_bulk_max_concurrent_threads: int | None = Field(default=None, ge=1, le=16)
     agent_retry_max_attempts: int | None = Field(default=None, ge=1, le=10)
     agent_retry_initial_wait_seconds: float | None = Field(
         default=None, ge=0.0, le=30.0

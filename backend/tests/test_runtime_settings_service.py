@@ -25,6 +25,7 @@ def test_resolve_runtime_settings_applies_override_and_sanitization() -> None:
                 default_currency_code="cad",
                 dashboard_currency_code="usd",
                 agent_max_steps=0,
+                agent_bulk_max_concurrent_threads=99,
                 agent_retry_max_attempts=0,
                 agent_max_images_per_message=0,
                 agent_max_image_size_bytes=10,
@@ -36,6 +37,7 @@ def test_resolve_runtime_settings_applies_override_and_sanitization() -> None:
         assert resolved.default_currency_code == "CAD"
         assert resolved.dashboard_currency_code == "USD"
         assert resolved.agent_max_steps >= 1
+        assert resolved.agent_bulk_max_concurrent_threads == get_settings().agent_bulk_max_concurrent_threads
         assert resolved.agent_retry_max_attempts >= 1
         assert resolved.agent_max_images_per_message >= 1
         assert resolved.agent_max_image_size_bytes >= 1024
@@ -57,6 +59,7 @@ def test_build_runtime_settings_read_prefers_request_principal_name() -> None:
         assert payload.current_user_name == "alice"
         assert payload.agent_model == "openai/gpt-4.1-mini"
         assert payload.overrides.agent_model == "openai/gpt-4.1-mini"
+        assert payload.agent_bulk_max_concurrent_threads == get_settings().agent_bulk_max_concurrent_threads
     finally:
         db.close()
 

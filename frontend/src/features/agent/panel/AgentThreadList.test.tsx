@@ -45,7 +45,7 @@ describe("AgentThreadList", () => {
         deletingThreadId={null}
         isDeleteDisabled={false}
         isRenameDisabled={false}
-        optimisticRunningThreadId={null}
+        optimisticRunningThreadIds={[]}
       />
     );
 
@@ -73,7 +73,7 @@ describe("AgentThreadList", () => {
         deletingThreadId={null}
         isDeleteDisabled={false}
         isRenameDisabled={false}
-        optimisticRunningThreadId={null}
+        optimisticRunningThreadIds={[]}
       />
     );
 
@@ -99,7 +99,7 @@ describe("AgentThreadList", () => {
         deletingThreadId="thread-1"
         isDeleteDisabled={false}
         isRenameDisabled={false}
-        optimisticRunningThreadId={null}
+        optimisticRunningThreadIds={[]}
       />
     );
 
@@ -120,7 +120,7 @@ describe("AgentThreadList", () => {
         deletingThreadId={null}
         isDeleteDisabled={true}
         isRenameDisabled={false}
-        optimisticRunningThreadId={null}
+        optimisticRunningThreadIds={[]}
       />
     );
 
@@ -142,17 +142,17 @@ describe("AgentThreadList", () => {
         deletingThreadId={null}
         isDeleteDisabled={false}
         isRenameDisabled={false}
-        optimisticRunningThreadId={null}
+        optimisticRunningThreadIds={[]}
       />
     );
 
     expect(screen.getByLabelText("Thread is processing")).toBeInTheDocument();
   });
 
-  it("shows a running status indicator immediately for optimistic running thread id", () => {
+  it("shows running status indicators immediately for optimistic running thread ids", () => {
     render(
       <AgentThreadList
-        threads={[THREADS[0]]}
+        threads={THREADS}
         selectedThreadId="thread-1"
         isLoading={false}
         errorMessage={null}
@@ -163,10 +163,10 @@ describe("AgentThreadList", () => {
         deletingThreadId={null}
         isDeleteDisabled={false}
         isRenameDisabled={false}
-        optimisticRunningThreadId="thread-1"
+        optimisticRunningThreadIds={["thread-1", "thread-2"]}
       />
     );
 
-    expect(screen.getByLabelText("Thread is processing")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Thread is processing")).toHaveLength(2);
   });
 });

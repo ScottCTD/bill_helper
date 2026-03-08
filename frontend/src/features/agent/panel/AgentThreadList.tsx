@@ -17,7 +17,7 @@ interface AgentThreadListProps {
   deletingThreadId: string | null;
   isDeleteDisabled: boolean;
   isRenameDisabled: boolean;
-  optimisticRunningThreadId: string | null;
+  optimisticRunningThreadIds: string[];
 }
 
 function normalizeThreadTitleInput(value: string): string {
@@ -37,13 +37,14 @@ export function AgentThreadList(props: AgentThreadListProps) {
     deletingThreadId,
     isDeleteDisabled,
     isRenameDisabled,
-    optimisticRunningThreadId
+    optimisticRunningThreadIds
   } = props;
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const inputRef = useRef<HTMLDivElement | null>(null);
   const committingThreadIdRef = useRef<string | null>(null);
   const initialDraftTitleRef = useRef("");
+  const optimisticRunningThreadIdSet = new Set(optimisticRunningThreadIds);
 
   useEffect(() => {
     if (!editingThreadId) {
@@ -107,7 +108,7 @@ export function AgentThreadList(props: AgentThreadListProps) {
         <div className="agent-thread-list-scroll scroll-surface">
           {(threads ?? []).map((thread) => {
             const isSelected = thread.id === selectedThreadId;
-            const isRunning = thread.has_running_run || optimisticRunningThreadId === thread.id;
+            const isRunning = thread.has_running_run || optimisticRunningThreadIdSet.has(thread.id);
             const isEditing = editingThreadId === thread.id;
             return (
               <div key={thread.id} className={isSelected ? "agent-thread-row group selected" : "agent-thread-row group"}>

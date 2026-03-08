@@ -47,4 +47,5 @@ Route map:
 Providers in `frontend/src/main.tsx`:
 
 - `QueryClientProvider`
+- `NotificationProvider`
 - `BrowserRouter`

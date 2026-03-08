@@ -109,6 +109,14 @@ def sanitize_int_at_least(value: int, *, minimum: int, fallback: int) -> int:
     return value
 
 
+def sanitize_int_between(value: int, *, minimum: int, maximum: int, fallback: int) -> int:
+    if value < minimum:
+        return min(max(fallback, minimum), maximum)
+    if value > maximum:
+        return min(max(fallback, minimum), maximum)
+    return value
+
+
 def sanitize_float_at_least(value: float, *, minimum: float, fallback: float) -> float:
     if value < minimum:
         return max(fallback, minimum)

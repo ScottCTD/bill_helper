@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
 
 import litellm
@@ -666,6 +667,7 @@ def test_validate_litellm_environment_allows_indeterminate_validation(monkeypatc
 
 
 def test_validate_litellm_environment_accepts_bedrock_bearer_token(monkeypatch):
+    monkeypatch.setattr("backend.config._env_files", ())
     monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "ABSK-test-token")
     monkeypatch.setattr(
         litellm,
@@ -685,9 +687,36 @@ def test_validate_litellm_environment_accepts_bedrock_bearer_token(monkeypatch):
     assert request_model == "bedrock/anthropic.claude-sonnet-4-6"
 
 
+def test_validate_litellm_environment_loads_bedrock_bearer_token_from_env_file(
+    monkeypatch, tmp_path
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text("AWS_BEARER_TOKEN_BEDROCK=ABSK-test-token\n", encoding="utf-8")
+    monkeypatch.delenv("AWS_BEARER_TOKEN_BEDROCK", raising=False)
+    monkeypatch.setattr("backend.config._env_files", (str(env_file),))
+    monkeypatch.setattr(
+        litellm,
+        "validate_environment",
+        lambda **_kwargs: {
+            "keys_in_environment": False,
+            "missing_keys": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+        },
+    )
+
+    has_credentials, missing_keys, request_model = validate_litellm_environment(
+        model_name="bedrock/anthropic.claude-sonnet-4-6",
+    )
+
+    assert has_credentials is True
+    assert missing_keys == []
+    assert request_model == "bedrock/anthropic.claude-sonnet-4-6"
+    assert os.environ["AWS_BEARER_TOKEN_BEDROCK"] == "ABSK-test-token"
+
+
 def test_validate_litellm_environment_reports_bedrock_bearer_token_alternative(
     monkeypatch,
 ):
+    monkeypatch.setattr("backend.config._env_files", ())
     monkeypatch.delenv("AWS_BEARER_TOKEN_BEDROCK", raising=False)
     monkeypatch.setattr(
         litellm,

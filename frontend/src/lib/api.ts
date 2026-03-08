@@ -26,6 +26,23 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
+function extractErrorMessage(body: string, status: number): string {
+  if (!body) {
+    return `Request failed (${status})`;
+  }
+
+  try {
+    const parsed = JSON.parse(body) as { detail?: unknown };
+    if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+      return parsed.detail;
+    }
+  } catch {
+    // Non-JSON error bodies fall back to raw text.
+  }
+
+  return body;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers ?? {});
   const isFormData = init?.body instanceof FormData;
@@ -40,7 +57,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(body || `Request failed (${response.status})`);
+    throw new Error(extractErrorMessage(body, response.status));
   }
 
   if (response.status === 204) {
@@ -365,6 +382,7 @@ export function updateRuntimeSettings(payload: {
   dashboard_currency_code?: string | null;
   agent_model?: string | null;
   agent_max_steps?: number | null;
+  agent_bulk_max_concurrent_threads?: number | null;
   agent_retry_max_attempts?: number | null;
   agent_retry_initial_wait_seconds?: number | null;
   agent_retry_max_wait_seconds?: number | null;
@@ -412,6 +430,26 @@ export function deleteAgentThread(threadId: string): Promise<void> {
   });
 }
 
+function buildAgentMessageFormData(content: string, files: File[]): FormData {
+  const formData = new FormData();
+  formData.set("content", content);
+  files.forEach((file) => {
+    formData.append("files", file);
+  });
+  return formData;
+}
+
+export function sendAgentMessage(payload: {
+  threadId: string;
+  content: string;
+  files: File[];
+}): Promise<AgentRun> {
+  return request<AgentRun>(`/api/v1/agent/threads/${payload.threadId}/messages`, {
+    method: "POST",
+    body: buildAgentMessageFormData(payload.content, payload.files)
+  });
+}
+
 export async function streamAgentMessage(payload: {
   threadId: string;
   content: string;
@@ -419,15 +457,9 @@ export async function streamAgentMessage(payload: {
   signal?: AbortSignal;
   onEvent: (event: AgentStreamEvent) => void;
 }): Promise<void> {
-  const formData = new FormData();
-  formData.set("content", payload.content);
-  payload.files.forEach((file) => {
-    formData.append("files", file);
-  });
-
   const response = await fetch(`${API_BASE_URL}/api/v1/agent/threads/${payload.threadId}/messages/stream`, {
     method: "POST",
-    body: formData,
+    body: buildAgentMessageFormData(payload.content, payload.files),
     signal: payload.signal,
     headers: {
       Accept: "text/event-stream"
@@ -435,7 +467,7 @@ export async function streamAgentMessage(payload: {
   });
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(body || `Request failed (${response.status})`);
+    throw new Error(extractErrorMessage(body, response.status));
   }
   if (!response.body) {
     throw new Error("Streaming response body is unavailable.");

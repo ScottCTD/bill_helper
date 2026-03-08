@@ -24,6 +24,7 @@ vi.mock("../../lib/api", async () => {
     listTags: vi.fn(),
     renameAgentThread: vi.fn(),
     rejectAgentChangeItem: vi.fn(),
+    sendAgentMessage: vi.fn(),
     streamAgentMessage: vi.fn()
   };
 });
@@ -55,8 +56,13 @@ function buildThreadDetail(runs: ReturnType<typeof buildRun>[]) {
   };
 }
 
+function buildPdfFile(name: string) {
+  return new File(["%PDF-1.7"], name, { type: "application/pdf" });
+}
+
 describe("AgentPanel", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(api.createAgentThread).mockResolvedValue({
       id: "thread-created",
       title: null,
@@ -79,6 +85,7 @@ describe("AgentPanel", () => {
       dashboard_currency_code: "USD",
       agent_model: "gpt-test",
       agent_max_steps: 8,
+      agent_bulk_max_concurrent_threads: 4,
       agent_retry_max_attempts: 3,
       agent_retry_initial_wait_seconds: 1,
       agent_retry_max_wait_seconds: 10,
@@ -94,6 +101,7 @@ describe("AgentPanel", () => {
         dashboard_currency_code: null,
         agent_model: null,
         agent_max_steps: null,
+        agent_bulk_max_concurrent_threads: null,
         agent_retry_max_attempts: null,
         agent_retry_initial_wait_seconds: null,
         agent_retry_max_wait_seconds: null,
@@ -132,6 +140,13 @@ describe("AgentPanel", () => {
       created_at: "2026-03-06T10:00:00Z",
       updated_at: "2026-03-06T10:05:00Z"
     });
+    vi.mocked(api.sendAgentMessage).mockResolvedValue(
+      buildRun({
+        status: "running",
+        assistant_message_id: null,
+        completed_at: null
+      })
+    );
     vi.mocked(api.streamAgentMessage).mockResolvedValue();
   });
 
@@ -209,6 +224,297 @@ describe("AgentPanel", () => {
 
     const countBadge = screen.getByText("2");
     expect(countBadge).toHaveClass("agent-panel-review-badge");
+  });
+
+  it("shows Bulk mode help only in a tooltip and still requires at least one file", async () => {
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
+
+    renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    await userEvent.click(screen.getByRole("switch", { name: "Bulk mode" }));
+
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    await userEvent.hover(screen.getByRole("button", { name: "Bulk mode help" }));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Each file starts a fresh thread using only the prompt typed here. Current thread history is not included."
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Start Bulk" }));
+
+    expect(await screen.findByText("Attach at least one file to start Bulk mode.")).toBeInTheDocument();
+    expect(api.sendAgentMessage).not.toHaveBeenCalled();
+  });
+
+  it("starts one fresh thread per file in Bulk mode without reusing the selected thread", async () => {
+    let createCount = 0;
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
+    vi.mocked(api.createAgentThread).mockImplementation(async ({ title } = {}) => {
+      createCount += 1;
+      return {
+        id: `thread-created-${createCount}`,
+        title: title ?? null,
+        created_at: `2026-03-06T10:00:0${createCount}Z`,
+        updated_at: `2026-03-06T10:00:0${createCount}Z`
+      };
+    });
+
+    const { container } = renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!(fileInput instanceof HTMLInputElement)) {
+      throw new Error("Expected file input");
+    }
+
+    await userEvent.upload(fileInput, [buildPdfFile("statement-january.pdf"), buildPdfFile("statement-february.pdf")]);
+    await userEvent.click(screen.getByRole("switch", { name: "Bulk mode" }));
+    await userEvent.type(screen.getByRole("textbox"), "Review this statement");
+    await userEvent.click(screen.getByRole("button", { name: "Start Bulk" }));
+
+    await waitFor(() => expect(api.createAgentThread).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.sendAgentMessage).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Started 2 threads.")).toBeInTheDocument();
+    expect(api.streamAgentMessage).not.toHaveBeenCalled();
+    expect(vi.mocked(api.sendAgentMessage).mock.calls).toEqual([
+      [
+        {
+          threadId: "thread-created-1",
+          content: "Review this statement",
+          files: [expect.objectContaining({ name: "statement-january.pdf" })]
+        }
+      ],
+      [
+        {
+          threadId: "thread-created-2",
+          content: "Review this statement",
+          files: [expect.objectContaining({ name: "statement-february.pdf" })]
+        }
+      ]
+    ]);
+    expect(
+      vi.mocked(api.getAgentThread).mock.calls.some(([threadId]) => threadId === "thread-created-1" || threadId === "thread-created-2")
+    ).toBe(false);
+  });
+
+  it("caps Bulk mode launches at four concurrent sends", async () => {
+    let createCount = 0;
+    let activeSends = 0;
+    let maxActiveSends = 0;
+    const sendResolvers: Array<() => void> = [];
+
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
+    vi.mocked(api.createAgentThread).mockImplementation(async ({ title } = {}) => {
+      createCount += 1;
+      return {
+        id: `thread-created-${createCount}`,
+        title: title ?? null,
+        created_at: `2026-03-06T10:00:${String(createCount).padStart(2, "0")}Z`,
+        updated_at: `2026-03-06T10:00:${String(createCount).padStart(2, "0")}Z`
+      };
+    });
+    vi.mocked(api.sendAgentMessage).mockImplementation(
+      ({ threadId }) =>
+        new Promise((resolve) => {
+          activeSends += 1;
+          maxActiveSends = Math.max(maxActiveSends, activeSends);
+          sendResolvers.push(() => {
+            activeSends -= 1;
+            resolve(
+              buildRun({
+                thread_id: threadId,
+                status: "running",
+                assistant_message_id: null,
+                completed_at: null
+              })
+            );
+          });
+        })
+    );
+
+    const { container } = renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!(fileInput instanceof HTMLInputElement)) {
+      throw new Error("Expected file input");
+    }
+
+    await userEvent.upload(
+      fileInput,
+      Array.from({ length: 6 }, (_, index) => buildPdfFile(`statement-${index + 1}.pdf`))
+    );
+    await userEvent.click(screen.getByRole("switch", { name: "Bulk mode" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start Bulk" }));
+
+    await waitFor(() => expect(api.sendAgentMessage).toHaveBeenCalledTimes(4));
+    expect(maxActiveSends).toBe(4);
+
+    await act(async () => {
+      sendResolvers.shift()?.();
+    });
+
+    await waitFor(() => expect(api.sendAgentMessage).toHaveBeenCalledTimes(5));
+
+    await act(async () => {
+      sendResolvers.shift()?.();
+    });
+
+    await waitFor(() => expect(api.sendAgentMessage).toHaveBeenCalledTimes(6));
+
+    await act(async () => {
+      sendResolvers.splice(0).forEach((resolve) => resolve());
+    });
+  });
+
+  it("uses the runtime settings Bulk concurrency limit", async () => {
+    let createCount = 0;
+    let activeSends = 0;
+    let maxActiveSends = 0;
+    const sendResolvers: Array<() => void> = [];
+
+    vi.mocked(api.getRuntimeSettings).mockResolvedValue({
+      current_user_name: "Admin",
+      user_memory: null,
+      default_currency_code: "USD",
+      dashboard_currency_code: "USD",
+      agent_model: "gpt-test",
+      agent_max_steps: 8,
+      agent_bulk_max_concurrent_threads: 2,
+      agent_retry_max_attempts: 3,
+      agent_retry_initial_wait_seconds: 1,
+      agent_retry_max_wait_seconds: 10,
+      agent_retry_backoff_multiplier: 2,
+      agent_max_image_size_bytes: 1000000,
+      agent_max_images_per_message: 5,
+      agent_base_url: null,
+      agent_api_key_configured: true,
+      overrides: {
+        current_user_name: null,
+        user_memory: null,
+        default_currency_code: null,
+        dashboard_currency_code: null,
+        agent_model: null,
+        agent_max_steps: null,
+        agent_bulk_max_concurrent_threads: 2,
+        agent_retry_max_attempts: null,
+        agent_retry_initial_wait_seconds: null,
+        agent_retry_max_wait_seconds: null,
+        agent_retry_backoff_multiplier: null,
+        agent_max_image_size_bytes: null,
+        agent_max_images_per_message: null,
+        agent_base_url: null,
+        agent_api_key_configured: true
+      }
+    });
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
+    vi.mocked(api.createAgentThread).mockImplementation(async ({ title } = {}) => {
+      createCount += 1;
+      return {
+        id: `thread-created-${createCount}`,
+        title: title ?? null,
+        created_at: `2026-03-06T10:00:${String(createCount).padStart(2, "0")}Z`,
+        updated_at: `2026-03-06T10:00:${String(createCount).padStart(2, "0")}Z`
+      };
+    });
+    vi.mocked(api.sendAgentMessage).mockImplementation(
+      ({ threadId }) =>
+        new Promise((resolve) => {
+          activeSends += 1;
+          maxActiveSends = Math.max(maxActiveSends, activeSends);
+          sendResolvers.push(() => {
+            activeSends -= 1;
+            resolve(
+              buildRun({
+                thread_id: threadId,
+                status: "running",
+                assistant_message_id: null,
+                completed_at: null
+              })
+            );
+          });
+        })
+    );
+
+    const { container } = renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!(fileInput instanceof HTMLInputElement)) {
+      throw new Error("Expected file input");
+    }
+
+    await userEvent.upload(
+      fileInput,
+      Array.from({ length: 4 }, (_, index) => buildPdfFile(`statement-${index + 1}.pdf`))
+    );
+    await userEvent.click(screen.getByRole("switch", { name: "Bulk mode" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start Bulk" }));
+
+    await waitFor(() => expect(api.sendAgentMessage).toHaveBeenCalledTimes(2));
+    expect(maxActiveSends).toBe(2);
+
+    await act(async () => {
+      sendResolvers.splice(0).forEach((resolve) => resolve());
+    });
+
+    await waitFor(() => expect(api.sendAgentMessage).toHaveBeenCalledTimes(4));
+
+    await act(async () => {
+      sendResolvers.splice(0).forEach((resolve) => resolve());
+    });
+  });
+
+  it("preserves failed files and the shared prompt after a partial Bulk mode failure", async () => {
+    let createCount = 0;
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
+    vi.mocked(api.createAgentThread).mockImplementation(async ({ title } = {}) => {
+      createCount += 1;
+      return {
+        id: `thread-created-${createCount}`,
+        title: title ?? null,
+        created_at: `2026-03-06T10:00:0${createCount}Z`,
+        updated_at: `2026-03-06T10:00:0${createCount}Z`
+      };
+    });
+    vi.mocked(api.sendAgentMessage)
+      .mockResolvedValueOnce(
+        buildRun({
+          thread_id: "thread-created-1",
+          status: "running",
+          assistant_message_id: null,
+          completed_at: null
+        })
+      )
+      .mockRejectedValueOnce(new Error("provider unavailable"));
+
+    const { container } = renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!(fileInput instanceof HTMLInputElement)) {
+      throw new Error("Expected file input");
+    }
+
+    await userEvent.upload(fileInput, [buildPdfFile("statement-ok.pdf"), buildPdfFile("statement-fail.pdf")]);
+    await userEvent.click(screen.getByRole("switch", { name: "Bulk mode" }));
+    const composer = screen.getByRole("textbox");
+    await userEvent.type(composer, "Use this shared prompt");
+    await userEvent.click(screen.getByRole("button", { name: "Start Bulk" }));
+
+    expect(await screen.findByText("Started 1 thread. Failed 1.")).toBeInTheDocument();
+    expect(screen.getByText("Files: statement-fail.pdf provider unavailable")).toBeInTheDocument();
+    expect(screen.getByText("provider unavailable")).toBeInTheDocument();
+    expect(composer).toHaveValue("Use this shared prompt");
+    expect(screen.queryByText("statement-ok.pdf")).not.toBeInTheDocument();
+    expect(screen.getByText("statement-fail.pdf")).toBeInTheDocument();
+    expect(api.deleteAgentThread).toHaveBeenCalledWith("thread-created-2");
   });
 
   it("updates the thread title immediately when rename_thread streams", async () => {

@@ -40,6 +40,7 @@
 - `versions/0023_add_agent_provider_config.py`: adds custom provider configuration fields to runtime settings (`agent_base_url`, `agent_api_key`).
 - `versions/0024_entity_root_accounts.py`: rebuilds accounts as entity-root records by rekeying `accounts.id` to shared `entities.id` values and updating dependent account references.
 - `versions/0025_user_memory_json_list.py`: normalizes persisted runtime user memory into JSON list form for prompt rendering and add-only appends.
+- `versions/0027_add_agent_bulk_concurrency_setting.py`: adds persisted Bulk mode concurrency control to runtime settings (`agent_bulk_max_concurrent_threads`).
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)

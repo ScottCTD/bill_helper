@@ -46,7 +46,7 @@ Configuration is resolved in this order (highest → lowest priority):
 | 3 | `~/.config/bill-helper/.env` | Shared dev secrets across all worktrees |
 | 4 | Defaults in `backend/config.py` | Sensible fallbacks |
 
-This means secrets like `OPENROUTER_API_KEY` only need to be configured once in the shared location and are available to every worktree automatically. A per-worktree `.env` can selectively override any value (e.g., test a different model).
+This means secrets like `OPENROUTER_API_KEY` or `AWS_BEARER_TOKEN_BEDROCK` only need to be configured once in the shared location and are available to every worktree automatically. Bill Helper mirrors env-file variables into the process environment before LiteLLM validation and model calls, so provider-specific SDK/env lookups see the same shared secrets. A per-worktree `.env` can selectively override any value (e.g., test a different model).
 
 ### Shared Data Directory
 
@@ -104,6 +104,7 @@ uv sync --extra dev
 |----------|---------|-------------|
 | `BILL_HELPER_AGENT_MODEL` | `openrouter/qwen/qwen3.5-27b` | LiteLLM model identifier |
 | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool-call steps per agent run |
+| `BILL_HELPER_AGENT_BULK_MAX_CONCURRENT_THREADS` | `4` | Max fresh threads Bulk mode starts at once |
 | `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS` | `3` | Model call retry attempts |
 | `BILL_HELPER_AGENT_RETRY_INITIAL_WAIT_SECONDS` | `0.25` | Initial retry backoff delay |
 | `BILL_HELPER_AGENT_RETRY_MAX_WAIT_SECONDS` | `4.0` | Max retry backoff delay |
@@ -142,7 +143,7 @@ LiteLLM resolves provider credentials from standard environment variables based 
 - Backend boots normally when provider credentials are missing
 - Agent message execution endpoints return `503` when the configured model's provider credentials are missing
 - `GET /settings` reports `agent_api_key_configured=true` when either an explicit override key exists or LiteLLM can resolve provider credentials for the selected model; `agent_base_url` reflects only explicit overrides
-- Runtime settings from the database (`/api/v1/settings`) override env defaults for: current user name, default currency, dashboard currency, agent model, agent max steps, and retry parameters
+- Runtime settings from the database (`/api/v1/settings`) override env defaults for: current user name, default currency, dashboard currency, agent model, agent max steps, Bulk mode concurrency, and retry parameters
 
 ## Database Setup
 
@@ -180,6 +181,7 @@ Current revisions:
 - `0023_add_agent_provider_config`
 - `0024_entity_root_accounts`
 - `0025_user_memory_json_list`
+- `0027_add_agent_bulk_concurrency_setting`
 
 Optional seed:
 

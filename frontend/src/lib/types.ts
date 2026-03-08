@@ -248,6 +248,7 @@ export interface RuntimeSettingsOverrides {
   dashboard_currency_code: string | null;
   agent_model: string | null;
   agent_max_steps: number | null;
+  agent_bulk_max_concurrent_threads: number | null;
   agent_retry_max_attempts: number | null;
   agent_retry_initial_wait_seconds: number | null;
   agent_retry_max_wait_seconds: number | null;
@@ -265,6 +266,7 @@ export interface RuntimeSettings {
   dashboard_currency_code: string;
   agent_model: string;
   agent_max_steps: number;
+  agent_bulk_max_concurrent_threads: number;
   agent_retry_max_attempts: number;
   agent_retry_initial_wait_seconds: number;
   agent_retry_max_wait_seconds: number;

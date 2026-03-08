@@ -16,6 +16,7 @@ from backend.services.runtime_settings_normalization import (
     normalize_text_or_none,
     sanitize_float_at_least,
     sanitize_int_at_least,
+    sanitize_int_between,
     serialize_user_memory_or_none,
     validate_user_memory_size,
 )
@@ -32,6 +33,7 @@ class ResolvedRuntimeSettings:
     dashboard_currency_code: str
     agent_model: str
     agent_max_steps: int
+    agent_bulk_max_concurrent_threads: int
     agent_retry_max_attempts: int
     agent_retry_initial_wait_seconds: float
     agent_retry_max_wait_seconds: float
@@ -154,6 +156,14 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         minimum=1,
         fallback=defaults.agent_max_steps,
     )
+    agent_bulk_max_concurrent_threads = sanitize_int_between(
+        override.agent_bulk_max_concurrent_threads
+        if override and override.agent_bulk_max_concurrent_threads is not None
+        else defaults.agent_bulk_max_concurrent_threads,
+        minimum=1,
+        maximum=16,
+        fallback=defaults.agent_bulk_max_concurrent_threads,
+    )
     agent_retry_max_attempts = sanitize_int_at_least(
         override.agent_retry_max_attempts
         if override and override.agent_retry_max_attempts is not None
@@ -211,6 +221,7 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         dashboard_currency_code=dashboard_currency_code,
         agent_model=agent_model,
         agent_max_steps=agent_max_steps,
+        agent_bulk_max_concurrent_threads=agent_bulk_max_concurrent_threads,
         agent_retry_max_attempts=agent_retry_max_attempts,
         agent_retry_initial_wait_seconds=agent_retry_initial_wait_seconds,
         agent_retry_max_wait_seconds=agent_retry_max_wait_seconds,
@@ -240,6 +251,7 @@ def build_runtime_settings_read(
         dashboard_currency_code=resolved.dashboard_currency_code,
         agent_model=resolved.agent_model,
         agent_max_steps=resolved.agent_max_steps,
+        agent_bulk_max_concurrent_threads=resolved.agent_bulk_max_concurrent_threads,
         agent_retry_max_attempts=resolved.agent_retry_max_attempts,
         agent_retry_initial_wait_seconds=resolved.agent_retry_initial_wait_seconds,
         agent_retry_max_wait_seconds=resolved.agent_retry_max_wait_seconds,
@@ -266,6 +278,9 @@ def build_runtime_settings_read(
             if override
             else None,
             agent_max_steps=override.agent_max_steps if override else None,
+            agent_bulk_max_concurrent_threads=override.agent_bulk_max_concurrent_threads
+            if override
+            else None,
             agent_retry_max_attempts=override.agent_retry_max_attempts
             if override
             else None,

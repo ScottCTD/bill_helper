@@ -44,6 +44,7 @@ Agent settings include:
 
 - `AGENT_MODEL` (default `openrouter/qwen/qwen3.5-27b`)
 - `AGENT_MAX_STEPS` (default `100`)
+- `AGENT_BULK_MAX_CONCURRENT_THREADS` (default `4`)
 - `AGENT_MAX_IMAGE_SIZE_BYTES` (default `5MB`)
 - `AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`)
 - `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL`
@@ -62,6 +63,7 @@ Behavior notes:
 - app startup succeeds even when provider credentials are missing
 - only agent execution is blocked (`503`) when LiteLLM cannot resolve credentials for the configured model target
 - provider credentials are resolved by LiteLLM from standard provider-specific environment variables for the configured model
+- provider-specific secrets from `.env` or `~/.config/bill-helper/.env` are mirrored into `os.environ` before LiteLLM validation and model calls, so shared XDG env files work for direct provider lookups such as `AWS_BEARER_TOKEN_BEDROCK`
 - `agent_base_url` and `agent_api_key` are explicit app-level overrides only; provider-native env vars are not forwarded through those fields
 - `get_settings()` caches environment settings with `lru_cache`
 - runtime behavior consumers should read through `backend/services/runtime_settings.py`

@@ -15,6 +15,9 @@ This document describes the architecture, prompts, tools, and usage workflow of 
   - Run/tool context is shown alongside the assistant message.
   - Removable attachment chips (image thumbnails + PDF file chips) appear above the composer before send.
   - Paste (`Cmd/Ctrl+V`) and drag-drop ingestion for image/PDF attachments.
+  - `Bulk mode` creates one fresh thread per attached file using only the current textarea prompt; it does not copy the currently selected thread history.
+  - Bulk mode launch concurrency comes from runtime settings (`agent_bulk_max_concurrent_threads`), with `4` as the default.
+  - Bulk launches stay in the existing thread rail, show immediate running indicators, expose the fresh-thread warning from a hover/focus tooltip, and report started/failed files through transient popup notifications.
   - Composer shortcut: `Cmd+Enter` (or `Ctrl+Enter`) sends the message.
   - Cumulative thread usage bar above the composer: `Context`, `Total input`, `Output`, `Cache read`, `Cache hit rate`, `Total cost`.
   - `Context` is the best-effort current prompt size for the selected thread; `Total input` remains the cumulative billed input usage across completed and in-flight runs.
@@ -80,6 +83,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
   - removes persisted upload directories under `{data_dir}/agent_uploads/<message_id>/...`
 - `GET /api/v1/agent/threads/{thread_id}`: fetch full thread detail
 - `POST /api/v1/agent/threads/{thread_id}/messages`: send message and run agent (non-streaming)
+  - used by Bulk mode after creating one fresh thread per attached file
 - `POST /api/v1/agent/threads/{thread_id}/messages/stream`: send message and run agent (SSE streaming)
 - `GET /api/v1/agent/runs/{run_id}`: fetch run detail
 - `POST /api/v1/agent/runs/{run_id}/interrupt`: interrupt a running agent
@@ -92,6 +96,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | ---------------------------------- | ------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------- |
 | `agent_model`                      | `BILL_HELPER_AGENT_MODEL`                                     | `openrouter/qwen/qwen3.5-27b` | Model name; runtime override supported via `/api/v1/settings`                                   |
 | `agent_max_steps`                  | `BILL_HELPER_AGENT_MAX_STEPS`                                 | `100`                         | Max tool loop iterations                                                                        |
+| `agent_bulk_max_concurrent_threads` | `BILL_HELPER_AGENT_BULK_MAX_CONCURRENT_THREADS`               | `4`                           | Max fresh threads Bulk mode starts concurrently                                                 |
 | `current_user_timezone`            | `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` | `America/Toronto`             | User-local date basis for the system-prompt current-date section                                |
 | `default_currency_code`            | `BILL_HELPER_DEFAULT_CURRENCY_CODE`                           | `CAD`                         | Fallback for entry proposals missing currency (`/settings` override first, env fallback second) |
 | `agent_retry_max_attempts`         | `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS`                        | `3`                           | Model completion retry attempts                                                                 |

@@ -21,6 +21,7 @@ interface SettingsFormState {
   dashboard_currency_code: string;
   agent_model: string;
   agent_max_steps: string;
+  agent_bulk_max_concurrent_threads: string;
   agent_max_images_per_message: string;
   agent_max_image_size_mb: string;
   agent_retry_max_attempts: string;
@@ -90,6 +91,7 @@ function buildFormState(data: RuntimeSettings): SettingsFormState {
     dashboard_currency_code: data.dashboard_currency_code,
     agent_model: data.agent_model,
     agent_max_steps: String(data.agent_max_steps),
+    agent_bulk_max_concurrent_threads: String(data.agent_bulk_max_concurrent_threads),
     agent_max_images_per_message: String(data.agent_max_images_per_message),
     agent_max_image_size_mb: bytesToMegabytes(data.agent_max_image_size_bytes),
     agent_retry_max_attempts: String(data.agent_retry_max_attempts),
@@ -185,6 +187,13 @@ export function SettingsPage() {
       }
 
       const nextAgentMaxSteps = parsePositiveInteger(formState.agent_max_steps, "Agent max steps");
+      const nextAgentBulkMaxConcurrentThreads = parsePositiveInteger(
+        formState.agent_bulk_max_concurrent_threads,
+        "Bulk mode max concurrent threads"
+      );
+      if (nextAgentBulkMaxConcurrentThreads > 16) {
+        throw new Error("Bulk mode max concurrent threads must be 16 or less.");
+      }
       const nextAgentMaxImagesPerMessage = parsePositiveInteger(
         formState.agent_max_images_per_message,
         "Max attachments per message"
@@ -229,6 +238,7 @@ export function SettingsPage() {
         dashboard_currency_code: nextDashboardCurrencyCode,
         agent_model: formState.agent_model.trim(),
         agent_max_steps: nextAgentMaxSteps,
+        agent_bulk_max_concurrent_threads: nextAgentBulkMaxConcurrentThreads,
         agent_max_images_per_message: nextAgentMaxImagesPerMessage,
         agent_max_image_size_bytes: nextAgentMaxImageSizeBytes,
         agent_retry_max_attempts: nextAgentRetryMaxAttempts,
@@ -257,6 +267,7 @@ export function SettingsPage() {
       dashboard_currency_code: null,
       agent_model: null,
       agent_max_steps: null,
+      agent_bulk_max_concurrent_threads: null,
       agent_max_images_per_message: null,
       agent_max_image_size_bytes: null,
       agent_retry_max_attempts: null,
@@ -355,7 +366,7 @@ export function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Agent Runtime</CardTitle>
-            <CardDescription>Controls model selection and guardrails for new runs.</CardDescription>
+            <CardDescription>Controls model selection and guardrails for new runs and bulk launches.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <FormField
@@ -434,13 +445,26 @@ export function SettingsPage() {
               </>
             ) : null}
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <FormField label="Max steps">
                 <Input
                   type="number"
                   min={1}
                   value={formState.agent_max_steps}
                   onChange={(event) => setFormState((state) => (state ? { ...state, agent_max_steps: event.target.value } : state))}
+                />
+              </FormField>
+              <FormField label="Bulk max threads" hint="Maximum fresh threads Bulk mode starts at once.">
+                <Input
+                  type="number"
+                  min={1}
+                  max={16}
+                  value={formState.agent_bulk_max_concurrent_threads}
+                  onChange={(event) =>
+                    setFormState((state) =>
+                      state ? { ...state, agent_bulk_max_concurrent_threads: event.target.value } : state
+                    )
+                  }
                 />
               </FormField>
               <FormField label="Max attachments per message">

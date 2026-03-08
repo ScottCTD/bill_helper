@@ -19,8 +19,10 @@ def test_settings_endpoint_returns_effective_defaults(client):
     assert payload["default_currency_code"] == settings.default_currency_code
     assert payload["dashboard_currency_code"] == settings.dashboard_currency_code
     assert payload["agent_model"] == settings.agent_model
+    assert payload["agent_bulk_max_concurrent_threads"] == settings.agent_bulk_max_concurrent_threads
     assert payload["overrides"]["user_memory"] is None
     assert payload["overrides"]["agent_model"] is None
+    assert payload["overrides"]["agent_bulk_max_concurrent_threads"] is None
 
 
 def test_settings_endpoint_uses_request_principal_for_current_user_name(client):
@@ -53,6 +55,28 @@ def test_settings_model_override_and_clear(client):
     clear_payload = clear_override.json()
     assert clear_payload["agent_model"] == "openrouter/qwen/qwen3.5-27b"
     assert clear_payload["overrides"]["agent_model"] is None
+
+
+def test_settings_bulk_concurrency_override_and_clear(client):
+    from backend.config import get_settings
+
+    set_override = client.patch(
+        "/api/v1/settings",
+        json={"agent_bulk_max_concurrent_threads": 6},
+    )
+    set_override.raise_for_status()
+    set_payload = set_override.json()
+    assert set_payload["agent_bulk_max_concurrent_threads"] == 6
+    assert set_payload["overrides"]["agent_bulk_max_concurrent_threads"] == 6
+
+    clear_override = client.patch(
+        "/api/v1/settings",
+        json={"agent_bulk_max_concurrent_threads": None},
+    )
+    clear_override.raise_for_status()
+    clear_payload = clear_override.json()
+    assert clear_payload["agent_bulk_max_concurrent_threads"] == get_settings().agent_bulk_max_concurrent_threads
+    assert clear_payload["overrides"]["agent_bulk_max_concurrent_threads"] is None
 
 
 def test_settings_agent_provider_config_masks_api_key_in_response(client):

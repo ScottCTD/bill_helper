@@ -14,7 +14,7 @@ interface AgentThreadPanelProps {
   isDeleteDisabled: boolean;
   isRenameDisabled: boolean;
   isOpen: boolean;
-  optimisticRunningThreadId: string | null;
+  optimisticRunningThreadIds: string[];
 }
 
 export function AgentThreadPanel(props: AgentThreadPanelProps) {
@@ -31,7 +31,7 @@ export function AgentThreadPanel(props: AgentThreadPanelProps) {
     isDeleteDisabled,
     isRenameDisabled,
     isOpen,
-    optimisticRunningThreadId
+    optimisticRunningThreadIds
   } = props;
 
   if (!isOpen) return null;
@@ -53,7 +53,7 @@ export function AgentThreadPanel(props: AgentThreadPanelProps) {
         deletingThreadId={deletingThreadId}
         isDeleteDisabled={isDeleteDisabled}
         isRenameDisabled={isRenameDisabled}
-        optimisticRunningThreadId={optimisticRunningThreadId}
+        optimisticRunningThreadIds={optimisticRunningThreadIds}
       />
     </div>
   );
