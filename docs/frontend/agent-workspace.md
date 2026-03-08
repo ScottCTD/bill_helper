@@ -53,6 +53,9 @@ Supporting modules include:
 - pinned composer surface with attachment chips and preview dialog
 - supports picker, paste, and drag-drop for images and PDFs
 - includes a `Bulk mode` toggle beside `Add Attachments`
+- shows an `Agent model` dropdown immediately left of the primary composer action and sources options from runtime settings `available_agent_models` in the same order
+- initializes the picker from the latest run model when a thread has history, otherwise falls back through the thread's configured model and runtime default `agent_model`
+- changing the picker only affects the next `POST /api/v1/agent/threads/{thread_id}/messages` or `/messages/stream` request; existing thread history is still sent unchanged
 - Bulk mode creates one fresh thread per attached file, reuses the current textarea prompt for every launch, and never copies the currently selected thread history
 - Bulk launch concurrency uses the resolved runtime setting `agent_bulk_max_concurrent_threads` and falls back to `4` until settings load
 - Bulk mode help is exposed through a hover/focus tooltip beside the toggle instead of persistent helper text

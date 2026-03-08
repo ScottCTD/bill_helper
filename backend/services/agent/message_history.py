@@ -377,9 +377,10 @@ def build_llm_messages(
     thread_id: str,
     *,
     current_user_message_id: str | None = None,
+    model_name: str | None = None,
 ) -> list[dict[str, Any]]:
     settings = resolve_runtime_settings(db)
-    include_pdf_page_images = _model_supports_vision(settings.agent_model)
+    include_pdf_page_images = _model_supports_vision(model_name or settings.agent_model)
 
     history = list(
         db.scalars(

@@ -99,7 +99,9 @@ Endpoints:
 ## Thread Detail Behavior
 
 - `GET /api/v1/agent/threads/{thread_id}` returns `current_context_tokens`
+- message-send endpoints accept optional multipart `model_name`; when present it must match one of the resolved runtime `available_agent_models`
 - thread detail returns compact tool-call snapshots by default (`has_full_payload=false`)
+- thread detail keeps `configured_model_name` as the resolved runtime default while each run persists its own `model_name`; `current_context_tokens` follows the newest run model when a thread already has runs
 - full tool payloads are fetched through `GET /api/v1/agent/tool-calls/{tool_call_id}`
 - runs persist ordered `events[]` rows for replayable timeline activity
 - runs also carry their `change_items`; the frontend flattens those per-run proposal lists into one thread review model

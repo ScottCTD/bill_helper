@@ -654,3 +654,22 @@ def test_migration_0024_rewrites_account_ids_to_entity_roots(tmp_path):
         assert int(account_row["is_active"]) == 1
         assert entity_category is None
         assert int(assignment_count) == 0
+
+
+def test_migration_0028_adds_available_agent_models_column(tmp_path):
+    database_url = _sqlite_url(tmp_path, "migration_0028.sqlite")
+    cfg = _build_alembic_config(database_url)
+    command.upgrade(cfg, "0027_add_agent_bulk_concurrency_setting")
+
+    engine = create_engine(database_url, future=True)
+    inspector = inspect(engine)
+    assert "available_agent_models" not in {
+        column["name"] for column in inspector.get_columns("runtime_settings")
+    }
+
+    command.upgrade(cfg, "0028_add_available_agent_models_to_runtime_settings")
+
+    inspector = inspect(engine)
+    assert "available_agent_models" in {
+        column["name"] for column in inspector.get_columns("runtime_settings")
+    }

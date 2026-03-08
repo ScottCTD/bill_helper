@@ -102,7 +102,7 @@ uv sync --extra dev
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BILL_HELPER_AGENT_MODEL` | `openrouter/qwen/qwen3.5-27b` | LiteLLM model identifier |
+| `BILL_HELPER_AGENT_MODEL` | `bedrock/us.anthropic.claude-sonnet-4-6` | LiteLLM model identifier |
 | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool-call steps per agent run |
 | `BILL_HELPER_AGENT_BULK_MAX_CONCURRENT_THREADS` | `4` | Max fresh threads Bulk mode starts at once |
 | `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS` | `3` | Model call retry attempts |
@@ -118,10 +118,10 @@ LiteLLM resolves provider credentials from standard environment variables based 
 
 | Variable | Used when |
 |----------|-----------|
-| `OPENROUTER_API_KEY` | Model starts with `openrouter/` (default) |
+| `AWS_BEARER_TOKEN_BEDROCK` or standard AWS Bedrock credential env vars | Model starts with `bedrock/` (default) |
+| `OPENROUTER_API_KEY` | Model starts with `openrouter/` |
 | `OPENAI_API_KEY` | Model starts with `openai/` |
 | `ANTHROPIC_API_KEY` | Model starts with `anthropic/` |
-| `AWS_BEARER_TOKEN_BEDROCK` or standard AWS Bedrock credential env vars | Model starts with `bedrock/` |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Model starts with `gemini/` |
 | `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY` | Explicit app-level credential override for a custom endpoint |
 | `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL` | Explicit app-level base URL override for a custom endpoint |
@@ -143,7 +143,7 @@ LiteLLM resolves provider credentials from standard environment variables based 
 - Backend boots normally when provider credentials are missing
 - Agent message execution endpoints return `503` when the configured model's provider credentials are missing
 - `GET /settings` reports `agent_api_key_configured=true` when either an explicit override key exists or LiteLLM can resolve provider credentials for the selected model; `agent_base_url` reflects only explicit overrides
-- Runtime settings from the database (`/api/v1/settings`) override env defaults for: current user name, default currency, dashboard currency, agent model, agent max steps, Bulk mode concurrency, and retry parameters
+- Runtime settings from the database (`/api/v1/settings`) override env defaults for: current user name, default currency, dashboard currency, agent model, ordered available agent models, agent max steps, Bulk mode concurrency, and retry parameters
 
 ## Database Setup
 

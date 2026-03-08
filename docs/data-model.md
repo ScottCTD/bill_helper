@@ -72,6 +72,7 @@ Operational rules:
   - `default_currency_code`
   - `dashboard_currency_code`
   - `agent_model`
+  - `available_agent_models` (nullable JSON-serialized ordered list of model identifiers)
   - `agent_max_steps`
   - `agent_bulk_max_concurrent_threads`
   - `agent_retry_max_attempts`
@@ -89,6 +90,7 @@ Purpose:
 - stores optional runtime overrides managed by `/api/v1/settings`
 - effective runtime values are resolved as `override -> env default` where applicable
 - `user_memory` is an optional DB-only JSON-serialized list of strings used for persistent agent prompt context
+- `available_agent_models` is an optional DB-only JSON-serialized ordered list; the resolved API value always includes the effective `agent_model`
 
 ## `entities`
 
@@ -294,6 +296,7 @@ API-derived fields (not persisted in DB columns):
 - `input_cost_usd` remains the full prompt-side cost after cache-aware pricing when `cache_read_tokens` or `cache_write_tokens` are present
 - `output_cost_usd` remains the completion-side cost
 - `total_cost_usd` is the sum of prompt-side and completion-side cost; no separate cache-cost response fields are added
+- `model_name` records the explicit message-level selection when a send request overrides the configured default model
 
 ## `agent_tool_calls`
 

@@ -67,6 +67,7 @@ Includes:
 - legacy persisted change rows with unsupported `change_type` values are skipped from `change_items` so thread history keeps loading on current clients
 - `configured_model_name`
 - `current_context_tokens`
+- each run carries its own `model_name`; clients should treat the newest run model as the active conversation model when present
 - compact tool-call snapshots by default
 - ordered run `events[]`
 - nullable usage counters and derived pricing fields (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
@@ -84,6 +85,7 @@ Content type: `multipart/form-data`
 Form fields:
 
 - `content` (optional if files are present)
+- `model_name` (optional explicit model selection; must match one of the `available_agent_models` returned by `GET /settings`)
 - `files` (0..N image or PDF attachments)
 
 Behavior:
@@ -93,7 +95,7 @@ Behavior:
 - creates an `agent_runs` row with initial `status=running`
 - starts bounded tool-calling execution in background
 - PDFs are parsed with PyMuPDF first; vision-capable models also receive rendered page images
-- provider routing resolves through LiteLLM using configured model plus provider credentials
+- provider routing resolves through LiteLLM using the requested `model_name` when supplied, otherwise the configured default model
 - proposal tool outputs include `proposal_id` and `proposal_short_id`
 - pending proposals can later be edited or removed while still pending
 
@@ -102,6 +104,7 @@ Response: `AgentRunRead`
 Errors:
 
 - `400` invalid payload
+- `400` selected `model_name` is not enabled in runtime settings
 - `404` thread not found
 - `503` provider credentials unavailable
 
@@ -118,6 +121,7 @@ Behavior:
 - uses the same validation and persistence rules as the non-stream endpoint
 - executes in-request and streams incremental events
 - if the client disconnects, the run continues in background
+- response payload shape stays aligned with the non-stream endpoint: run snapshots expose the effective per-run `model_name`
 
 Response content type: `text/event-stream`
 

@@ -42,7 +42,7 @@ Core app settings include:
 
 Agent settings include:
 
-- `AGENT_MODEL` (default `openrouter/qwen/qwen3.5-27b`)
+- `AGENT_MODEL` (default `bedrock/us.anthropic.claude-sonnet-4-6`)
 - `AGENT_MAX_STEPS` (default `100`)
 - `AGENT_BULK_MAX_CONCURRENT_THREADS` (default `4`)
 - `AGENT_MAX_IMAGE_SIZE_BYTES` (default `5MB`)
@@ -52,9 +52,10 @@ Agent settings include:
 
 Runtime override behavior:
 
-- `runtime_settings` stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`, including `user_memory`
+- `runtime_settings` stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`, including ordered `user_memory` and `available_agent_models`
 - effective runtime settings resolve as `override -> env default` where applicable
 - `user_memory` is DB-backed only, normalized as an ordered `list[str]`, and injected into every agent system prompt as a markdown unordered list when set
+- `available_agent_models` is DB-backed only, normalized as an ordered `list[str]`, and always resolved to include the effective `agent_model`
 - identity is request-principal-based at API boundaries; `current_user_name` is read-only in `/settings`
 - `agent_base_url` overrides allow only `http` and `https` and block localhost domains and non-public IP literals
 

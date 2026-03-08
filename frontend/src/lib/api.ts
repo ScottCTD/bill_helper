@@ -17,6 +17,7 @@ import type {
   GroupSummary,
   GroupType,
   RuntimeSettings,
+  RuntimeSettingsUpdatePayload,
   Reconciliation,
   Snapshot,
   Taxonomy,
@@ -401,23 +402,7 @@ export function getRuntimeSettings(): Promise<RuntimeSettings> {
   return request<RuntimeSettings>("/api/v1/settings");
 }
 
-export function updateRuntimeSettings(payload: {
-  current_user_name?: string | null;
-  user_memory?: string[] | null;
-  default_currency_code?: string | null;
-  dashboard_currency_code?: string | null;
-  agent_model?: string | null;
-  agent_max_steps?: number | null;
-  agent_bulk_max_concurrent_threads?: number | null;
-  agent_retry_max_attempts?: number | null;
-  agent_retry_initial_wait_seconds?: number | null;
-  agent_retry_max_wait_seconds?: number | null;
-  agent_retry_backoff_multiplier?: number | null;
-  agent_max_image_size_bytes?: number | null;
-  agent_max_images_per_message?: number | null;
-  agent_base_url?: string | null;
-  agent_api_key?: string | null;
-}): Promise<RuntimeSettings> {
+export function updateRuntimeSettings(payload: RuntimeSettingsUpdatePayload): Promise<RuntimeSettings> {
   return request<RuntimeSettings>("/api/v1/settings", {
     method: "PATCH",
     body: JSON.stringify(payload)
@@ -456,9 +441,13 @@ export function deleteAgentThread(threadId: string): Promise<void> {
   });
 }
 
-function buildAgentMessageFormData(content: string, files: File[]): FormData {
+function buildAgentMessageFormData(content: string, files: File[], modelName?: string | null): FormData {
   const formData = new FormData();
   formData.set("content", content);
+  const normalizedModelName = modelName?.trim();
+  if (normalizedModelName) {
+    formData.set("model_name", normalizedModelName);
+  }
   files.forEach((file) => {
     formData.append("files", file);
   });
@@ -469,10 +458,11 @@ export function sendAgentMessage(payload: {
   threadId: string;
   content: string;
   files: File[];
+  modelName?: string | null;
 }): Promise<AgentRun> {
   return request<AgentRun>(`/api/v1/agent/threads/${payload.threadId}/messages`, {
     method: "POST",
-    body: buildAgentMessageFormData(payload.content, payload.files)
+    body: buildAgentMessageFormData(payload.content, payload.files, payload.modelName)
   });
 }
 
@@ -480,12 +470,13 @@ export async function streamAgentMessage(payload: {
   threadId: string;
   content: string;
   files: File[];
+  modelName?: string | null;
   signal?: AbortSignal;
   onEvent: (event: AgentStreamEvent) => void;
 }): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/v1/agent/threads/${payload.threadId}/messages/stream`, {
     method: "POST",
-    body: buildAgentMessageFormData(payload.content, payload.files),
+    body: buildAgentMessageFormData(payload.content, payload.files, payload.modelName),
     signal: payload.signal,
     headers: {
       Accept: "text/event-stream"

@@ -5,11 +5,12 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.config import get_settings
+from backend.config import DEFAULT_AGENT_MODEL, get_settings
 from backend.models_finance import RuntimeSettings as RuntimeSettingsRow
 from backend.schemas_finance import RuntimeSettingsOverridesRead, RuntimeSettingsRead, RuntimeSettingsUpdate
 from backend.services.agent.model_client import validate_litellm_environment
 from backend.services.runtime_settings_normalization import (
+    parse_agent_models_or_none,
     normalize_currency_code_or_none,
     parse_user_memory_or_none,
     normalize_secret_or_none,
@@ -17,11 +18,17 @@ from backend.services.runtime_settings_normalization import (
     sanitize_float_at_least,
     sanitize_int_at_least,
     sanitize_int_between,
+    serialize_agent_models_or_none,
     serialize_user_memory_or_none,
     validate_user_memory_size,
 )
 
 RUNTIME_SETTINGS_SCOPE = "default"
+DEFAULT_AVAILABLE_AGENT_MODELS = (
+    DEFAULT_AGENT_MODEL,
+    "openai/gpt-4.1-mini",
+    "openrouter/qwen/qwen3.5-27b",
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -32,6 +39,7 @@ class ResolvedRuntimeSettings:
     default_currency_code: str
     dashboard_currency_code: str
     agent_model: str
+    available_agent_models: list[str]
     agent_max_steps: int
     agent_bulk_max_concurrent_threads: int
     agent_retry_max_attempts: int
@@ -71,6 +79,8 @@ def update_runtime_settings_override(
         # Skip masked sentinel to prevent accidental overwrites of API key
         if field_name == "agent_api_key" and value == "***masked***":
             continue
+        if field_name == "available_agent_models":
+            value = serialize_agent_models_or_none(value)
         if field_name == "user_memory":
             value = serialize_user_memory_or_none(value)
         setattr(row, field_name, value)
@@ -106,6 +116,21 @@ def append_user_memory_items(
     db.add(row)
     db.flush()
     return added_items, merged_items
+
+
+def _default_available_agent_models() -> list[str]:
+    return list(parse_agent_models_or_none(DEFAULT_AVAILABLE_AGENT_MODELS) or [DEFAULT_AGENT_MODEL])
+
+
+def _ensure_available_models_include_default(
+    available_models: list[str] | None,
+    *,
+    agent_model: str,
+) -> list[str]:
+    normalized_models = list(available_models or _default_available_agent_models())
+    if agent_model.casefold() in {model.casefold() for model in normalized_models}:
+        return normalized_models
+    return [*normalized_models, agent_model]
 
 
 def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
@@ -146,7 +171,13 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
             else None
         )
         or normalize_text_or_none(defaults.agent_model)
-        or "openrouter/qwen/qwen3.5-27b"
+        or DEFAULT_AGENT_MODEL
+    )
+    available_agent_models = _ensure_available_models_include_default(
+        parse_agent_models_or_none(override.available_agent_models)
+        if override is not None
+        else None,
+        agent_model=agent_model,
     )
 
     agent_max_steps = sanitize_int_at_least(
@@ -220,6 +251,7 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         default_currency_code=default_currency_code,
         dashboard_currency_code=dashboard_currency_code,
         agent_model=agent_model,
+        available_agent_models=available_agent_models,
         agent_max_steps=agent_max_steps,
         agent_bulk_max_concurrent_threads=agent_bulk_max_concurrent_threads,
         agent_retry_max_attempts=agent_retry_max_attempts,
@@ -250,6 +282,7 @@ def build_runtime_settings_read(
         default_currency_code=resolved.default_currency_code,
         dashboard_currency_code=resolved.dashboard_currency_code,
         agent_model=resolved.agent_model,
+        available_agent_models=resolved.available_agent_models,
         agent_max_steps=resolved.agent_max_steps,
         agent_bulk_max_concurrent_threads=resolved.agent_bulk_max_concurrent_threads,
         agent_retry_max_attempts=resolved.agent_retry_max_attempts,
@@ -275,6 +308,9 @@ def build_runtime_settings_read(
             if override
             else None,
             agent_model=normalize_text_or_none(override.agent_model)
+            if override
+            else None,
+            available_agent_models=parse_agent_models_or_none(override.available_agent_models)
             if override
             else None,
             agent_max_steps=override.agent_max_steps if override else None,

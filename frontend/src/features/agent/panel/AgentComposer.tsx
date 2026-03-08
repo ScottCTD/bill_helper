@@ -17,6 +17,9 @@ interface AgentComposerProps {
   composerTextareaRef: RefObject<HTMLTextAreaElement | null>;
   fileInputRef: RefObject<HTMLInputElement | null>;
   draftMessage: string;
+  availableModels: string[];
+  selectedModel: string;
+  isModelPickerDisabled: boolean;
   isMutating: boolean;
   isRunInFlight: boolean;
   isSendingMessage: boolean;
@@ -32,6 +35,7 @@ interface AgentComposerProps {
   onDragLeave: (event: DragEvent<HTMLFormElement>) => void;
   onDrop: (event: DragEvent<HTMLFormElement>) => void;
   onMessageChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
+  onModelChange: (event: ChangeEvent<HTMLSelectElement>) => void;
   onComposerKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   onComposerPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
   onFileSelection: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -48,6 +52,9 @@ export function AgentComposer(props: AgentComposerProps) {
     composerTextareaRef,
     fileInputRef,
     draftMessage,
+    availableModels,
+    selectedModel,
+    isModelPickerDisabled,
     isMutating,
     isRunInFlight,
     isSendingMessage,
@@ -63,6 +70,7 @@ export function AgentComposer(props: AgentComposerProps) {
     onDragLeave,
     onDrop,
     onMessageChange,
+    onModelChange,
     onComposerKeyDown,
     onComposerPaste,
     onFileSelection,
@@ -172,24 +180,41 @@ export function AgentComposer(props: AgentComposerProps) {
             </label>
           </div>
 
-          {showStopButton ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive"
-              disabled={isInterruptPending}
-              className="agent-composer-send"
-              onClick={onStopRun}
+          <div className="agent-composer-primary-actions">
+            <select
+              className="agent-composer-model-select"
+              aria-label="Agent model"
+              value={availableModels.length === 0 ? "" : selectedModel}
+              onChange={onModelChange}
+              disabled={isModelPickerDisabled || availableModels.length === 0}
             >
-              {isInterruptPending ? "Stopping..." : "Stop"}
-              <Square className="h-3.5 w-3.5" />
-            </Button>
-          ) : (
-            <Button type="submit" size="sm" disabled={isMutating || isBulkLaunching} className="agent-composer-send">
-              {submitLabel}
-              <SendHorizontal className="h-4 w-4" />
-            </Button>
-          )}
+              {availableModels.length === 0 ? <option value="">Loading models…</option> : null}
+              {availableModels.map((modelName) => (
+                <option key={modelName} value={modelName}>
+                  {modelName}
+                </option>
+              ))}
+            </select>
+
+            {showStopButton ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={isInterruptPending}
+                className="agent-composer-send"
+                onClick={onStopRun}
+              >
+                {isInterruptPending ? "Stopping..." : "Stop"}
+                <Square className="h-3.5 w-3.5" />
+              </Button>
+            ) : (
+              <Button type="submit" size="sm" disabled={isMutating || isBulkLaunching} className="agent-composer-send">
+                {submitLabel}
+                <SendHorizontal className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
       {actionError ? <p className="error">{actionError}</p> : null}

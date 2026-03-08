@@ -102,6 +102,55 @@ def test_thread_detail_includes_configured_model_name(client):
     assert detail["configured_model_name"] == get_settings().agent_model
 
 
+def test_send_message_allows_explicit_model_selection(client, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    patch_model(
+        monkeypatch,
+        lambda _messages: {"role": "assistant", "content": "Selected model applied."},
+    )
+
+    settings_response = client.patch(
+        "/api/v1/settings",
+        json={
+            "available_agent_models": [
+                "bedrock/us.anthropic.claude-sonnet-4-6",
+                "openai/gpt-4.1-mini",
+            ]
+        },
+    )
+    settings_response.raise_for_status()
+
+    thread = create_thread(client)
+    run = send_message(
+        client,
+        thread["id"],
+        "Use the selected model.",
+        model_name="openai/gpt-4.1-mini",
+    )
+
+    assert run["status"] == "completed"
+    assert run["model_name"] == "openai/gpt-4.1-mini"
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    assert detail["configured_model_name"] == "bedrock/us.anthropic.claude-sonnet-4-6"
+    assert detail["runs"][0]["model_name"] == "openai/gpt-4.1-mini"
+
+
+def test_send_message_rejects_model_outside_available_agent_models(client):
+    thread = create_thread(client)
+    response = client.post(
+        f"/api/v1/agent/threads/{thread['id']}/messages",
+        data={
+            "content": "hello",
+            "model_name": "google/gemini-2.5-pro",
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Selected model is not enabled in runtime settings."
+
+
 def test_run_includes_context_tokens(client, monkeypatch):
     monkeypatch.setattr(
         "backend.services.agent.runtime.calculate_context_tokens",
@@ -344,10 +393,10 @@ def test_delete_thread_removes_uploaded_attachment_files(client, monkeypatch):
     assert all(not path.exists() for path in attachment_paths)
 
 
-def test_default_agent_model_is_openrouter_qwen_qwen3_5_27b():
+def test_default_agent_model_is_bedrock_claude_sonnet_4_6():
     from backend.config import get_settings
 
-    assert get_settings().agent_model == "openrouter/qwen/qwen3.5-27b"
+    assert get_settings().agent_model == "bedrock/us.anthropic.claude-sonnet-4-6"
 
 
 def test_model_supports_vision_has_manual_override_for_openrouter_qwen_qwen3_5_27b(monkeypatch):
@@ -1398,6 +1447,63 @@ def test_stream_message_endpoint_emits_real_time_events(client, monkeypatch):
     assert assistant_messages[0]["content_markdown"] == "Hello"
 
 
+def test_stream_message_allows_explicit_model_selection(client, monkeypatch):
+    from backend.services.agent import runtime
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+
+    def stream_model(_messages, _db, **_kwargs):
+        yield {"type": "text_delta", "delta": "Selected model applied."}
+        yield {
+            "type": "done",
+            "message": {
+                "role": "assistant",
+                "content": "Selected model applied.",
+                "tool_calls": [],
+                "usage": {
+                    "input_tokens": 10,
+                    "output_tokens": 5,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0,
+                },
+            },
+        }
+
+    monkeypatch.setattr(runtime, "call_model_stream", stream_model)
+
+    settings_response = client.patch(
+        "/api/v1/settings",
+        json={
+            "available_agent_models": [
+                "bedrock/us.anthropic.claude-sonnet-4-6",
+                "openai/gpt-4.1-mini",
+            ]
+        },
+    )
+    settings_response.raise_for_status()
+
+    thread = create_thread(client)
+    events = collect_sse_events(
+        client,
+        thread["id"],
+        "Use the selected stream model.",
+        model_name="openai/gpt-4.1-mini",
+    )
+
+    assert any(
+        event.get("type") == "run_event"
+        and event.get("event", {}).get("event_type") == "run_completed"
+        for event in events
+    )
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    assert detail["configured_model_name"] == "bedrock/us.anthropic.claude-sonnet-4-6"
+    assert detail["runs"][0]["status"] == "completed"
+    assert detail["runs"][0]["model_name"] == "openai/gpt-4.1-mini"
+
+
 def test_stream_rename_thread_tool_updates_title_before_final_assistant_turn(client, monkeypatch):
     from backend.models_agent import AgentThread
     from backend.services.agent import runtime
@@ -1889,7 +1995,7 @@ def test_run_pricing_handles_missing_cache_usage_fields(client, monkeypatch):
     assert any(
         call
         == {
-            "model_name": "openrouter/qwen/qwen3.5-27b",
+            "model_name": "bedrock/us.anthropic.claude-sonnet-4-6",
             "input_tokens": 10,
             "output_tokens": 5,
             "cache_read_tokens": None,

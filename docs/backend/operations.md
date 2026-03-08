@@ -28,6 +28,8 @@
 - `0024_entity_root_accounts`
 - `0025_user_memory_json_list`
 - `0026_entry_groups_v2`
+- `0027_add_agent_bulk_concurrency_setting`
+- `0028_add_available_agent_models_to_runtime_settings`
 
 Commands:
 

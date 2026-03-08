@@ -56,6 +56,70 @@ function buildThreadDetail(runs: ReturnType<typeof buildRun>[]) {
   };
 }
 
+type RuntimeSettingsResponse = Awaited<ReturnType<typeof api.getRuntimeSettings>>;
+type RuntimeSettingsOverrideInput = Partial<Omit<RuntimeSettingsResponse, "overrides">> & {
+  overrides?: Partial<RuntimeSettingsResponse["overrides"]>;
+};
+
+function buildRuntimeSettings(overrides: RuntimeSettingsOverrideInput = {}) {
+  return {
+    current_user_name: "Admin",
+    user_memory: null,
+    default_currency_code: "USD",
+    dashboard_currency_code: "USD",
+    agent_model: "gpt-test",
+    available_agent_models: ["gpt-test", "openai/gpt-4.1-mini", "openrouter/qwen/qwen3.5-27b"],
+    agent_max_steps: 8,
+    agent_bulk_max_concurrent_threads: 4,
+    agent_retry_max_attempts: 3,
+    agent_retry_initial_wait_seconds: 1,
+    agent_retry_max_wait_seconds: 10,
+    agent_retry_backoff_multiplier: 2,
+    agent_max_image_size_bytes: 1000000,
+    agent_max_images_per_message: 5,
+    agent_base_url: null,
+    agent_api_key_configured: true,
+    overrides: {
+      current_user_name: null,
+      user_memory: null,
+      default_currency_code: null,
+      dashboard_currency_code: null,
+      agent_model: null,
+      available_agent_models: null,
+      agent_max_steps: null,
+      agent_bulk_max_concurrent_threads: null,
+      agent_retry_max_attempts: null,
+      agent_retry_initial_wait_seconds: null,
+      agent_retry_max_wait_seconds: null,
+      agent_retry_backoff_multiplier: null,
+      agent_max_image_size_bytes: null,
+      agent_max_images_per_message: null,
+      agent_base_url: null,
+      agent_api_key_configured: true
+    },
+    ...overrides,
+    overrides: {
+      current_user_name: null,
+      user_memory: null,
+      default_currency_code: null,
+      dashboard_currency_code: null,
+      agent_model: null,
+      available_agent_models: null,
+      agent_max_steps: null,
+      agent_bulk_max_concurrent_threads: null,
+      agent_retry_max_attempts: null,
+      agent_retry_initial_wait_seconds: null,
+      agent_retry_max_wait_seconds: null,
+      agent_retry_backoff_multiplier: null,
+      agent_max_image_size_bytes: null,
+      agent_max_images_per_message: null,
+      agent_base_url: null,
+      agent_api_key_configured: true,
+      ...overrides.overrides
+    }
+  };
+}
+
 function buildPdfFile(name: string) {
   return new File(["%PDF-1.7"], name, { type: "application/pdf" });
 }
@@ -78,40 +142,7 @@ describe("AgentPanel", () => {
     vi.mocked(api.listTags).mockResolvedValue([
       { id: 1, name: "food", color: "#7fb069", type: "daily" }
     ]);
-    vi.mocked(api.getRuntimeSettings).mockResolvedValue({
-      current_user_name: "Admin",
-      user_memory: null,
-      default_currency_code: "USD",
-      dashboard_currency_code: "USD",
-      agent_model: "gpt-test",
-      agent_max_steps: 8,
-      agent_bulk_max_concurrent_threads: 4,
-      agent_retry_max_attempts: 3,
-      agent_retry_initial_wait_seconds: 1,
-      agent_retry_max_wait_seconds: 10,
-      agent_retry_backoff_multiplier: 2,
-      agent_max_image_size_bytes: 1000000,
-      agent_max_images_per_message: 5,
-      agent_base_url: null,
-      agent_api_key_configured: true,
-      overrides: {
-        current_user_name: null,
-        user_memory: null,
-        default_currency_code: null,
-        dashboard_currency_code: null,
-        agent_model: null,
-        agent_max_steps: null,
-        agent_bulk_max_concurrent_threads: null,
-        agent_retry_max_attempts: null,
-        agent_retry_initial_wait_seconds: null,
-        agent_retry_max_wait_seconds: null,
-        agent_retry_backoff_multiplier: null,
-        agent_max_image_size_bytes: null,
-        agent_max_images_per_message: null,
-        agent_base_url: null,
-        agent_api_key_configured: true
-      }
-    });
+    vi.mocked(api.getRuntimeSettings).mockResolvedValue(buildRuntimeSettings());
     vi.mocked(api.getAgentToolCall).mockResolvedValue(
       buildRun({}).tool_calls[0] ?? {
         id: "tool-call-1",
@@ -284,14 +315,16 @@ describe("AgentPanel", () => {
         {
           threadId: "thread-created-1",
           content: "Review this statement",
-          files: [expect.objectContaining({ name: "statement-january.pdf" })]
+          files: [expect.objectContaining({ name: "statement-january.pdf" })],
+          modelName: "gpt-test"
         }
       ],
       [
         {
           threadId: "thread-created-2",
           content: "Review this statement",
-          files: [expect.objectContaining({ name: "statement-february.pdf" })]
+          files: [expect.objectContaining({ name: "statement-february.pdf" })],
+          modelName: "gpt-test"
         }
       ]
     ]);
@@ -377,40 +410,12 @@ describe("AgentPanel", () => {
     let maxActiveSends = 0;
     const sendResolvers: Array<() => void> = [];
 
-    vi.mocked(api.getRuntimeSettings).mockResolvedValue({
-      current_user_name: "Admin",
-      user_memory: null,
-      default_currency_code: "USD",
-      dashboard_currency_code: "USD",
-      agent_model: "gpt-test",
-      agent_max_steps: 8,
-      agent_bulk_max_concurrent_threads: 2,
-      agent_retry_max_attempts: 3,
-      agent_retry_initial_wait_seconds: 1,
-      agent_retry_max_wait_seconds: 10,
-      agent_retry_backoff_multiplier: 2,
-      agent_max_image_size_bytes: 1000000,
-      agent_max_images_per_message: 5,
-      agent_base_url: null,
-      agent_api_key_configured: true,
-      overrides: {
-        current_user_name: null,
-        user_memory: null,
-        default_currency_code: null,
-        dashboard_currency_code: null,
-        agent_model: null,
-        agent_max_steps: null,
+    vi.mocked(api.getRuntimeSettings).mockResolvedValue(
+      buildRuntimeSettings({
         agent_bulk_max_concurrent_threads: 2,
-        agent_retry_max_attempts: null,
-        agent_retry_initial_wait_seconds: null,
-        agent_retry_max_wait_seconds: null,
-        agent_retry_backoff_multiplier: null,
-        agent_max_image_size_bytes: null,
-        agent_max_images_per_message: null,
-        agent_base_url: null,
-        agent_api_key_configured: true
-      }
-    });
+        overrides: { agent_bulk_max_concurrent_threads: 2 }
+      })
+    );
     vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
     vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
     vi.mocked(api.createAgentThread).mockImplementation(async ({ title } = {}) => {
@@ -579,5 +584,128 @@ describe("AgentPanel", () => {
     await act(async () => {
       resolveStream?.();
     });
+  });
+
+  it("initializes the composer model picker from the latest thread run model", async () => {
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getRuntimeSettings).mockResolvedValue(
+      buildRuntimeSettings({
+        agent_model: "bedrock/us.anthropic.claude-sonnet-4-6",
+        available_agent_models: ["bedrock/us.anthropic.claude-sonnet-4-6", "openai/gpt-4.1-mini"],
+        overrides: { agent_model: "bedrock/us.anthropic.claude-sonnet-4-6" }
+      })
+    );
+    vi.mocked(api.getAgentThread).mockResolvedValue(
+      buildThreadDetail([
+        buildRun({ model_name: "openai/gpt-4.1-mini" })
+      ])
+    );
+
+    renderWithQueryClient(<AgentPanel isOpen />);
+
+    const modelPicker = await screen.findByRole("combobox", { name: "Agent model" });
+    await waitFor(() => expect(modelPicker).toHaveValue("openai/gpt-4.1-mini"));
+    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "bedrock/us.anthropic.claude-sonnet-4-6",
+      "openai/gpt-4.1-mini"
+    ]);
+  });
+
+  it("updates the header model label immediately when the composer model picker changes", async () => {
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getRuntimeSettings).mockResolvedValue(
+      buildRuntimeSettings({
+        agent_model: "gpt-test",
+        available_agent_models: ["gpt-test", "openai/gpt-4.1-mini"]
+      })
+    );
+    vi.mocked(api.getAgentThread).mockResolvedValue(
+      buildThreadDetail([
+        buildRun({ model_name: "openai/gpt-4.1-mini" })
+      ])
+    );
+
+    renderWithQueryClient(<AgentPanel isOpen />);
+
+    const modelPicker = await screen.findByRole("combobox", { name: "Agent model" });
+    await waitFor(() => expect(modelPicker).toHaveValue("openai/gpt-4.1-mini"));
+    expect(await screen.findByRole("heading", { name: "Agent (openai/gpt-4.1-mini)" })).toBeInTheDocument();
+
+    await userEvent.selectOptions(modelPicker, "gpt-test");
+
+    expect(screen.getByRole("heading", { name: "Agent (gpt-test)" })).toBeInTheDocument();
+  });
+
+  it("uses the selected composer model for the next streamed send", async () => {
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getRuntimeSettings).mockResolvedValue(
+      buildRuntimeSettings({
+        agent_model: "bedrock/us.anthropic.claude-sonnet-4-6",
+        available_agent_models: ["bedrock/us.anthropic.claude-sonnet-4-6", "openai/gpt-4.1-mini"]
+      })
+    );
+    vi.mocked(api.getAgentThread)
+      .mockResolvedValueOnce(buildThreadDetail([]))
+      .mockResolvedValue(buildThreadDetail([]));
+
+    renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Agent model" }), "openai/gpt-4.1-mini");
+    await userEvent.type(screen.getByRole("textbox"), "Use the faster model next");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() =>
+      expect(api.streamAgentMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread-1",
+          content: "Use the faster model next",
+          modelName: "openai/gpt-4.1-mini"
+        })
+      )
+    );
+  });
+
+  it("uses the selected composer model for bulk send requests", async () => {
+    let createCount = 0;
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getRuntimeSettings).mockResolvedValue(
+      buildRuntimeSettings({
+        available_agent_models: ["gpt-test", "openai/gpt-4.1-mini"]
+      })
+    );
+    vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
+    vi.mocked(api.createAgentThread).mockImplementation(async ({ title } = {}) => {
+      createCount += 1;
+      return {
+        id: `thread-created-${createCount}`,
+        title: title ?? null,
+        created_at: `2026-03-06T10:00:0${createCount}Z`,
+        updated_at: `2026-03-06T10:00:0${createCount}Z`
+      };
+    });
+
+    const { container } = renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!(fileInput instanceof HTMLInputElement)) {
+      throw new Error("Expected file input");
+    }
+
+    await userEvent.upload(fileInput, [buildPdfFile("statement.pdf")]);
+    await userEvent.click(screen.getByRole("switch", { name: "Bulk mode" }));
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Agent model" }), "openai/gpt-4.1-mini");
+    await userEvent.type(screen.getByRole("textbox"), "Review this statement");
+    await userEvent.click(screen.getByRole("button", { name: "Start Bulk" }));
+
+    await waitFor(() => expect(api.sendAgentMessage).toHaveBeenCalledTimes(1));
+    expect(api.sendAgentMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "thread-created-1",
+        content: "Review this statement",
+        modelName: "openai/gpt-4.1-mini"
+      })
+    );
   });
 });
