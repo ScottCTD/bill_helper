@@ -22,6 +22,7 @@ vi.mock("../../lib/api", async () => {
     listCurrencies: vi.fn(),
     listEntities: vi.fn(),
     listTags: vi.fn(),
+    reopenAgentChangeItem: vi.fn(),
     renameAgentThread: vi.fn(),
     rejectAgentChangeItem: vi.fn(),
     sendAgentMessage: vi.fn(),
@@ -132,6 +133,7 @@ describe("AgentPanel", () => {
       buildChangeItem({ status: "APPLIED", applied_resource_type: "tag", applied_resource_id: "1" })
     );
     vi.mocked(api.rejectAgentChangeItem).mockResolvedValue(buildChangeItem({ status: "REJECTED" }));
+    vi.mocked(api.reopenAgentChangeItem).mockResolvedValue(buildChangeItem({ status: "PENDING_REVIEW" }));
     vi.mocked(api.deleteAgentThread).mockResolvedValue();
     vi.mocked(api.interruptAgentRun).mockResolvedValue(buildRun({ status: "failed", error_text: "Run interrupted by user." }));
     vi.mocked(api.renameAgentThread).mockResolvedValue({

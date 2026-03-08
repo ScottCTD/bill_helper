@@ -35,7 +35,11 @@ from backend.services.agent.entry_references import (
     find_entries_by_id,
     find_entries_by_selector,
 )
-from backend.services.agent.group_references import group_owner_condition
+from backend.services.agent.group_references import (
+    find_groups_by_id,
+    group_owner_condition,
+    group_public_summary,
+)
 from backend.services.crud_policy import PolicyViolation
 from backend.services.entries import set_entry_tags, soft_delete_entry
 from backend.services.entities import (
@@ -121,9 +125,29 @@ def _find_change_item_by_id(db: Session, change_item_id: str) -> AgentChangeItem
     return item
 
 
-def _resolve_applied_group_id(db: Session, reference: GroupReferencePayload) -> str:
+def _resolve_existing_group_id(db: Session, *, group_id: str, current_user_id: str) -> str:
+    matches = find_groups_by_id(db, group_id=group_id, owner_user_id=current_user_id)
+    if not matches:
+        raise ValueError("Group not found")
+    if len(matches) > 1:
+        candidates = "; ".join(group_public_summary(group) for group in matches)
+        raise ValueError(f"Group id is ambiguous ({len(matches)} matches): {candidates}")
+    return str(matches[0].id)
+
+
+def _resolve_existing_entry_id(db: Session, *, entry_id: str) -> str:
+    matches = find_entries_by_id(db, entry_id)
+    if not matches:
+        raise ValueError("Entry id did not match any entry")
+    if len(matches) > 1:
+        candidates = "; ".join(entry_public_summary(entry) for entry in matches)
+        raise ValueError(f"Entry id is ambiguous ({len(matches)} matches): {candidates}")
+    return str(matches[0].id)
+
+
+def _resolve_applied_group_id(db: Session, reference: GroupReferencePayload, *, current_user_id: str) -> str:
     if reference.group_id is not None:
-        return reference.group_id
+        return _resolve_existing_group_id(db, group_id=reference.group_id, current_user_id=current_user_id)
 
     assert reference.create_group_proposal_id is not None
     item = _find_change_item_by_id(db, reference.create_group_proposal_id)
@@ -136,7 +160,7 @@ def _resolve_applied_group_id(db: Session, reference: GroupReferencePayload) -> 
 
 def _resolve_applied_entry_id(db: Session, reference: EntryReferencePayload) -> str:
     if reference.entry_id is not None:
-        return reference.entry_id
+        return _resolve_existing_entry_id(db, entry_id=reference.entry_id)
 
     assert reference.create_entry_proposal_id is not None
     item = _find_change_item_by_id(db, reference.create_entry_proposal_id)
@@ -148,15 +172,16 @@ def _resolve_applied_entry_id(db: Session, reference: EntryReferencePayload) -> 
 
 
 def _find_scoped_group_by_id(db: Session, *, group_id: str, current_user_id: str) -> EntryGroup:
+    resolved_group_id = _resolve_existing_group_id(db, group_id=group_id, current_user_id=current_user_id)
     group = db.scalar(
         select(EntryGroup)
         .where(
-            EntryGroup.id == group_id,
+            EntryGroup.id == resolved_group_id,
             group_owner_condition(current_user_id),
         )
         .options(*group_tree_options())
     )
-    if group is None:
+    if group is None:  # pragma: no cover - guarded by _resolve_existing_group_id
         raise ValueError("Group not found")
     return group
 
@@ -413,7 +438,7 @@ def apply_create_group_member(db: Session, payload: dict[str, Any]) -> AppliedRe
 
     settings = resolve_runtime_settings(db)
     current_user = ensure_current_user(db, settings.current_user_name)
-    group_id = _resolve_applied_group_id(db, parsed.group_ref)
+    group_id = _resolve_applied_group_id(db, parsed.group_ref, current_user_id=current_user.id)
     group = _find_scoped_group_by_id(db, group_id=group_id, current_user_id=current_user.id)
 
     entry = None
@@ -422,7 +447,7 @@ def apply_create_group_member(db: Session, payload: dict[str, Any]) -> AppliedRe
         entry_id = _resolve_applied_entry_id(db, parsed.entry_ref)
         entry = _find_unique_entry_by_id(db, entry_id)
     if parsed.child_group_ref is not None:
-        child_group_id = _resolve_applied_group_id(db, parsed.child_group_ref)
+        child_group_id = _resolve_applied_group_id(db, parsed.child_group_ref, current_user_id=current_user.id)
         child_group = _find_scoped_group_by_id(db, group_id=child_group_id, current_user_id=current_user.id)
 
     membership = add_group_member(
@@ -453,7 +478,9 @@ def apply_delete_group_member(db: Session, payload: dict[str, Any]) -> AppliedRe
 
     target_entry_id = _resolve_applied_entry_id(db, parsed.entry_ref) if parsed.entry_ref is not None else None
     target_child_group_id = (
-        _resolve_applied_group_id(db, parsed.child_group_ref) if parsed.child_group_ref is not None else None
+        _resolve_applied_group_id(db, parsed.child_group_ref, current_user_id=current_user.id)
+        if parsed.child_group_ref is not None
+        else None
     )
     membership = next(
         (

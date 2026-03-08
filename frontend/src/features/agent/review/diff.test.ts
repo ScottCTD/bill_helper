@@ -89,7 +89,7 @@ describe("proposal diff", () => {
     expect(diff.lines.find((line) => line.path === "currency")?.value).toBe("CAD");
   });
 
-  it("renders entry details without ref ids for create-group-member proposals", () => {
+  it("renders create-group-member proposals as a group assignment change", () => {
     const diff = buildProposalDiff("create_group_member", {
       action: "add",
       group_ref: { group_id: "group-1234" },
@@ -109,12 +109,14 @@ describe("proposal diff", () => {
       }
     });
 
-    expect(diff.mode).toBe("create");
-    expect(diff.lines.some((line) => line.path === "date" && line.value === "2026-03-01")).toBe(true);
-    expect(diff.lines.some((line) => line.path === "name" && line.value === "March Rent")).toBe(true);
-    expect(diff.lines.some((line) => line.path === "amount" && line.value === "2500")).toBe(true);
+    expect(diff.mode).toBe("update");
+    expect(diff.lines.some((line) => line.path === "group" && line.value === "Rent Timeline")).toBe(true);
+    expect(diff.lines.some((line) => line.path === "date")).toBe(false);
+    expect(diff.lines.some((line) => line.path === "name")).toBe(false);
+    expect(diff.lines.some((line) => line.path === "amount")).toBe(false);
     expect(diff.lines.some((line) => line.path === "member ref")).toBe(false);
     expect(diff.lines.some((line) => line.path === "parent group ref")).toBe(false);
+    expect(diff.metadata.some((line) => line.label === "Group" && line.value === "Rent Timeline")).toBe(true);
   });
 
   it("builds reviewer override diff for create-group-member split-role edits", () => {
@@ -152,6 +154,32 @@ describe("proposal diff", () => {
     expect(diff.lines.some((line) => line.path === "split role" && line.value === "PARENT")).toBe(true);
     expect(diff.lines.some((line) => line.path === "member ref")).toBe(false);
     expect(diff.metadata.some((line) => line.label === "Group type" && line.value === "SPLIT")).toBe(true);
+  });
+
+  it("renders delete-group-member proposals as a group removal change", () => {
+    const diff = buildProposalDiff("delete_group_member", {
+      action: "remove",
+      group_ref: { group_id: "group-1234" },
+      entry_ref: { entry_id: "entry-1111" },
+      child_group_ref: null,
+      group_preview: { name: "Rent Timeline", group_type: "RECURRING" },
+      member_preview: {
+        date: "2026-03-01",
+        name: "March Rent",
+        kind: "EXPENSE",
+        amount_minor: 250000,
+        currency_code: "USD",
+        from_entity: "Main Checking",
+        to_entity: "Landlord",
+        tags: ["housing"]
+      }
+    });
+
+    expect(diff.mode).toBe("update");
+    expect(diff.lines.some((line) => line.sign === "-" && line.path === "group" && line.value === "Rent Timeline")).toBe(true);
+    expect(diff.lines.some((line) => line.path === "date")).toBe(false);
+    expect(diff.lines.some((line) => line.path === "name")).toBe(false);
+    expect(diff.metadata.some((line) => line.label === "Group" && line.value === "Rent Timeline")).toBe(true);
   });
 
   it("builds update-group diffs from current group snapshots", () => {

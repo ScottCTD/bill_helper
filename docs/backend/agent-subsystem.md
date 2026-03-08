@@ -57,7 +57,7 @@
 - `backend/services/agent/benchmark_interface.py`
   - benchmark-facing `run_benchmark_case` contract
 - `backend/services/agent/review.py`
-  - approve or reject workflow and state transitions
+  - approve, reject, reopen, and apply state transitions
 - `backend/services/agent/change_apply.py`
   - concrete apply handlers for approved proposals
 - `backend/services/agent/serializers.py`
@@ -80,6 +80,7 @@
 - the prompt has a dedicated `Grouping` section that combines fixed `BUNDLE` / `SPLIT` / `RECURRING` semantics, examples, and workflow guidance
 - after proposing a new entry, the prompt instructs the agent to check whether an existing recurring, split, or bundle group should absorb it and to propose the membership change when needed
 - group membership proposals may reference pending `create_group` and `create_entry` proposal ids in the same thread; approval is blocked until those dependencies are applied
+- stored group-member proposal payloads canonicalize existing `group_id` / `entry_id` aliases and pending create-proposal ids to their full ids so pending-conflict detection, dependency blocking, and apply all operate on the same references
 
 ## Agent Router
 
@@ -103,6 +104,7 @@ Endpoints:
 - `POST /api/v1/agent/runs/{run_id}/interrupt`
 - `POST /api/v1/agent/change-items/{item_id}/approve`
 - `POST /api/v1/agent/change-items/{item_id}/reject`
+- `POST /api/v1/agent/change-items/{item_id}/reopen`
 - `GET /api/v1/agent/attachments/{attachment_id}`
 
 ## Thread Detail Behavior
@@ -130,8 +132,11 @@ Endpoints:
 
 ## Review And Apply Behavior
 
-- `backend/services/agent/review.py` accepts reviewer `payload_override` for create/update entry, tag, entity, and group proposals while keeping the approve endpoint contract unchanged
+- `backend/services/agent/review.py` accepts reviewer `payload_override` for create/update entry, tag, entity, and group proposals across approve, reject, and reopen actions while leaving `APPLIED` items immutable
+- invalid reviewer overrides fail during payload normalization and leave the proposal unchanged instead of marking it `APPLY_FAILED`
 - group-member approvals that reference pending `create_group` / `create_entry` proposals are blocked until those dependencies are applied; rejected or failed dependencies leave the member proposal unapprovable until edited or removed
+- apply-time group-member resolution canonicalizes existing short `group_id` and `entry_id` aliases to full ids before scoped lookup and membership matching, so approval semantics match proposal-time alias handling
+- `update_pending_proposal` re-runs group conflict checks after normalization, so revised group create/update/delete/member proposals cannot be patched into duplicate or conflicting pending states
 - `backend/services/agent/change_apply.py` still owns the actual domain mutation after approval, including group create/rename/delete and group membership add/remove
 - `backend/services/agent/message_history.py` prepends compact review outcome lines before the next user feedback message and includes `review_override=...` when reviewer edits changed the applied payload
 - group-member proposal previews now carry enough entry fields, including `markdown_notes`, for the frontend to render a locked full-entry snapshot during review

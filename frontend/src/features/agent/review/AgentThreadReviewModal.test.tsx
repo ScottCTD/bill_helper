@@ -128,6 +128,7 @@ describe("AgentThreadReviewModal", () => {
         onOpenChange={() => undefined}
         onApproveItem={vi.fn()}
         onRejectItem={vi.fn()}
+        onReopenItem={vi.fn()}
       />
     );
 
@@ -212,6 +213,7 @@ describe("AgentThreadReviewModal", () => {
         onOpenChange={() => undefined}
         onApproveItem={onApproveItem}
         onRejectItem={vi.fn()}
+        onReopenItem={vi.fn()}
       />
     );
 
@@ -251,6 +253,7 @@ describe("AgentThreadReviewModal", () => {
         onOpenChange={() => undefined}
         onApproveItem={onApproveItem}
         onRejectItem={vi.fn()}
+        onReopenItem={vi.fn()}
       />
     );
 
@@ -317,6 +320,7 @@ describe("AgentThreadReviewModal", () => {
         onOpenChange={() => undefined}
         onApproveItem={onApproveItem}
         onRejectItem={vi.fn()}
+        onReopenItem={vi.fn()}
       />
     );
 
@@ -340,5 +344,131 @@ describe("AgentThreadReviewModal", () => {
     expect(screen.queryByLabelText("Entry ref")).not.toBeInTheDocument();
     const comboboxes = screen.getAllByRole("combobox");
     expect(comboboxes.at(-1)).toHaveValue("CHILD");
+  });
+
+  it("hides dependency chips once the referenced proposal is already applied", async () => {
+    const run = buildRun({
+      id: "run-group",
+      created_at: "2026-03-06T10:00:00Z",
+      change_items: [
+        buildChangeItem({
+          id: "proposal-group-create",
+          run_id: "run-group",
+          change_type: "create_group",
+          status: "APPLIED",
+          applied_resource_type: "group",
+          applied_resource_id: "group-1",
+          payload_json: {
+            name: "Payroll Deposit",
+            group_type: "RECURRING"
+          }
+        }),
+        buildChangeItem({
+          id: "proposal-group-member",
+          run_id: "run-group",
+          change_type: "create_group_member",
+          payload_json: {
+            action: "add",
+            group_ref: {
+              create_group_proposal_id: "proposal-group-create"
+            },
+            entry_ref: {
+              entry_id: "entry-1234"
+            },
+            child_group_ref: null,
+            member_role: null,
+            group_preview: {
+              name: "Payroll Deposit",
+              group_type: "RECURRING"
+            },
+            member_preview: {
+              date: "2026-01-15",
+              kind: "INCOME",
+              name: "Payroll Deposit",
+              amount_minor: 179739,
+              currency_code: "CAD",
+              from_entity: "Employer",
+              to_entity: "Checking",
+              tags: ["salary_wages"],
+              markdown_notes: "Payroll deposit"
+            }
+          }
+        })
+      ]
+    });
+
+    renderWithQueryClient(
+      <AgentThreadReviewModal
+        open
+        runs={[run]}
+        onOpenChange={() => undefined}
+        onApproveItem={vi.fn()}
+        onRejectItem={vi.fn()}
+        onReopenItem={vi.fn()}
+      />
+    );
+
+    const proposalButtons = await screen.findAllByText("Add Group Member: Payroll Deposit -> Payroll Deposit");
+    await userEvent.click(proposalButtons[0]);
+
+    expect(screen.queryByText("Parent group dependency")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Parent group")).toHaveValue("Payroll Deposit");
+  });
+
+  it("lets reviewers reopen rejected editable items with payload overrides", async () => {
+    const run = buildRun({
+      id: "run-tag",
+      created_at: "2026-03-06T10:00:00Z",
+      change_items: [
+        buildChangeItem({
+          id: "proposal-tag",
+          run_id: "run-tag",
+          change_type: "create_tag",
+          status: "REJECTED",
+          payload_json: {
+            name: "subscriptions",
+            type: "recurring"
+          }
+        })
+      ]
+    });
+    const onReopenItem = vi.fn().mockResolvedValue({
+      ...run.change_items[0],
+      status: "PENDING_REVIEW",
+      payload_json: {
+        name: "streaming",
+        type: "media"
+      }
+    });
+
+    renderWithQueryClient(
+      <AgentThreadReviewModal
+        open
+        runs={[run]}
+        onOpenChange={() => undefined}
+        onApproveItem={vi.fn()}
+        onRejectItem={vi.fn()}
+        onReopenItem={onReopenItem}
+      />
+    );
+
+    const nameInput = await screen.findByLabelText("Name");
+    const typeInput = screen.getByLabelText("Type");
+
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, "Streaming");
+    await userEvent.clear(typeInput);
+    await userEvent.type(typeInput, "Media");
+    await userEvent.click(screen.getByRole("button", { name: "Move to Pending" }));
+
+    await waitFor(() =>
+      expect(onReopenItem).toHaveBeenCalledWith({
+        itemId: "proposal-tag",
+        payloadOverride: {
+          name: "streaming",
+          type: "Media"
+        }
+      })
+    );
   });
 });

@@ -170,3 +170,9 @@ class AgentChangeItemApproveRequest(BaseModel):
 
 class AgentChangeItemRejectRequest(BaseModel):
     note: str | None = None
+    payload_override: dict[str, Any] | None = None
+
+
+class AgentChangeItemReopenRequest(BaseModel):
+    note: str | None = None
+    payload_override: dict[str, Any] | None = None

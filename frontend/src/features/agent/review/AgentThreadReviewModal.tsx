@@ -51,7 +51,8 @@ interface AgentThreadReviewModalProps {
   runs: AgentRun[];
   onOpenChange: (open: boolean) => void;
   onApproveItem: (payload: { itemId: string; payloadOverride?: Record<string, unknown> }) => Promise<AgentChangeItem>;
-  onRejectItem: (payload: { itemId: string }) => Promise<AgentChangeItem>;
+  onRejectItem: (payload: { itemId: string; payloadOverride?: Record<string, unknown> }) => Promise<AgentChangeItem>;
+  onReopenItem: (payload: { itemId: string; payloadOverride?: Record<string, unknown> }) => Promise<AgentChangeItem>;
   isBusy?: boolean;
 }
 
@@ -98,9 +99,8 @@ function proposalReferenceId(record: Record<string, unknown>, idKey: string, pro
   return null;
 }
 
-function proposalReferenceIsPending(record: Record<string, unknown>, proposalKey: string): boolean {
-  const proposalId = record[proposalKey];
-  return typeof proposalId === "string" && proposalId.trim().length > 0;
+function isUnresolvedDependency(proposal: ThreadReviewItem | null): boolean {
+  return proposal != null && proposal.item.status !== "APPLIED";
 }
 
 function proposalReferenceLabel(record: Record<string, unknown>, idKey: string, proposalKey: string): string {
@@ -525,6 +525,10 @@ function resolveProposalItemByReference(items: ThreadReviewItem[], referenceId: 
   return items.find((item) => item.item.id.toLowerCase().startsWith(normalizedReference)) ?? null;
 }
 
+function isEditableReviewStatus(status: AgentChangeStatus): boolean {
+  return status !== "APPLIED";
+}
+
 function PendingDependencyChip({
   label,
   proposal
@@ -608,16 +612,10 @@ function ReviewGroupMembershipEditor({
   const groupPreview = asRecord(payload.group_preview);
   const memberPreview = asRecord(payload.member_preview);
   const isEntryTarget = Object.keys(entryRef).length > 0;
-  const groupDependency = proposalReferenceIsPending(groupRef, "create_group_proposal_id")
-    ? resolveProposalItemByReference(items, proposalReferenceId(groupRef, "group_id", "create_group_proposal_id"))
-    : null;
+  const groupDependency = resolveProposalItemByReference(items, proposalReferenceId(groupRef, "group_id", "create_group_proposal_id"));
   const memberDependency = isEntryTarget
-    ? proposalReferenceIsPending(entryRef, "create_entry_proposal_id")
-      ? resolveProposalItemByReference(items, proposalReferenceId(entryRef, "entry_id", "create_entry_proposal_id"))
-      : null
-    : proposalReferenceIsPending(childGroupRef, "create_group_proposal_id")
-      ? resolveProposalItemByReference(items, proposalReferenceId(childGroupRef, "group_id", "create_group_proposal_id"))
-      : null;
+    ? resolveProposalItemByReference(items, proposalReferenceId(entryRef, "entry_id", "create_entry_proposal_id"))
+    : resolveProposalItemByReference(items, proposalReferenceId(childGroupRef, "group_id", "create_group_proposal_id"));
   const groupType = typeof groupPreview.group_type === "string" ? groupPreview.group_type : "BUNDLE";
   const parentGroupName =
     typeof groupPreview.name === "string" && groupPreview.name.trim()
@@ -629,14 +627,19 @@ function ReviewGroupMembershipEditor({
       ? memberPreview.name
       : proposalReferenceLabel(childGroupRef, "group_id", "create_group_proposal_id");
   const childGroupType = typeof memberPreview.group_type === "string" ? memberPreview.group_type : "Unknown";
+  const unresolvedGroupDependency = isUnresolvedDependency(groupDependency) ? groupDependency : null;
+  const unresolvedMemberDependency = isUnresolvedDependency(memberDependency) ? memberDependency : null;
 
   return (
     <div className="agent-review-editor-grid">
-      {(groupDependency || memberDependency) ? (
+      {(unresolvedGroupDependency || unresolvedMemberDependency) ? (
         <div className="agent-review-dependency-list">
-          {groupDependency ? <PendingDependencyChip label="Parent group dependency" proposal={groupDependency} /> : null}
-          {memberDependency ? (
-            <PendingDependencyChip label={isEntryTarget ? "Entry dependency" : "Child group dependency"} proposal={memberDependency} />
+          {unresolvedGroupDependency ? <PendingDependencyChip label="Parent group dependency" proposal={unresolvedGroupDependency} /> : null}
+          {unresolvedMemberDependency ? (
+            <PendingDependencyChip
+              label={isEntryTarget ? "Entry dependency" : "Child group dependency"}
+              proposal={unresolvedMemberDependency}
+            />
           ) : null}
         </div>
       ) : null}
@@ -715,6 +718,7 @@ export function AgentThreadReviewModal({
   onOpenChange,
   onApproveItem,
   onRejectItem,
+  onReopenItem,
   isBusy = false
 }: AgentThreadReviewModalProps) {
   const [items, setItems] = useState<ThreadReviewItem[]>([]);
@@ -882,8 +886,38 @@ export function AgentThreadReviewModal({
   }
 
   async function rejectReviewItem(reviewItem: ThreadReviewItem): Promise<boolean> {
+    const overrideState = resolveOverrideState(reviewItem);
+    if (overrideState.validationError) {
+      setActionError(overrideState.validationError);
+      setActiveItemId(reviewItem.item.id);
+      return false;
+    }
     try {
-      const updated = await onRejectItem({ itemId: reviewItem.item.id });
+      const updated = await onRejectItem({
+        itemId: reviewItem.item.id,
+        payloadOverride: overrideState.hasChanges ? overrideState.payloadOverride : undefined
+      });
+      mergeUpdatedItem(updated);
+      setActionError(null);
+      return true;
+    } catch (error) {
+      setActionError(resolveErrorMessage(error));
+      return false;
+    }
+  }
+
+  async function reopenReviewItem(reviewItem: ThreadReviewItem): Promise<boolean> {
+    const overrideState = resolveOverrideState(reviewItem);
+    if (overrideState.validationError) {
+      setActionError(overrideState.validationError);
+      setActiveItemId(reviewItem.item.id);
+      return false;
+    }
+    try {
+      const updated = await onReopenItem({
+        itemId: reviewItem.item.id,
+        payloadOverride: overrideState.hasChanges ? overrideState.payloadOverride : undefined
+      });
       mergeUpdatedItem(updated);
       setActionError(null);
       return true;
@@ -894,28 +928,51 @@ export function AgentThreadReviewModal({
   }
 
   async function handleApproveActive() {
-    if (!activeReviewItem || !isPendingReviewStatus(activeReviewItem.item.status) || isBusy || isBatchRunning) {
+    if (!activeReviewItem || !isActiveEditable || isBusy || isBatchRunning) {
       return;
     }
     setActionNotice(null);
     setBatchSummary(null);
+    const wasPending = isPendingReviewStatus(activeReviewItem.item.status);
     const succeeded = await approveReviewItem(activeReviewItem);
     if (succeeded) {
       setActionNotice(`Approved ${shortId(activeReviewItem.item.id)}.`);
-      focusNextPending(activeReviewItem.item.id);
+      if (wasPending) {
+        focusNextPending(activeReviewItem.item.id);
+      } else {
+        setActiveItemId(activeReviewItem.item.id);
+      }
     }
   }
 
   async function handleRejectActive() {
-    if (!activeReviewItem || !isPendingReviewStatus(activeReviewItem.item.status) || isBusy || isBatchRunning) {
+    if (!activeReviewItem || !isEditableReviewStatus(activeReviewItem.item.status) || isBusy || isBatchRunning) {
       return;
     }
     setActionNotice(null);
     setBatchSummary(null);
+    const wasPending = isPendingReviewStatus(activeReviewItem.item.status);
     const succeeded = await rejectReviewItem(activeReviewItem);
     if (succeeded) {
       setActionNotice(`Rejected ${shortId(activeReviewItem.item.id)}.`);
-      focusNextPending(activeReviewItem.item.id);
+      if (wasPending) {
+        focusNextPending(activeReviewItem.item.id);
+      } else {
+        setActiveItemId(activeReviewItem.item.id);
+      }
+    }
+  }
+
+  async function handleReopenActive() {
+    if (!activeReviewItem || !isEditableReviewStatus(activeReviewItem.item.status) || isBusy || isBatchRunning) {
+      return;
+    }
+    setActionNotice(null);
+    setBatchSummary(null);
+    const succeeded = await reopenReviewItem(activeReviewItem);
+    if (succeeded) {
+      setActionNotice(`Moved ${shortId(activeReviewItem.item.id)} to pending review.`);
+      setActiveItemId(activeReviewItem.item.id);
     }
   }
 
@@ -980,12 +1037,12 @@ export function AgentThreadReviewModal({
         setActiveItemId((current) => findRelativeItemId(items, current, 1));
         return;
       }
-      if ((event.key === "a" || event.key === "A") && activeReviewItem && isPendingReviewStatus(activeReviewItem.item.status)) {
+      if ((event.key === "a" || event.key === "A") && activeReviewItem && isEditableReviewStatus(activeReviewItem.item.status)) {
         event.preventDefault();
         void handleApproveActive();
         return;
       }
-      if ((event.key === "r" || event.key === "R") && activeReviewItem && isPendingReviewStatus(activeReviewItem.item.status)) {
+      if ((event.key === "r" || event.key === "R") && activeReviewItem && isEditableReviewStatus(activeReviewItem.item.status)) {
         event.preventDefault();
         void handleRejectActive();
       }
@@ -1008,6 +1065,7 @@ export function AgentThreadReviewModal({
     activeReviewItem != null ? buildProposalDiff(activeReviewItem.item.change_type, activeReviewItem.item.payload_json, reviewerOverride) : null;
   const nextPendingItemId = findNextPendingItemId(items, activeItemId);
   const isActivePending = activeReviewItem ? isPendingReviewStatus(activeReviewItem.item.status) : false;
+  const isActiveEditable = activeReviewItem ? isEditableReviewStatus(activeReviewItem.item.status) : false;
   const activeEntryDraft =
     activeReviewItem && (activeReviewItem.item.change_type === "create_entry" || activeReviewItem.item.change_type === "update_entry")
       ? entryDrafts[activeReviewItem.item.id] ?? buildEntryReviewDraft(activeReviewItem.item, defaultCurrencyCode)
@@ -1129,6 +1187,20 @@ export function AgentThreadReviewModal({
                     Approve
                   </Button>
                 </div>
+              ) : isActiveEditable ? (
+                <div className="agent-review-controls-group agent-review-controls-actions">
+                  {activeReviewItem?.item.status !== "PENDING_REVIEW" ? (
+                    <Button type="button" variant="ghost" onClick={handleReopenActive} disabled={isBusy || isBatchRunning}>
+                      Move to Pending
+                    </Button>
+                  ) : null}
+                  <Button type="button" variant="outline" onClick={handleRejectActive} disabled={isBusy || isBatchRunning}>
+                    {activeReviewItem?.item.status === "REJECTED" ? "Save Rejected" : "Reject"}
+                  </Button>
+                  <Button type="button" onClick={handleApproveActive} disabled={isBusy || isBatchRunning}>
+                    {activeReviewItem?.item.status === "APPLY_FAILED" ? "Approve Again" : "Approve"}
+                  </Button>
+                </div>
               ) : null}
             </div>
 
@@ -1241,11 +1313,11 @@ export function AgentThreadReviewModal({
                       </p>
                     ) : null}
 
-                    {isActivePending && activeEntryDraft ? (
+                    {isActiveEditable && activeEntryDraft ? (
                       <section className="agent-review-panel-section">
                         <div className="agent-review-section-heading">
                           <h4>Review edits</h4>
-                          <p>Adjust the proposed entry before approval.</p>
+                          <p>{isActivePending ? "Adjust the proposed entry before approval." : "Adjust the proposal payload before changing review status."}</p>
                         </div>
                         <ReviewEntryEditor
                           draft={activeEntryDraft}
@@ -1264,11 +1336,11 @@ export function AgentThreadReviewModal({
                       </section>
                     ) : null}
 
-                    {isActivePending && activeTagDraft ? (
+                    {isActiveEditable && activeTagDraft ? (
                       <section className="agent-review-panel-section">
                         <div className="agent-review-section-heading">
                           <h4>Review edits</h4>
-                          <p>Adjust the proposed tag before approval.</p>
+                          <p>{isActivePending ? "Adjust the proposed tag before approval." : "Adjust the proposal payload before changing review status."}</p>
                         </div>
                         <ReviewTagEditor
                           draft={activeTagDraft}
@@ -1285,11 +1357,11 @@ export function AgentThreadReviewModal({
                       </section>
                     ) : null}
 
-                    {isActivePending && activeEntityDraft ? (
+                    {isActiveEditable && activeEntityDraft ? (
                       <section className="agent-review-panel-section">
                         <div className="agent-review-section-heading">
                           <h4>Review edits</h4>
-                          <p>Adjust the proposed entity before approval.</p>
+                          <p>{isActivePending ? "Adjust the proposed entity before approval." : "Adjust the proposal payload before changing review status."}</p>
                         </div>
                         <ReviewEntityEditor
                           draft={activeEntityDraft}
@@ -1306,11 +1378,17 @@ export function AgentThreadReviewModal({
                       </section>
                     ) : null}
 
-                    {isActivePending && activeGroupDraft ? (
+                    {isActiveEditable && activeGroupDraft ? (
                       <section className="agent-review-panel-section">
                         <div className="agent-review-section-heading">
                           <h4>Review edits</h4>
-                          <p>{activeReviewItem.item.change_type === "create_group" ? "Adjust the proposed group before approval." : "Rename the proposed group before approval."}</p>
+                          <p>
+                            {isActivePending
+                              ? activeReviewItem.item.change_type === "create_group"
+                                ? "Adjust the proposed group before approval."
+                                : "Rename the proposed group before approval."
+                              : "Adjust the proposal payload before changing review status."}
+                          </p>
                         </div>
                         <ReviewGroupEditor
                           draft={activeGroupDraft}
@@ -1327,11 +1405,15 @@ export function AgentThreadReviewModal({
                       </section>
                     ) : null}
 
-                    {isActivePending && activeGroupMembershipDraft ? (
+                    {isActiveEditable && activeGroupMembershipDraft ? (
                       <section className="agent-review-panel-section">
                         <div className="agent-review-section-heading">
                           <h4>Review edits</h4>
-                          <p>Review the group and member details before approval. Only split role is editable; pending dependencies stay locked.</p>
+                          <p>
+                            {isActivePending
+                              ? "Review the group and member details before approval. Only split role is editable; unresolved proposal dependencies stay locked."
+                              : "Review the group and member details before changing review status. Only split role is editable; unresolved proposal dependencies stay locked."}
+                          </p>
                         </div>
                         <ReviewGroupMembershipEditor
                           item={activeReviewItem.item}
@@ -1353,7 +1435,7 @@ export function AgentThreadReviewModal({
                       </section>
                     ) : null}
 
-                    {isActivePending &&
+                    {isActiveEditable &&
                     (activeReviewItem.item.change_type === "delete_group" || activeReviewItem.item.change_type === "delete_group_member") ? (
                       <section className="agent-review-panel-section">
                         <div className="agent-review-section-heading">

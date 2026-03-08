@@ -18,6 +18,7 @@ from backend.tests.agent_test_utils import (
     patch_model,
     send_message,
 )
+from backend.tests.test_entries import create_account, create_entry, create_group
 
 
 def _insert_legacy_group_member_change_item(run_id: str) -> None:
@@ -2876,6 +2877,164 @@ def test_reject_flow(client, monkeypatch):
     assert all(entity["name"] != "Temp Vendor" for entity in entities)
 
 
+def test_rejected_item_can_be_reapproved_with_reviewer_override(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Entity proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entity",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entity",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Temp Vendor",
+                                "category": "merchant",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Propose entity Temp Vendor")
+    item_id = run["change_items"][0]["id"]
+
+    reject_response = client.post(
+        f"/api/v1/agent/change-items/{item_id}/reject",
+        json={
+            "note": "Rename before approval",
+            "payload_override": {
+                "name": "Temp Vendor Final",
+                "category": "services",
+            },
+        },
+    )
+    reject_response.raise_for_status()
+    rejected = reject_response.json()
+    assert rejected["status"] == "REJECTED"
+    assert rejected["payload_json"]["name"] == "Temp Vendor Final"
+    assert rejected["payload_json"]["category"] == "services"
+    assert "payload_override:" in (rejected["review_note"] or "")
+
+    approve_response = client.post(f"/api/v1/agent/change-items/{item_id}/approve", json={})
+    approve_response.raise_for_status()
+    approved = approve_response.json()
+    assert approved["status"] == "APPLIED"
+
+    entities = client.get("/api/v1/entities").json()
+    assert any(entity["name"] == "Temp Vendor Final" and entity["category"] == "services" for entity in entities)
+    assert all(entity["name"] != "Temp Vendor" for entity in entities)
+
+
+def test_reopen_restores_pending_review_and_persists_override(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Tag proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_tag",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_tag",
+                        "arguments": json.dumps(
+                            {
+                                "name": "subscriptions",
+                                "type": "recurring",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Propose tag subscriptions")
+    item_id = run["change_items"][0]["id"]
+
+    reject_response = client.post(
+        f"/api/v1/agent/change-items/{item_id}/reject",
+        json={"note": "Wrong type"},
+    )
+    reject_response.raise_for_status()
+    assert reject_response.json()["status"] == "REJECTED"
+
+    reopen_response = client.post(
+        f"/api/v1/agent/change-items/{item_id}/reopen",
+        json={
+            "note": "Retry with corrected tag",
+            "payload_override": {
+                "name": "streaming",
+                "type": "media",
+            },
+        },
+    )
+    reopen_response.raise_for_status()
+    reopened = reopen_response.json()
+    assert reopened["status"] == "PENDING_REVIEW"
+    assert reopened["payload_json"]["name"] == "streaming"
+    assert reopened["payload_json"]["type"] == "media"
+    assert "payload_override:" in (reopened["review_note"] or "")
+
+    approve_response = client.post(f"/api/v1/agent/change-items/{item_id}/approve", json={})
+    approve_response.raise_for_status()
+    assert approve_response.json()["status"] == "APPLIED"
+
+    tags = client.get("/api/v1/tags").json()
+    assert any(tag["name"] == "streaming" and tag["type"] == "media" for tag in tags)
+    assert all(tag["name"] != "subscriptions" for tag in tags)
+
+
+def test_applied_items_cannot_be_reopened_or_rejected(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Tag proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_tag",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_tag",
+                        "arguments": json.dumps(
+                            {
+                                "name": "subscriptions",
+                                "type": "recurring",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Propose tag subscriptions")
+    item_id = run["change_items"][0]["id"]
+
+    approve_response = client.post(f"/api/v1/agent/change-items/{item_id}/approve", json={})
+    approve_response.raise_for_status()
+    assert approve_response.json()["status"] == "APPLIED"
+
+    reject_response = client.post(f"/api/v1/agent/change-items/{item_id}/reject", json={})
+    assert reject_response.status_code == 409
+
+    reopen_response = client.post(f"/api/v1/agent/change-items/{item_id}/reopen", json={})
+    assert reopen_response.status_code == 409
+
+
 def test_propose_delete_tag_reports_references_but_still_creates_proposal(client, monkeypatch):
     create_entry_response = client.post(
         "/api/v1/entries",
@@ -3095,7 +3254,7 @@ def test_entry_approve_applies_entry_and_allows_override(client, monkeypatch):
     assert "status" not in payload["items"][0]
 
 
-def test_entry_approve_apply_failure_marks_item_failed(client, monkeypatch):
+def test_entry_approve_invalid_override_keeps_item_pending(client, monkeypatch):
     def fake_model(messages):
         if messages[-1]["role"] == "tool":
             return {"role": "assistant", "content": "Entry proposal created."}
@@ -3151,9 +3310,9 @@ def test_entry_approve_apply_failure_marks_item_failed(client, monkeypatch):
     run_detail = client.get(f"/api/v1/agent/runs/{run['id']}")
     run_detail.raise_for_status()
     refreshed_item = next(item for item in run_detail.json()["change_items"] if item["id"] == item_id)
-    assert refreshed_item["status"] == "APPLY_FAILED"
-    assert "apply failed" in (refreshed_item["review_note"] or "")
-    assert any(action["action"] == "approve" for action in refreshed_item["review_actions"])
+    assert refreshed_item["status"] == "PENDING_REVIEW"
+    assert refreshed_item["review_note"] is None
+    assert refreshed_item["review_actions"] == []
 
 
 def test_update_entry_selector_ambiguity_is_reported_to_agent(client, monkeypatch):
@@ -4127,6 +4286,372 @@ def test_group_membership_apply_resolves_pending_group_and_entry_references(clie
     detail = detail_response.json()
     assert detail["direct_member_count"] == 1
     assert detail["descendant_entry_count"] == 1
+
+
+def test_group_membership_canonicalizes_short_pending_proposal_refs(client, monkeypatch):
+    create_entity(client, "Main Checking", "account")
+    create_entity(client, "Landlord", "merchant")
+
+    thread = create_thread(client)
+
+    def propose_group_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Group proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_group",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_group",
+                        "arguments": json.dumps({"name": "Rent Bundle", "group_type": "BUNDLE"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_group_model)
+    group_run = send_message(client, thread["id"], "Create a group proposal")
+    group_item = group_run["change_items"][0]
+
+    def propose_entry_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Entry proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entry",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entry",
+                        "arguments": json.dumps(
+                            {
+                                "kind": "EXPENSE",
+                                "date": "2026-03-01",
+                                "name": "March Rent",
+                                "amount_minor": 250000,
+                                "currency_code": "USD",
+                                "from_entity": "Main Checking",
+                                "to_entity": "Landlord",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_entry_model)
+    entry_run = send_message(client, thread["id"], "Create an entry proposal")
+    entry_item = entry_run["change_items"][0]
+
+    def propose_membership_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Membership proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_membership",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_group_membership",
+                        "arguments": json.dumps(
+                            {
+                                "action": "add",
+                                "group_ref": {"create_group_proposal_id": group_item["id"][:8]},
+                                "entry_ref": {"create_entry_proposal_id": entry_item["id"][:8]},
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_membership_model)
+    membership_run = send_message(client, thread["id"], "Attach the pending entry to the pending group")
+    membership_item = membership_run["change_items"][0]
+    assert membership_item["payload_json"]["group_ref"]["create_group_proposal_id"] == group_item["id"]
+    assert membership_item["payload_json"]["entry_ref"]["create_entry_proposal_id"] == entry_item["id"]
+
+    pending_approve = client.post(f"/api/v1/agent/change-items/{membership_item['id']}/approve", json={})
+    assert pending_approve.status_code == 422
+    assert "pending create proposals" in pending_approve.json()["detail"]
+
+    approve_group = client.post(f"/api/v1/agent/change-items/{group_item['id']}/approve", json={})
+    approve_group.raise_for_status()
+    approve_entry = client.post(f"/api/v1/agent/change-items/{entry_item['id']}/approve", json={})
+    approve_entry.raise_for_status()
+    approve_membership = client.post(f"/api/v1/agent/change-items/{membership_item['id']}/approve", json={})
+    approve_membership.raise_for_status()
+    assert approve_membership.json()["status"] == "APPLIED"
+
+
+def test_group_membership_apply_resolves_existing_short_ids(client, monkeypatch):
+    account_id = create_account(client)
+    entry = create_entry(client, account_id, "OpenAI ChatGPT Subscription", occurred_at="2026-03-06")
+    group = create_group(client, "OpenAI ChatGPT Plus Subscription", "RECURRING")
+
+    thread = create_thread(client)
+
+    def propose_membership_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Membership proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_membership",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_group_membership",
+                        "arguments": json.dumps(
+                            {
+                                "action": "add",
+                                "group_ref": {"group_id": group["id"][:8]},
+                                "entry_ref": {"entry_id": entry["id"][:8]},
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_membership_model)
+    membership_run = send_message(client, thread["id"], "Attach the existing OpenAI entry to the recurring group")
+    membership_item = membership_run["change_items"][0]
+
+    approve_response = client.post(f"/api/v1/agent/change-items/{membership_item['id']}/approve", json={})
+    approve_response.raise_for_status()
+    approved_payload = approve_response.json()
+
+    assert approved_payload["status"] == "APPLIED"
+
+    detail_response = client.get(f"/api/v1/groups/{group['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    assert detail["direct_member_count"] == 1
+    assert detail["nodes"][0]["node_type"] == "ENTRY"
+    assert detail["nodes"][0]["subject_id"] == entry["id"]
+
+
+def test_group_membership_remove_apply_resolves_existing_short_ids(client, monkeypatch):
+    account_id = create_account(client)
+    entry = create_entry(client, account_id, "OpenAI ChatGPT Subscription", occurred_at="2026-03-06")
+    group = create_group(client, "OpenAI ChatGPT Plus Subscription", "RECURRING")
+
+    add_membership = client.post(f"/api/v1/groups/{group['id']}/members", json={"entry_id": entry["id"]})
+    add_membership.raise_for_status()
+
+    thread = create_thread(client)
+
+    def propose_membership_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Membership removal proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_membership",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_group_membership",
+                        "arguments": json.dumps(
+                            {
+                                "action": "remove",
+                                "group_ref": {"group_id": group["id"][:8]},
+                                "entry_ref": {"entry_id": entry["id"][:8]},
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_membership_model)
+    membership_run = send_message(client, thread["id"], "Remove the existing OpenAI entry from the recurring group")
+    membership_item = membership_run["change_items"][0]
+
+    approve_response = client.post(f"/api/v1/agent/change-items/{membership_item['id']}/approve", json={})
+    approve_response.raise_for_status()
+    approved_payload = approve_response.json()
+
+    assert approved_payload["status"] == "APPLIED"
+
+    detail_response = client.get(f"/api/v1/groups/{group['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    assert detail["direct_member_count"] == 0
+
+
+def test_group_membership_duplicate_detection_uses_canonical_existing_refs(client, monkeypatch):
+    account_id = create_account(client)
+    entry = create_entry(client, account_id, "OpenAI ChatGPT Subscription", occurred_at="2026-03-06")
+    group = create_group(client, "OpenAI ChatGPT Plus Subscription", "RECURRING")
+
+    thread = create_thread(client)
+
+    def propose_short_membership_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Membership proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_membership",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_group_membership",
+                        "arguments": json.dumps(
+                            {
+                                "action": "add",
+                                "group_ref": {"group_id": group["id"][:8]},
+                                "entry_ref": {"entry_id": entry["id"][:8]},
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_short_membership_model)
+    first_run = send_message(client, thread["id"], "Attach the entry to the recurring group")
+    first_item = first_run["change_items"][0]
+    assert first_item["payload_json"]["group_ref"]["group_id"] == group["id"]
+    assert first_item["payload_json"]["entry_ref"]["entry_id"] == entry["id"]
+
+    def propose_full_membership_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_membership",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_group_membership",
+                        "arguments": json.dumps(
+                            {
+                                "action": "add",
+                                "group_ref": {"group_id": group["id"]},
+                                "entry_ref": {"entry_id": entry["id"]},
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_full_membership_model)
+    second_run = send_message(client, thread["id"], "Attach the same entry again")
+    assert second_run["change_items"] == []
+    assert second_run["tool_calls"][0]["output_json"]["status"] == "ERROR"
+    assert "pending group membership proposal already exists" in second_run["tool_calls"][0]["output_json"]["summary"]
+
+
+def test_update_pending_group_membership_rejects_conflicting_alias_variant(client, monkeypatch):
+    account_id = create_account(client)
+    first_entry = create_entry(client, account_id, "OpenAI ChatGPT Subscription", occurred_at="2026-03-06")
+    second_entry = create_entry(client, account_id, "OpenAI ChatGPT Plus Subscription", occurred_at="2026-04-06")
+    group = create_group(client, "OpenAI Subscription Timeline", "RECURRING")
+
+    thread = create_thread(client)
+
+    def propose_first_membership_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "First membership proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_membership",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_group_membership",
+                        "arguments": json.dumps(
+                            {
+                                "action": "add",
+                                "group_ref": {"group_id": group["id"][:8]},
+                                "entry_ref": {"entry_id": first_entry["id"][:8]},
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_first_membership_model)
+    first_run = send_message(client, thread["id"], "Attach the first entry")
+    assert first_run["change_items"][0]["status"] == "PENDING_REVIEW"
+
+    def propose_second_membership_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Second membership proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_membership",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_group_membership",
+                        "arguments": json.dumps(
+                            {
+                                "action": "add",
+                                "group_ref": {"group_id": group["id"]},
+                                "entry_ref": {"entry_id": second_entry["id"]},
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_second_membership_model)
+    second_run = send_message(client, thread["id"], "Attach the second entry")
+    second_item = second_run["change_items"][0]
+
+    def update_pending_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_update_pending",
+                    "type": "function",
+                    "function": {
+                        "name": "update_pending_proposal",
+                        "arguments": json.dumps(
+                            {
+                                "proposal_id": second_item["id"][:8],
+                                "patch_map": {
+                                    "entry_ref.entry_id": first_entry["id"][:8],
+                                },
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, update_pending_model)
+    update_run = send_message(client, thread["id"], "Revise the second membership proposal")
+    assert update_run["change_items"] == []
+    assert update_run["tool_calls"][0]["output_json"]["status"] == "ERROR"
+    assert "pending group membership proposal already exists" in update_run["tool_calls"][0]["output_json"]["summary"]
 
 
 def test_create_entry_uses_default_currency_when_omitted(client, monkeypatch):

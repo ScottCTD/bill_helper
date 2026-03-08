@@ -554,11 +554,30 @@ export function approveAgentChangeItem(payload: {
   });
 }
 
-export function rejectAgentChangeItem(payload: { itemId: string; note?: string }): Promise<AgentChangeItem> {
+export function rejectAgentChangeItem(payload: {
+  itemId: string;
+  note?: string;
+  payload_override?: Record<string, unknown>;
+}): Promise<AgentChangeItem> {
   return request<AgentChangeItem>(`/api/v1/agent/change-items/${payload.itemId}/reject`, {
     method: "POST",
     body: JSON.stringify({
-      note: payload.note
+      note: payload.note,
+      payload_override: payload.payload_override
+    })
+  });
+}
+
+export function reopenAgentChangeItem(payload: {
+  itemId: string;
+  note?: string;
+  payload_override?: Record<string, unknown>;
+}): Promise<AgentChangeItem> {
+  return request<AgentChangeItem>(`/api/v1/agent/change-items/${payload.itemId}/reopen`, {
+    method: "POST",
+    body: JSON.stringify({
+      note: payload.note,
+      payload_override: payload.payload_override
     })
   });
 }

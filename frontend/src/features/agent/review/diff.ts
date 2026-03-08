@@ -48,13 +48,14 @@ const ENTRY_FIELD_ORDER: Record<string, number> = {
   to_entity: 6,
   tags: 7,
   markdown_notes: 8,
-  group_type: 9,
-  parent_group: 10,
-  parent_group_ref: 11,
-  member_kind: 12,
-  member: 13,
-  member_ref: 14,
-  member_role: 15
+  group: 9,
+  group_type: 10,
+  parent_group: 11,
+  parent_group_ref: 12,
+  member_kind: 13,
+  member: 14,
+  member_ref: 15,
+  member_role: 16
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -459,52 +460,109 @@ function buildUpdateGroupAfterRecord(payload: JsonRecord, reviewerOverride?: Jso
   };
 }
 
-function buildGroupMemberRecord(payload: JsonRecord): JsonRecord {
-  const entryRef = asRecord(payload.entry_ref);
-  const groupPreview = asRecord(payload.group_preview);
-  const memberPreview = asRecord(payload.member_preview);
-  const isEntryMember = Object.keys(entryRef).length > 0;
-  const record: JsonRecord = {
-    parent_group: previewName(groupPreview, "Unknown group"),
-    member_kind: isEntryMember ? "entry" : "group",
-    member: previewName(memberPreview, isEntryMember ? "Unknown entry" : "Unknown group")
-  };
-  if (typeof groupPreview.group_type === "string" && groupPreview.group_type.trim()) {
-    record.group_type = groupPreview.group_type;
+function buildEntryRecordFromMemberPreview(memberPreview: JsonRecord): JsonRecord {
+  const record: JsonRecord = {};
+  if (typeof memberPreview.date === "string" && memberPreview.date.trim()) {
+    record.date = memberPreview.date;
   }
-  if (isEntryMember) {
-    if (typeof memberPreview.date === "string" && memberPreview.date.trim()) {
-      record.date = memberPreview.date;
-    }
-    if (typeof memberPreview.name === "string" && memberPreview.name.trim()) {
-      record.name = memberPreview.name;
-    }
-    if (typeof memberPreview.kind === "string" && memberPreview.kind.trim()) {
-      record.kind = memberPreview.kind;
-    }
-    if (typeof memberPreview.amount_minor === "number") {
-      record.amount_minor = memberPreview.amount_minor;
-    }
-    if (typeof memberPreview.currency_code === "string" && memberPreview.currency_code.trim()) {
-      record.currency_code = memberPreview.currency_code;
-    }
-    if (typeof memberPreview.from_entity === "string" && memberPreview.from_entity.trim()) {
-      record.from_entity = memberPreview.from_entity;
-    }
-    if (typeof memberPreview.to_entity === "string" && memberPreview.to_entity.trim()) {
-      record.to_entity = memberPreview.to_entity;
-    }
-    if (Array.isArray(memberPreview.tags)) {
-      record.tags = memberPreview.tags;
-    }
-    if (typeof memberPreview.markdown_notes === "string" && memberPreview.markdown_notes.trim()) {
-      record.markdown_notes = memberPreview.markdown_notes;
-    }
+  if (typeof memberPreview.name === "string" && memberPreview.name.trim()) {
+    record.name = memberPreview.name;
   }
-  if (typeof payload.member_role === "string" && payload.member_role.trim()) {
-    record.member_role = payload.member_role;
+  if (typeof memberPreview.kind === "string" && memberPreview.kind.trim()) {
+    record.kind = memberPreview.kind;
+  }
+  if (typeof memberPreview.amount_minor === "number") {
+    record.amount_minor = memberPreview.amount_minor;
+  }
+  if (typeof memberPreview.currency_code === "string" && memberPreview.currency_code.trim()) {
+    record.currency_code = memberPreview.currency_code;
+  }
+  if (typeof memberPreview.from_entity === "string" && memberPreview.from_entity.trim()) {
+    record.from_entity = memberPreview.from_entity;
+  }
+  if (typeof memberPreview.to_entity === "string" && memberPreview.to_entity.trim()) {
+    record.to_entity = memberPreview.to_entity;
+  }
+  if (Array.isArray(memberPreview.tags)) {
+    record.tags = memberPreview.tags;
+  }
+  if (typeof memberPreview.markdown_notes === "string" && memberPreview.markdown_notes.trim()) {
+    record.markdown_notes = memberPreview.markdown_notes;
   }
   return record;
+}
+
+function buildChildGroupRecordFromMemberPreview(memberPreview: JsonRecord): JsonRecord {
+  const record: JsonRecord = {
+    name: previewName(memberPreview, "Unknown group")
+  };
+  if (typeof memberPreview.group_type === "string" && memberPreview.group_type.trim()) {
+    record.group_type = memberPreview.group_type;
+  }
+  return record;
+}
+
+function buildGroupMembershipSubjectRecord(payload: JsonRecord): JsonRecord {
+  const entryRef = asRecord(payload.entry_ref);
+  const memberPreview = asRecord(payload.member_preview);
+  if (Object.keys(entryRef).length > 0) {
+    return buildEntryRecordFromMemberPreview(memberPreview);
+  }
+  return buildChildGroupRecordFromMemberPreview(memberPreview);
+}
+
+function decorateGroupMembershipRecord(
+  subjectRecord: JsonRecord,
+  options: {
+    groupName: string;
+    memberRole: string | null;
+    includeMembership: boolean;
+  }
+): JsonRecord {
+  const { groupName, memberRole, includeMembership } = options;
+  if (!includeMembership) {
+    return { ...subjectRecord };
+  }
+  return {
+    ...subjectRecord,
+    group: groupName,
+    ...(memberRole ? { member_role: memberRole } : {})
+  };
+}
+
+function buildGroupMembershipDiff(
+  payload: JsonRecord,
+  metadata: DiffMetadata[],
+  action: "add" | "remove",
+  reviewerOverride?: JsonRecord
+): ProposalDiff {
+  const reviewerEdited = Boolean(reviewerOverride && !jsonRecordsAreEquivalent(payload, reviewerOverride));
+  const effectivePayload = reviewerEdited
+    ? {
+        ...payload,
+        ...reviewerOverride,
+        group_preview: reviewerOverride?.group_preview ?? payload.group_preview,
+        member_preview: reviewerOverride?.member_preview ?? payload.member_preview
+      }
+    : payload;
+  const subjectRecord = buildGroupMembershipSubjectRecord(payload);
+  const parentGroup = asRecord(effectivePayload.group_preview);
+  const groupName = previewName(parentGroup, "Unknown group");
+  const memberRole =
+    typeof effectivePayload.member_role === "string" && effectivePayload.member_role.trim()
+      ? effectivePayload.member_role
+      : null;
+  const before = decorateGroupMembershipRecord(subjectRecord, {
+    groupName,
+    memberRole,
+    includeMembership: action === "remove"
+  });
+  const after = decorateGroupMembershipRecord(subjectRecord, {
+    groupName,
+    memberRole,
+    includeMembership: action === "add"
+  });
+  return buildRecordUpdateDiff(before, after, metadata, { reviewerEdited });
 }
 
 export function jsonRecordsAreEquivalent(left: JsonRecord, right: JsonRecord): boolean {
@@ -587,32 +645,23 @@ export function buildProposalDiff(
       return buildDeleteDiff(payload, metadata, identity);
     }
     case "create_group_member": {
-      const effectiveRecord =
-        reviewerOverride && !jsonRecordsAreEquivalent(payload, reviewerOverride)
-          ? buildGroupMemberRecord({
-              ...payload,
-              ...reviewerOverride,
-              group_preview: reviewerOverride.group_preview ?? payload.group_preview,
-              member_preview: reviewerOverride.member_preview ?? payload.member_preview
-            })
-          : undefined;
-      const record = buildGroupMemberRecord(payload);
       const parentGroup = asRecord(payload.group_preview);
       const memberPreview = asRecord(payload.member_preview);
-      pushMetadata(metadata, "Parent group", previewName(parentGroup, "Unknown group"));
+      pushMetadata(metadata, "Group", previewName(parentGroup, "Unknown group"));
       pushMetadata(metadata, "Member", previewName(memberPreview, "Unknown member"));
       pushMetadata(metadata, "Group type", parentGroup.group_type);
       if (typeof payload.member_role === "string") {
         pushMetadata(metadata, "Split role", payload.member_role);
       }
-      return buildCreateDiff(record, metadata, effectiveRecord);
+      return buildGroupMembershipDiff(payload, metadata, "add", reviewerOverride);
     }
     case "delete_group_member": {
       const parentGroup = asRecord(payload.group_preview);
       const memberPreview = asRecord(payload.member_preview);
-      pushMetadata(metadata, "Parent group", previewName(parentGroup, "Unknown group"));
+      pushMetadata(metadata, "Group", previewName(parentGroup, "Unknown group"));
       pushMetadata(metadata, "Member", previewName(memberPreview, "Unknown member"));
-      return buildDeleteDiff(payload, metadata, buildGroupMemberRecord(payload));
+      pushMetadata(metadata, "Group type", parentGroup.group_type);
+      return buildGroupMembershipDiff(payload, metadata, "remove");
     }
     default:
       return withComputedStats({
