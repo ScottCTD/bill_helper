@@ -66,7 +66,7 @@
 ## Prompt And Tooling Rules
 
 - prompt policy is organized into explicit sections for tool discipline, proposal workflows, execution, and final response behavior
-- `Current User Context` includes timezone/date bullets plus a static `Group Type Reference`, `Entity Category Reference`, and `Account Context`
+- `Current User Context` includes timezone/date bullets plus `Entity Category Reference` and `Account Context`
 - `Agent Memory` is rendered as a markdown unordered list built from persisted runtime-setting memory items
 - duplicate-entry checks should happen before new entry proposals
 - tag/entity naming should stay canonical and generalized
@@ -76,6 +76,7 @@
 - `rename_thread` should run right after the first user message in a new thread, then only when the user explicitly asks or the topic materially changes
 - model-facing tool interfaces avoid requiring full domain IDs; entry mutations prefer `entry_id` aliases from `list_entries` with selector fallback
 - existing-group mutations prefer `group_id` aliases from `list_groups`
+- the prompt has a dedicated `Grouping` section that combines fixed `BUNDLE` / `SPLIT` / `RECURRING` semantics, examples, and workflow guidance
 - after proposing a new entry, the prompt instructs the agent to check whether an existing recurring, split, or bundle group should absorb it and to propose the membership change when needed
 - group membership proposals may reference pending `create_group` and `create_entry` proposal ids in the same thread; approval is blocked until those dependencies are applied
 
