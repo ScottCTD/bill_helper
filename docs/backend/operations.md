@@ -27,6 +27,7 @@
 - `0023_add_agent_provider_config`
 - `0024_entity_root_accounts`
 - `0025_user_memory_json_list`
+- `0026_entry_groups_v2`
 
 Commands:
 
@@ -56,7 +57,7 @@ Current baseline noted in docs: `backend/tests/test_agent.py` was at `76 passed`
 - thread summaries include `has_running_run`
 - runtime settings can change dashboard currency, default entry currency, and agent execution settings without restarting the app
 - account IDs are shared entity-root IDs after `0024_entity_root_accounts`
-- group read models remain link-driven and read-only; there is no first-class group CRUD endpoint
+- groups are first-class records after `0026_entry_groups_v2`; topology is derived from direct membership plus `group_type`
 - deleting an account removes its snapshots, preserves denormalized entry labels, and clears linked account or entity FKs
 - dashboard analytics exclude internal transfers when both endpoints resolve to account-backed entity roots
 - taxonomy defaults (`entity_category`, `tag_type`) are auto-provisioned by service logic when missing
@@ -70,3 +71,4 @@ Current baseline noted in docs: `backend/tests/test_agent.py` was at `76 passed`
 - streaming uses SSE only; there is no websocket transport
 - no autonomous or scheduled agent runs
 - taxonomy assignment storage uses string `subject_id` values without cross-table FK enforcement
+- group nesting depth is limited to one and edges are derived only; there is no explicit edge editing surface

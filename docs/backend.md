@@ -19,6 +19,7 @@ This file is the backend index. Use it to find the focused backend docs under `d
 
 ## Current Migration Head
 
+- `0026_entry_groups_v2`
 - `0027_add_agent_bulk_concurrency_setting`
 
 ## Related Docs

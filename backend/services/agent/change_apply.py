@@ -37,7 +37,6 @@ from backend.services.entities import (
     set_entity_category,
 )
 from backend.services.tags import delete_tag
-from backend.services.groups import assign_initial_group, recompute_entry_groups
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.tags import resolve_tag_color
 from backend.services.taxonomy_constants import (
@@ -231,10 +230,8 @@ def apply_create_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
         to_entity=to_entity.name,
         owner=owner_user.name,
         markdown_body=parsed.markdown_notes,
-        group_id="",
     )
     db.add(entry)
-    assign_initial_group(db, entry)
     set_entry_tags(db, entry, parsed.tags)
     db.flush()
     return AppliedResource(resource_type="entry", resource_id=entry.id)
@@ -300,7 +297,6 @@ def apply_delete_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
     else:  # pragma: no cover - validated by Pydantic
         raise ValueError("Entry reference is required")
     soft_delete_entry(db, entry)
-    recompute_entry_groups(db)
     db.flush()
     return AppliedResource(resource_type="entry", resource_id=entry.id)
 

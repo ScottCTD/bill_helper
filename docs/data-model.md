@@ -7,7 +7,12 @@ All data is persisted in SQLite via SQLAlchemy.
 Core:
 
 - `EntryKind`: `EXPENSE`, `INCOME`, `TRANSFER`
-- `LinkType`: `RECURRING`, `SPLIT`, `BUNDLE`
+- `GroupType`: `BUNDLE`, `SPLIT`, `RECURRING`
+- `GroupMemberRole`: `PARENT`, `CHILD`
+
+Legacy note:
+
+- `LinkType` remains in code only to support pre-`0026_entry_groups_v2` migration logic; active group storage no longer persists `entry_links`
 
 Agent:
 
@@ -45,6 +50,9 @@ Operational rules:
 ## `entry_groups`
 
 - `id` (PK)
+- `owner_user_id` (FK -> `users.id`)
+- `name`
+- `group_type`
 - `created_at`, `updated_at`
 
 ## `users`
@@ -97,7 +105,6 @@ Operational rules:
 ## `entries`
 
 - `id` (PK)
-- `group_id` (FK -> `entry_groups.id`)
 - `account_id` (nullable FK -> `accounts.id`)
 - `kind`, `occurred_at`, `name`, `amount_minor`, `currency_code`
 - `from_entity_id`, `to_entity_id` (nullable FK -> `entities.id`)
@@ -113,16 +120,33 @@ Deletion semantics:
 - `from_entity_id` / `to_entity_id` use `ON DELETE SET NULL`
 - when an entity or account root is deleted, the denormalized `from_entity` / `to_entity` text is intentionally preserved so historical labels remain visible
 - API serializers derive `from_entity_missing` / `to_entity_missing` when preserved text remains but the linked entity FK is now `NULL`
+- group context is derived from optional membership rows plus parent-chain traversal; there is no persisted `entries.group_id`
 
-## `entry_links`
+## `entry_group_members`
 
 - `id` (PK)
-- `source_entry_id`, `target_entry_id` (FK -> `entries.id`)
-- `link_type`, `note`, `created_at`
+- `group_id` (FK -> `entry_groups.id`)
+- `entry_id` (nullable FK -> `entries.id`)
+- `child_group_id` (nullable FK -> `entry_groups.id`)
+- `member_role` (nullable `GroupMemberRole`)
+- `position`
+- `created_at`, `updated_at`
 
-Unique constraint:
+Core constraints:
 
-- `(source_entry_id, target_entry_id, link_type)`
+- exactly one of `entry_id` or `child_group_id` must be set
+- `entry_id` is globally unique, so an entry can belong to at most one direct group
+- `child_group_id` is globally unique, so a child group can belong to at most one parent group
+- `(group_id, entry_id)` and `(group_id, child_group_id)` are unique
+- `child_group_id != group_id`
+
+Operational rules:
+
+- top-level groups may contain direct entries and/or child groups
+- child groups may contain direct entries only
+- edges are not persisted; graph topology is derived at read time from `group_type` plus sorted direct membership
+- `position` and `created_at` provide deterministic ordering for recurring-group chain derivation
+- entry create/update flows may assign or clear one direct group membership inline; split-group assignment also requires a direct member role
 
 ## `tags`
 
@@ -196,6 +220,8 @@ Deletion semantics:
 - deleting an account deletes the shared account/entity root, cascades account snapshots, sets `entries.account_id = NULL`, and detaches `from_entity_id` / `to_entity_id` references that pointed at that root while preserving label text
 - deleting a generic entity detaches `from_entity_id` / `to_entity_id` and preserves label text
 - deleting an account-backed entity through generic entity routes is blocked; account-backed roots are managed through `/accounts`
+- soft-deleting an entry removes its direct `entry_group_members` row if one exists
+- deleting a group is allowed only when it has no direct members and is not attached as a child group
 
 ## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`, `0020_add_agent_message_attachment_original_filename`, `0021_add_agent_run_context_tokens`, `0022_agent_run_events_and_tool_lifecycle`)
 

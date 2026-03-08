@@ -651,6 +651,15 @@
     @apply flex-nowrap;
   }
 
+  .entry-property-group-group {
+    @apply flex-wrap gap-2 md:flex-nowrap;
+  }
+
+  .entry-property-group-group > .single-select:first-child {
+    @apply min-w-0 flex-1;
+    max-width: none;
+  }
+
   .entry-property-input-owner {
     @apply min-w-0 flex-1;
   }
@@ -688,32 +697,144 @@
     @apply h-auto w-full rounded-lg border border-border/80 bg-card;
   }
 
+  .groups-hero-card {
+    @apply overflow-hidden border-border/80 bg-gradient-to-br from-card via-card to-accent/20;
+  }
+
+  .groups-hero-header {
+    @apply gap-3 pb-3;
+  }
+
+  .groups-hero-content {
+    @apply flex flex-col gap-4 pt-0 lg:flex-row lg:items-end lg:justify-between;
+  }
+
+  .groups-hero-metrics {
+    @apply grid gap-3 sm:grid-cols-3;
+  }
+
+  .groups-metric-card {
+    @apply grid gap-1 rounded-xl border border-border/80 bg-card/85 px-4 py-3 shadow-sm backdrop-blur;
+  }
+
+  .groups-metric-label {
+    @apply text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  .groups-metric-value {
+    @apply text-2xl font-semibold text-foreground;
+  }
+
+  .groups-metric-detail {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .groups-hero-actions {
+    @apply flex items-center justify-start lg:justify-end;
+  }
+
   .groups-layout {
-    @apply grid gap-6 xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)];
+    @apply grid items-start gap-6 xl:grid-cols-[minmax(300px,360px)_minmax(0,1fr)];
   }
 
   .groups-list-card {
-    @apply xl:sticky xl:top-5 xl:flex xl:max-h-[calc(100vh-4.5rem)] xl:flex-col xl:overflow-hidden;
+    @apply self-start xl:sticky xl:top-5 xl:flex xl:max-h-[calc(100vh-4.5rem)] xl:flex-col xl:overflow-hidden;
+  }
+
+  .groups-sidebar-header {
+    @apply gap-3;
   }
 
   .groups-list-content {
-    @apply grid gap-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto;
+    @apply flex flex-col gap-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto;
   }
 
-  .groups-summary-table {
-    @apply text-sm;
+  .groups-list {
+    @apply flex flex-col gap-3;
   }
 
-  .groups-summary-row {
-    @apply cursor-pointer;
+  .groups-list-item {
+    @apply grid gap-2 rounded-xl border border-border/80 bg-card px-4 py-3 text-left shadow-sm transition-colors hover:border-border hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
   }
 
-  .groups-summary-row-selected {
-    @apply cursor-pointer bg-accent/55;
+  .groups-list-item-selected {
+    @apply border-primary/35 bg-accent/55 shadow-none;
+  }
+
+  .groups-list-item-header {
+    @apply flex items-start justify-between gap-3;
+  }
+
+  .groups-list-item-name {
+    @apply line-clamp-2 text-sm font-semibold text-foreground;
+  }
+
+  .groups-list-item-range {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .groups-list-item-stats {
+    @apply flex flex-wrap gap-2 text-xs text-muted-foreground;
+  }
+
+  .groups-list-item-stats > span {
+    @apply rounded-full border border-border/80 bg-muted/55 px-2.5 py-1;
   }
 
   .groups-summary-id {
     @apply text-xs text-muted-foreground;
+  }
+
+  .groups-detail-card {
+    @apply border-border/80;
+  }
+
+  .groups-detail-header {
+    @apply gap-4 pb-2 lg:flex-row lg:items-start lg:justify-between;
+  }
+
+  .groups-detail-title-row {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .groups-detail-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .groups-detail-content {
+    @apply pt-2;
+  }
+
+  .groups-overview-grid {
+    @apply grid gap-3 lg:grid-cols-3;
+  }
+
+  .groups-overview-card {
+    @apply grid gap-1 rounded-xl border border-border/80 bg-muted/35 px-4 py-3;
+  }
+
+  .groups-overview-label {
+    @apply text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  .groups-overview-value {
+    @apply text-lg font-semibold text-foreground;
+  }
+
+  .groups-overview-detail {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .groups-subsection-header {
+    @apply gap-4 lg:flex-row lg:items-start lg:justify-between;
+  }
+
+  .groups-empty-state {
+    @apply grid gap-1 rounded-xl border border-dashed border-border bg-muted/25 px-4 py-5;
+  }
+
+  .groups-empty-title {
+    @apply text-sm font-semibold text-foreground;
   }
 
   .group-flow-container {
@@ -781,6 +902,27 @@
   .group-flow-node-transfer {
     border-color: hsl(var(--muted-foreground) / 0.4);
     box-shadow: inset 0 0 0 1px hsl(var(--muted-foreground) / 0.15);
+  }
+
+  .group-flow-node-group {
+    background:
+      linear-gradient(135deg, hsl(var(--accent) / 0.45), transparent 72%),
+      hsl(var(--card));
+  }
+
+  .group-flow-node-group-bundle {
+    border-color: hsl(var(--primary) / 0.35);
+    box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.14);
+  }
+
+  .group-flow-node-group-split {
+    border-color: hsl(var(--warning) / 0.45);
+    box-shadow: inset 0 0 0 1px hsl(var(--warning) / 0.18);
+  }
+
+  .group-flow-node-group-recurring {
+    border-color: hsl(var(--ring) / 0.45);
+    box-shadow: inset 0 0 0 1px hsl(var(--ring) / 0.16);
   }
 
   .group-flow-node-content {
@@ -903,7 +1045,8 @@
 
     .entry-property-group-kind,
     .entry-property-group-from-to,
-    .entry-property-group-owner {
+    .entry-property-group-owner,
+    .entry-property-group-group {
       @apply flex-wrap;
     }
   }

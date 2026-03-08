@@ -23,17 +23,17 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 
 - migration-first DB lifecycle via Alembic
 - integer minor-unit money representation
-- entry graph model with explicit link edges and derived group IDs
+- first-class typed entry groups with derived graph edges from direct membership
 - `Entity` is the root identity model; `Account` is a shared-primary-key subtype table (`accounts.id == entities.id`)
 - account semantics are determined by subtype membership in `accounts`, not by `entities.category`
-- soft-delete entries with link cleanup
+- soft-delete entries with direct group-membership cleanup
 - AI boundary is append-only proposal creation plus explicit human review apply/reject
 - direct API deletes and agent-applied deletes use the same canonical semantics for tag/entity/account removal
 
 ## Backend Layering
 
 - routers: request validation + status mapping
-- services: normalization, calculations, group recomputation, agent orchestration
+- services: normalization, calculations, group validation/graph derivation, agent orchestration
 - models: persistence structure and relationships
 - schemas: API contracts
 - app bootstrap: explicit `create_app()` factory (uvicorn factory mode), avoiding import-time initialization side effects

@@ -69,7 +69,7 @@ Create entry.
 Body:
 
 - `account_id` (optional)
-- `kind` (`EXPENSE` | `INCOME`)
+- `kind` (`EXPENSE` | `INCOME` | `TRANSFER`)
 - `occurred_at`
 - `name`
 - `amount_minor`
@@ -77,6 +77,8 @@ Body:
 - `from_entity_id` / `to_entity_id` (optional)
 - `owner_user_id` (optional)
 - `from_entity` / `to_entity` / `owner` (optional name fallbacks)
+- `direct_group_id` (optional)
+- `direct_group_member_role` (`PARENT` | `CHILD`, optional, only valid when assigning into a `SPLIT` group)
 - `markdown_body` (optional)
 - `tags` (optional string array)
 
@@ -84,12 +86,15 @@ Response: `EntryRead`
 
 Behavior:
 
-- assigns initial entry group
+- new entries start ungrouped until a group membership is added
 - tag names are normalized to lowercase
 - missing tags are auto-created with random colors
 - owner defaults to configured current user if omitted
 - ownership is scoped to the requesting principal
+- create flow can assign one direct group membership inline
 - read models include `from_entity_missing` / `to_entity_missing` when preserved labels remain after entity/account deletion
+- read models expose group context through `direct_group` and `group_path`
+- read models also expose `direct_group_member_role`
 
 ### `GET /entries`
 
@@ -110,67 +115,129 @@ Behavior:
 
 - list results are principal-scoped by `owner_user_id`
 - each row includes `from_entity_missing` / `to_entity_missing`
+- each row includes `direct_group` and `group_path`
 
 ### `GET /entries/{entry_id}`
 
-Get entry detail with links. Response: `EntryDetailRead`
+Get entry detail. Response: `EntryDetailRead`
 
-Behavior: lookup is principal-scoped and includes missing-entity flags.
+Behavior:
+
+- lookup is principal-scoped
+- response includes missing-entity flags
+- response includes `direct_group` and `group_path`
+- response no longer includes raw link rows
 
 ### `PATCH /entries/{entry_id}`
 
 Partial update. Response: `EntryRead`
 
-Behavior: update is principal-scoped.
+Body fields may include any editable entry fields plus:
 
-### `DELETE /entries/{entry_id}`
-
-Soft-delete entry and remove links. Response: `204`
-
-Behavior: delete is principal-scoped.
-
-## Entry Links
-
-### `POST /entries/{entry_id}/links`
-
-Create link.
-
-Body:
-
-- `target_entry_id`
-- `link_type` (`RECURRING` | `SPLIT` | `BUNDLE`)
-- `note` (optional)
-
-Response: `LinkRead`
-
-Errors: `400` self-link, `404` not found, `409` duplicate tuple.
-
-Behavior: both source and target entries must be visible to the requesting principal.
-
-### `DELETE /links/{link_id}`
-
-Delete link. Response: `204`
-
-Behavior: principal access is required to both linked entries.
-
-## Groups
-
-### `GET /groups`
-
-List derived group summaries. Response: `GroupSummaryRead[]`
+- `direct_group_id`
+- `direct_group_member_role`
 
 Behavior:
 
-- groups are connected components derived from active entry links
-- single-entry components are omitted
-- endpoint is read-only
-- responses are principal-scoped to visible entries
+- update is principal-scoped
+- update can move the entry between groups or clear its direct group
+- `direct_group_member_role` is required when assigning into a `SPLIT` group and ignored/rejected for other group types based on validation
+
+### `DELETE /entries/{entry_id}`
+
+Soft-delete entry and remove any direct group membership. Response: `204`
+
+Behavior: delete is principal-scoped.
+
+## Groups
+
+### `POST /groups`
+
+Create a named typed group.
+
+Body:
+
+- `name` (required)
+- `group_type` (`BUNDLE` | `SPLIT` | `RECURRING`)
+
+Response: `GroupSummaryRead`
+
+Behavior:
+
+- group ownership is scoped to the requesting principal
+- `group_type` is immutable after creation
+- empty groups are allowed
+
+### `GET /groups`
+
+List first-class group summaries. Response: `GroupSummaryRead[]`
+
+Behavior:
+
+- responses are principal-scoped
+- empty groups are included
+- each row includes `parent_group_id`, direct-member counts, descendant entry count, and date range summary
 
 ### `GET /groups/{group_id}`
 
 Fetch one group graph. Response: `GroupGraphRead`
 
-Behavior: graph lookup is principal-scoped.
+Behavior:
+
+- graph lookup is principal-scoped
+- nodes are discriminated as direct `ENTRY` or `GROUP` members
+- edges are derived from `group_type`; they are not stored or edited directly
+
+### `PATCH /groups/{group_id}`
+
+Rename a group.
+
+Body fields:
+
+- `name`
+
+Response: `GroupSummaryRead`
+
+Behavior: only rename is supported in v1.
+
+### `DELETE /groups/{group_id}`
+
+Delete a group. Response: `204`
+
+Behavior:
+
+- group lookup is principal-scoped
+- delete succeeds only when the group has no direct members and is not attached as a child group
+
+### `POST /groups/{group_id}/members`
+
+Add one direct member to a group.
+
+Body:
+
+- exactly one of `entry_id` or `child_group_id`
+- `member_role` (`PARENT` | `CHILD`) is required for `SPLIT` groups and rejected for other group types
+
+Response: `GroupGraphRead`
+
+Errors:
+
+- `400` invalid payload or domain-rule violation
+- `404` target entry/group not visible to the principal
+- `409` duplicate membership
+
+### `DELETE /groups/{group_id}/members/{membership_id}`
+
+Remove one direct member. Response: `204`
+
+## Group Rules
+
+- entries can belong to at most one direct group
+- child groups can belong to at most one parent group
+- nesting depth is exactly one level: top-level groups may contain entries and child groups; child groups may contain entries only
+- `BUNDLE` derives a fully connected graph over direct members
+- `SPLIT` allows at most one direct `PARENT`; descendant entries under the parent must be `EXPENSE` and descendant entries under children must be `INCOME`
+- `RECURRING` requires all descendant entries to share one `EntryKind` and derives a chronological chain from representative dates
 
 ## Dashboard
 

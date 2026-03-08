@@ -12,9 +12,10 @@ import type {
   Entity,
   EntryDetail,
   EntryListResponse,
+  GroupMemberRole,
   GroupGraph,
   GroupSummary,
-  Link,
+  GroupType,
   RuntimeSettings,
   Reconciliation,
   Snapshot,
@@ -322,6 +323,8 @@ export function createEntry(payload: {
   owner?: string;
   markdown_body?: string;
   tags?: string[];
+  direct_group_id?: string;
+  direct_group_member_role?: GroupMemberRole | null;
 }) {
   return request("/api/v1/entries", {
     method: "POST",
@@ -346,16 +349,10 @@ export function deleteEntry(entryId: string) {
   });
 }
 
-export function createLink(entryId: string, payload: { target_entry_id: string; link_type: string; note?: string }): Promise<Link> {
-  return request<Link>(`/api/v1/entries/${entryId}/links`, {
+export function createGroup(payload: { name: string; group_type: GroupType }): Promise<GroupSummary> {
+  return request<GroupSummary>("/api/v1/groups", {
     method: "POST",
     body: JSON.stringify(payload)
-  });
-}
-
-export function deleteLink(linkId: string) {
-  return request(`/api/v1/links/${linkId}`, {
-    method: "DELETE"
   });
 }
 
@@ -365,6 +362,35 @@ export function getGroup(groupId: string): Promise<GroupGraph> {
 
 export function listGroups(): Promise<GroupSummary[]> {
   return request<GroupSummary[]>("/api/v1/groups");
+}
+
+export function updateGroup(groupId: string, payload: { name: string }): Promise<GroupSummary> {
+  return request<GroupSummary>(`/api/v1/groups/${groupId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteGroup(groupId: string): Promise<void> {
+  return request<void>(`/api/v1/groups/${groupId}`, {
+    method: "DELETE"
+  });
+}
+
+export function addGroupMember(
+  groupId: string,
+  payload: { entry_id?: string; child_group_id?: string; member_role?: GroupMemberRole }
+): Promise<GroupGraph> {
+  return request<GroupGraph>(`/api/v1/groups/${groupId}/members`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteGroupMember(groupId: string, membershipId: string): Promise<void> {
+  return request<void>(`/api/v1/groups/${groupId}/members/${membershipId}`, {
+    method: "DELETE"
+  });
 }
 
 export function getDashboard(month: string): Promise<Dashboard> {

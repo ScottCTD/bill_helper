@@ -9,8 +9,18 @@ class EntryKind(StrEnum):
     TRANSFER = "TRANSFER"
 
 
+class GroupType(StrEnum):
+    BUNDLE = "BUNDLE"
+    SPLIT = "SPLIT"
+    RECURRING = "RECURRING"
+
+
+class GroupMemberRole(StrEnum):
+    PARENT = "PARENT"
+    CHILD = "CHILD"
+
+
 class LinkType(StrEnum):
     RECURRING = "RECURRING"
     SPLIT = "SPLIT"
     BUNDLE = "BUNDLE"
-

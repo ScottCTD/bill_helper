@@ -6,7 +6,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from backend.enums_finance import EntryKind
-from backend.models_finance import Entry, EntryLink, Tag
+from backend.models_finance import Entry, EntryGroupMember, Tag
 from backend.services.tags import generate_random_tag_color
 
 
@@ -59,8 +59,6 @@ def soft_delete_entry(db: Session, entry: Entry) -> None:
     entry.is_deleted = True
     entry.deleted_at = utc_now()
     db.execute(
-        delete(EntryLink).where(
-            (EntryLink.source_entry_id == entry.id) | (EntryLink.target_entry_id == entry.id)
-        )
+        delete(EntryGroupMember).where(EntryGroupMember.entry_id == entry.id)
     )
     db.flush()

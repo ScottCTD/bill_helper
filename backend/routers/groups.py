@@ -1,18 +1,73 @@
 from __future__ import annotations
 
-from collections import defaultdict
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.auth import RequestPrincipal, get_current_principal
 from backend.database import get_db
-from backend.models_finance import Entry, EntryLink
-from backend.schemas_finance import GroupEdge, GroupGraphRead, GroupNode, GroupSummaryRead
-from backend.services.access_scope import entry_owner_filter
+from backend.models_finance import EntryGroup
+from backend.schemas_finance import (
+    GroupCreate,
+    GroupGraphRead,
+    GroupMemberCreate,
+    GroupSummaryRead,
+    GroupUpdate,
+)
+from backend.services.access_scope import (
+    get_entry_for_principal_or_404,
+    get_group_for_principal_or_404,
+    group_owner_filter,
+)
+from backend.services.groups import (
+    add_group_member,
+    build_group_graph,
+    build_group_summary,
+    create_group,
+    delete_group,
+    group_tree_options,
+    load_group_tree,
+    remove_group_member,
+    rename_group,
+)
 
 router = APIRouter(prefix="/groups", tags=["groups"])
+
+
+def _get_group_tree_or_404(
+    db: Session,
+    *,
+    group_id: str,
+    principal: RequestPrincipal,
+) -> EntryGroup:
+    return get_group_for_principal_or_404(
+        db,
+        group_id=group_id,
+        principal=principal,
+        stmt=select(EntryGroup).options(*group_tree_options()),
+    )
+
+
+@router.post("", response_model=GroupSummaryRead, status_code=status.HTTP_201_CREATED)
+def create_group_route(
+    payload: GroupCreate,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> GroupSummaryRead:
+    try:
+        group = create_group(
+            db,
+            name=payload.name,
+            group_type=payload.group_type,
+            owner_user_id=principal.user_id,
+        )
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    db.commit()
+    return build_group_summary(group)
 
 
 @router.get("", response_model=list[GroupSummaryRead])
@@ -20,63 +75,21 @@ def list_group_summaries(
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_current_principal),
 ) -> list[GroupSummaryRead]:
-    entries = list(
+    groups = list(
         db.scalars(
-            select(Entry)
-            .where(
-                Entry.is_deleted.is_(False),
-                entry_owner_filter(principal),
-            )
-            .order_by(Entry.occurred_at.asc(), Entry.created_at.asc())
+            select(EntryGroup)
+            .where(group_owner_filter(principal))
+            .options(*group_tree_options())
         )
     )
-    if not entries:
-        return []
-
-    group_entries: dict[str, list[Entry]] = defaultdict(list)
-    entry_group_by_id: dict[str, str] = {}
-    for entry in entries:
-        group_entries[entry.group_id].append(entry)
-        entry_group_by_id[entry.id] = entry.group_id
-
-    active_entry_ids = set(entry_group_by_id.keys())
-    edge_counts = defaultdict(int)
-    links = list(
-        db.scalars(
-            select(EntryLink).where(
-                EntryLink.source_entry_id.in_(active_entry_ids),
-                EntryLink.target_entry_id.in_(active_entry_ids),
-            )
-        )
-    )
-    for link in links:
-        source_group_id = entry_group_by_id.get(link.source_entry_id)
-        target_group_id = entry_group_by_id.get(link.target_entry_id)
-        if source_group_id is not None and source_group_id == target_group_id:
-            edge_counts[source_group_id] += 1
-
-    summaries: list[GroupSummaryRead] = []
-    for group_id, grouped_entries in group_entries.items():
-        if len(grouped_entries) < 2:
-            continue
-        latest_entry = max(grouped_entries, key=lambda entry: (entry.occurred_at, entry.created_at))
-        summaries.append(
-            GroupSummaryRead(
-                group_id=group_id,
-                entry_count=len(grouped_entries),
-                edge_count=edge_counts.get(group_id, 0),
-                first_occurred_at=min(entry.occurred_at for entry in grouped_entries),
-                last_occurred_at=max(entry.occurred_at for entry in grouped_entries),
-                latest_entry_name=latest_entry.name,
-            )
-        )
-
+    summaries = [build_group_summary(group) for group in groups]
     return sorted(
         summaries,
         key=lambda summary: (
-            summary.last_occurred_at,
-            summary.entry_count,
-            summary.group_id,
+            summary.last_occurred_at is None,
+            summary.last_occurred_at or summary.name,
+            summary.name.lower(),
+            summary.id,
         ),
         reverse=True,
     )
@@ -88,49 +101,95 @@ def get_group_graph(
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_current_principal),
 ) -> GroupGraphRead:
-    entries = list(
-        db.scalars(
-            select(Entry)
-            .where(
-                Entry.group_id == group_id,
-                Entry.is_deleted.is_(False),
-                entry_owner_filter(principal),
-            )
-            .order_by(Entry.occurred_at.asc(), Entry.created_at.asc())
+    group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
+    return build_group_graph(group)
+
+
+@router.patch("/{group_id}", response_model=GroupSummaryRead)
+def update_group(
+    group_id: str,
+    payload: GroupUpdate,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> GroupSummaryRead:
+    group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
+    if payload.name is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No group fields were provided.")
+
+    try:
+        updated_group = rename_group(db, group=group, name=payload.name)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    db.commit()
+    return build_group_summary(updated_group)
+
+
+@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_group_route(
+    group_id: str,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> None:
+    group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
+    try:
+        delete_group(db, group=group)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    db.commit()
+
+
+@router.post("/{group_id}/members", response_model=GroupGraphRead, status_code=status.HTTP_201_CREATED)
+def add_group_member_route(
+    group_id: str,
+    payload: GroupMemberCreate,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> GroupGraphRead:
+    group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
+
+    entry = None
+    child_group = None
+    if payload.entry_id is not None:
+        entry = get_entry_for_principal_or_404(db, entry_id=payload.entry_id, principal=principal)
+    if payload.child_group_id is not None:
+        child_group = _get_group_tree_or_404(db, group_id=payload.child_group_id, principal=principal)
+
+    try:
+        add_group_member(
+            db,
+            group=group,
+            entry=entry,
+            child_group=child_group,
+            member_role=payload.member_role,
         )
-    )
-    if not entries:
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group membership already exists.") from exc
+
+    db.commit()
+    updated_group = load_group_tree(db, group_id)
+    if updated_group is None:  # pragma: no cover - post-commit invariant
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+    return build_group_graph(updated_group)
 
-    entry_ids = [entry.id for entry in entries]
-    edges = list(
-        db.scalars(
-            select(EntryLink)
-            .where(EntryLink.source_entry_id.in_(entry_ids), EntryLink.target_entry_id.in_(entry_ids))
-            .order_by(EntryLink.created_at.asc())
-        )
-    )
 
-    return GroupGraphRead(
-        group_id=group_id,
-        nodes=[
-            GroupNode(
-                id=entry.id,
-                name=entry.name,
-                kind=entry.kind,
-                amount_minor=entry.amount_minor,
-                occurred_at=entry.occurred_at,
-            )
-            for entry in entries
-        ],
-        edges=[
-            GroupEdge(
-                id=edge.id,
-                source_entry_id=edge.source_entry_id,
-                target_entry_id=edge.target_entry_id,
-                link_type=edge.link_type,
-                note=edge.note,
-            )
-            for edge in edges
-        ],
-    )
+@router.delete("/{group_id}/members/{membership_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_group_member_route(
+    group_id: str,
+    membership_id: str,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> None:
+    group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
+    try:
+        remove_group_member(db, group=group, membership_id=membership_id)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    db.commit()

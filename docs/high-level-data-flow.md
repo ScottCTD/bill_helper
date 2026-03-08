@@ -1,6 +1,6 @@
-# High-Level Data Flow and Graph Model (Current MVP)
+# High-Level Data Flow and Group Model (Current MVP)
 
-This document summarizes end-to-end flows for the current implementation: manual ledger writes, graph grouping, dashboard reads, and agent review-gated proposals.
+This document summarizes end-to-end flows for the current implementation: manual ledger writes, first-class typed groups, dashboard reads, and agent review-gated proposals.
 
 ## System View
 
@@ -14,21 +14,26 @@ flowchart LR
     API --> UI
 ```
 
-## Graph-Based Entry Management
+## Typed Group-Based Entry Management
 
-Entries are graph nodes and links are typed graph edges:
+Groups are first-class records. Topology is derived from direct membership plus group type:
 
-- Node table: `entries`
-- Edge table: `entry_links`
-- Component identity table: `entry_groups`
+- Group table: `entry_groups`
+- Membership table: `entry_group_members`
+- Entry table: `entries`
 
-Group IDs are backend-derived (not user-assigned):
+Direct graph rules:
 
-1. Load all active (non-deleted) entries.
-2. Build an undirected adjacency map from `entry_links`.
-3. Run DFS to identify connected components.
-4. Assign one `group_id` per component.
-5. Persist updated group IDs in one transaction.
+1. Users create a named group with `group_type`.
+2. Users add direct members as entries or child groups.
+3. Backend validates depth-1 nesting and no-sharing rules.
+4. `GET /groups/{group_id}` derives graph nodes and edges from the current direct membership set.
+
+Derived edge semantics:
+
+- `BUNDLE`: fully connected graph over direct members
+- `SPLIT`: one optional `PARENT` member with directed edges to `CHILD` members
+- `RECURRING`: chronological chain ordered by representative descendant date
 
 Implemented in `backend/services/groups.py`.
 
@@ -36,11 +41,11 @@ Implemented in `backend/services/groups.py`.
 
 Primary tables:
 
-- `entries`: core expense/income records, entity refs, soft-delete flags, group membership, markdown note body.
-- `entry_links`: typed directional links (`RECURRING`, `SPLIT`, `BUNDLE`).
-- `entry_groups`: connected-component identities for linked entries.
+- `entries`: core expense/income/transfer records, entity refs, soft-delete flags, markdown note body.
+- `entry_groups`: first-class named typed groups.
+- `entry_group_members`: direct membership rows connecting a group to either an entry or a child group.
 - `accounts`, `account_snapshots`: account metadata and reconciliation checkpoints.
-- `users`: normalized owners used by entries/accounts.
+- `users`: normalized owners used by entries/accounts/groups.
 - `entities`: normalized names for `from`/`to` and account-linked entities.
 - `tags`, `entry_tags`: tag catalog and many-to-many entry mapping.
 - `taxonomies`, `taxonomy_terms`, `taxonomy_assignments`: reusable categorical system for entities/tags.
@@ -58,17 +63,19 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 
 1. Frontend submits to `/api/v1/entries` or `/api/v1/entries/{id}`.
 2. Popup editor serializes notes into `markdown_body`.
-3. Router validates payload with Pydantic schemas.
-4. Services normalize tags/entities/users and resolve references.
-5. SQLAlchemy writes rows to SQLite and commits.
-6. Frontend invalidates query caches and refreshes dependent views.
+3. Optional `direct_group_id` and `direct_group_member_role` are sent from the same modal when the user assigns a direct group inline.
+4. Router validates payload with Pydantic schemas.
+5. Services normalize tags/entities/users, then apply or clear direct group membership through the group service.
+6. SQLAlchemy writes rows to SQLite and commits.
+7. Frontend invalidates query caches and refreshes dependent views.
+8. Entry reads expose `direct_group`, `direct_group_member_role`, and `group_path`; new entries still default to ungrouped.
 
-### Graph Mutation Path (Links + Entry Delete)
+### Group Mutation Path
 
-1. Link create (`POST /entries/{id}/links`) or delete (`DELETE /links/{id}`) mutates `entry_links`.
-2. Entry delete (`DELETE /entries/{id}`) soft-deletes the row and removes related links.
-3. Backend runs `recompute_entry_groups`.
-4. Graph reads (`GET /groups/{group_id}`) reflect updated topology.
+1. Group create, rename, delete, add-member, or remove-member mutates `entry_groups` and/or `entry_group_members`.
+2. Backend validates membership ownership, depth-1 nesting, and group-type invariants.
+3. Graph reads (`GET /groups`, `GET /groups/{group_id}`) derive counts, nodes, and edges from the current membership tree.
+4. Entry detail reads reflect updated `direct_group` and `group_path`.
 
 ### Agent-Assisted Write Path (Review-Gated)
 
@@ -77,6 +84,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 3. Proposed creates are persisted as `agent_change_items` (`PENDING_REVIEW`).
 4. Human reviewer approves/rejects individual items.
 5. On approval, apply handlers create domain rows (including entries) and record review actions.
+6. Agent-created entries remain ungrouped until a user assigns them through the groups workspace.
 
 ### Read Path (Dashboard + Reconciliation)
 
@@ -93,7 +101,6 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 
 - API routers:
   - `backend/routers/entries.py`
-  - `backend/routers/links.py`
   - `backend/routers/groups.py`
   - `backend/routers/dashboard.py`
   - `backend/routers/accounts.py`
@@ -125,6 +132,10 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `frontend/src/lib/queryInvalidation.ts`
   - `frontend/src/pages/EntriesPage.tsx`
   - `frontend/src/pages/EntryDetailPage.tsx`
+  - `frontend/src/pages/GroupsPage.tsx`
+  - `frontend/src/components/GroupGraphView.tsx`
+  - `frontend/src/components/GroupEditorModal.tsx`
+  - `frontend/src/components/GroupMemberEditorModal.tsx`
   - `frontend/src/pages/DashboardPage.tsx`
   - `frontend/src/pages/AccountsPage.tsx`
   - `frontend/src/features/accounts/*`
@@ -147,6 +158,21 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `0009_remove_entry_status`
   - `0010_runtime_settings_overrides`
   - `0011_remove_openrouter_runtime_settings_fields`
+  - `0012_remove_related_link_type`
+  - `0013_add_account_markdown_body`
+  - `0014_remove_account_institution_type`
+  - `0015_add_agent_tool_call_output_text`
+  - `0016_add_user_memory_to_runtime_settings`
+  - `0017_rename_tag_category_taxonomy`
+  - `0018_add_tag_description`
+  - `0019_add_transfer_entry_kind`
+  - `0020_add_agent_message_attachment_original_filename`
+  - `0021_add_agent_run_context_tokens`
+  - `0022_agent_run_events_and_tool_lifecycle`
+  - `0023_add_agent_provider_config`
+  - `0024_entity_root_accounts`
+  - `0025_user_memory_json_list`
+  - `0026_entry_groups_v2`
 - Operational commands:
   - `uv run alembic upgrade head`
   - `uv run bill-helper-api`
@@ -162,8 +188,8 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 
 ## Current Constraints and Limitations
 
-- Group recomputation is global over active entries (not incremental).
-- Link uniqueness is directional, while grouping treats connectivity as undirected.
-- Entry deletion is soft-delete; related link rows are physically removed.
-- Dashboard analytics use runtime-configured currency selection (`/settings` override, else env default).
-- No auth/permissions boundaries (single-user local mode).
+- no auth or permissions beyond the current prototype principal model
+- group nesting depth is capped at one
+- child groups cannot be shared across multiple parents
+- edges are derived only; there is no explicit edge storage or arbitrary edge editor
+- dashboard analytics use runtime-configured currency selection (`/settings` override, else env default)

@@ -15,19 +15,19 @@ from backend.database import build_engine, build_session_maker
 from backend.db_meta import Base
 from backend.enums_finance import EntryKind
 from backend.models_finance import Account, Entry
-from backend.services.entities import ensure_entity_by_name
-from backend.services.entries import normalize_tag_name, set_entry_tags
-from backend.services.groups import assign_initial_group
 from backend.services.bootstrap import (
     run_schema_seed_and_stamp,
     stamp_alembic_head_for_database_url,
 )
+from backend.services.entities import ensure_entity_by_name
+from backend.services.entries import normalize_tag_name, set_entry_tags
 from backend.services.taxonomy_constants import (
     TAG_TYPE_SUBJECT_TYPE,
     TAG_TYPE_TAXONOMY_KEY,
 )
 from backend.services.taxonomy import assign_single_term_by_name
 from backend.services.users import ensure_user_by_name
+
 SUPPORTED_CURRENCIES = ("CAD", "USD", "CNY")
 DEFAULT_ENTRY_CURRENCY = "CAD"
 
@@ -152,15 +152,15 @@ def _seed_demo_rows(
     credit_entity = ensure_entity_by_name(db, "Demo Credit", category="account")
 
     debit_account = Account(
+        id=debit_entity.id,
         owner_user_id=default_user.id,
-        entity_id=debit_entity.id,
         name=debit_entity.name,
         currency_code=DEFAULT_ENTRY_CURRENCY,
         is_active=True,
     )
     credit_account = Account(
+        id=credit_entity.id,
         owner_user_id=default_user.id,
-        entity_id=credit_entity.id,
         name=credit_entity.name,
         currency_code=DEFAULT_ENTRY_CURRENCY,
         is_active=True,
@@ -187,7 +187,6 @@ def _seed_demo_rows(
 
         entry = Entry(
             account_id=credit_account.id,
-            group_id="",
             kind=kind,
             occurred_at=date.fromisoformat(row["Date"]),
             name=_title_case(description),
@@ -206,7 +205,6 @@ def _seed_demo_rows(
             ),
         )
         db.add(entry)
-        assign_initial_group(db, entry)
         tag_types = _derive_tags(
             description=description,
             sub_description=sub_description,

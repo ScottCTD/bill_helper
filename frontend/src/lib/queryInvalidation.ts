@@ -20,15 +20,20 @@ export function invalidateEntryReadModels(queryClient: QueryClient, entryId?: st
   queryClient.invalidateQueries({ queryKey: queryKeys.entries.detailRoot });
 }
 
-export function invalidateEntryLinkReadModels(queryClient: QueryClient, entryId?: string): void {
+export function invalidateGroupReadModels(queryClient: QueryClient, entryId?: string, groupId?: string): void {
   queryClient.invalidateQueries({ queryKey: queryKeys.entries.all });
   queryClient.invalidateQueries({ queryKey: queryKeys.groups.all });
+  if (groupId) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.groups.detail(groupId) });
+  }
   if (entryId) {
     queryClient.invalidateQueries({ queryKey: queryKeys.entries.detail(entryId) });
     return;
   }
   queryClient.invalidateQueries({ queryKey: queryKeys.entries.detailRoot });
 }
+
+export const invalidateEntryLinkReadModels = invalidateGroupReadModels;
 
 export function invalidateAgentThreadData(queryClient: QueryClient, threadId?: string): void {
   queryClient.invalidateQueries({ queryKey: queryKeys.agent.threads });

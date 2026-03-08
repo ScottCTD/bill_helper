@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Enum,
@@ -19,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db_meta import Base
-from backend.enums_finance import EntryKind, LinkType
+from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
 from backend.models_shared import utc_now, uuid_str
 
 
@@ -27,6 +28,13 @@ class EntryGroup(Base):
     __tablename__ = "entry_groups"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    owner_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    group_type: Mapped[GroupType] = mapped_column(
+        Enum(GroupType), nullable=False, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
@@ -37,7 +45,20 @@ class EntryGroup(Base):
         nullable=False,
     )
 
-    entries: Mapped[list[Entry]] = relationship(back_populates="group")
+    owner_user: Mapped[User | None] = relationship(
+        back_populates="owned_groups",
+        foreign_keys=[owner_user_id],
+    )
+    memberships: Mapped[list[EntryGroupMember]] = relationship(
+        back_populates="group",
+        foreign_keys="EntryGroupMember.group_id",
+        cascade="all, delete-orphan",
+    )
+    parent_membership: Mapped[EntryGroupMember | None] = relationship(
+        back_populates="child_group",
+        foreign_keys="EntryGroupMember.child_group_id",
+        uselist=False,
+    )
 
 
 class User(Base):
@@ -60,6 +81,9 @@ class User(Base):
     accounts: Mapped[list[Account]] = relationship(back_populates="owner_user")
     owned_entries: Mapped[list[Entry]] = relationship(
         back_populates="owner_user", foreign_keys="Entry.owner_user_id"
+    )
+    owned_groups: Mapped[list[EntryGroup]] = relationship(
+        back_populates="owner_user", foreign_keys="EntryGroup.owner_user_id"
     )
 
 
@@ -349,9 +373,6 @@ class Entry(Base):
     __tablename__ = "entries"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    group_id: Mapped[str] = mapped_column(
-        ForeignKey("entry_groups.id", ondelete="RESTRICT"), nullable=False, index=True
-    )
     account_id: Mapped[str | None] = mapped_column(
         ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -395,7 +416,6 @@ class Entry(Base):
         nullable=False,
     )
 
-    group: Mapped[EntryGroup] = relationship(back_populates="entries")
     account: Mapped[Account | None] = relationship(back_populates="entries")
     from_entity_ref: Mapped[Entity | None] = relationship(
         back_populates="as_source_entries",
@@ -413,47 +433,72 @@ class Entry(Base):
         secondary="entry_tags",
         back_populates="entries",
     )
-    outgoing_links: Mapped[list[EntryLink]] = relationship(
-        back_populates="source_entry",
-        foreign_keys="EntryLink.source_entry_id",
-        cascade="all, delete-orphan",
-    )
-    incoming_links: Mapped[list[EntryLink]] = relationship(
-        back_populates="target_entry",
-        foreign_keys="EntryLink.target_entry_id",
-        cascade="all, delete-orphan",
+    group_membership: Mapped[EntryGroupMember | None] = relationship(
+        back_populates="entry",
+        foreign_keys="EntryGroupMember.entry_id",
+        uselist=False,
     )
 
 
-class EntryLink(Base):
-    __tablename__ = "entry_links"
+class EntryGroupMember(Base):
+    __tablename__ = "entry_group_members"
     __table_args__ = (
-        UniqueConstraint(
-            "source_entry_id",
-            "target_entry_id",
-            "link_type",
-            name="uq_entry_links_tuple",
+        CheckConstraint(
+            "(entry_id IS NOT NULL AND child_group_id IS NULL) OR "
+            "(entry_id IS NULL AND child_group_id IS NOT NULL)",
+            name="ck_entry_group_members_one_subject",
         ),
+        CheckConstraint(
+            "child_group_id IS NULL OR group_id != child_group_id",
+            name="ck_entry_group_members_no_self_child",
+        ),
+        UniqueConstraint(
+            "group_id",
+            "entry_id",
+            name="uq_entry_group_members_group_entry",
+        ),
+        UniqueConstraint(
+            "group_id",
+            "child_group_id",
+            name="uq_entry_group_members_group_child",
+        ),
+        UniqueConstraint("entry_id", name="uq_entry_group_members_entry"),
+        UniqueConstraint("child_group_id", name="uq_entry_group_members_child_group"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    source_entry_id: Mapped[str] = mapped_column(
-        ForeignKey("entries.id", ondelete="CASCADE"), nullable=False, index=True
+    group_id: Mapped[str] = mapped_column(
+        ForeignKey("entry_groups.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    target_entry_id: Mapped[str] = mapped_column(
-        ForeignKey("entries.id", ondelete="CASCADE"), nullable=False, index=True
+    entry_id: Mapped[str | None] = mapped_column(
+        ForeignKey("entries.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    link_type: Mapped[LinkType] = mapped_column(
-        Enum(LinkType), nullable=False, index=True
+    child_group_id: Mapped[str | None] = mapped_column(
+        ForeignKey("entry_groups.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    member_role: Mapped[GroupMemberRole | None] = mapped_column(
+        Enum(GroupMemberRole), nullable=True, index=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
-
-    source_entry: Mapped[Entry] = relationship(
-        back_populates="outgoing_links", foreign_keys=[source_entry_id]
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
     )
-    target_entry: Mapped[Entry] = relationship(
-        back_populates="incoming_links", foreign_keys=[target_entry_id]
+
+    group: Mapped[EntryGroup] = relationship(
+        back_populates="memberships",
+        foreign_keys=[group_id],
+    )
+    entry: Mapped[Entry | None] = relationship(
+        back_populates="group_membership",
+        foreign_keys=[entry_id],
+    )
+    child_group: Mapped[EntryGroup | None] = relationship(
+        back_populates="parent_membership",
+        foreign_keys=[child_group_id],
     )

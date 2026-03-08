@@ -148,6 +148,151 @@ def test_migration_0025_converts_user_memory_text_to_json_list(tmp_path):
     assert json.loads(stored_value) == ["Prefers terse answers.", "Works in CAD."]
 
 
+def test_migration_0026_converts_legacy_links_to_typed_groups(tmp_path):
+    database_url = _sqlite_url(tmp_path, "migration_0026.sqlite")
+    cfg = _build_alembic_config(database_url)
+    command.upgrade(cfg, "0025_user_memory_json_list")
+
+    engine = create_engine(database_url, future=True)
+    now = datetime.now(timezone.utc)
+    split_group_id = str(uuid4())
+    fallback_group_id = str(uuid4())
+    singleton_group_id = str(uuid4())
+    split_parent_id = str(uuid4())
+    split_child_id = str(uuid4())
+    split_child_two_id = str(uuid4())
+    invalid_first_id = str(uuid4())
+    invalid_second_id = str(uuid4())
+    singleton_entry_id = str(uuid4())
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                INSERT INTO entry_groups (id, created_at, updated_at)
+                VALUES
+                  (:split_group_id, :created_at, :updated_at),
+                  (:fallback_group_id, :created_at, :updated_at),
+                  (:singleton_group_id, :created_at, :updated_at)
+                """
+            ),
+            {
+                "split_group_id": split_group_id,
+                "fallback_group_id": fallback_group_id,
+                "singleton_group_id": singleton_group_id,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO entries
+                  (
+                    id,
+                    group_id,
+                    account_id,
+                    kind,
+                    occurred_at,
+                    name,
+                    amount_minor,
+                    currency_code,
+                    from_entity_id,
+                    to_entity_id,
+                    owner_user_id,
+                    from_entity,
+                    to_entity,
+                    owner,
+                    markdown_body,
+                    is_deleted,
+                    deleted_at,
+                    created_at,
+                    updated_at
+                  )
+                VALUES
+                  (:split_parent_id, :split_group_id, NULL, 'EXPENSE', '2026-03-01', 'Dinner', 2400, 'USD', NULL, NULL, NULL, NULL, NULL, 'admin', NULL, 0, NULL, :created_at, :updated_at),
+                  (:split_child_id, :split_group_id, NULL, 'INCOME', '2026-03-02', 'Alice', 1200, 'USD', NULL, NULL, NULL, NULL, NULL, 'admin', NULL, 0, NULL, :created_at, :updated_at),
+                  (:split_child_two_id, :split_group_id, NULL, 'INCOME', '2026-03-03', 'Bob', 1200, 'USD', NULL, NULL, NULL, NULL, NULL, 'admin', NULL, 0, NULL, :created_at, :updated_at),
+                  (:invalid_first_id, :fallback_group_id, NULL, 'EXPENSE', '2026-03-04', 'Bad parent', 1000, 'USD', NULL, NULL, NULL, NULL, NULL, 'admin', NULL, 0, NULL, :created_at, :updated_at),
+                  (:invalid_second_id, :fallback_group_id, NULL, 'EXPENSE', '2026-03-05', 'Bad child', 1000, 'USD', NULL, NULL, NULL, NULL, NULL, 'admin', NULL, 0, NULL, :created_at, :updated_at),
+                  (:singleton_entry_id, :singleton_group_id, NULL, 'EXPENSE', '2026-03-06', 'Singleton', 500, 'USD', NULL, NULL, NULL, NULL, NULL, 'admin', NULL, 0, NULL, :created_at, :updated_at)
+                """
+            ),
+            {
+                "split_parent_id": split_parent_id,
+                "split_child_id": split_child_id,
+                "split_child_two_id": split_child_two_id,
+                "invalid_first_id": invalid_first_id,
+                "invalid_second_id": invalid_second_id,
+                "singleton_entry_id": singleton_entry_id,
+                "split_group_id": split_group_id,
+                "fallback_group_id": fallback_group_id,
+                "singleton_group_id": singleton_group_id,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO entry_links (id, source_entry_id, target_entry_id, link_type, note, created_at)
+                VALUES
+                  (:split_link_one, :split_parent_id, :split_child_id, 'SPLIT', NULL, :created_at),
+                  (:split_link_two, :split_parent_id, :split_child_two_id, 'SPLIT', NULL, :created_at),
+                  (:invalid_link, :invalid_first_id, :invalid_second_id, 'SPLIT', NULL, :created_at)
+                """
+            ),
+            {
+                "split_link_one": str(uuid4()),
+                "split_link_two": str(uuid4()),
+                "invalid_link": str(uuid4()),
+                "split_parent_id": split_parent_id,
+                "split_child_id": split_child_id,
+                "split_child_two_id": split_child_two_id,
+                "invalid_first_id": invalid_first_id,
+                "invalid_second_id": invalid_second_id,
+                "created_at": now,
+            },
+        )
+
+    command.upgrade(cfg, "head")
+
+    inspector = inspect(engine)
+    assert "entry_group_members" in inspector.get_table_names()
+    assert "entry_links" not in inspector.get_table_names()
+    entry_columns = {column["name"] for column in inspector.get_columns("entries")}
+    assert "group_id" not in entry_columns
+
+    with engine.begin() as connection:
+        groups = {
+            str(row[0]): str(row[1])
+            for row in connection.execute(
+                text("SELECT id, group_type FROM entry_groups ORDER BY id ASC")
+            ).all()
+        }
+        assert groups[split_group_id] == "SPLIT"
+        assert groups[fallback_group_id] == "BUNDLE"
+        assert singleton_group_id not in groups
+
+        roles = {
+            str(row[0]): row[1]
+            for row in connection.execute(
+                text(
+                    """
+                    SELECT entry_id, member_role
+                    FROM entry_group_members
+                    WHERE group_id = :group_id
+                    ORDER BY position ASC
+                    """
+                ),
+                {"group_id": split_group_id},
+            ).all()
+        }
+        assert roles[split_parent_id] == "PARENT"
+        assert roles[split_child_id] == "CHILD"
+        assert roles[split_child_two_id] == "CHILD"
+
+
 def test_migration_0017_renames_old_tag_taxonomy_when_new_key_missing(tmp_path):
     database_url = _sqlite_url(tmp_path, "migration_0017.sqlite")
     cfg = _build_alembic_config(database_url)

@@ -15,12 +15,14 @@
 - row delete actions use compact trash-can icon buttons with accessible labels instead of inline `Delete` text, and their icon-only action headers are visually hidden to keep the column minimal
 - rows show a `Missing entity` badge when preserved labels remain after entity or account deletion
 - entry create modal resolves default currency from runtime settings
+- entry create/edit modal includes a single direct-group picker; `SPLIT` groups also show a split-role picker
 
 ### `frontend/src/pages/EntryDetailPage.tsx`
 
-- shows entry detail plus linked-group graph
-- link create and delete use the shared `LinkEditorModal`
-- source and target entry pickers use searchable `SingleSelect`
+- shows entry detail, direct-group context, and the direct-group graph when the entry is assigned
+- uses `direct_group` and `group_path` from `GET /entries/{entry_id}` instead of rendering raw link rows
+- popup editing includes the same direct-group and split-role controls as the entries page modal
+- routes structural edits into the groups workspace via a dedicated `Open groups workspace` action
 - editing uses the shared popup editor and the same runtime-settings defaults as create flow
 - detail cards show `Missing entity` badges when preserved `from` or `to` labels no longer have linked entity records
 
@@ -28,11 +30,14 @@
 
 ### `frontend/src/pages/GroupsPage.tsx`
 
-- dedicated derived-group workspace at `/groups`
+- dedicated first-class group workspace at `/groups`
+- organized as a browser/detail layout: searchable sidebar, group overview header, derived graph section, and direct-members section
 - left summary list comes from `GET /groups`
 - selected graph detail comes from `GET /groups/{group_id}`
-- group topology changes remain link-driven only
-- link removal actions use compact icon buttons, with the action header visually hidden so the column can stay minimal
+- supports create, rename, delete, add-entry, add-child-group, and remove-member flows
+- child-group picking is limited to top-level groups that are not already attached elsewhere, matching the depth-1/no-sharing backend rules
+- direct members table shows both entries and child groups, along with group-type-specific metadata
+- `GroupGraphView.tsx` renders both entry nodes and child-group nodes, with layout rules per `group_type`
 - `GroupGraphView.tsx` locally filters React Flow warning `002` because it is a false positive for this graph
 
 ## Accounts

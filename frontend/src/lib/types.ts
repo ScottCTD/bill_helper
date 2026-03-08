@@ -1,5 +1,6 @@
 export type EntryKind = "EXPENSE" | "INCOME" | "TRANSFER";
-export type LinkType = "RECURRING" | "SPLIT" | "BUNDLE";
+export type GroupType = "BUNDLE" | "SPLIT" | "RECURRING";
+export type GroupMemberRole = "PARENT" | "CHILD";
 
 export interface Tag {
   id: number;
@@ -85,18 +86,14 @@ export interface Reconciliation {
   delta_minor: number | null;
 }
 
-export interface Link {
+export interface EntryGroupRef {
   id: string;
-  source_entry_id: string;
-  target_entry_id: string;
-  link_type: LinkType;
-  note: string | null;
-  created_at: string;
+  name: string;
+  group_type: GroupType;
 }
 
 export interface Entry {
   id: string;
-  group_id: string;
   account_id: string | null;
   kind: EntryKind;
   occurred_at: string;
@@ -115,11 +112,12 @@ export interface Entry {
   created_at: string;
   updated_at: string;
   tags: Tag[];
+  direct_group: EntryGroupRef | null;
+  direct_group_member_role: GroupMemberRole | null;
+  group_path: EntryGroupRef[];
 }
 
-export interface EntryDetail extends Entry {
-  links: Link[];
-}
+export interface EntryDetail extends Entry {}
 
 export interface EntryListResponse {
   items: Entry[];
@@ -129,34 +127,55 @@ export interface EntryListResponse {
 }
 
 export interface GroupNode {
-  id: string;
+  graph_id: string;
+  membership_id: string;
+  subject_id: string;
+  node_type: "ENTRY" | "GROUP";
   name: string;
-  kind: EntryKind;
-  amount_minor: number;
-  occurred_at: string;
+  member_role: GroupMemberRole | null;
+  representative_occurred_at: string | null;
+  kind: EntryKind | null;
+  amount_minor: number | null;
+  occurred_at: string | null;
+  group_type: GroupType | null;
+  descendant_entry_count: number | null;
+  first_occurred_at: string | null;
+  last_occurred_at: string | null;
 }
 
 export interface GroupEdge {
   id: string;
-  source_entry_id: string;
-  target_entry_id: string;
-  link_type: LinkType;
-  note: string | null;
+  source_graph_id: string;
+  target_graph_id: string;
+  group_type: GroupType;
 }
 
 export interface GroupGraph {
-  group_id: string;
+  id: string;
+  name: string;
+  group_type: GroupType;
+  parent_group_id: string | null;
+  direct_member_count: number;
+  direct_entry_count: number;
+  direct_child_group_count: number;
+  descendant_entry_count: number;
+  first_occurred_at: string | null;
+  last_occurred_at: string | null;
   nodes: GroupNode[];
   edges: GroupEdge[];
 }
 
 export interface GroupSummary {
-  group_id: string;
-  entry_count: number;
-  edge_count: number;
-  first_occurred_at: string;
-  last_occurred_at: string;
-  latest_entry_name: string;
+  id: string;
+  name: string;
+  group_type: GroupType;
+  parent_group_id: string | null;
+  direct_member_count: number;
+  direct_entry_count: number;
+  direct_child_group_count: number;
+  descendant_entry_count: number;
+  first_occurred_at: string | null;
+  last_occurred_at: string | null;
 }
 
 export interface DailyExpensePoint {
