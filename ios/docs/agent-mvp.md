@@ -14,6 +14,7 @@
 ## Thread Detail
 
 - thread detail renders assistant and user messages, current run state, recent live stream text/reasoning, and pending review cards
+- assistant-authored message bubbles render `contentMarkdown` with Apple markdown formatting support; user/system messages remain plain text
 - the composer supports text send plus invoice/receipt attachments from Photos or the file importer
 - the composer locks while imports/uploads are in flight and surfaces attachment/read/send errors inline
 
