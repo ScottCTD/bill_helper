@@ -9,6 +9,7 @@ This is the main local entry point for the native iOS client shipped in this rep
 - agent tab shows thread list/detail flows with loading, empty, error, and refresh states
 - creating a thread pushes directly into thread detail for immediate messaging
 - thread detail shows assistant/user messages, run state, recent streamed text/reasoning, and pending review cards
+- assistant message bubbles render markdown formatting from the backend `contentMarkdown` field while user/system messages stay plain text
 - composer supports text send plus invoice/receipt attachments from Photos or the file importer
 - approve/reject proposal review actions update thread detail immediately and refresh parent-list summaries
 - app startup restores persisted session state before wiring the live client, and app configuration resolves the backend base URL for MVP development

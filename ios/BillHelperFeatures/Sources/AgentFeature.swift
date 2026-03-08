@@ -1,6 +1,9 @@
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
+import os
+
+private let agentMessageMarkdownLogger = Logger(subsystem: "com.billhelper.ios", category: "AgentMessageMarkdown")
 
 struct AgentFeatureClient {
     var listThreads: () async throws -> [AgentThreadSummary]
@@ -696,9 +699,15 @@ private struct AgentMessageCard: View {
                     .foregroundStyle(.secondary)
             }
 
-            Text(messageContent(message))
-                .font(.body)
-                .textSelection(.enabled)
+            Group {
+                if let renderedContent = AssistantMessageMarkdownRenderer.renderedContent(for: message) {
+                    Text(renderedContent)
+                } else {
+                    Text(messageContent(message))
+                }
+            }
+            .font(.body)
+            .textSelection(.enabled)
 
             if !message.attachments.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1024,6 +1033,22 @@ private func backgroundColor(_ role: AgentMessageRole) -> Color {
     case .assistant: Color.indigo.opacity(0.08)
     case .system: Color.secondary.opacity(0.10)
     case .user: Color.green.opacity(0.10)
+    }
+}
+
+enum AssistantMessageMarkdownRenderer {
+    static func renderedContent(for message: AgentMessage) -> AttributedString? {
+        guard message.role == .assistant else { return nil }
+
+        let content = messageContent(message)
+        do {
+            return try AttributedString(markdown: content)
+        } catch {
+            agentMessageMarkdownLogger.error(
+                "Failed to parse assistant markdown for message \(message.id, privacy: .public): \(String(describing: error), privacy: .public)"
+            )
+            return nil
+        }
     }
 }
 

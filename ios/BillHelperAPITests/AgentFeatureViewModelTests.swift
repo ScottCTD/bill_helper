@@ -3,6 +3,26 @@ import XCTest
 
 @MainActor
 final class AgentFeatureViewModelTests: XCTestCase {
+    func testAssistantMarkdownRendererFormatsAssistantMessages() async throws {
+        let message = makeMessage(
+            id: "message-1",
+            role: .assistant,
+            content: "**Bold** [link](https://example.com)"
+        )
+
+        let rendered = try XCTUnwrap(AssistantMessageMarkdownRenderer.renderedContent(for: message))
+
+        XCTAssertEqual(String(rendered.characters), "Bold link")
+        XCTAssertTrue(rendered.runs.contains { $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true })
+        XCTAssertTrue(rendered.runs.contains { $0.link == URL(string: "https://example.com")! })
+    }
+
+    func testAssistantMarkdownRendererLeavesUserMessagesAsPlainText() async {
+        let message = makeMessage(id: "message-2", role: .user, content: "**Bold**")
+
+        XCTAssertNil(AssistantMessageMarkdownRenderer.renderedContent(for: message))
+    }
+
     func testListViewModelLoadsThreadsAndCreatesNewThread() async {
         let createdThread = makeThread(id: "thread-2", title: "Receipt follow-up")
         let client = AgentFeatureClient(
