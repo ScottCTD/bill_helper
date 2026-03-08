@@ -64,6 +64,7 @@ Operational rules:
   - `dashboard_currency_code`
   - `agent_model`
   - `agent_max_steps`
+  - `agent_bulk_max_concurrent_threads`
   - `agent_retry_max_attempts`
   - `agent_retry_initial_wait_seconds`
   - `agent_retry_max_wait_seconds`

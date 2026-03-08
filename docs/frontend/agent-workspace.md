@@ -27,7 +27,7 @@ Supporting modules include:
 ## Timeline Behavior
 
 - thread rail is on the right, collapsible, resizable, and independently scrollable
-- thread rows expose hover/focus delete controls, support double-click inline rename, and reconcile optimistic running state with `has_running_run`
+- thread rows expose hover/focus delete controls, support double-click inline rename, and reconcile multiple optimistic running ids with persisted `has_running_run`
 - timeline is event-driven from persisted `run.events`
 - tool rows appear as queued, then update in place through running, completed, failed, or cancelled
 - live SSE `run_event` payloads can include a compact `tool_call` snapshot so tool rows show their real name before full hydration
@@ -52,8 +52,14 @@ Supporting modules include:
 
 - pinned composer surface with attachment chips and preview dialog
 - supports picker, paste, and drag-drop for images and PDFs
+- includes a `Bulk mode` toggle beside `Add Attachments`
+- Bulk mode creates one fresh thread per attached file, reuses the current textarea prompt for every launch, and never copies the currently selected thread history
+- Bulk launch concurrency uses the resolved runtime setting `agent_bulk_max_concurrent_threads` and falls back to `4` until settings load
+- Bulk mode help is exposed through a hover/focus tooltip beside the toggle instead of persistent helper text
+- Bulk launches report transient started/failed toast notifications; failed files stay attached for retry while successful files clear
 - `Cmd/Ctrl+Enter` always submits; plain `Enter` submits only for a single-line draft
 - idle primary action is `Send`; active-run primary action is `Stop`
+- when Bulk mode is enabled, the primary action becomes `Start Bulk` and uses the existing non-stream send endpoint per created thread
 - agent messages stream over SSE from `POST /api/v1/agent/threads/{thread_id}/messages/stream`
 
 ## Usage And Activity

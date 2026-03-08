@@ -17,10 +17,12 @@ import {
   deleteAgentThread,
   getAgentToolCall,
   getAgentThread,
+  getRuntimeSettings,
   interruptAgentRun,
   listAgentThreads,
   renameAgentThread,
   rejectAgentChangeItem,
+  sendAgentMessage,
   streamAgentMessage
 } from "../../lib/api";
 import { invalidateAgentThreadData, invalidateEntryReadModels } from "../../lib/queryInvalidation";
@@ -30,6 +32,7 @@ import type {
   AgentRun,
   AgentRunEvent,
   AgentStreamEvent,
+  AgentThread,
   AgentThreadDetail,
   AgentThreadSummary,
   AgentToolCall
@@ -51,6 +54,7 @@ import { useStickToBottom } from "./panel/useStickToBottom";
 import { useAgentDraftAttachments } from "./panel/useAgentDraftAttachments";
 import {
   COMPOSER_TEXTAREA_MAX_HEIGHT_PX,
+  type DraftAttachment,
   detectDraftAttachmentKind,
   type PendingAssistantMessage,
   type PendingUserMessage
@@ -59,11 +63,16 @@ import { AgentThreadReviewModal } from "./review/AgentThreadReviewModal";
 import { useResizablePanel } from "../../hooks/useResizablePanel";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
+import { useNotifications } from "../../components/ui/notification-center";
 
 interface AgentPanelProps {
   isOpen: boolean;
   onClose?: () => void;
 }
+
+const BULK_MODE_HELP_TEXT =
+  "Each file starts a fresh thread using only the prompt typed here. Current thread history is not included.";
+const DEFAULT_BULK_LAUNCH_CONCURRENCY_LIMIT = 4;
 
 function normalizeThreadTitleValue(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -81,11 +90,58 @@ function extractRenameThreadTitle(toolCall: AgentToolCall): string | null {
   return normalizeThreadTitleValue(toolCall.input_json?.title);
 }
 
+function deriveThreadTitleFromFilename(filename: string): string {
+  const stem = filename.replace(/\.[^./\\]+$/, "");
+  const normalized = stem.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  const nextTitle = normalized || filename.trim() || "Bulk upload";
+  return nextTitle.slice(0, 255);
+}
+
+function buildThreadSummary(thread: AgentThread, overrides: Partial<AgentThreadSummary> = {}): AgentThreadSummary {
+  return {
+    ...thread,
+    last_message_preview: null,
+    pending_change_count: 0,
+    has_running_run: false,
+    ...overrides
+  };
+}
+
+function summarizeFilenames(fileNames: string[]): string {
+  if (fileNames.length <= 3) {
+    return fileNames.join(", ");
+  }
+  return `${fileNames.slice(0, 3).join(", ")}, and ${fileNames.length - 3} more`;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  iteratee: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await iteratee(items[currentIndex], currentIndex);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
+}
+
 export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const queryClient = useQueryClient();
+  const { notify } = useNotifications();
   const [selectedThreadId, setSelectedThreadId] = useState<string>("");
   const [draftMessage, setDraftMessage] = useState("");
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [isBulkLaunching, setIsBulkLaunching] = useState(false);
   const [isStreamHealthy, setIsStreamHealthy] = useState(false);
   const [activeStreamRunId, setActiveStreamRunId] = useState<string | null>(null);
   const [streamedReasoningTextByRunId, setStreamedReasoningTextByRunId] = useState<Record<string, string>>({});
@@ -93,12 +149,12 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const [optimisticRunEventsByRunId, setOptimisticRunEventsByRunId] = useState<Record<string, AgentRunEvent[]>>({});
   const [optimisticToolCallsByRunId, setOptimisticToolCallsByRunId] = useState<Record<string, AgentToolCall[]>>({});
   const [optimisticThreadTitlesById, setOptimisticThreadTitlesById] = useState<Record<string, string>>({});
+  const [optimisticRunningThreadIds, setOptimisticRunningThreadIds] = useState<string[]>([]);
   const [hydratingToolCallIds, setHydratingToolCallIds] = useState<Set<string>>(new Set());
   const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null);
   const [pendingAssistantMessage, setPendingAssistantMessage] = useState<PendingAssistantMessage | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isThreadReviewOpen, setIsThreadReviewOpen] = useState(false);
-  const [optimisticRunningThreadId, setOptimisticRunningThreadId] = useState<string | null>(null);
   const { containerRef: timelineScrollRef, isAtBottom, scrollToBottom, snapToBottom } = useStickToBottom<HTMLDivElement>();
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
@@ -159,6 +215,17 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   const threadsQuery = useQuery({
     queryKey: queryKeys.agent.threads,
     queryFn: listAgentThreads,
+    enabled: isOpen,
+    refetchInterval: (query) => {
+      const threads = query.state.data as AgentThreadSummary[] | undefined;
+      const hasRunningThread = (threads ?? []).some((thread) => thread.has_running_run);
+      return hasRunningThread || optimisticRunningThreadIds.length > 0 || isBulkLaunching ? 5000 : false;
+    },
+    refetchIntervalInBackground: true
+  });
+  const runtimeSettingsQuery = useQuery({
+    queryKey: queryKeys.settings.runtime,
+    queryFn: getRuntimeSettings,
     enabled: isOpen
   });
 
@@ -198,6 +265,8 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   }, [isOpen, selectedThreadId, threadsQuery.data]);
 
   const threadMessages = threadQuery.data?.messages;
+  const bulkLaunchConcurrencyLimit =
+    runtimeSettingsQuery.data?.agent_bulk_max_concurrent_threads ?? DEFAULT_BULK_LAUNCH_CONCURRENCY_LIMIT;
   const lastSnappedThreadRef = useRef("");
 
   useEffect(() => {
@@ -207,6 +276,18 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
   useEffect(() => {
     optimisticToolCallsRef.current = optimisticToolCallsByRunId;
   }, [optimisticToolCallsByRunId]);
+
+  useEffect(() => {
+    if (!threadsQuery.data) {
+      return;
+    }
+    setOptimisticRunningThreadIds((current) =>
+      current.filter((threadId) => {
+        const matchingThread = threadsQuery.data?.find((thread) => thread.id === threadId);
+        return !matchingThread || matchingThread.has_running_run;
+      })
+    );
+  }, [threadsQuery.data]);
 
   // Snap to bottom when messages first arrive for a new thread
   useEffect(() => {
@@ -245,6 +326,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       setIsThreadReviewOpen(false);
       setPendingUserMessage(null);
       setPendingAssistantMessage(null);
+      removeOptimisticRunningThreadId(deletedThreadId);
       resetOptimisticRunState();
       setActionError(null);
       invalidateAgentThreadData(queryClient);
@@ -283,6 +365,24 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     },
     [queryClient]
   );
+
+  const upsertThreadSummary = useCallback(
+    (thread: AgentThreadSummary) => {
+      queryClient.setQueryData(queryKeys.agent.threads, (current: AgentThreadSummary[] | undefined) => {
+        const nextThreads = [thread, ...(current ?? []).filter((item) => item.id !== thread.id)];
+        return nextThreads.sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+      });
+    },
+    [queryClient]
+  );
+
+  const addOptimisticRunningThreadId = useCallback((threadId: string) => {
+    setOptimisticRunningThreadIds((current) => (current.includes(threadId) ? current : [...current, threadId]));
+  }, []);
+
+  const removeOptimisticRunningThreadId = useCallback((threadId: string) => {
+    setOptimisticRunningThreadIds((current) => current.filter((item) => item !== threadId));
+  }, []);
 
   const renameThreadMutation = useMutation({
     mutationFn: renameAgentThread,
@@ -698,24 +798,108 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
   }
 
-  async function handleSubmitMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setActionError(null);
-    const content = draftMessage.trim();
-    if (!content && draftFiles.length === 0) {
-      setActionError("Enter a message or attach at least one file.");
+  async function handleSubmitBulkMessages(content: string, attachments: DraftAttachment[]) {
+    if (attachments.length === 0) {
+      setActionError("Attach at least one file to start Bulk mode.");
       return;
     }
-    const sendingDraftFiles = [...draftFiles];
+
+    setActionError(null);
+    setIsBulkLaunching(true);
     try {
-      const threadId = await ensureThreadId();
+      const results = await mapWithConcurrency(attachments, bulkLaunchConcurrencyLimit, async (attachment) => {
+        let createdThread: AgentThread | null = null;
+        try {
+          createdThread = await createAgentThread({
+            title: deriveThreadTitleFromFilename(attachment.file.name)
+          });
+          upsertThreadSummary(buildThreadSummary(createdThread));
+          addOptimisticRunningThreadId(createdThread.id);
+          upsertThreadSummary(
+            buildThreadSummary(createdThread, {
+              last_message_preview: content || "User sent attachments.",
+              has_running_run: true
+            })
+          );
+          await sendAgentMessage({
+            threadId: createdThread.id,
+            content,
+            files: [attachment.file]
+          });
+          return { attachmentId: attachment.id, fileName: attachment.file.name, failed: false as const, errorMessage: null };
+        } catch (error) {
+          if (createdThread) {
+            removeOptimisticRunningThreadId(createdThread.id);
+            try {
+              await deleteAgentThread(createdThread.id);
+              queryClient.setQueryData(queryKeys.agent.threads, (current: AgentThreadSummary[] | undefined) =>
+                (current ?? []).filter((thread) => thread.id !== createdThread?.id)
+              );
+              queryClient.removeQueries({ queryKey: queryKeys.agent.thread(createdThread.id), exact: true });
+            } catch {
+              upsertThreadSummary(
+                buildThreadSummary(createdThread, {
+                  last_message_preview: null,
+                  has_running_run: false
+                })
+              );
+            }
+          }
+          return {
+            attachmentId: attachment.id,
+            fileName: attachment.file.name,
+            failed: true as const,
+            errorMessage: (error as Error).message
+          };
+        }
+      });
+
+      const startedCount = results.filter((result) => !result.failed).length;
+      const failedResults = results.filter((result) => result.failed);
+      const failedAttachmentIdSet = new Set(failedResults.map((result) => result.attachmentId));
+      const uniqueErrorMessages = [...new Set(failedResults.map((result) => result.errorMessage).filter(Boolean))];
+      setDraftFiles((current) => current.filter((attachment) => failedAttachmentIdSet.has(attachment.id)));
+      setPreviewAttachmentId(null);
+      if (failedAttachmentIdSet.size === 0) {
+        setDraftMessage("");
+      }
+      setActionError(uniqueErrorMessages.length === 0 ? null : uniqueErrorMessages.join(" "));
+      if (failedResults.length === 0) {
+        notify({
+          title: `Started ${startedCount} thread${startedCount === 1 ? "" : "s"}.`,
+          tone: "success"
+        });
+      } else {
+        const descriptionParts = [`Files: ${summarizeFilenames(failedResults.map((result) => result.fileName))}`];
+        if (uniqueErrorMessages[0]) {
+          descriptionParts.push(uniqueErrorMessages[0]);
+        }
+        notify({
+          title: `Started ${startedCount} thread${startedCount === 1 ? "" : "s"}. Failed ${failedResults.length}.`,
+          description: descriptionParts.join(" "),
+          tone: "error",
+          durationMs: 5600
+        });
+      }
+      invalidateAgentThreadData(queryClient);
+    } finally {
+      setIsBulkLaunching(false);
+    }
+  }
+
+  async function handleSubmitSingleMessage(content: string, attachments: DraftAttachment[]) {
+    const sendingDraftFiles = [...attachments];
+    let threadId: string | null = null;
+    try {
+      threadId = await ensureThreadId();
+      const activeThreadId = threadId;
       const sendAbortController = new AbortController();
       sendAbortControllerRef.current = sendAbortController;
       setIsSendingMessage(true);
-      setOptimisticRunningThreadId(threadId);
+      addOptimisticRunningThreadId(activeThreadId);
       setIsStreamHealthy(true);
       resetOptimisticRunState();
-      invalidateAgentThreadData(queryClient, threadId);
+      invalidateAgentThreadData(queryClient, activeThreadId);
       const baselineLastUserMessageId =
         [...(threadQuery.data?.messages ?? [])]
           .reverse()
@@ -728,7 +912,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
           ?.id ?? null;
       const optimisticMessage: PendingUserMessage = {
         id: `pending-user-${Date.now()}`,
-        threadId,
+        threadId: activeThreadId,
         content,
         createdAt: new Date().toISOString(),
         baselineLastUserMessageId,
@@ -743,7 +927,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       setPendingUserMessage(optimisticMessage);
       setPendingAssistantMessage({
         id: `pending-assistant-${Date.now()}`,
-        threadId,
+        threadId: activeThreadId,
         createdAt: new Date().toISOString(),
         baselineLastAssistantMessageId
       });
@@ -753,40 +937,39 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       snapToBottom();
 
       await streamAgentMessage({
-        threadId,
-        content: draftMessage,
+        threadId: activeThreadId,
+        content,
         files: sendingDraftFiles.map((item) => item.file),
         signal: sendAbortController.signal,
-        onEvent: (streamEvent) => handleAgentStreamEvent(threadId, streamEvent)
+        onEvent: (streamEvent) => handleAgentStreamEvent(activeThreadId, streamEvent)
       });
       sendAbortControllerRef.current = null;
       setIsStreamHealthy(false);
-      const detail = await getAgentThread(threadId);
-      queryClient.setQueryData(queryKeys.agent.thread(threadId), detail);
+      const detail = await getAgentThread(activeThreadId);
+      queryClient.setQueryData(queryKeys.agent.thread(activeThreadId), detail);
       setOptimisticThreadTitlesById((current) => {
         const next = { ...current };
-        delete next[threadId];
+        delete next[activeThreadId];
         return next;
       });
-      invalidateAgentThreadData(queryClient, threadId);
+      invalidateAgentThreadData(queryClient, activeThreadId);
       setPendingUserMessage((current) => {
-        if (!current || current.threadId !== threadId) {
+        if (!current || current.threadId !== activeThreadId) {
           return current;
         }
         return null;
       });
       setPendingAssistantMessage((current) => {
-        if (!current || current.threadId !== threadId) {
+        if (!current || current.threadId !== activeThreadId) {
           return current;
         }
         return null;
       });
-      setOptimisticRunningThreadId(null);
+      removeOptimisticRunningThreadId(activeThreadId);
       resetOptimisticRunState();
     } catch (error) {
       sendAbortControllerRef.current = null;
       setIsStreamHealthy(false);
-      setOptimisticRunningThreadId(null);
       if ((error as Error).name === "AbortError") {
         setPendingUserMessage((current) => {
           return current ? null : current;
@@ -796,15 +979,35 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
         setActionError((error as Error).message);
       }
     } finally {
+      if (threadId) {
+        removeOptimisticRunningThreadId(threadId);
+      }
       setIsSendingMessage(false);
     }
+  }
+
+  async function handleSubmitMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setActionError(null);
+    const content = draftMessage.trim();
+    if (isBulkMode) {
+      await handleSubmitBulkMessages(content, [...draftFiles]);
+      return;
+    }
+    if (!content && draftFiles.length === 0) {
+      setActionError("Enter a message or attach at least one file.");
+      return;
+    }
+    await handleSubmitSingleMessage(content, [...draftFiles]);
   }
 
   async function handleStopRun() {
     setActionError(null);
     setIsSendingMessage(false);
     setIsStreamHealthy(false);
-    setOptimisticRunningThreadId(null);
+    if (selectedThreadId) {
+      removeOptimisticRunningThreadId(selectedThreadId);
+    }
     setPendingAssistantMessage(null);
     resetOptimisticRunState();
     if (sendAbortControllerRef.current) {
@@ -849,7 +1052,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
 
     event.preventDefault();
-    if (isMutating || isRunInFlight) {
+    if (isMutating || isBulkLaunching || (!isBulkMode && isRunInFlight)) {
       return;
     }
     event.currentTarget.form?.requestSubmit();
@@ -887,6 +1090,11 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     }
   }
 
+  function handleBulkModeChange(checked: boolean) {
+    setIsBulkMode(checked);
+    setActionError(null);
+  }
+
   if (!isOpen) {
     return null;
   }
@@ -903,7 +1111,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                 variant="secondary"
                 size="sm"
                 onClick={() => setIsThreadReviewOpen(true)}
-                disabled={!selectedThreadId || reviewProposalCount === 0 || isMutating}
+                disabled={!selectedThreadId || reviewProposalCount === 0 || isMutating || isBulkLaunching}
                 className={`agent-panel-review-button${pendingReviewCount > 0 ? " is-pending" : ""}`}
               >
                 <span>Review</span>
@@ -920,7 +1128,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
                 onClick={() => {
                   void handleCreateThread();
                 }}
-                disabled={isMutating}
+                disabled={isMutating || isBulkLaunching}
               >
                 New Thread
               </Button>
@@ -978,8 +1186,12 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               isMutating={isMutating}
               isRunInFlight={isRunInFlight}
               isSendingMessage={isSendingMessage}
+              isBulkMode={isBulkMode}
+              isBulkLaunching={isBulkLaunching}
               isInterruptPending={interruptRunMutation.isPending}
+              bulkModeHelpText={BULK_MODE_HELP_TEXT}
               actionError={actionError}
+              onBulkModeChange={handleBulkModeChange}
               onSubmit={handleSubmitMessage}
               onDragEnter={handleComposerDragEnter}
               onDragOver={handleComposerDragOver}
@@ -1021,10 +1233,10 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
               }}
               renamingThreadId={renameThreadMutation.isPending ? (renameThreadMutation.variables?.threadId ?? null) : null}
               deletingThreadId={deleteThreadMutation.isPending ? (deleteThreadMutation.variables ?? null) : null}
-              isDeleteDisabled={isMutating || isRunInFlight}
-              isRenameDisabled={isMutating || isRunInFlight}
+              isDeleteDisabled={isMutating || isRunInFlight || isBulkLaunching}
+              isRenameDisabled={isMutating || isRunInFlight || isBulkLaunching}
               isOpen={isThreadPanelOpen}
-              optimisticRunningThreadId={optimisticRunningThreadId}
+              optimisticRunningThreadIds={optimisticRunningThreadIds}
             />
           </div>
         </div>

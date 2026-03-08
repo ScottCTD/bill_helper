@@ -160,6 +160,7 @@ Response highlights:
 - `default_currency_code`
 - `dashboard_currency_code`
 - agent runtime fields
+- `agent_bulk_max_concurrent_threads`
 - `agent_base_url`
 - `agent_api_key_configured`
 - `overrides` object with nullable override values
@@ -182,6 +183,7 @@ Updatable fields include:
 - `dashboard_currency_code`
 - `agent_model`
 - `agent_max_steps`
+- `agent_bulk_max_concurrent_threads`
 - retry policy fields
 - image and attachment limit fields
 - `agent_base_url`

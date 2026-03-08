@@ -24,6 +24,7 @@ const baseSettingsFixture: RuntimeSettings = {
   dashboard_currency_code: "CAD",
   agent_model: "openrouter/qwen/qwen3.5-27b",
   agent_max_steps: 20,
+  agent_bulk_max_concurrent_threads: 4,
   agent_retry_max_attempts: 2,
   agent_retry_initial_wait_seconds: 1,
   agent_retry_max_wait_seconds: 8,
@@ -39,6 +40,7 @@ const baseSettingsFixture: RuntimeSettings = {
     dashboard_currency_code: null,
     agent_model: null,
     agent_max_steps: null,
+    agent_bulk_max_concurrent_threads: null,
     agent_retry_max_attempts: null,
     agent_retry_initial_wait_seconds: null,
     agent_retry_max_wait_seconds: null,
@@ -150,6 +152,38 @@ describe("SettingsPage", () => {
     expect(vi.mocked(updateRuntimeSettings).mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         user_memory: ["Prefers terse answers.", "Works in CAD."],
+      })
+    );
+  });
+
+  it("saves Bulk mode max concurrent threads", async () => {
+    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
+    vi.mocked(getRuntimeSettings).mockResolvedValue(baseSettingsFixture);
+    vi.mocked(updateRuntimeSettings).mockResolvedValue({
+      ...baseSettingsFixture,
+      agent_bulk_max_concurrent_threads: 6,
+      overrides: {
+        ...baseSettingsFixture.overrides,
+        agent_bulk_max_concurrent_threads: 6,
+      },
+    });
+
+    renderWithQueryClient(<SettingsPage />);
+
+    await screen.findByText("Settings");
+    const bulkConcurrencyInput = screen.getByRole("spinbutton", {
+      name: "Bulk max threads Maximum fresh threads Bulk mode starts at once."
+    });
+    await userEvent.clear(bulkConcurrencyInput);
+    await userEvent.type(bulkConcurrencyInput, "6");
+    fireEvent.submit(document.getElementById("runtime-settings-form") as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(updateRuntimeSettings).toHaveBeenCalled();
+    });
+    expect(vi.mocked(updateRuntimeSettings).mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        agent_bulk_max_concurrent_threads: 6,
       })
     );
   });

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+import os
 from pathlib import Path
 
 from pydantic import AliasChoices, Field, model_validator
@@ -23,6 +24,49 @@ _env_files: tuple[str, ...] = (
 DEFAULT_CORS_SCHEME = "http"
 DEFAULT_CORS_HOST = "localhost"
 DEFAULT_CORS_PORT = 5173
+
+
+def _parse_env_file(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        return {}
+
+    parsed: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
+        key, separator, value = line.partition("=")
+        if not separator:
+            continue
+        normalized_key = key.strip()
+        if not normalized_key:
+            continue
+        normalized_value = value.strip()
+        if (
+            len(normalized_value) >= 2
+            and normalized_value[0] == normalized_value[-1]
+            and normalized_value[0] in {"'", '"'}
+        ):
+            normalized_value = normalized_value[1:-1]
+        parsed[normalized_key] = normalized_value
+    return parsed
+
+
+def ensure_env_file_variables_loaded() -> None:
+    """Hydrate shared env-file secrets into process env for provider SDKs.
+
+    Pydantic reads `env_file` values for declared Settings fields only. Provider
+    integrations such as LiteLLM still resolve credentials directly from
+    `os.environ`, so we mirror env-file variables into the process environment
+    without overriding already-exported values.
+    """
+
+    for env_file in _env_files:
+        env_path = Path(env_file).expanduser()
+        for key, value in _parse_env_file(env_path).items():
+            os.environ.setdefault(key, value)
 
 
 def _default_cors_origins() -> list[str]:
@@ -56,6 +100,7 @@ class Settings(BaseSettings):
     )
     agent_model: str = "openrouter/qwen/qwen3.5-27b"
     agent_max_steps: int = 100
+    agent_bulk_max_concurrent_threads: int = Field(default=4, ge=1, le=16)
     agent_retry_max_attempts: int = Field(default=3, ge=1, le=10)
     agent_retry_initial_wait_seconds: float = Field(default=0.25, ge=0.0, le=30.0)
     agent_retry_max_wait_seconds: float = Field(default=4.0, ge=0.0, le=120.0)
@@ -99,4 +144,5 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    ensure_env_file_variables_loaded()
     return Settings()

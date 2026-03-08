@@ -78,6 +78,9 @@ class RuntimeSettings(Base):
     )
     agent_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     agent_max_steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    agent_bulk_max_concurrent_threads: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
     agent_retry_max_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
     agent_retry_initial_wait_seconds: Mapped[float | None] = mapped_column(
         Float, nullable=True

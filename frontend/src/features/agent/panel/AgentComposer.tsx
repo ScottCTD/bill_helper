@@ -1,9 +1,11 @@
 import type { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, KeyboardEvent, RefObject } from "react";
-import { FileText, Paperclip, SendHorizontal, Square, X } from "lucide-react";
+import { CircleHelp, FileText, Paperclip, SendHorizontal, Square, X } from "lucide-react";
 
 import { cn } from "../../../lib/utils";
 import { Button } from "../../../components/ui/button";
+import { Switch } from "../../../components/ui/switch";
 import { Textarea } from "../../../components/ui/textarea";
+import { Tooltip } from "../../../components/ui/tooltip";
 import type { DraftAttachmentPreview } from "./types";
 
 interface AgentComposerProps {
@@ -18,8 +20,12 @@ interface AgentComposerProps {
   isMutating: boolean;
   isRunInFlight: boolean;
   isSendingMessage: boolean;
+  isBulkMode: boolean;
+  isBulkLaunching: boolean;
   isInterruptPending: boolean;
+  bulkModeHelpText: string;
   actionError: string | null;
+  onBulkModeChange: (checked: boolean) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onDragEnter: (event: DragEvent<HTMLFormElement>) => void;
   onDragOver: (event: DragEvent<HTMLFormElement>) => void;
@@ -45,8 +51,12 @@ export function AgentComposer(props: AgentComposerProps) {
     isMutating,
     isRunInFlight,
     isSendingMessage,
+    isBulkMode,
+    isBulkLaunching,
     isInterruptPending,
+    bulkModeHelpText,
     actionError,
+    onBulkModeChange,
     onSubmit,
     onDragEnter,
     onDragOver,
@@ -58,6 +68,11 @@ export function AgentComposer(props: AgentComposerProps) {
     onFileSelection,
     onStopRun
   } = props;
+  const showStopButton = !isBulkMode && isRunInFlight;
+  const submitLabel = isBulkMode ? (isBulkLaunching ? "Starting..." : "Start Bulk") : isSendingMessage ? "Sending..." : "Send";
+  const composerPlaceholder = isBulkMode
+    ? "Enter one shared prompt. Each attached file will start its own fresh thread."
+    : "Ask a question or ask the agent to propose entries/tags/entities...";
 
   return (
     <form
@@ -117,7 +132,7 @@ export function AgentComposer(props: AgentComposerProps) {
         <Textarea
           ref={composerTextareaRef}
           className="agent-composer-textarea border-none shadow-none focus-visible:ring-0"
-          placeholder="Ask a question or ask the agent to propose entries/tags/entities..."
+          placeholder={composerPlaceholder}
           value={draftMessage}
           onChange={onMessageChange}
           onKeyDown={onComposerKeyDown}
@@ -135,19 +150,43 @@ export function AgentComposer(props: AgentComposerProps) {
             className="sr-only"
             tabIndex={-1}
           />
-          <Button type="button" variant="ghost" size="sm" className="agent-composer-attach" onClick={() => fileInputRef.current?.click()}>
-            <Paperclip className="h-4 w-4" />
-            Add Attachments
-          </Button>
+          <div className="agent-composer-secondary-actions">
+            <Button type="button" variant="ghost" size="sm" className="agent-composer-attach" onClick={() => fileInputRef.current?.click()}>
+              <Paperclip className="h-4 w-4" />
+              Add Attachments
+            </Button>
 
-          {isRunInFlight ? (
-            <Button type="button" size="sm" variant="destructive" disabled={isInterruptPending} className="agent-composer-send" onClick={onStopRun}>
+            <label className="agent-composer-bulk-toggle">
+              <Switch
+                checked={isBulkMode}
+                onCheckedChange={onBulkModeChange}
+                disabled={isMutating || isSendingMessage || isBulkLaunching || isInterruptPending}
+                aria-label="Bulk mode"
+              />
+              <span className="agent-composer-bulk-toggle-label">Bulk mode</span>
+              <Tooltip content={bulkModeHelpText}>
+                <button type="button" className="agent-composer-bulk-tooltip-trigger" aria-label="Bulk mode help">
+                  <CircleHelp className="h-3.5 w-3.5 text-muted-foreground/80" aria-hidden="true" />
+                </button>
+              </Tooltip>
+            </label>
+          </div>
+
+          {showStopButton ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              disabled={isInterruptPending}
+              className="agent-composer-send"
+              onClick={onStopRun}
+            >
               {isInterruptPending ? "Stopping..." : "Stop"}
               <Square className="h-3.5 w-3.5" />
             </Button>
           ) : (
-            <Button type="submit" size="sm" disabled={isMutating} className="agent-composer-send">
-              {isSendingMessage ? "Sending..." : "Send"}
+            <Button type="submit" size="sm" disabled={isMutating || isBulkLaunching} className="agent-composer-send">
+              {submitLabel}
               <SendHorizontal className="h-4 w-4" />
             </Button>
           )}

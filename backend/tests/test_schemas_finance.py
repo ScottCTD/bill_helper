@@ -16,10 +16,12 @@ def test_runtime_settings_update_normalizes_currency_and_agent_model() -> None:
         default_currency_code="cad",
         dashboard_currency_code="usd",
         agent_model="  openai/gpt-4.1-mini  ",
+        agent_bulk_max_concurrent_threads=6,
     )
     assert payload.default_currency_code == "CAD"
     assert payload.dashboard_currency_code == "USD"
     assert payload.agent_model == "openai/gpt-4.1-mini"
+    assert payload.agent_bulk_max_concurrent_threads == 6
 
 
 def test_runtime_settings_update_normalizes_user_memory_items() -> None:

@@ -13,6 +13,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from backend.config import ensure_env_file_variables_loaded
 from backend.services.agent.error_policy import recoverable_result
 
 
@@ -334,6 +335,7 @@ def _ordered_tool_calls(tool_calls_by_index: dict[int, dict[str, Any]]) -> list[
 def validate_litellm_environment(*, model_name: str) -> tuple[bool, list[str], str]:
     normalized_model = (model_name or "").strip() or "openrouter/qwen/qwen3.5-27b"
     provider_name = _provider_name_for_model(normalized_model)
+    ensure_env_file_variables_loaded()
     try:
         validation = litellm.validate_environment(
             model=normalized_model,
@@ -381,6 +383,7 @@ class LiteLLMModelClient:
         base_url: str | None = None,
         api_key: str | None = None,
     ) -> None:
+        ensure_env_file_variables_loaded()
         self._model_name = (model_name or "").strip() or "openrouter/qwen/qwen3.5-27b"
         self._tools = tools
         self._retry_max_attempts = max(1, retry_max_attempts)

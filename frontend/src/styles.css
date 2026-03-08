@@ -1949,8 +1949,97 @@
     @apply gap-1.5 text-muted-foreground hover:text-foreground;
   }
 
+  .agent-composer-secondary-actions {
+    @apply flex items-center gap-2;
+  }
+
+  .agent-composer-bulk-toggle {
+    @apply inline-flex items-center gap-2 rounded-full px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground;
+  }
+
+  .agent-composer-bulk-toggle-label {
+    @apply whitespace-nowrap;
+  }
+
+  .agent-composer-bulk-tooltip-trigger {
+    @apply inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+
   .agent-composer-send {
-    @apply gap-1.5;
+    @apply ml-auto gap-1.5;
+  }
+
+  .tooltip-root {
+    @apply relative inline-flex;
+  }
+
+  .tooltip-content {
+    @apply pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden w-64 -translate-x-1/2 rounded-xl border border-slate-200/80 bg-white/95 px-3 py-2 text-left text-xs leading-5 text-slate-700 shadow-[0_10px_30px_hsl(220_22%_20%_/_0.14)] backdrop-blur-md;
+  }
+
+  .tooltip-content-open {
+    @apply block;
+  }
+
+  .notification-viewport {
+    @apply pointer-events-none fixed right-4 top-4 z-[100] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2;
+  }
+
+  .notification-toast {
+    @apply pointer-events-auto grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-[1.25rem] border bg-white/[0.88] px-4 py-3 text-sm text-slate-900 shadow-[0_12px_40px_hsl(220_25%_18%_/_0.16)] backdrop-blur-xl;
+    animation: notification-toast-enter 220ms ease-out;
+  }
+
+  .notification-toast-info {
+    @apply border-slate-200/80;
+  }
+
+  .notification-toast-success {
+    @apply border-emerald-200/80 bg-emerald-50/[0.88];
+  }
+
+  .notification-toast-error {
+    @apply border-rose-200/80 bg-rose-50/90;
+  }
+
+  .notification-toast-icon {
+    @apply mt-0.5 text-slate-500;
+  }
+
+  .notification-toast-success .notification-toast-icon {
+    @apply text-emerald-600;
+  }
+
+  .notification-toast-error .notification-toast-icon {
+    @apply text-rose-600;
+  }
+
+  .notification-toast-copy {
+    @apply min-w-0;
+  }
+
+  .notification-toast-title {
+    @apply truncate text-sm font-semibold leading-5 text-slate-950;
+  }
+
+  .notification-toast-description {
+    @apply mt-0.5 text-xs leading-5 text-slate-600;
+  }
+
+  .notification-toast-dismiss {
+    @apply mt-0.5 !h-6 !w-6 rounded-full text-slate-500 hover:bg-white/70 hover:text-slate-900;
+  }
+
+  @keyframes notification-toast-enter {
+    from {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.98);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   .agent-draft-attachments {
