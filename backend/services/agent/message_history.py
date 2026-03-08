@@ -369,6 +369,7 @@ def build_llm_messages(
     *,
     current_user_message_id: str | None = None,
     model_name: str | None = None,
+    surface: str = "app",
 ) -> list[dict[str, Any]]:
     settings = resolve_runtime_settings(db)
     include_pdf_page_images = _model_supports_vision(model_name or settings.agent_model)
@@ -403,6 +404,7 @@ def build_llm_messages(
                     entity_category_context=_build_entity_category_context(db),
                     user_memory=settings.user_memory,
                     current_timezone=get_settings().current_user_timezone,
+                    response_surface=surface,
                 )
             ),
         }

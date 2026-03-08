@@ -125,6 +125,54 @@ def test_run_includes_context_tokens(client, monkeypatch):
     assert run_response.json()["context_tokens"] == 321
 
 
+def test_send_message_persists_telegram_surface_and_formats_terminal_reply(client, monkeypatch):
+    captured_messages: list[list[dict]] = []
+
+    def model(messages):
+        captured_messages.append(messages)
+        return {
+            "role": "assistant",
+            "content": "## Summary\n**Done**\n[Receipt](https://example.com/receipt)",
+        }
+
+    patch_model(monkeypatch, model)
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Summarize this", surface="telegram")
+
+    assert run["status"] == "completed"
+    assert run["surface"] == "telegram"
+    assert run["terminal_assistant_reply"] == "Summary\nDone\nReceipt (https://example.com/receipt)"
+    assert captured_messages
+
+    system_message = captured_messages[-1][0]
+    system_content = str(system_message.get("content", ""))
+    assert "Current response surface: telegram" in system_content
+    assert "Avoid Markdown-heavy formatting, tables, and fenced code blocks." in system_content
+
+    run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
+    run_response.raise_for_status()
+    payload = run_response.json()
+    assert payload["surface"] == "telegram"
+    assert payload["terminal_assistant_reply"] == "Summary\nDone\nReceipt (https://example.com/receipt)"
+
+
+def test_get_run_surface_override_formats_terminal_reply_for_telegram(client, monkeypatch):
+    patch_model(
+        monkeypatch,
+        lambda _messages: {"role": "assistant", "content": "**Bold** response"},
+    )
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "hello")
+
+    run_response = client.get(f"/api/v1/agent/runs/{run['id']}", params={"surface": "telegram"})
+    run_response.raise_for_status()
+    payload = run_response.json()
+    assert payload["surface"] == "app"
+    assert payload["terminal_assistant_reply"] == "Bold response"
+
+
 def test_thread_detail_uses_persisted_context_tokens_for_idle_thread(client, monkeypatch):
     monkeypatch.setattr(
         "backend.services.agent.runtime.calculate_context_tokens",
@@ -734,6 +782,16 @@ def test_system_prompt_renders_jinja_template_without_leaking_placeholders():
     assert "## Current User Context" in prompt
     assert "- User Timezone: America/Vancouver" in prompt
     assert "- Current date: 2026-02-10" in prompt
+
+
+def test_system_prompt_adds_telegram_surface_guidance():
+    from backend.services.agent.prompts import SystemPromptContext, system_prompt
+
+    prompt = system_prompt(SystemPromptContext(response_surface="telegram"))
+
+    assert "### Response Surface" in prompt
+    assert "Current response surface: telegram" in prompt
+    assert "Avoid Markdown-heavy formatting, tables, and fenced code blocks." in prompt
 
 
 def test_system_prompt_includes_user_memory_when_present():
@@ -1509,6 +1567,32 @@ def test_stream_message_allows_explicit_model_selection(client, monkeypatch):
     assert detail["configured_model_name"] == "bedrock/us.anthropic.claude-sonnet-4-6"
     assert detail["runs"][0]["status"] == "completed"
     assert detail["runs"][0]["model_name"] == "openai/gpt-4.1-mini"
+
+
+def test_stream_message_endpoint_persists_telegram_surface(client, monkeypatch):
+    from backend.services.agent import runtime
+
+    def stream_model(_messages, _db, **_kwargs):
+        yield {
+            "type": "done",
+            "message": {
+                "role": "assistant",
+                "content": "**Hello** from stream",
+                "tool_calls": [],
+            },
+        }
+
+    monkeypatch.setattr(runtime, "call_model_stream", stream_model)
+
+    thread = create_thread(client)
+    events = collect_sse_events(client, thread["id"], "say hello", surface="telegram")
+    run_id = next(event["run_id"] for event in events if event.get("type") == "run_event")
+
+    run_response = client.get(f"/api/v1/agent/runs/{run_id}")
+    run_response.raise_for_status()
+    payload = run_response.json()
+    assert payload["surface"] == "telegram"
+    assert payload["terminal_assistant_reply"] == "Hello from stream"
 
 
 def test_stream_rename_thread_tool_updates_title_before_final_assistant_turn(client, monkeypatch):

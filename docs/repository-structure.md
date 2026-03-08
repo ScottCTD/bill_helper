@@ -11,6 +11,7 @@
 - `uv.lock`: locked Python dependency graph for `uv`.
 - `alembic.ini`: Alembic runtime/logging configuration.
 - `ios/`: SwiftUI iOS MVP workspace containing the app shell target, shared mobile core sources, feature surfaces, `ios/docs/` client notes, and focused API/unit tests.
+- `telegram/`: top-level Telegram transport package with `telegram/README.md`, `telegram/docs/` implementation notes, config, PTB application/handler wiring, the `telegram/ptb.py` import-collision shim/re-export for `python-telegram-bot`, polling/webhook intake adapters, file/reply helpers, and targeted tests for the bot integration surface.
 
 ## Migration Layer (`/alembic`)
 
@@ -44,6 +45,7 @@
 - `versions/0026_entry_groups_v2.py`: replaces link-derived groups with first-class typed groups and membership rows, migrates compatible legacy linked components, and removes `entries.group_id` plus `entry_links`.
 - `versions/0027_add_agent_bulk_concurrency_setting.py`: adds persisted Bulk mode concurrency control to runtime settings (`agent_bulk_max_concurrent_threads`).
 - `versions/0028_add_available_agent_models_to_runtime_settings.py`: adds persisted ordered runtime model-list overrides (`runtime_settings.available_agent_models`).
+- `versions/0029_add_agent_run_surface.py`: adds persisted run surface hints for Telegram-aware agent execution and reply reads.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)

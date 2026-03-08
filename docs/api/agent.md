@@ -86,6 +86,7 @@ Form fields:
 
 - `content` (optional if files are present)
 - `model_name` (optional explicit model selection; must match one of the `available_agent_models` returned by `GET /settings`)
+- `surface` (`app` by default; `telegram` enables Telegram-safe prompt and reply shaping)
 - `files` (0..N image or PDF attachments)
 
 Behavior:
@@ -116,6 +117,12 @@ Authorization: admin principal only.
 
 Content type: `multipart/form-data`
 
+Form fields:
+
+- `content` (optional if files are present)
+- `surface` (`app` by default; `telegram` enables Telegram-safe prompt and reply shaping)
+- `files` (0..N image or PDF attachments)
+
 Behavior:
 
 - uses the same validation and persistence rules as the non-stream endpoint
@@ -140,6 +147,7 @@ Usage notes:
 - when cache metadata is present, prompt-side pricing uses LiteLLM's cache-aware rates but remains exposed through the existing `input_cost_usd` and `total_cost_usd` fields
 - retries after partial streamed text suppress already-emitted prefixes
 - `reasoning_delta` is transient live stream output; the durable record remains the later persisted `run_event` with `event_type=reasoning_update`
+- Telegram transport clients typically send `surface=telegram` here and later read `GET /agent/runs/{run_id}?surface=telegram` to retrieve the same run's Telegram-safe terminal reply.
 - expand a streamed compact tool row through `GET /agent/tool-calls/{tool_call_id}` when full arguments or results are needed
 
 ## Runs And Tool Calls
@@ -150,9 +158,15 @@ Get a run snapshot. Response: `AgentRunRead`
 
 Authorization: admin principal only.
 
+Optional query params:
+
+- `surface` (`app` or `telegram`) to override terminal-reply formatting for this read only
+
 Returned payload includes:
 
 - lifecycle metadata
+- `surface` (persisted execution surface for the run)
+- `terminal_assistant_reply` (latest terminal assistant reply formatted for the requested surface; defaults to the run's persisted surface)
 - full tool calls (`has_full_payload=true`)
 - change items (legacy unsupported persisted change rows are omitted)
 - usage counters

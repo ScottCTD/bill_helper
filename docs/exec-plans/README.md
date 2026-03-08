@@ -14,3 +14,7 @@ This directory is for volatile work-tracking docs, not for stable system referen
 - When work lands, update the canonical docs in the stable `docs/` tree.
 - Do not leave stable behavior documented only in an execution plan.
 - Package READMEs and `AGENTS.md` should link here when work tracking is needed; they should not absorb plan content.
+
+## Recent Archived Plans
+
+- `completed/2026-03-08_telegram_bot_todo.md`: archived Telegram integration implementation plan.

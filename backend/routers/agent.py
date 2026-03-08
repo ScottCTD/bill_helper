@@ -4,8 +4,9 @@ import json
 from collections.abc import Iterator
 from pathlib import Path
 from threading import Thread
+from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, load_only, selectinload
@@ -68,6 +69,8 @@ router = APIRouter(
     dependencies=[Depends(require_admin_principal)],
 )
 
+AgentSurface = Literal["app", "telegram"]
+
 
 def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:
     threads = list(db.scalars(select(AgentThread).order_by(AgentThread.updated_at.desc())))
@@ -126,6 +129,7 @@ async def _create_user_message_run_or_503(
     thread_id: str,
     content: str,
     files: list[UploadFile],
+    surface: AgentSurface,
     db: Session,
     model_name: str | None,
 ) -> AgentRun:
@@ -137,6 +141,7 @@ async def _create_user_message_run_or_503(
             upload_root=_agent_upload_root(),
             db=db,
             model_name=model_name,
+            surface=surface,
         )
     except AgentRuntimeUnavailable as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
@@ -204,6 +209,7 @@ def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThr
         .options(
             selectinload(AgentThread.messages).selectinload(AgentMessage.attachments),
             selectinload(AgentThread.runs).selectinload(AgentRun.events),
+            selectinload(AgentThread.runs).selectinload(AgentRun.assistant_message),
             selectinload(AgentThread.runs)
             .selectinload(AgentRun.tool_calls)
             .options(
@@ -244,6 +250,7 @@ async def send_thread_message(
     thread_id: str,
     content: str = Form(default=""),
     model_name: str | None = Form(default=None),
+    surface: AgentSurface = Form(default="app"),
     files: list[UploadFile] = File(default_factory=list),
     db: Session = Depends(get_db),
 ) -> AgentRunRead:
@@ -251,6 +258,7 @@ async def send_thread_message(
         thread_id=thread_id,
         content=content,
         files=files,
+        surface=surface,
         db=db,
         model_name=model_name,
     )
@@ -267,6 +275,7 @@ async def send_thread_message_stream(
     thread_id: str,
     content: str = Form(default=""),
     model_name: str | None = Form(default=None),
+    surface: AgentSurface = Form(default="app"),
     files: list[UploadFile] = File(default_factory=list),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
@@ -274,6 +283,7 @@ async def send_thread_message_stream(
         thread_id=thread_id,
         content=content,
         files=files,
+        surface=surface,
         db=db,
         model_name=model_name,
     )
@@ -307,11 +317,16 @@ async def send_thread_message_stream(
 
 
 @router.get("/runs/{run_id}", response_model=AgentRunRead)
-def get_run(run_id: str, db: Session = Depends(get_db)) -> AgentRunRead:
+def get_run(
+    run_id: str,
+    surface: AgentSurface | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> AgentRunRead:
     run = db.scalar(
         select(AgentRun)
         .where(AgentRun.id == run_id)
         .options(
+            selectinload(AgentRun.assistant_message),
             selectinload(AgentRun.events),
             selectinload(AgentRun.tool_calls),
             selectinload(AgentRun.change_items).selectinload(AgentChangeItem.review_actions),
@@ -319,7 +334,7 @@ def get_run(run_id: str, db: Session = Depends(get_db)) -> AgentRunRead:
     )
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
-    return run_to_schema(run)
+    return run_to_schema(run, surface=surface)
 
 
 @router.get("/tool-calls/{tool_call_id}", response_model=AgentToolCallRead)

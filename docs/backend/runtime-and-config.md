@@ -16,6 +16,8 @@
 - App factory + ASGI app: `backend/main.py`
 - Backend run command: `uv run bill-helper-api`
 - Health endpoint: `GET /healthz`
+- Telegram polling entry point: `uv run python -m telegram.polling`
+- Telegram webhook entry point: `uv run python -m telegram.webhook`
 
 ## Configuration (`backend/config.py`)
 
@@ -70,6 +72,15 @@ Behavior notes:
 - runtime behavior consumers should read through `backend/services/runtime_settings.py`
 - FastAPI app construction is factory-driven via `create_app()`
 - `backend.main` launches uvicorn in factory mode (`backend.main:create_app`) to avoid import-time bootstrap coupling
+
+## Telegram Transport Config (`telegram/config.py`)
+
+- Telegram settings use `TELEGRAM_*` env names with `BILL_HELPER_TELEGRAM_*` aliases also accepted.
+- The Telegram adapter reads the same env cascade as the backend: working-tree `.env`, then `~/.config/bill-helper/.env`, then real environment variables.
+- Key settings: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_API_BASE_URL`, `TELEGRAM_BACKEND_BASE_URL`, `TELEGRAM_BACKEND_AUTH_TOKEN`, `TELEGRAM_BACKEND_AUTH_HEADERS`, `TELEGRAM_DATA_DIR`, and `TELEGRAM_STATE_PATH`.
+- Default Telegram data dir is `{SHARED_DATA_DIR}/telegram`; default state path is `{data_dir}/chat_state.json`.
+- `TELEGRAM_BACKEND_AUTH_HEADERS` must decode to a JSON object; if it already provides `Authorization`, that header is preserved instead of synthesizing a bearer token from `TELEGRAM_BACKEND_AUTH_TOKEN`.
+- `telegram.config.get_settings()` is cached with `lru_cache`, mirroring the backend settings access pattern.
 
 ## Database Layer (`backend/database.py`)
 

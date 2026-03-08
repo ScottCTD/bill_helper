@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from backend.enums_agent import is_supported_agent_change_type
@@ -29,6 +30,32 @@ from backend.services.agent.pricing import calculate_usage_costs
 
 
 logger = logging.getLogger(__name__)
+
+
+_MARKDOWN_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+_MARKDOWN_HEADING_PATTERN = re.compile(r"^#{1,6}\s*", re.MULTILINE)
+_MARKDOWN_BLOCKQUOTE_PATTERN = re.compile(r"^\s*>\s?", re.MULTILINE)
+_MARKDOWN_FENCE_PATTERN = re.compile(r"```(?:[a-zA-Z0-9_+.-]+)?\n?|```")
+
+
+def _format_terminal_assistant_reply(content: str | None, *, surface: str) -> str | None:
+    if content is None:
+        return None
+    if surface != "telegram":
+        return content
+
+    formatted = _MARKDOWN_LINK_PATTERN.sub(r"\1 (\2)", content)
+    formatted = _MARKDOWN_HEADING_PATTERN.sub("", formatted)
+    formatted = _MARKDOWN_BLOCKQUOTE_PATTERN.sub("", formatted)
+    formatted = _MARKDOWN_FENCE_PATTERN.sub("", formatted)
+    formatted = (
+        formatted.replace("**", "")
+        .replace("__", "")
+        .replace("~~", "")
+        .replace("`", "")
+    )
+    formatted = re.sub(r"\n{3,}", "\n\n", formatted).strip()
+    return formatted or None
 
 
 def attachment_to_schema(attachment: AgentMessageAttachment, *, api_prefix: str) -> AgentMessageAttachmentRead:
@@ -162,7 +189,12 @@ def _serializable_change_items(run: AgentRun) -> list[AgentChangeItem]:
     return supported_items
 
 
-def run_to_schema(run: AgentRun, *, include_tool_payload: bool = True) -> AgentRunRead:
+def run_to_schema(
+    run: AgentRun,
+    *,
+    include_tool_payload: bool = True,
+    surface: str | None = None,
+) -> AgentRunRead:
     costs = calculate_usage_costs(
         model_name=run.model_name,
         input_tokens=run.input_tokens,
@@ -170,13 +202,20 @@ def run_to_schema(run: AgentRun, *, include_tool_payload: bool = True) -> AgentR
         cache_read_tokens=run.cache_read_tokens,
         cache_write_tokens=run.cache_write_tokens,
     )
+    reply_surface = surface or run.surface or "app"
+    assistant_content = run.assistant_message.content_markdown if run.assistant_message is not None else None
     return AgentRunRead(
         id=run.id,
         thread_id=run.thread_id,
         user_message_id=run.user_message_id,
         assistant_message_id=run.assistant_message_id,
+        terminal_assistant_reply=_format_terminal_assistant_reply(
+            assistant_content,
+            surface=reply_surface,
+        ),
         status=run.status,
         model_name=run.model_name,
+        surface=run.surface,
         context_tokens=run.context_tokens,
         input_tokens=run.input_tokens,
         output_tokens=run.output_tokens,

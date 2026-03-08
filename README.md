@@ -14,6 +14,7 @@ The goal is an all-in-one place to view and analyze personal finances — a cent
 - Real-time token streaming with persisted per-tool lifecycle events
 - Live thread usage metrics, including current context-window size and cumulative token/cost totals
 - Image and PDF attachment support (bank statements, receipts)
+- Telegram private-chat transport with PTB-powered commands, uploads, and reply delivery
 - Provider-agnostic model routing via LiteLLM (OpenAI, Anthropic, Google, OpenRouter, etc.)
 
 **Finance Tracking**
@@ -81,7 +82,7 @@ AWS_BEARER_TOKEN_BEDROCK=ABSK...          # default model uses Bedrock bearer-to
 # BILL_HELPER_AGENT_BASE_URL=https://api.example.com/v1
 ```
 
-See `.env.example` for all available variables. Configuration cascades: real env vars → `.env` in CWD → `~/.config/bill-helper/.env` → defaults. See `docs/adr/0003-xdg-shared-config-and-data.md` for the full design.
+See `.env.example` plus `docs/development.md` for the current variable set, including Telegram transport settings. Configuration cascades: real env vars → `.env` in CWD → `~/.config/bill-helper/.env` → defaults. See `docs/adr/0003-xdg-shared-config-and-data.md` for the full design.
 
 The app boots fine without any credentials — the agent chat simply returns a configuration error until a valid provider key is set.
 
@@ -104,6 +105,8 @@ This starts both backend and frontend, applies pending migrations, and opens:
 - **API docs**: http://localhost:8000/docs
 
 Press `Ctrl+C` to stop both services.
+
+For local Telegram bot polling/webhook development, see [docs/development.md](docs/development.md). For package-local Telegram module notes, see [telegram/README.md](telegram/README.md).
 
 ## How the Agent Works
 
@@ -148,6 +151,7 @@ frontend/                 # React + Vite application
   src/features/           # Feature modules (agent, accounts, properties)
   src/pages/              # Route pages
 ios/                      # SwiftUI iOS MVP shell, shared mobile core, and API tests
+telegram/                 # PTB-based Telegram transport, package-local docs, entrypoints, and tests
 alembic/                  # Database migrations
 scripts/                  # Dev and seed scripts
 docs/                     # Extended documentation
