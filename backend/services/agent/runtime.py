@@ -32,7 +32,6 @@ from backend.services.agent.runtime_state import (
     PreparedToolCall,
     apply_usage_totals_to_run as _apply_usage_totals_to_run,
     cancel_incomplete_tool_calls as _cancel_incomplete_tool_calls,
-    emit_run_event as _emit_run_event,
     ensure_run_started_event as _ensure_run_started_event,
     events_after_sequence as _events_after_sequence,
     extract_reasoning_from_tool_result as _extract_reasoning_from_tool_result,
@@ -54,6 +53,7 @@ from backend.services.agent.run_orchestrator import (
     RunLoopOutcome,
     run_agent_loop,
 )
+from backend.services.agent.serializers import stream_run_event_to_payload
 from backend.services.agent.tool_args import INTERMEDIATE_UPDATE_TOOL_NAME
 from backend.services.agent.tool_runtime import build_openai_tool_schemas, execute_tool
 from backend.services.agent.tool_types import ToolContext, ToolExecutionStatus
@@ -344,7 +344,7 @@ class _RuntimeRunLoopAdapterBase(AgentRunLoopAdapter[PreparedToolCall]):
         return self._max_steps
 
     def _event_payload(self, event_row: AgentRunEvent) -> dict[str, Any] | None:
-        return _emit_run_event(self.run, event_row)
+        return stream_run_event_to_payload(self.run, event_row)
 
     def _event_payloads(self, event_rows: list[AgentRunEvent]) -> list[dict[str, Any]]:
         payloads: list[dict[str, Any]] = []
@@ -583,7 +583,7 @@ class _RuntimeStreamRunLoopAdapter(_RuntimeRunLoopAdapterBase):
             self._last_emitted_sequence,
             event_row.sequence_index,
         )
-        return _emit_run_event(self.run, event_row)
+        return stream_run_event_to_payload(self.run, event_row)
 
     def on_stopped(self) -> list[dict[str, Any]]:
         return self._event_payloads(
@@ -732,12 +732,12 @@ def run_existing_agent_run_stream(db: Session, run_id: str) -> Iterator[dict[str
         if resolution.run is None:
             return
         for event_row in resolution.run.events:
-            yield _emit_run_event(resolution.run, event_row)
+            yield stream_run_event_to_payload(resolution.run, event_row)
         return
     if resolution.state == "failed_missing_thread":
         if resolution.run is None or resolution.terminal_event is None:
             return
-        yield _emit_run_event(resolution.run, resolution.terminal_event)
+        yield stream_run_event_to_payload(resolution.run, resolution.terminal_event)
         return
 
     if resolution.run is None or resolution.thread is None:  # pragma: no cover - defensive
