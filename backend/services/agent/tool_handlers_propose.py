@@ -4,13 +4,12 @@ from copy import deepcopy
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import func, or_, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select
 
 from backend.enums_agent import AgentChangeStatus, AgentChangeType
 from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
-from backend.models_finance import Account, AccountSnapshot, Entry, EntryGroup, EntryGroupMember, Tag
-from backend.models_agent import AgentChangeItem, AgentRun
+from backend.models_finance import Entry, EntryGroup, EntryGroupMember
+from backend.models_agent import AgentChangeItem
 from backend.services.agent.change_contracts import (
     ChildGroupMemberTargetPayload,
     CreateAccountPayload as ProposeCreateAccountArgs,
@@ -27,10 +26,8 @@ from backend.services.agent.change_contracts import (
     DeleteTagPayload as ProposeDeleteTagArgs,
     EntryGroupMemberTargetPayload,
     EntryReferencePayload,
-    EntrySelectorPayload,
     GroupMemberTargetPayload,
     GroupReferencePayload,
-    UpdateAccountPatchPayload as AccountPatchArgs,
     UpdateAccountPayload as ProposeUpdateAccountArgs,
     UpdateEntityPayload as ProposeUpdateEntityArgs,
     UpdateEntryPatchPayload as EntryPatchArgs,
@@ -42,14 +39,6 @@ from backend.services.agent.change_contracts import (
     parse_group_member_target_payload,
     validate_patch_map_paths,
 )
-from backend.services.agent.entry_references import (
-    entry_id_ambiguity_details,
-    entry_public_id,
-    entry_selector_from_entry,
-    entry_selector_to_json,
-    find_entries_by_public_id_prefix,
-    find_entries_by_selector,
-)
 from backend.services.agent.group_references import (
     find_groups_by_id,
     group_detail_public_record,
@@ -57,213 +46,56 @@ from backend.services.agent.group_references import (
     group_owner_condition,
     group_public_id,
 )
+from backend.services.agent.entry_references import entry_id_ambiguity_details, find_entries_by_public_id_prefix
+from backend.services.agent.proposals.catalog import (
+    propose_create_account,
+    propose_create_entity,
+    propose_create_tag,
+    propose_delete_account,
+    propose_delete_entity,
+    propose_delete_tag,
+    propose_update_account,
+    propose_update_entity,
+    propose_update_tag,
+)
+from backend.services.agent.proposals.common import (
+    create_change_item,
+    pending_proposals_for_thread,
+    proposal_result,
+    proposal_short_id,
+    resolve_pending_proposal_by_id,
+    resolve_proposal_by_id,
+    runtime_current_user_id,
+)
+from backend.services.agent.proposals.entries import (
+    entry_preview_from_proposal,
+    match_existing_entry_or_error,
+    match_single_entry_reference_or_error,
+    normalized_entry_reference_payload,
+    normalize_update_entry_patch_for_payload,
+    proposal_payload_from_create_entry_args,
+    propose_create_entry,
+    propose_delete_entry,
+    propose_update_entry,
+    resolve_entry_proposal_reference_or_error,
+    validate_create_entry_entity_references,
+    validate_update_entry_entity_patch,
+)
 from backend.services.agent.proposal_patching import apply_patch_map_to_payload
-from backend.services.agent.proposal_metadata import proposal_metadata_for_change_type
 from backend.services.agent.tool_args import (
     ProposeUpdateGroupMembershipArgs,
     RemovePendingProposalArgs,
     UpdatePendingProposalArgs,
 )
-from backend.services.accounts import find_account_by_name
 from backend.services.agent.tool_handlers_read import (
-    entry_ambiguity_details,
     entry_to_public_record,
     error_result,
     format_lines,
 )
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
-from backend.services.entities import (
-    ACCOUNT_CATEGORY_DETAIL,
-    find_entity_by_name,
-    is_account_entity,
-)
+from backend.services.entities import ACCOUNT_CATEGORY_DETAIL
 from backend.services.groups import build_group_graph, build_group_summary, group_tree_options
-from backend.services.runtime_settings import resolve_runtime_settings
-from backend.services.taxonomy import get_single_term_name_map
-from backend.services.users import ensure_current_user
-from backend.validation.finance_names import normalize_entity_category, normalize_entity_name
-
-
-def proposal_short_id(item_id: str) -> str:
-    return item_id[:8]
-
-
-def proposal_result(summary: str, *, preview: dict[str, Any], item: AgentChangeItem) -> ToolExecutionResult:
-    output_json = {
-        "status": "OK",
-        "summary": summary,
-        "item_status": item.status.value,
-        "proposal_id": item.id,
-        "proposal_short_id": proposal_short_id(item.id),
-        "preview": preview,
-    }
-    return ToolExecutionResult(
-        output_text=format_lines(
-            [
-                "OK",
-                f"summary: {summary}",
-                f"status: {item.status.value}",
-                f"proposal_id: {item.id}",
-                f"proposal_short_id: {proposal_short_id(item.id)}",
-                f"preview: {preview}",
-            ]
-        ),
-        output_json=output_json,
-        status=ToolExecutionStatus.OK,
-    )
-
-
-def account_payload_record(account: Account) -> dict[str, Any]:
-    return {
-        "name": account.name,
-        "currency_code": account.currency_code,
-        "is_active": account.is_active,
-        "markdown_body": account.markdown_body,
-    }
-
-
-def create_change_item(
-    context: ToolContext,
-    *,
-    change_type: AgentChangeType,
-    payload: dict[str, Any],
-    rationale_text: str,
-) -> AgentChangeItem:
-    item = AgentChangeItem(
-        run_id=context.run_id,
-        change_type=change_type,
-        payload_json=payload,
-        rationale_text=rationale_text,
-        status=AgentChangeStatus.PENDING_REVIEW,
-    )
-    context.db.add(item)
-    context.db.flush()
-    return item
-
-
-def _reference_details(
-    *,
-    entry_id: str | None,
-    selector: EntrySelectorPayload | None,
-) -> dict[str, Any]:
-    details: dict[str, Any] = {}
-    if entry_id is not None:
-        details["entry_id"] = entry_id
-    if selector is not None:
-        details["selector"] = entry_selector_to_json(selector)
-    return details
-
-
-def _find_entries_for_reference(
-    context: ToolContext,
-    *,
-    entry_id: str | None,
-    selector: EntrySelectorPayload | None,
-) -> list[Entry]:
-    id_matches = (
-        find_entries_by_public_id_prefix(context.db, entry_id)
-        if entry_id is not None
-        else None
-    )
-    selector_matches = (
-        find_entries_by_selector(context.db, selector)
-        if selector is not None
-        else None
-    )
-    if id_matches is None:
-        return selector_matches or []
-    if selector_matches is None:
-        return id_matches
-    if {entry.id for entry in id_matches} != {entry.id for entry in selector_matches}:
-        raise ValueError(
-            "entry_id and selector must identify the same entry candidates"
-        )
-    return id_matches
-
-
-def _match_single_entry_reference_or_error(
-    context: ToolContext,
-    *,
-    entry_id: str | None,
-    selector: EntrySelectorPayload | None,
-) -> Entry | ToolExecutionResult:
-    try:
-        matches = _find_entries_for_reference(
-            context,
-            entry_id=entry_id,
-            selector=selector,
-        )
-    except ValueError as exc:
-        return error_result(
-            "conflicting entry reference",
-            details={
-                **_reference_details(entry_id=entry_id, selector=selector),
-                "reason": str(exc),
-            },
-        )
-    if not matches:
-        return error_result(
-            "no entry matched reference",
-            details=_reference_details(entry_id=entry_id, selector=selector),
-        )
-    if len(matches) > 1:
-        details = _reference_details(entry_id=entry_id, selector=selector)
-        if entry_id is not None:
-            details.update(entry_id_ambiguity_details(matches, entry_id=entry_id))
-            return error_result(
-                "ambiguous entry_id matched multiple entries; retry with one of the candidate ids",
-                details=details,
-            )
-        return error_result(
-            "ambiguous selector matched multiple entries; ask the user to clarify",
-            details={
-                **details,
-                **entry_ambiguity_details(matches),
-            },
-        )
-    return matches[0]
-
-
-def _raise_if_entry_reference_error(result: Entry | ToolExecutionResult) -> Entry:
-    if isinstance(result, ToolExecutionResult):
-        raise ValueError(str(result.output_json.get("summary", "invalid entry reference")))
-    return result
-
-
-def _normalized_entry_reference_payload(
-    context: ToolContext,
-    *,
-    entry_id: str | None,
-    selector: EntrySelectorPayload | None,
-) -> dict[str, Any]:
-    matched_entry = _raise_if_entry_reference_error(
-        _match_single_entry_reference_or_error(
-            context,
-            entry_id=entry_id,
-            selector=selector,
-        )
-    )
-    return {
-        "entry_id": matched_entry.id,
-        "selector": entry_selector_from_entry(matched_entry),
-        "target": entry_to_public_record(matched_entry),
-    }
-
-
-def _match_existing_entry_or_error(
-    context: ToolContext,
-    *,
-    entry_id: str,
-) -> Entry | ToolExecutionResult:
-    matches = find_entries_by_public_id_prefix(context.db, entry_id)
-    if not matches:
-        return error_result("no entry matched entry_id", details={"entry_id": entry_id})
-    if len(matches) > 1:
-        return error_result(
-            "ambiguous entry_id matched multiple entries; retry with one of the candidate ids",
-            details=entry_id_ambiguity_details(matches, entry_id=entry_id),
-        )
-    return matches[0]
+from backend.validation.finance_names import normalize_entity_category
 
 
 def _resolve_group_proposal_reference_or_error(
@@ -291,159 +123,6 @@ def _resolve_group_proposal_reference_or_error(
     return item
 
 
-def _resolve_entry_proposal_reference_or_error(
-    context: ToolContext,
-    *,
-    proposal_id: str,
-    expected_statuses: set[AgentChangeStatus] | None = None,
-) -> AgentChangeItem | ToolExecutionResult:
-    try:
-        item = resolve_proposal_by_id(context, proposal_id, detail_label="thread proposals")
-    except ValueError as exc:
-        return error_result("invalid proposal id", details=str(exc))
-    if item is None:
-        return error_result("proposal not found", details={"proposal_id": proposal_id})
-    if item.change_type != AgentChangeType.CREATE_ENTRY:
-        return error_result(
-            "proposal_id does not reference a create_entry proposal",
-            details={"proposal_id": proposal_id, "change_type": item.change_type.value},
-        )
-    if expected_statuses is not None and item.status not in expected_statuses:
-        return error_result(
-            "entry proposal is not in a usable status",
-            details={"proposal_id": item.id, "status": item.status.value},
-        )
-    return item
-
-
-def pending_proposals_for_thread(context: ToolContext) -> list[AgentChangeItem]:
-    return proposals_for_thread(context, statuses={AgentChangeStatus.PENDING_REVIEW})
-
-
-def proposals_for_thread(
-    context: ToolContext,
-    *,
-    statuses: set[AgentChangeStatus] | None = None,
-) -> list[AgentChangeItem]:
-    thread_id = context.db.scalar(select(AgentRun.thread_id).where(AgentRun.id == context.run_id))
-    if thread_id is None:
-        return []
-    conditions = [AgentRun.thread_id == thread_id]
-    if statuses is not None:
-        conditions.append(AgentChangeItem.status.in_(sorted(statuses, key=lambda value: value.value)))
-    return list(
-        context.db.scalars(
-            select(AgentChangeItem)
-            .join(AgentRun, AgentRun.id == AgentChangeItem.run_id)
-            .where(*conditions)
-            .order_by(AgentChangeItem.created_at.asc())
-        )
-    )
-
-
-def normalized_pending_create_entity_root_names(
-    context: ToolContext,
-    *,
-    exclude_item_id: str | None = None,
-) -> set[str]:
-    names: set[str] = set()
-    for item in pending_proposals_for_thread(context):
-        if exclude_item_id is not None and item.id == exclude_item_id:
-            continue
-        if item.change_type not in {
-            AgentChangeType.CREATE_ENTITY,
-            AgentChangeType.CREATE_ACCOUNT,
-        }:
-            continue
-        raw_name = item.payload_json.get("name")
-        if not isinstance(raw_name, str):
-            continue
-        normalized = normalize_entity_name(raw_name)
-        if normalized:
-            names.add(normalized.lower())
-    return names
-
-
-def has_pending_create_entity_root_proposal(
-    context: ToolContext,
-    entity_name: str,
-    *,
-    exclude_item_id: str | None = None,
-) -> bool:
-    normalized = normalize_entity_name(entity_name)
-    if not normalized:
-        return False
-    return normalized.lower() in normalized_pending_create_entity_root_names(
-        context,
-        exclude_item_id=exclude_item_id,
-    )
-
-
-def validate_proposed_entity_reference(context: ToolContext, entity_name: str) -> None:
-    if find_entity_by_name(context.db, entity_name) is not None:
-        return
-    if has_pending_create_entity_root_proposal(context, entity_name):
-        return
-    raise ValueError(
-        f"entity not found: '{entity_name}'. Use an existing entity or propose_create_entity "
-        "or propose_create_account for it in the current thread first."
-    )
-
-
-def validate_create_entry_entity_references(
-    context: ToolContext,
-    *,
-    from_entity: str,
-    to_entity: str,
-) -> None:
-    validate_proposed_entity_reference(context, from_entity)
-    validate_proposed_entity_reference(context, to_entity)
-
-
-def validate_update_entry_entity_patch(context: ToolContext, patch: EntryPatchArgs) -> None:
-    if "from_entity" in patch.model_fields_set and patch.from_entity is not None:
-        validate_proposed_entity_reference(context, patch.from_entity)
-    if "to_entity" in patch.model_fields_set and patch.to_entity is not None:
-        validate_proposed_entity_reference(context, patch.to_entity)
-
-
-def resolve_pending_proposal_by_id(context: ToolContext, proposal_id: str) -> AgentChangeItem | None:
-    return resolve_proposal_by_id(
-        context,
-        proposal_id,
-        items=pending_proposals_for_thread(context),
-        detail_label="pending proposals",
-    )
-
-
-def resolve_proposal_by_id(
-    context: ToolContext,
-    proposal_id: str,
-    *,
-    items: list[AgentChangeItem] | None = None,
-    detail_label: str = "thread proposals",
-) -> AgentChangeItem | None:
-    proposal_items = proposals_for_thread(context) if items is None else items
-    if not proposal_items:
-        return None
-
-    exact = next((item for item in proposal_items if item.id.lower() == proposal_id.lower()), None)
-    if exact is not None:
-        return exact
-
-    matches = [item for item in proposal_items if item.id.lower().startswith(proposal_id.lower())]
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        example_ids = [item.id[:8] for item in matches[:5]]
-        raise ValueError(f"proposal_id '{proposal_id}' is ambiguous across {detail_label}: {example_ids}")
-    return None
-
-
-def runtime_current_user_id(context: ToolContext) -> str:
-    settings = resolve_runtime_settings(context.db)
-    current_user = ensure_current_user(context.db, settings.current_user_name)
-    return current_user.id
 
 
 def _find_groups_for_reference(context: ToolContext, *, group_id: str) -> list[EntryGroup]:
@@ -500,26 +179,6 @@ def _group_preview_from_proposal(item: AgentChangeItem) -> dict[str, Any]:
     }
 
 
-def _entry_preview_from_proposal(item: AgentChangeItem) -> dict[str, Any]:
-    payload = item.payload_json
-    return {
-        "source": "proposal",
-        "proposal_id": item.id,
-        "proposal_short_id": proposal_short_id(item.id),
-        "proposal_status": item.status.value,
-        "entry_id": payload.get("entry_id"),
-        "date": payload.get("date"),
-        "kind": payload.get("kind"),
-        "name": payload.get("name"),
-        "amount_minor": payload.get("amount_minor"),
-        "currency_code": payload.get("currency_code"),
-        "from_entity": payload.get("from_entity"),
-        "to_entity": payload.get("to_entity"),
-        "tags": payload.get("tags") or [],
-        "markdown_notes": payload.get("markdown_notes"),
-    }
-
-
 def _match_existing_group_or_error(
     context: ToolContext,
     *,
@@ -566,13 +225,13 @@ def _canonical_entry_ref_payload(
     expected_statuses: set[AgentChangeStatus] | None = None,
 ) -> tuple[dict[str, Any], Entry | None, AgentChangeItem | None] | ToolExecutionResult:
     if entry_ref.entry_id is not None:
-        entry = _match_existing_entry_or_error(context, entry_id=entry_ref.entry_id)
+        entry = match_existing_entry_or_error(context, entry_id=entry_ref.entry_id)
         if isinstance(entry, ToolExecutionResult):
             return entry
         return {"entry_id": entry.id}, entry, None
 
     assert entry_ref.create_entry_proposal_id is not None
-    proposal = _resolve_entry_proposal_reference_or_error(
+    proposal = resolve_entry_proposal_reference_or_error(
         context,
         proposal_id=entry_ref.create_entry_proposal_id,
         expected_statuses=expected_statuses,
@@ -655,14 +314,14 @@ def _resolved_group_member_target_preview(
             preview["source"] = "entry"
             return preview, entry.kind
 
-        proposal = _resolve_entry_proposal_reference_or_error(
+        proposal = resolve_entry_proposal_reference_or_error(
             context,
             proposal_id=target.entry_ref.create_entry_proposal_id or "",
             expected_statuses={AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED, AgentChangeStatus.APPLIED},
         )
         if isinstance(proposal, ToolExecutionResult):
             return proposal
-        preview = _entry_preview_from_proposal(proposal)
+        preview = entry_preview_from_proposal(proposal)
         raw_kind = proposal.payload_json.get("kind")
         entry_kind = EntryKind(str(raw_kind)) if isinstance(raw_kind, str) else None
         return preview, entry_kind
@@ -984,7 +643,7 @@ def _validate_group_member_remove_rules(
     target_child_group_id: str | None = None
 
     if isinstance(target, EntryGroupMemberTargetPayload):
-        entry = _match_existing_entry_or_error(context, entry_id=target.entry_ref.entry_id or "")
+        entry = match_existing_entry_or_error(context, entry_id=target.entry_ref.entry_id or "")
         if isinstance(entry, ToolExecutionResult):
             return entry
         canonical_target = {"target_type": "entry", "entry_ref": {"entry_id": entry.id}}
@@ -1083,19 +742,6 @@ def _build_remove_group_membership_payload(
         "member_preview": member_preview,
     }
     return payload, group_preview, member_preview
-
-
-def proposal_payload_from_create_entry_args(context: ToolContext, args: ProposeCreateEntryArgs) -> dict[str, Any]:
-    settings = resolve_runtime_settings(context.db)
-    payload = args.model_dump(mode="json")
-    currency_code = str(payload.get("currency_code") or settings.default_currency_code).strip().upper()
-    payload["currency_code"] = currency_code
-    return payload
-
-
-def normalize_update_entry_patch_for_payload(patch_model: EntryPatchArgs) -> dict[str, Any]:
-    return patch_model.model_dump(mode="json", exclude_unset=True)
-
 TChangePayload = TypeVar("TChangePayload", bound=BaseModel)
 
 
@@ -1231,7 +877,7 @@ def normalize_payload_for_change_type(
             model_type=ProposeUpdateEntryArgs,
         )
         validate_update_entry_entity_patch(context, parsed.patch)
-        normalized_payload = _normalized_entry_reference_payload(
+        normalized_payload = normalized_entry_reference_payload(
             context,
             entry_id=parsed.entry_id,
             selector=parsed.selector,
@@ -1247,7 +893,7 @@ def normalize_payload_for_change_type(
             },
             model_type=ProposeDeleteEntryArgs,
         )
-        return _normalized_entry_reference_payload(
+        return normalized_entry_reference_payload(
             context,
             entry_id=parsed.entry_id,
             selector=parsed.selector,
@@ -1320,326 +966,6 @@ def normalize_payload_for_change_type(
         normalized_payload, _group_preview, _member_preview = normalized
         return normalized_payload
     raise ValueError(f"unsupported proposal change type: {change_type.value}")
-
-
-def propose_create_tag(context: ToolContext, args: ProposeCreateTagArgs) -> ToolExecutionResult:
-    existing = context.db.scalar(select(Tag).where(Tag.name == args.name))
-    if existing is not None:
-        return error_result("tag already exists", details={"name": args.name})
-
-    payload = {"name": args.name, "type": args.type}
-    item = create_change_item(
-        context,
-        change_type=AgentChangeType.CREATE_TAG,
-        payload=payload,
-        rationale_text="Agent proposed creating a tag.",
-    )
-    return proposal_result("proposed tag creation", preview=payload, item=item)
-
-
-def propose_update_tag(context: ToolContext, args: ProposeUpdateTagArgs) -> ToolExecutionResult:
-    existing = context.db.scalar(select(Tag).where(Tag.name == args.name))
-    if existing is None:
-        return error_result("tag not found", details={"name": args.name})
-
-    patch = args.patch.model_dump(exclude_unset=True)
-    target_name = patch.get("name")
-    if target_name is not None:
-        duplicate = context.db.scalar(select(Tag).where(Tag.name == target_name))
-        if duplicate is not None and duplicate.id != existing.id:
-            return error_result("target tag name already exists", details={"name": target_name})
-
-    type_by_tag_id = get_single_term_name_map(
-        context.db,
-        taxonomy_key="tag_type",
-        subject_type="tag",
-        subject_ids=[existing.id],
-    )
-    payload = {
-        "name": args.name,
-        "patch": patch,
-        "current": {
-            "name": existing.name,
-            "type": type_by_tag_id.get(str(existing.id)),
-        },
-    }
-    item = create_change_item(
-        context,
-        change_type=AgentChangeType.UPDATE_TAG,
-        payload=payload,
-        rationale_text="Agent proposed updating a tag.",
-    )
-    preview = {"name": args.name, "patch": patch}
-    return proposal_result("proposed tag update", preview=preview, item=item)
-
-
-def propose_delete_tag(context: ToolContext, args: ProposeDeleteTagArgs) -> ToolExecutionResult:
-    existing = context.db.scalar(select(Tag).where(Tag.name == args.name))
-    if existing is None:
-        return error_result("tag not found", details={"name": args.name})
-
-    referenced_entry_count = int(
-        context.db.scalar(
-            select(func.count(Entry.id))
-            .join(Entry.tags)
-            .where(Tag.id == existing.id, Entry.is_deleted.is_(False))
-        )
-        or 0
-    )
-    sample_entries = list(
-        context.db.scalars(
-            select(Entry)
-            .join(Entry.tags)
-            .where(Tag.id == existing.id, Entry.is_deleted.is_(False))
-            .options(selectinload(Entry.tags))
-            .order_by(Entry.occurred_at.desc(), Entry.created_at.desc())
-            .limit(5)
-        )
-    ) if referenced_entry_count > 0 else []
-
-    payload = {"name": args.name}
-    item = create_change_item(
-        context,
-        change_type=AgentChangeType.DELETE_TAG,
-        payload=payload,
-        rationale_text="Agent proposed deleting a tag.",
-    )
-    preview = {
-        "name": args.name,
-        "referenced_entry_count": referenced_entry_count,
-        "sample_entries": [entry_to_public_record(entry) for entry in sample_entries],
-    }
-    return proposal_result("proposed tag deletion", preview=preview, item=item)
-
-
-def propose_create_entity(context: ToolContext, args: ProposeCreateEntityArgs) -> ToolExecutionResult:
-    if normalize_entity_category(args.category) == "account":
-        return error_result(ACCOUNT_CATEGORY_DETAIL)
-    existing = find_entity_by_name(context.db, args.name)
-    if existing is not None:
-        return error_result("entity already exists", details={"name": args.name})
-    if has_pending_create_entity_root_proposal(context, args.name):
-        return error_result(
-            "entity or account already has a pending creation proposal in this thread",
-            details={"name": args.name},
-        )
-
-    payload = {"name": args.name, "category": args.category}
-    item = create_change_item(
-        context,
-        change_type=AgentChangeType.CREATE_ENTITY,
-        payload=payload,
-        rationale_text="Agent proposed creating an entity.",
-    )
-    return proposal_result("proposed entity creation", preview=payload, item=item)
-
-
-def propose_update_entity(context: ToolContext, args: ProposeUpdateEntityArgs) -> ToolExecutionResult:
-    existing = find_entity_by_name(context.db, args.name)
-    if existing is None:
-        return error_result("entity not found", details={"name": args.name})
-    if is_account_entity(existing):
-        return error_result(
-            "account-backed entities must be managed from Accounts",
-            details={"name": args.name},
-        )
-
-    patch = args.patch.model_dump(exclude_unset=True)
-    if normalize_entity_category(patch.get("category")) == "account":
-        return error_result(ACCOUNT_CATEGORY_DETAIL)
-    target_name = patch.get("name")
-    if target_name is not None:
-        duplicate = find_entity_by_name(context.db, target_name)
-        if duplicate is not None and duplicate.id != existing.id:
-            return error_result("target entity name already exists", details={"name": target_name})
-
-    payload = {
-        "name": args.name,
-        "patch": patch,
-        "current": {
-            "name": existing.name,
-            "category": existing.category,
-        },
-    }
-    item = create_change_item(
-        context,
-        change_type=AgentChangeType.UPDATE_ENTITY,
-        payload=payload,
-        rationale_text="Agent proposed updating an entity.",
-    )
-    preview = {"name": args.name, "patch": patch}
-    return proposal_result("proposed entity update", preview=preview, item=item)
-
-
-def propose_delete_entity(context: ToolContext, args: ProposeDeleteEntityArgs) -> ToolExecutionResult:
-    existing = find_entity_by_name(context.db, args.name)
-    if existing is None:
-        return error_result("entity not found", details={"name": args.name})
-    if is_account_entity(existing):
-        return error_result(
-            "account-backed entities must be managed from Accounts",
-            details={"name": args.name},
-        )
-
-    impacted_entries = list(
-        context.db.scalars(
-            select(Entry)
-            .where(
-                Entry.is_deleted.is_(False),
-                or_(Entry.from_entity_id == existing.id, Entry.to_entity_id == existing.id),
-            )
-            .options(selectinload(Entry.tags))
-            .order_by(Entry.occurred_at.desc(), Entry.created_at.desc())
-        )
-    )
-    impact_records = [entry_to_public_record(entry) for entry in impacted_entries]
-    impacted_account_count = int(
-        context.db.scalar(select(func.count(Account.id)).where(Account.id == existing.id))
-        or 0
-    )
-
-    payload = {
-        "name": args.name,
-        "impact_preview": {
-            "entry_count": len(impact_records),
-            "account_count": impacted_account_count,
-            "entries": impact_records,
-        },
-    }
-    item = create_change_item(
-        context,
-        change_type=AgentChangeType.DELETE_ENTITY,
-        payload=payload,
-        rationale_text="Agent proposed deleting an entity.",
-    )
-    preview = {
-        "name": args.name,
-        "impacted_entries": len(impact_records),
-        "impacted_accounts": impacted_account_count,
-    }
-    return proposal_result("proposed entity deletion", preview=preview, item=item)
-
-
-def propose_create_account(context: ToolContext, args: ProposeCreateAccountArgs) -> ToolExecutionResult:
-    if find_entity_by_name(context.db, args.name) is not None:
-        return error_result("entity name already exists", details={"name": args.name})
-    if has_pending_create_entity_root_proposal(context, args.name):
-        return error_result(
-            "entity or account already has a pending creation proposal in this thread",
-            details={"name": args.name},
-        )
-
-    payload = args.model_dump(mode="json")
-    item = create_change_item(
-        context,
-        change_type=AgentChangeType.CREATE_ACCOUNT,
-        payload=payload,
-        rationale_text="Agent proposed creating an account.",
-    )
-    return proposal_result("proposed account creation", preview=payload, item=item)
-
-
-def propose_update_account(context: ToolContext, args: ProposeUpdateAccountArgs) -> ToolExecutionResult:
-    existing = find_account_by_name(context.db, args.name)
-    if existing is None:
-        return error_result("account not found", details={"name": args.name})
-
-    patch = args.patch.model_dump(exclude_unset=True)
-    target_name = patch.get("name")
-    if target_name is not None:
-        duplicate = find_entity_by_name(context.db, target_name)
-        if duplicate is not None and duplicate.id != existing.id:
-            return error_result("target account name already exists", details={"name": target_name})
-
-    payload = {
-        "name": args.name,
-        "patch": patch,
-        "current": account_payload_record(existing),
-    }
-    item = create_change_item(
-        context,
-        change_type=AgentChangeType.UPDATE_ACCOUNT,
-        payload=payload,
-        rationale_text="Agent proposed updating an account.",
-    )
-    preview = {"name": args.name, "patch": patch}
-    return proposal_result("proposed account update", preview=preview, item=item)
-
-
-def propose_delete_account(context: ToolContext, args: ProposeDeleteAccountArgs) -> ToolExecutionResult:
-    existing = find_account_by_name(context.db, args.name)
-    if existing is None:
-        return error_result("account not found", details={"name": args.name})
-
-    impacted_entry_count = int(
-        context.db.scalar(
-            select(func.count(Entry.id)).where(
-                Entry.is_deleted.is_(False),
-                or_(
-                    Entry.account_id == existing.id,
-                    Entry.from_entity_id == existing.id,
-                    Entry.to_entity_id == existing.id,
-                ),
-            )
-        )
-        or 0
-    )
-    snapshot_count = int(
-        context.db.scalar(select(func.count(AccountSnapshot.id)).where(AccountSnapshot.account_id == existing.id))
-        or 0
-    )
-    payload = {
-        "name": args.name,
-        "impact_preview": {
-            "entry_count": impacted_entry_count,
-            "snapshot_count": snapshot_count,
-            "current": account_payload_record(existing),
-        },
-    }
-    item = create_change_item(
-        context,
-        change_type=AgentChangeType.DELETE_ACCOUNT,
-        payload=payload,
-        rationale_text="Agent proposed deleting an account.",
-    )
-    preview = {
-        "name": args.name,
-        "impacted_entries": impacted_entry_count,
-        "snapshots": snapshot_count,
-    }
-    return proposal_result("proposed account deletion", preview=preview, item=item)
-
-
-def propose_create_entry(context: ToolContext, args: ProposeCreateEntryArgs) -> ToolExecutionResult:
-    try:
-        validate_create_entry_entity_references(
-            context,
-            from_entity=args.from_entity,
-            to_entity=args.to_entity,
-        )
-    except ValueError as exc:
-        return error_result(str(exc))
-
-    payload = proposal_payload_from_create_entry_args(context, args)
-    item = create_change_item(
-        context,
-        change_type=AgentChangeType.CREATE_ENTRY,
-        payload=payload,
-        rationale_text="Agent proposed creating an entry.",
-    )
-    preview = {
-        "date": payload["date"],
-        "kind": payload["kind"],
-        "name": payload["name"],
-        "amount_minor": payload["amount_minor"],
-        "currency_code": payload["currency_code"],
-        "from_entity": payload["from_entity"],
-        "to_entity": payload["to_entity"],
-        "tags": payload["tags"],
-    }
-    return proposal_result("proposed entry creation", preview=preview, item=item)
-
-
 def propose_create_group(context: ToolContext, args: ProposeCreateGroupArgs) -> ToolExecutionResult:
     conflict = _pending_create_group_conflict(
         context,
@@ -1786,73 +1112,6 @@ def propose_update_group_membership(
         "member": member_preview,
     }
     return proposal_result("proposed group membership removal", preview=preview, item=item)
-
-
-def propose_update_entry(context: ToolContext, args: ProposeUpdateEntryArgs) -> ToolExecutionResult:
-    matched_entry = _match_single_entry_reference_or_error(
-        context,
-        entry_id=args.entry_id,
-        selector=args.selector,
-    )
-    if isinstance(matched_entry, ToolExecutionResult):
-        return matched_entry
-
-    try:
-        validate_update_entry_entity_patch(context, args.patch)
-    except ValueError as exc:
-        return error_result(str(exc))
-
-    patch = args.patch.model_dump(exclude_unset=True)
-    if "date" in patch and patch["date"] is not None:
-        patch["date"] = patch["date"].isoformat()
-
-    payload = {
-        "entry_id": matched_entry.id,
-        "selector": entry_selector_from_entry(matched_entry),
-        "patch": patch,
-        "target": entry_to_public_record(matched_entry),
-    }
-    item = create_change_item(
-        context,
-        change_type=AgentChangeType.UPDATE_ENTRY,
-        payload=payload,
-        rationale_text="Agent proposed updating an entry.",
-    )
-    preview = {
-        "entry_id": entry_public_id(matched_entry.id),
-        "selector": payload["selector"],
-        "patch": patch,
-    }
-    return proposal_result("proposed entry update", preview=preview, item=item)
-
-
-def propose_delete_entry(context: ToolContext, args: ProposeDeleteEntryArgs) -> ToolExecutionResult:
-    matched_entry = _match_single_entry_reference_or_error(
-        context,
-        entry_id=args.entry_id,
-        selector=args.selector,
-    )
-    if isinstance(matched_entry, ToolExecutionResult):
-        return matched_entry
-    payload = {
-        "entry_id": matched_entry.id,
-        "selector": entry_selector_from_entry(matched_entry),
-        "target": entry_to_public_record(matched_entry),
-    }
-    item = create_change_item(
-        context,
-        change_type=AgentChangeType.DELETE_ENTRY,
-        payload=payload,
-        rationale_text="Agent proposed deleting an entry.",
-    )
-    preview = {
-        "entry_id": entry_public_id(matched_entry.id),
-        "selector": payload["selector"],
-        "target": payload["target"],
-    }
-    return proposal_result("proposed entry deletion", preview=preview, item=item)
-
-
 def update_pending_proposal(context: ToolContext, args: UpdatePendingProposalArgs) -> ToolExecutionResult:
     try:
         item = resolve_pending_proposal_by_id(context, args.proposal_id)
