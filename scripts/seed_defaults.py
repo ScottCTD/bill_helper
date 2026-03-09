@@ -197,7 +197,7 @@ def seed_user_memory(
     on_error: Literal["best_effort", "fail_fast"] = "best_effort",
 ) -> str | None:
     """Copy user_memory from the production DB into the given session's runtime_settings."""
-    from backend.models_finance import RuntimeSettings
+    from backend.models_settings import RuntimeSettings
 
     from backend.config import get_settings
 

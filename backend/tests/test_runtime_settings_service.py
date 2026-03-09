@@ -4,14 +4,14 @@ from unittest.mock import patch
 
 from backend.config import get_settings
 from backend.database import get_session_maker
-from backend.models_finance import RuntimeSettings
+from backend.models_settings import RuntimeSettings
+from backend.schemas_settings import RuntimeSettingsUpdate
 from backend.services.runtime_settings import (
     append_user_memory_items,
     build_runtime_settings_read,
     resolve_runtime_settings,
     update_runtime_settings_override,
 )
-from backend.schemas_finance import RuntimeSettingsUpdate
 
 
 def test_resolve_runtime_settings_applies_override_and_sanitization() -> None:

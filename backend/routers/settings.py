@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from backend.auth.contracts import RequestPrincipal
 from backend.auth.dependencies import get_or_create_current_principal, require_admin_principal
 from backend.database import get_db
-from backend.schemas_finance import RuntimeSettingsRead, RuntimeSettingsUpdate
+from backend.schemas_settings import RuntimeSettingsRead, RuntimeSettingsUpdate
 from backend.services.runtime_settings import build_runtime_settings_read, update_runtime_settings_override
 
 router = APIRouter(prefix="/settings", tags=["settings"])

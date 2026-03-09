@@ -31,6 +31,8 @@ REMOVED_FACADE_PATHS = {
     BACKEND_DIR / "schemas.py",
     BACKEND_DIR / "enums.py",
 }
+SETTINGS_MODEL_PATH = BACKEND_DIR / "models_settings.py"
+SETTINGS_SCHEMA_PATH = BACKEND_DIR / "schemas_settings.py"
 REMOVED_AGENT_TOOL_ARGS_MODULE = BACKEND_DIR / "services" / "agent" / "tool_args.py"
 AGENT_TOOL_ARGS_PACKAGE = BACKEND_DIR / "services" / "agent" / "tool_args"
 
@@ -47,6 +49,15 @@ def _assert_marker_module(path: Path) -> None:
         )
     ]
     assert not non_docstring_nodes, f"{path} should remain marker/docstring-only"
+
+
+def _defined_class_names(path: Path) -> set[str]:
+    module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    return {
+        node.name
+        for node in module.body
+        if isinstance(node, ast.ClassDef)
+    }
 
 
 def test_service_package_init_modules_are_marker_only() -> None:
@@ -117,7 +128,11 @@ def test_agent_tool_args_are_grouped_in_a_package() -> None:
 
 def test_schema_modules_do_not_import_service_modules() -> None:
     violations: list[str] = []
-    for path in (BACKEND_DIR / "schemas_agent.py", BACKEND_DIR / "schemas_finance.py"):
+    for path in (
+        BACKEND_DIR / "schemas_agent.py",
+        BACKEND_DIR / "schemas_finance.py",
+        SETTINGS_SCHEMA_PATH,
+    ):
         module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(module):
             if isinstance(node, ast.ImportFrom):
@@ -140,3 +155,24 @@ def test_schema_modules_do_not_import_service_modules() -> None:
                     "(extract shared validators into backend.validation)"
                 )
     assert not violations, "Schema modules must not depend on service modules:\n" + "\n".join(violations)
+
+
+def test_runtime_settings_contracts_are_split_from_finance_modules() -> None:
+    assert SETTINGS_MODEL_PATH.exists(), "Runtime settings ORM model should live in backend/models_settings.py"
+    assert SETTINGS_SCHEMA_PATH.exists(), "Runtime settings schemas should live in backend/schemas_settings.py"
+
+    finance_model_classes = _defined_class_names(BACKEND_DIR / "models_finance.py")
+    assert "RuntimeSettings" not in finance_model_classes, (
+        "Runtime settings ORM should stay outside backend/models_finance.py"
+    )
+
+    finance_schema_classes = _defined_class_names(BACKEND_DIR / "schemas_finance.py")
+    leaked_classes = {
+        "RuntimeSettingsOverridesRead",
+        "RuntimeSettingsRead",
+        "RuntimeSettingsUpdate",
+    } & finance_schema_classes
+    assert not leaked_classes, (
+        "Runtime settings schemas should stay outside backend/schemas_finance.py:\n"
+        + "\n".join(sorted(leaked_classes))
+    )

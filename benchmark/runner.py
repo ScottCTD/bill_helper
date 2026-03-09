@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.database import build_engine_for_url, build_session_maker
-from backend.schemas_finance import RuntimeSettingsUpdate
+from backend.schemas_settings import RuntimeSettingsUpdate
 from backend.services.agent.benchmark_interface import (
     BenchmarkAttachmentInput,
     BenchmarkCaseExecution,

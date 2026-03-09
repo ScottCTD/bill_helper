@@ -4,6 +4,7 @@
 
 - `backend/models_finance.py`: ledger, account, entity, tag, taxonomy, and entry models
 - `backend/models_agent.py`: thread, run, tool-call, change-item, and review models
+- `backend/models_settings.py`: runtime settings override model
 - `backend/models_shared.py`: shared timestamp and UUID defaults
 
 Core ledger models:
@@ -40,8 +41,9 @@ Agent models:
 
 ## Schemas
 
-- `backend/schemas_finance.py`: accounts, entries, groups, dashboard, and settings contracts
+- `backend/schemas_finance.py`: accounts, entries, groups, and dashboard contracts
 - `backend/schemas_agent.py`: thread, message, run, change-item, and review contracts
+- `backend/schemas_settings.py`: runtime settings request/response contracts
 
 Important read models:
 

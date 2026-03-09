@@ -161,6 +161,7 @@ def test_seed_defaults_seed_accounts_uses_entity_root_account_ids(tmp_path):
     from sqlalchemy.orm import sessionmaker
 
     import backend.models_finance  # noqa: F401
+    import backend.models_settings  # noqa: F401
     from backend.db_meta import Base
     from scripts import seed_defaults
 
