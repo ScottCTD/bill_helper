@@ -6,8 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.config import DEFAULT_AGENT_MODEL, get_settings
-from backend.models_finance import RuntimeSettings as RuntimeSettingsRow
-from backend.schemas_finance import RuntimeSettingsOverridesRead, RuntimeSettingsRead, RuntimeSettingsUpdate
+from backend.models_settings import RuntimeSettings as RuntimeSettingsRow
+from backend.schemas_settings import RuntimeSettingsOverridesRead, RuntimeSettingsRead, RuntimeSettingsUpdate
 from backend.services.agent.model_client import validate_litellm_environment
 from backend.validation.runtime_settings import (
     parse_agent_models_or_none,

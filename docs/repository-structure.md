@@ -60,9 +60,11 @@
 - `enums_agent.py`: agent run/review/message enums.
 - `models_finance.py`: ledger/account/entity/tag/taxonomy/entry ORM models.
 - `models_agent.py`: agent thread/run/tool-call/change/review ORM models.
+- `models_settings.py`: runtime settings ORM model and table mapping.
 - `models_shared.py`: shared model defaults (`utc_now`, `uuid_str`) used by both model domains.
-- `schemas_finance.py`: ledger/dashboard/settings request/response schemas.
+- `schemas_finance.py`: ledger/dashboard request/response schemas.
 - `schemas_agent.py`: agent thread/message/run/review request/response schemas.
+- `schemas_settings.py`: runtime settings request/response schemas.
 - `auth/`: request-principal contracts, explicit dev-session header parsing, and FastAPI auth dependencies.
 - `validation/`: neutral validation/normalization helpers shared by schemas, services, and tool-input models.
 - `main.py`: FastAPI app creation, routing, CORS, health check.
@@ -80,7 +82,7 @@
 - `groups.py`: first-class group CRUD, membership mutation, and derived direct-member graph reads.
 - `dashboard.py`: monthly analytics endpoint.
 - `agent.py`: append-only agent thread/message/run/review endpoints.
-- `settings.py`: runtime settings read/update endpoints for user overrides with env fallback where applicable and DB-backed list-form `user_memory`.
+- `settings.py`: runtime settings read/update endpoints backed by `models_settings.py` / `schemas_settings.py`, with env fallback where applicable and DB-backed list-form `user_memory`.
 - non-admin principal scope applies to owned-resource routes (`accounts`, `entries`, `users`, `groups`, `dashboard`).
 - shared dictionary mutation routes (`entities`, `tags`, `taxonomies` POST/PATCH, plus entity and tag DELETE) require admin principal.
 

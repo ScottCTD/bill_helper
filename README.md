@@ -146,8 +146,10 @@ backend/                  # FastAPI application
   services/agent/         # Agent runtime, tools, prompts, model client
   models_finance.py       # Ledger/account/taxonomy ORM models
   models_agent.py         # Agent run/review ORM models
-  schemas_finance.py      # Ledger/dashboard/settings request/response schemas
+  models_settings.py      # Runtime settings ORM model
+  schemas_finance.py      # Ledger/dashboard request/response schemas
   schemas_agent.py        # Agent thread/run/review request/response schemas
+  schemas_settings.py     # Runtime settings request/response schemas
 frontend/                 # React + Vite application
   src/features/agent/     # Agent workspace, timeline, and review feature
   src/features/           # Feature modules (agent, accounts, properties)
