@@ -412,8 +412,8 @@ Architecture quality baseline:
 
 Frontend agent modules:
 
-- coordinator: `frontend/src/features/agent/AgentPanel.tsx`
-- panel presentation + local hooks: `frontend/src/features/agent/panel/*`
+- render shell: `frontend/src/features/agent/AgentPanel.tsx`
+- panel controller + presentation + local hooks: `frontend/src/features/agent/panel/*`
 - run rendering: `frontend/src/features/agent/AgentRunBlock.tsx`
 - run activity derivation: `frontend/src/features/agent/activity.ts`
 - review modal and diff logic: `frontend/src/features/agent/review/*`
