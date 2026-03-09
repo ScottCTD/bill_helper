@@ -20,7 +20,7 @@ from backend.services.agent.change_contracts import (
     EntrySelectorPayload,
     GroupReferencePayload,
     UpdateGroupPayload,
-    validate_change_payload,
+    parse_change_payload as parse_change_payload_model,
     validate_patch_map_paths,
 )
 from backend.services.agent.entry_references import (
@@ -907,7 +907,6 @@ def proposal_payload_from_create_entry_args(context: ToolContext, args: ProposeC
 def normalize_update_entry_patch_for_payload(patch_model: EntryPatchArgs) -> dict[str, Any]:
     return patch_model.model_dump(mode="json", exclude_unset=True)
 
-
 TChangePayload = TypeVar("TChangePayload", bound=BaseModel)
 
 
@@ -917,7 +916,7 @@ def parse_change_payload(
     payload: dict[str, Any],
     model_type: type[TChangePayload],
 ) -> TChangePayload:
-    parsed = validate_change_payload(change_type, payload)
+    parsed = parse_change_payload_model(change_type, payload)
     if not isinstance(parsed, model_type):  # pragma: no cover - enum/model map guard
         raise ValueError(f"unexpected payload model for change type: {change_type.value}")
     return parsed
