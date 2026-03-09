@@ -142,6 +142,7 @@ def test_send_message_persists_telegram_surface_and_formats_terminal_reply(clien
 
     assert run["status"] == "completed"
     assert run["surface"] == "telegram"
+    assert run["reply_surface"] == "telegram"
     assert run["terminal_assistant_reply"] == "Summary\nDone\nReceipt (https://example.com/receipt)"
     assert captured_messages
 
@@ -154,6 +155,7 @@ def test_send_message_persists_telegram_surface_and_formats_terminal_reply(clien
     run_response.raise_for_status()
     payload = run_response.json()
     assert payload["surface"] == "telegram"
+    assert payload["reply_surface"] == "telegram"
     assert payload["terminal_assistant_reply"] == "Summary\nDone\nReceipt (https://example.com/receipt)"
 
 
@@ -170,6 +172,7 @@ def test_get_run_surface_override_formats_terminal_reply_for_telegram(client, mo
     run_response.raise_for_status()
     payload = run_response.json()
     assert payload["surface"] == "app"
+    assert payload["reply_surface"] == "telegram"
     assert payload["terminal_assistant_reply"] == "Bold response"
 
 
