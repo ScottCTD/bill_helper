@@ -40,17 +40,17 @@ from backend.services.agent.tool_args import (
     UpdatePendingProposalArgs,
 )
 from backend.services.agent.tool_handlers_memory import add_user_memory
-from backend.services.agent.tool_handlers_read import (
-    error_result,
+from backend.services.agent.tool_handlers_threads import rename_thread
+from backend.services.agent.read_tools.catalog import (
     list_accounts,
     list_entities,
-    list_entries,
-    list_groups,
-    list_proposals,
     list_tags,
-    send_intermediate_update,
 )
-from backend.services.agent.tool_handlers_threads import rename_thread
+from backend.services.agent.read_tools.entries import list_entries
+from backend.services.agent.read_tools.groups import list_groups
+from backend.services.agent.read_tools.progress import send_intermediate_update
+from backend.services.agent.read_tools.proposals import list_proposals
+from backend.services.agent.tool_results import error_result
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
 from backend.services.agent.proposals.catalog import (
     propose_create_account,

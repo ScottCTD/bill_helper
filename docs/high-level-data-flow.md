@@ -117,7 +117,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 - Agent services:
   - `backend/services/agent/runtime.py`
   - `backend/services/agent/tool_runtime.py`
-  - `backend/services/agent/tool_handlers_read.py`
+  - `backend/services/agent/read_tools/`
   - `backend/services/agent/proposals/`
   - `backend/services/agent/tool_args/`
   - `backend/services/agent/proposal_patching.py`

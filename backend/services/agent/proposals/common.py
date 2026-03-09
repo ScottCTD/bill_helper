@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from backend.enums_agent import AgentChangeStatus, AgentChangeType
 from backend.models_agent import AgentChangeItem, AgentRun
-from backend.services.agent.tool_handlers_read import format_lines
+from backend.services.agent.tool_results import format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.users import ensure_current_user

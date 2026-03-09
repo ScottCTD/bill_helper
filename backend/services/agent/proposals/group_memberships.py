@@ -19,6 +19,7 @@ from backend.services.agent.change_contracts import (
 )
 from backend.services.agent.entry_references import (
     entry_id_ambiguity_details,
+    entry_to_public_record,
     find_entries_by_public_id_prefix,
 )
 from backend.services.agent.proposals.common import (
@@ -44,7 +45,7 @@ from backend.services.agent.proposals.groups import (
     sorted_group_memberships,
 )
 from backend.services.agent.tool_args import ProposeUpdateGroupMembershipArgs
-from backend.services.agent.tool_handlers_read import entry_to_public_record, error_result
+from backend.services.agent.tool_results import error_result
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
 
 

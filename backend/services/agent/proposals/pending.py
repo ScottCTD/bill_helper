@@ -15,7 +15,7 @@ from backend.services.agent.proposals.groups import (
 )
 from backend.services.agent.proposals.normalization import normalize_payload_for_change_type
 from backend.services.agent.tool_args import RemovePendingProposalArgs, UpdatePendingProposalArgs
-from backend.services.agent.tool_handlers_read import error_result, format_lines
+from backend.services.agent.tool_results import error_result, format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 
 

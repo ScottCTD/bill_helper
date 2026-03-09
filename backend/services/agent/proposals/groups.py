@@ -26,7 +26,7 @@ from backend.services.agent.proposals.common import (
     resolve_proposal_by_id,
     runtime_current_user_id,
 )
-from backend.services.agent.tool_handlers_read import error_result
+from backend.services.agent.tool_results import error_result
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
 from backend.services.groups import build_group_summary
 

@@ -40,6 +40,11 @@ class EntryIdAmbiguityDetails(TypedDict):
     candidates: list[EntryPublicRecord]
 
 
+class EntrySelectorAmbiguityDetails(TypedDict):
+    candidate_count: int
+    candidates: list[EntryPublicRecord]
+
+
 def entry_public_id(entry_id: str, *, full: bool = False) -> str:
     normalized = str(entry_id)
     return normalized if full else normalized[:ENTRY_PUBLIC_ID_LENGTH]
@@ -151,6 +156,13 @@ def entry_id_ambiguity_details(entries: list[Entry], *, entry_id: str) -> EntryI
         "candidate_count": len(entries),
         "candidate_entry_ids": [entry.id for entry in entries],
         "candidates": [entry_to_public_record(entry, full_id=True) for entry in entries],
+    }
+
+
+def entry_ambiguity_details(entries: list[Entry]) -> EntrySelectorAmbiguityDetails:
+    return {
+        "candidate_count": len(entries),
+        "candidates": [entry_to_public_record(entry) for entry in entries],
     }
 
 

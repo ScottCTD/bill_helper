@@ -393,7 +393,7 @@ Backend agent modules:
 - `backend/services/agent/protocol_helpers.py`
 - `backend/services/agent/tool_args/`
 - `backend/services/agent/proposals/`
-- `backend/services/agent/tool_handlers_read.py`
+- `backend/services/agent/read_tools/`
 - `backend/services/agent/proposal_patching.py`
 - `backend/services/agent/tool_runtime.py`
 - `backend/services/agent/tools.py` (thin facade)
