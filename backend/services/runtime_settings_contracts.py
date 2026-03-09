@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -14,10 +15,27 @@ from backend.validation.runtime_settings import (
     validate_user_memory_size,
 )
 
+RuntimeSettingsPatchField = Literal[
+    "user_memory",
+    "default_currency_code",
+    "dashboard_currency_code",
+    "agent_model",
+    "available_agent_models",
+    "agent_max_steps",
+    "agent_bulk_max_concurrent_threads",
+    "agent_retry_max_attempts",
+    "agent_retry_initial_wait_seconds",
+    "agent_retry_max_wait_seconds",
+    "agent_retry_backoff_multiplier",
+    "agent_max_image_size_bytes",
+    "agent_max_images_per_message",
+    "agent_base_url",
+    "agent_api_key",
+]
 
-class RuntimeSettingsOverridesRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
 
+@dataclass(slots=True, frozen=True)
+class RuntimeSettingsOverridesView:
     user_memory: list[str] | None = None
     default_currency_code: str | None = None
     dashboard_currency_code: str | None = None
@@ -35,11 +53,10 @@ class RuntimeSettingsOverridesRead(BaseModel):
     agent_api_key_configured: bool = False
 
 
-class RuntimeSettingsRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+@dataclass(slots=True, frozen=True)
+class RuntimeSettingsView:
     current_user_name: str
-    user_memory: list[str] | None = None
+    user_memory: list[str] | None
     default_currency_code: str
     dashboard_currency_code: str
     agent_model: str
@@ -52,12 +69,12 @@ class RuntimeSettingsRead(BaseModel):
     agent_retry_backoff_multiplier: float
     agent_max_image_size_bytes: int
     agent_max_images_per_message: int
-    agent_base_url: str | None = None
-    agent_api_key_configured: bool = False
-    overrides: RuntimeSettingsOverridesRead
+    agent_base_url: str | None
+    agent_api_key_configured: bool
+    overrides: RuntimeSettingsOverridesView
 
 
-class RuntimeSettingsUpdate(BaseModel):
+class RuntimeSettingsPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     user_memory: list[str] | None = None
@@ -131,3 +148,6 @@ class RuntimeSettingsUpdate(BaseModel):
         if value is None:
             return None
         return validate_agent_api_key_or_none(str(value))
+
+    def includes(self, field: RuntimeSettingsPatchField) -> bool:
+        return field in self.model_fields_set

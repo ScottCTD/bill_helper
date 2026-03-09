@@ -5,13 +5,13 @@ from unittest.mock import patch
 from backend.config import get_settings
 from backend.database import get_session_maker
 from backend.models_settings import RuntimeSettings
-from backend.schemas_settings import RuntimeSettingsUpdate
 from backend.services.runtime_settings import (
     append_user_memory_items,
-    build_runtime_settings_read,
+    build_runtime_settings_view,
     resolve_runtime_settings,
     update_runtime_settings_override,
 )
+from backend.services.runtime_settings_contracts import RuntimeSettingsPatch
 
 
 def test_resolve_runtime_settings_applies_override_and_sanitization() -> None:
@@ -51,11 +51,11 @@ def test_build_runtime_settings_read_prefers_request_principal_name() -> None:
     try:
         update_runtime_settings_override(
             db,
-            RuntimeSettingsUpdate(agent_model="openai/gpt-4.1-mini"),
+            RuntimeSettingsPatch(agent_model="openai/gpt-4.1-mini"),
         )
         db.commit()
 
-        payload = build_runtime_settings_read(db, principal_name="alice")
+        payload = build_runtime_settings_view(db, principal_name="alice")
         assert payload.current_user_name == "alice"
         assert payload.agent_model == "openai/gpt-4.1-mini"
         assert payload.available_agent_models == [
@@ -99,7 +99,7 @@ def test_build_runtime_settings_read_reports_provider_credentials_without_custom
             "backend.services.runtime_settings.validate_litellm_environment",
             return_value=(True, [], get_settings().agent_model),
         ):
-            payload = build_runtime_settings_read(db)
+            payload = build_runtime_settings_view(db)
         assert payload.agent_api_key_configured is True
         assert payload.overrides.agent_api_key_configured is False
     finally:
@@ -112,7 +112,7 @@ def test_resolve_runtime_settings_uses_override_available_agent_models_and_keeps
     try:
         update_runtime_settings_override(
             db,
-            RuntimeSettingsUpdate(
+            RuntimeSettingsPatch(
                 agent_model="openai/gpt-4.1-mini",
                 available_agent_models=["bedrock/us.anthropic.claude-sonnet-4-6"],
             ),
@@ -120,7 +120,7 @@ def test_resolve_runtime_settings_uses_override_available_agent_models_and_keeps
         db.commit()
 
         resolved = resolve_runtime_settings(db)
-        payload = build_runtime_settings_read(db)
+        payload = build_runtime_settings_view(db)
 
         assert resolved.available_agent_models == [
             "bedrock/us.anthropic.claude-sonnet-4-6",
@@ -158,7 +158,7 @@ def test_append_user_memory_items_deduplicates_and_persists_items() -> None:
     try:
         update_runtime_settings_override(
             db,
-            RuntimeSettingsUpdate(user_memory=["Prefers terse answers."]),
+            RuntimeSettingsPatch(user_memory=["Prefers terse answers."]),
         )
         db.commit()
 
@@ -170,6 +170,6 @@ def test_append_user_memory_items_deduplicates_and_persists_items() -> None:
 
         assert added_items == ["Works in CAD."]
         assert all_items == ["Prefers terse answers.", "Works in CAD."]
-        assert build_runtime_settings_read(db).user_memory == all_items
+        assert build_runtime_settings_view(db).user_memory == all_items
     finally:
         db.close()

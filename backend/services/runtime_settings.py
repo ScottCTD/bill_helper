@@ -7,8 +7,12 @@ from sqlalchemy.orm import Session
 
 from backend.config import DEFAULT_AGENT_MODEL, get_settings
 from backend.models_settings import RuntimeSettings as RuntimeSettingsRow
-from backend.schemas_settings import RuntimeSettingsOverridesRead, RuntimeSettingsRead, RuntimeSettingsUpdate
 from backend.services.agent.model_client import validate_litellm_environment
+from backend.services.runtime_settings_contracts import (
+    RuntimeSettingsOverridesView,
+    RuntimeSettingsPatch,
+    RuntimeSettingsView,
+)
 from backend.validation.runtime_settings import (
     parse_agent_models_or_none,
     normalize_currency_code_or_none,
@@ -74,7 +78,7 @@ def _ensure_runtime_settings_override(db: Session) -> RuntimeSettingsRow:
 
 def update_runtime_settings_override(
     db: Session,
-    updates: RuntimeSettingsUpdate,
+    updates: RuntimeSettingsPatch,
 ) -> RuntimeSettingsRow:
     row = _ensure_runtime_settings_override(db)
     for field_name, value in updates.model_dump(exclude_unset=True).items():
@@ -267,18 +271,18 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
     )
 
 
-def build_runtime_settings_read(
+def build_runtime_settings_view(
     db: Session,
     *,
     principal_name: str | None = None,
-) -> RuntimeSettingsRead:
+) -> RuntimeSettingsView:
     override = get_runtime_settings_override(db)
     resolved = resolve_runtime_settings(db)
     has_provider_credentials, _, _ = validate_litellm_environment(
         model_name=resolved.agent_model
     )
 
-    return RuntimeSettingsRead(
+    return RuntimeSettingsView(
         current_user_name=normalize_text_or_none(principal_name) or resolved.current_user_name,
         user_memory=resolved.user_memory,
         default_currency_code=resolved.default_currency_code,
@@ -295,7 +299,7 @@ def build_runtime_settings_read(
         agent_max_images_per_message=resolved.agent_max_images_per_message,
         agent_base_url=resolved.agent_base_url,
         agent_api_key_configured=bool(resolved.agent_api_key) or has_provider_credentials,
-        overrides=RuntimeSettingsOverridesRead(
+        overrides=RuntimeSettingsOverridesView(
             user_memory=parse_user_memory_or_none(override.user_memory)
             if override
             else None,
