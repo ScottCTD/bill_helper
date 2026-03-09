@@ -28,6 +28,46 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class EntityRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entity_id: str | None = None
+    name: str | None = None
+
+    @model_validator(mode="after")
+    def validate_reference_present(self) -> EntityRef:
+        if self.entity_id is None and self.name is None:
+            raise ValueError("entity ref requires entity_id or name")
+        return self
+
+
+class EntityRefPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entity_id: str | None = None
+    name: str | None = None
+
+
+class UserRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str | None = None
+    name: str | None = None
+
+    @model_validator(mode="after")
+    def validate_reference_present(self) -> UserRef:
+        if self.user_id is None and self.name is None:
+            raise ValueError("user ref requires user_id or name")
+        return self
+
+
+class UserRefPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str | None = None
+    name: str | None = None
+
+
 class EntryCreateCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -37,12 +77,9 @@ class EntryCreateCommand(BaseModel):
     name: str
     amount_minor: int
     currency_code: str
-    from_entity_id: str | None = None
-    to_entity_id: str | None = None
-    owner_user_id: str | None = None
-    from_entity: str | None = None
-    to_entity: str | None = None
-    owner: str | None = None
+    from_ref: EntityRef | None = None
+    to_ref: EntityRef | None = None
+    owner_ref: UserRef | None = None
     markdown_body: str | None = None
     tags: list[str] = Field(default_factory=list)
     direct_group_id: str | None = None
@@ -64,12 +101,9 @@ class EntryUpdateCommand(BaseModel):
     name: str | None = None
     amount_minor: int | None = None
     currency_code: str | None = None
-    from_entity_id: str | None = None
-    to_entity_id: str | None = None
-    owner_user_id: str | None = None
-    from_entity: str | None = None
-    to_entity: str | None = None
-    owner: str | None = None
+    from_ref: EntityRefPatch | None = None
+    to_ref: EntityRefPatch | None = None
+    owner_ref: UserRefPatch | None = None
     markdown_body: str | None = None
     tags: list[str] | None = None
     direct_group_id: str | None = None
@@ -140,17 +174,19 @@ def _normalize_optional_user_name(name: str | None) -> str | None:
     return normalized or None
 
 
-def _resolve_entity_value(
+def _resolve_entity_ref(
     db: Session,
     *,
-    entity_id: str | None,
-    entity_name: str | None,
+    ref: EntityRef | EntityRefPatch | None,
     field_name: str,
 ) -> tuple[str | None, str | None]:
-    normalized_name = _normalize_optional_entity_name(entity_name)
+    if ref is None:
+        return None, None
 
-    if entity_id:
-        entity = db.get(Entity, entity_id)
+    normalized_name = _normalize_optional_entity_name(ref.name)
+
+    if ref.entity_id:
+        entity = db.get(Entity, ref.entity_id)
         if entity is None:
             raise PolicyViolation.not_found(f"{field_name} entity not found")
         if normalized_name is not None and entity.name.lower() != normalized_name.lower():
@@ -164,18 +200,20 @@ def _resolve_entity_value(
     return None, None
 
 
-def _resolve_user_value(
+def _resolve_user_ref(
     db: Session,
     *,
-    user_id: str | None,
-    user_name: str | None,
+    ref: UserRef | UserRefPatch | None,
     field_name: str,
     principal: RequestPrincipal,
 ) -> tuple[str | None, str | None]:
-    normalized_name = _normalize_optional_user_name(user_name)
+    if ref is None:
+        return None, None
 
-    if user_id:
-        user = load_user_for_principal(db, user_id=user_id, principal=principal)
+    normalized_name = _normalize_optional_user_name(ref.name)
+
+    if ref.user_id:
+        user = load_user_for_principal(db, user_id=ref.user_id, principal=principal)
         if normalized_name is not None and user.name.lower() != normalized_name.lower():
             raise PolicyViolation.bad_request(f"{field_name} user id and name do not match")
         return user.id, user.name
@@ -228,29 +266,24 @@ def create_entry_from_command(
     if command.account_id is not None:
         load_account_for_principal(db, account_id=command.account_id, principal=principal)
 
-    from_entity_id, from_entity_name = _resolve_entity_value(
+    from_entity_id, from_entity_name = _resolve_entity_ref(
         db,
-        entity_id=command.from_entity_id,
-        entity_name=command.from_entity,
+        ref=command.from_ref,
         field_name="from",
     )
-    to_entity_id, to_entity_name = _resolve_entity_value(
+    to_entity_id, to_entity_name = _resolve_entity_ref(
         db,
-        entity_id=command.to_entity_id,
-        entity_name=command.to_entity,
+        ref=command.to_ref,
         field_name="to",
     )
 
-    owner_user_id = command.owner_user_id
-    owner_name = _normalize_optional_user_name(command.owner)
-    if owner_user_id is None and owner_name is None:
+    if command.owner_ref is None:
         owner_user_id = principal.user_id
         owner_name = principal.user_name
     else:
-        owner_user_id, owner_name = _resolve_user_value(
+        owner_user_id, owner_name = _resolve_user_ref(
             db,
-            user_id=owner_user_id,
-            user_name=owner_name,
+            ref=command.owner_ref,
             field_name="owner",
             principal=principal,
         )
@@ -295,7 +328,10 @@ def update_entry_from_command(
     principal: RequestPrincipal,
 ) -> Entry:
     entry = _load_entry_for_mutation(db, entry_id=entry_id, principal=principal)
-    update_data = command.model_dump(exclude_unset=True)
+    update_data = command.model_dump(
+        exclude_unset=True,
+        exclude={"from_ref", "to_ref", "owner_ref"},
+    )
 
     tags = update_data.pop("tags", None)
     group_value = update_data.pop("direct_group_id", Ellipsis)
@@ -307,24 +343,28 @@ def update_entry_from_command(
     if "currency_code" in update_data and update_data["currency_code"] is not None:
         update_data["currency_code"] = update_data["currency_code"].upper()
 
-    for field_name in ("from", "to"):
-        id_field = f"{field_name}_entity_id"
-        name_field = field_name
-        if id_field in update_data or name_field in update_data:
-            resolved_id, resolved_name = _resolve_entity_value(
-                db,
-                entity_id=update_data.pop(id_field, None),
-                entity_name=update_data.pop(name_field, None),
-                field_name=field_name,
-            )
-            update_data[id_field] = resolved_id
-            update_data[name_field] = resolved_name
-
-    if "owner_user_id" in update_data or "owner" in update_data:
-        resolved_id, resolved_name = _resolve_user_value(
+    if "from_ref" in command.model_fields_set:
+        resolved_id, resolved_name = _resolve_entity_ref(
             db,
-            user_id=update_data.pop("owner_user_id", None),
-            user_name=update_data.pop("owner", None),
+            ref=command.from_ref,
+            field_name="from",
+        )
+        update_data["from_entity_id"] = resolved_id
+        update_data["from_entity"] = resolved_name
+
+    if "to_ref" in command.model_fields_set:
+        resolved_id, resolved_name = _resolve_entity_ref(
+            db,
+            ref=command.to_ref,
+            field_name="to",
+        )
+        update_data["to_entity_id"] = resolved_id
+        update_data["to_entity"] = resolved_name
+
+    if "owner_ref" in command.model_fields_set:
+        resolved_id, resolved_name = _resolve_user_ref(
+            db,
+            ref=command.owner_ref,
             field_name="owner",
             principal=principal,
         )

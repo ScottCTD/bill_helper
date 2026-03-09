@@ -22,7 +22,7 @@ This doc is the fast path for understanding how entries are created, edited, gro
 3. Request via `frontend/src/lib/api.ts` (`createEntry` or `updateEntry`).
 4. HTTP boundary in `backend/routers/entries.py` parses request models and maps service policy failures to HTTP responses.
 5. Typed entry workflow orchestration in `backend/services/entries.py`:
-   - entry create/update commands
+   - entry create/update commands with typed `EntityRef` / `UserRef` service refs
    - principal-scoped account/user/group loading
    - tag/entity/user normalization
    - direct-group membership assignment and validation

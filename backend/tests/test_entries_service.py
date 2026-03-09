@@ -10,6 +10,9 @@ from backend.enums_finance import EntryKind, GroupType
 from backend.models_finance import Account, Entity, EntryGroup, User
 from backend.services.crud_policy import PolicyViolation
 from backend.services.entries import (
+    EntityRef,
+    UserRefPatch,
+    UserRef,
     EntryCreateCommand,
     EntryUpdateCommand,
     create_entry_from_command,
@@ -69,6 +72,8 @@ def test_create_entry_from_command_assigns_tags_and_direct_group() -> None:
                 name="Hydro Bill",
                 amount_minor=1234,
                 currency_code="usd",
+                from_ref=EntityRef(name="Checking"),
+                owner_ref=UserRef(user_id=admin.id),
                 tags=["Food"],
                 direct_group_id=group.id,
             ),
@@ -78,6 +83,8 @@ def test_create_entry_from_command_assigns_tags_and_direct_group() -> None:
 
         assert entry.id is not None
         assert entry.owner_user_id == admin.id
+        assert entry.from_entity_id == account.id
+        assert entry.from_entity == "Checking"
         assert [tag.name for tag in entry.tags] == ["food"]
         assert entry.group_membership is not None
         assert entry.group_membership.entry_id == entry.id
@@ -114,7 +121,7 @@ def test_update_entry_from_command_uses_policy_violation_for_cross_principal_own
             update_entry_from_command(
                 db,
                 entry_id=entry.id,
-                command=EntryUpdateCommand(owner=admin.name),
+                command=EntryUpdateCommand(owner_ref=UserRefPatch(name=admin.name)),
                 principal=principal,
             )
 
