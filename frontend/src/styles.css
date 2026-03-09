@@ -380,6 +380,58 @@
     @apply shadow-sm;
   }
 
+  .settings-tab-list {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .settings-tab-button {
+    @apply rounded-full;
+  }
+
+  .settings-tab-active {
+    @apply shadow-sm;
+  }
+
+  .settings-reset-row {
+    @apply grid gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center;
+  }
+
+  .settings-reset-button {
+    @apply w-full shrink-0 whitespace-nowrap border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto;
+  }
+
+  .settings-toolbar {
+    @apply sticky top-0 z-20 grid gap-2 rounded-2xl border border-border/85 bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85;
+  }
+
+  .settings-toolbar-row {
+    @apply flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between;
+  }
+
+  .settings-toolbar-leading {
+    @apply flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4;
+  }
+
+  .settings-toolbar-heading {
+    @apply flex items-center;
+  }
+
+  .settings-toolbar-actions {
+    @apply flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between lg:justify-end;
+  }
+
+  .settings-toolbar-copy {
+    @apply grid gap-0.5;
+  }
+
+  .settings-toolbar-title {
+    @apply m-0 text-sm font-medium text-foreground;
+  }
+
+  .settings-toolbar-text {
+    @apply m-0 text-sm text-muted-foreground;
+  }
+
   .table-inline-form {
     @apply flex flex-wrap items-end gap-4 rounded-xl border border-border/75 bg-muted/20 p-3;
   }

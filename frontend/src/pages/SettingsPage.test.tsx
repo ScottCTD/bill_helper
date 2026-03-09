@@ -75,6 +75,7 @@ describe("SettingsPage", () => {
 
     expect(await screen.findByRole("tab", { name: "General" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Agent" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByText("Settings")).toBeInTheDocument();
     expect(screen.getByText("Ledger defaults")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
     expect(screen.getByText("All changes saved")).toBeInTheDocument();
@@ -91,7 +92,7 @@ describe("SettingsPage", () => {
 
     renderWithQueryClient(<SettingsPage />);
 
-    expect(await screen.findByText("Settings")).toBeInTheDocument();
+    await screen.findByRole("tab", { name: "General" });
     await openAgentTab();
     expect(screen.getByRole("switch", { name: "Use custom provider override" })).toHaveAttribute("aria-checked", "false");
     expect(screen.queryByRole("textbox", { name: "Custom API endpoint" })).not.toBeInTheDocument();

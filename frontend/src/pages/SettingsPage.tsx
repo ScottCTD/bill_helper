@@ -227,7 +227,6 @@ export function SettingsPage() {
     }
     return JSON.stringify(formState) !== JSON.stringify(initialState);
   }, [formState, initialState]);
-  const activeTabDefinition = SETTINGS_TABS.find((tab) => tab.id === activeTab) ?? SETTINGS_TABS[0];
 
   function submitSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -353,41 +352,44 @@ export function SettingsPage() {
 
   return (
     <div className="stack-lg">
-      <Card className="overflow-hidden">
-        <CardHeader className="relative gap-4 pb-4">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-muted/55 via-background to-secondary/45" />
-          <div className="relative grid gap-3">
-            <div>
-              <CardTitle>Settings</CardTitle>
-              <CardDescription>Configure defaults for entries, dashboard analytics, and agent runtime behavior.</CardDescription>
+      <div className="settings-toolbar">
+        <div className="settings-toolbar-row">
+          <div className="settings-toolbar-leading">
+            <div className="settings-toolbar-heading">
+              <h2 className="text-xl font-semibold">Settings</h2>
+            </div>
+            <div className="settings-tab-list" role="tablist" aria-label="Settings sections">
+              {SETTINGS_TABS.map((tab) => (
+                <Button
+                  key={tab.id}
+                  id={`settings-tab-${tab.id}`}
+                  type="button"
+                  role="tab"
+                  aria-controls={`settings-panel-${tab.id}`}
+                  aria-selected={activeTab === tab.id}
+                  variant={activeTab === tab.id ? "default" : "outline"}
+                  size="sm"
+                  className={cn("settings-tab-button", activeTab === tab.id ? "settings-tab-active" : "")}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </Button>
+              ))}
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="relative grid gap-4">
-          {formError ? <p className="error">{formError}</p> : null}
-          <div className="settings-tab-list" role="tablist" aria-label="Settings sections">
-            {SETTINGS_TABS.map((tab) => (
-              <Button
-                key={tab.id}
-                id={`settings-tab-${tab.id}`}
-                type="button"
-                role="tab"
-                aria-controls={`settings-panel-${tab.id}`}
-                aria-selected={activeTab === tab.id}
-                variant={activeTab === tab.id ? "default" : "outline"}
-                size="sm"
-                className={cn("settings-tab-button", activeTab === tab.id ? "settings-tab-active" : "")}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </Button>
-            ))}
+          <div className="settings-toolbar-actions">
+            <div className="settings-toolbar-copy">
+              <p className="settings-toolbar-title">{isDirty ? "Unsaved changes" : "All changes saved"}</p>
+            </div>
+            <Button form="runtime-settings-form" type="submit" disabled={!isDirty || updateMutation.isPending} className="w-full sm:w-auto">
+              {updateMutation.isPending ? "Saving..." : "Save changes"}
+            </Button>
           </div>
-          <p className="muted">{activeTabDefinition.description}</p>
-        </CardContent>
-      </Card>
+        </div>
+        {formError ? <p className="error">{formError}</p> : null}
+      </div>
 
-      <form id="runtime-settings-form" className="grid gap-4 pb-28" onSubmit={submitSettings}>
+      <form id="runtime-settings-form" className="grid gap-4" onSubmit={submitSettings}>
         {activeTab === "general" ? (
           <div
             id="settings-panel-general"
@@ -725,18 +727,6 @@ export function SettingsPage() {
           </div>
         )}
       </form>
-
-      <div className="settings-save-bar">
-        <div className="settings-save-bar-copy">
-          <p className="settings-save-bar-title">{isDirty ? "Unsaved changes" : "All changes saved"}</p>
-          <p className="settings-save-bar-text">
-            {isDirty ? "Save your runtime settings changes when you are ready." : "Edits will appear here once you change a setting."}
-          </p>
-        </div>
-        <Button form="runtime-settings-form" type="submit" disabled={!isDirty || updateMutation.isPending} className="settings-save-bar-button">
-          {updateMutation.isPending ? "Saving..." : "Save changes"}
-        </Button>
-      </div>
 
       <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
         <DialogContent className="max-w-xl">

@@ -86,9 +86,12 @@
 
 ### `frontend/src/pages/SettingsPage.tsx`
 
-- categorized runtime settings workspace with `General`, `Agent Runtime`, and `Reliability` sections
-- supports save/update and reset-to-server-default flows
+- tabbed runtime settings workspace with `General` and `Agent` tabs, each rendering focused section cards
+- uses a compact sticky top toolbar as the first page element, including the `Settings` title, section tabs, save action, and reset-to-server-default from a dedicated `General` tab reset section
 - settings changes invalidate dependent query surfaces
-- `Agent memory` lives under `Agent Runtime`, is edited as one item per line, persists as a list of strings, and is sent to every backend agent system prompt
+- `General` groups read-only identity context separately from ledger default currencies
+- `Agent` groups memory/models, provider overrides, run limits, bulk and attachment limits, and reliability into separate sections
+- `Agent memory` lives under the `Agent` tab, is edited as one item per line, persists as a list of strings, and is sent to every backend agent system prompt
 - `Default model` is edited separately from `Available models`; available models use one newline-separated identifier per line and preserve entered order
+- bulk concurrency is labeled around concurrent launches, while the per-message attachment limit explicitly calls out that Bulk mode still starts one fresh thread per attachment
 - agent provider overrides use a compact toggle; when off the custom endpoint/key fields are hidden and saving falls back to server env values from `.env` or process env
