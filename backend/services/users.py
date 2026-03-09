@@ -1,14 +1,24 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from backend.models_finance import Entry, User
-from backend.services.crud_policy import assert_unique_name, normalize_required_name
+from backend.models_finance import Account, Entry, User
+from backend.schemas_finance import UserRead
+from backend.services.crud_policy import PolicyViolation, assert_unique_name, normalize_required_name
+
+if TYPE_CHECKING:
+    from backend.auth import RequestPrincipal
 
 
 def normalize_user_name(name: str) -> str:
     return " ".join(name.split()).strip()
+
+
+def _is_admin_principal(principal: RequestPrincipal) -> bool:
+    return normalize_user_name(principal.user_name).lower() == "admin"
 
 
 def find_user_by_name(db: Session, name: str) -> User | None:
@@ -56,6 +66,99 @@ def create_user_with_unique_name(db: Session, *, raw_name: str) -> User:
     return user
 
 
+def _count_owned_resources(db: Session, *, user_id: str) -> tuple[int, int]:
+    account_count = int(
+        db.scalar(
+            select(func.count(Account.id)).where(Account.owner_user_id == user_id)
+        )
+        or 0
+    )
+    entry_count = int(
+        db.scalar(
+            select(func.count(Entry.id)).where(
+                Entry.owner_user_id == user_id,
+                Entry.is_deleted.is_(False),
+            )
+        )
+        or 0
+    )
+    return account_count, entry_count
+
+
+def _to_user_read(
+    *,
+    user: User,
+    principal_name: str,
+    account_count: int,
+    entry_count: int,
+) -> UserRead:
+    return UserRead(
+        id=user.id,
+        name=user.name,
+        is_current_user=user.name.lower() == principal_name.lower(),
+        account_count=account_count,
+        entry_count=entry_count,
+    )
+
+
+def build_user_read(
+    db: Session,
+    *,
+    user: User,
+    principal_name: str,
+) -> UserRead:
+    account_count, entry_count = _count_owned_resources(db, user_id=user.id)
+    return _to_user_read(
+        user=user,
+        principal_name=principal_name,
+        account_count=account_count,
+        entry_count=entry_count,
+    )
+
+
+def list_user_reads(
+    db: Session,
+    *,
+    principal: RequestPrincipal,
+) -> list[UserRead]:
+    from backend.services.access_scope import load_user_for_principal
+
+    if not _is_admin_principal(principal):
+        user = load_user_for_principal(db, user_id=principal.user_id, principal=principal)
+        return [build_user_read(db, user=user, principal_name=principal.user_name)]
+
+    account_count_subquery = (
+        select(func.count(Account.id))
+        .where(Account.owner_user_id == User.id)
+        .scalar_subquery()
+    )
+    entry_count_subquery = (
+        select(func.count(Entry.id))
+        .where(
+            Entry.is_deleted.is_(False),
+            Entry.owner_user_id == User.id,
+        )
+        .scalar_subquery()
+    )
+
+    rows = db.execute(
+        select(
+            User,
+            account_count_subquery.label("account_count"),
+            entry_count_subquery.label("entry_count"),
+        ).order_by(func.lower(User.name).asc())
+    ).all()
+    return [
+        _to_user_read(
+            user=user,
+            principal_name=principal.user_name,
+            account_count=int(account_count or 0),
+            entry_count=int(entry_count or 0),
+        )
+        for user, account_count, entry_count in rows
+    ]
+
+
 def rename_user_and_sync_entry_owner_labels(
     db: Session,
     *,
@@ -77,4 +180,34 @@ def rename_user_and_sync_entry_owner_labels(
     db.execute(update(Entry).where(Entry.owner_user_id == user.id).values(owner=normalized_name))
     db.add(user)
     db.flush()
+    return user
+
+
+def create_user_for_principal(
+    db: Session,
+    *,
+    raw_name: str,
+    principal: RequestPrincipal,
+) -> User:
+    if not _is_admin_principal(principal):
+        raise PolicyViolation.forbidden("Only admin principal can create users.")
+    return create_user_with_unique_name(db, raw_name=raw_name)
+
+
+def update_user_for_principal(
+    db: Session,
+    *,
+    user_id: str,
+    raw_name: str | None,
+    principal: RequestPrincipal,
+) -> User:
+    from backend.services.access_scope import load_user_for_principal
+
+    user = load_user_for_principal(db, user_id=user_id, principal=principal)
+    if raw_name is not None:
+        rename_user_and_sync_entry_owner_labels(
+            db,
+            user=user,
+            raw_name=raw_name,
+        )
     return user

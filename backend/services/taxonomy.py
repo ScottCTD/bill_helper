@@ -6,6 +6,8 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from backend.models_finance import Taxonomy, TaxonomyAssignment, TaxonomyTerm
+from backend.schemas_finance import TaxonomyRead, TaxonomyTermRead
+from backend.services.crud_policy import PolicyViolation, map_value_error
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +57,23 @@ def get_term_description(term: TaxonomyTerm) -> str | None:
     return None
 
 
+def _normalize_term_description(description: str | None) -> str | None:
+    if description is None:
+        return None
+    normalized = " ".join(description.split()).strip()
+    return normalized or None
+
+
+def set_term_description(term: TaxonomyTerm, description: str | None) -> None:
+    normalized = _normalize_term_description(description)
+    metadata = dict(term.metadata_json) if isinstance(term.metadata_json, dict) else {}
+    if normalized is not None:
+        metadata["description"] = normalized
+    else:
+        metadata.pop("description", None)
+    term.metadata_json = metadata or None
+
+
 def ensure_taxonomy(
     db: Session,
     *,
@@ -92,6 +111,12 @@ def ensure_default_taxonomies(db: Session) -> dict[str, Taxonomy]:
     return taxonomies
 
 
+def list_taxonomy_reads(db: Session) -> list[TaxonomyRead]:
+    ensure_default_taxonomies(db)
+    rows = list(db.scalars(select(Taxonomy).order_by(Taxonomy.key.asc())))
+    return [TaxonomyRead.model_validate(row) for row in rows]
+
+
 def get_taxonomy_by_key(db: Session, key: str) -> Taxonomy | None:
     normalized_key = normalize_taxonomy_key(key)
     return db.scalar(select(Taxonomy).where(Taxonomy.key == normalized_key))
@@ -112,6 +137,13 @@ def ensure_taxonomy_by_key(db: Session, key: str) -> Taxonomy:
         cardinality=spec.cardinality,
         display_name=spec.display_name,
     )
+
+
+def load_taxonomy_by_key(db: Session, key: str) -> Taxonomy:
+    taxonomy = get_taxonomy_by_key(db, key)
+    if taxonomy is None:
+        raise PolicyViolation.not_found("Taxonomy not found")
+    return taxonomy
 
 
 def ensure_term(db: Session, *, taxonomy: Taxonomy, name: str) -> TaxonomyTerm:
@@ -182,6 +214,23 @@ def rename_term(db: Session, *, term: TaxonomyTerm, new_name: str) -> TaxonomyTe
     term.normalized_name = normalized_name
     db.add(term)
     db.flush()
+    return term
+
+
+def load_taxonomy_term(
+    db: Session,
+    *,
+    taxonomy_id: str,
+    term_id: str,
+) -> TaxonomyTerm:
+    term = db.scalar(
+        select(TaxonomyTerm).where(
+            TaxonomyTerm.id == term_id,
+            TaxonomyTerm.taxonomy_id == taxonomy_id,
+        )
+    )
+    if term is None:
+        raise PolicyViolation.not_found("Taxonomy term not found")
     return term
 
 
@@ -285,6 +334,105 @@ def list_terms_with_usage(
         .order_by(func.lower(TaxonomyTerm.name).asc())
     ).all()
     return [(term, int(usage_count or 0)) for term, usage_count in rows]
+
+
+def build_taxonomy_term_read(
+    db: Session,
+    *,
+    term: TaxonomyTerm,
+) -> TaxonomyTermRead:
+    usage_count = int(
+        db.scalar(
+            select(func.count(TaxonomyAssignment.id)).where(TaxonomyAssignment.term_id == term.id)
+        )
+        or 0
+    )
+    return TaxonomyTermRead(
+        id=term.id,
+        taxonomy_id=term.taxonomy_id,
+        name=term.name,
+        normalized_name=term.normalized_name,
+        description=get_term_description(term),
+        usage_count=usage_count,
+    )
+
+
+def list_taxonomy_term_reads(
+    db: Session,
+    *,
+    taxonomy_key: str,
+) -> list[TaxonomyTermRead]:
+    taxonomy = load_taxonomy_by_key(db, taxonomy_key)
+    rows = list_terms_with_usage(db, taxonomy=taxonomy)
+    return [
+        TaxonomyTermRead(
+            id=term.id,
+            taxonomy_id=term.taxonomy_id,
+            name=term.name,
+            normalized_name=term.normalized_name,
+            description=get_term_description(term),
+            usage_count=usage_count,
+        )
+        for term, usage_count in rows
+    ]
+
+
+def create_term_from_payload(
+    db: Session,
+    *,
+    taxonomy_key: str,
+    name: str,
+    description: str | None,
+) -> TaxonomyTerm:
+    try:
+        taxonomy = ensure_taxonomy_by_key(db, taxonomy_key)
+        term = create_term(
+            db,
+            taxonomy=taxonomy,
+            name=name,
+        )
+    except ValueError as exc:
+        violation = map_value_error(
+            exc,
+            not_found_patterns=("Unknown taxonomy",),
+            conflict_patterns=("already exists",),
+        )
+        if violation.status_code == 404:
+            violation.detail = "Taxonomy not found"
+        raise violation from exc
+
+    if description is not None:
+        set_term_description(term, description)
+        db.add(term)
+
+    return term
+
+
+def update_term_from_payload(
+    db: Session,
+    *,
+    taxonomy_key: str,
+    term_id: str,
+    name: str | None,
+    description: str | None,
+    fields_set: set[str],
+) -> TaxonomyTerm:
+    taxonomy = load_taxonomy_by_key(db, taxonomy_key)
+    term = load_taxonomy_term(db, taxonomy_id=taxonomy.id, term_id=term_id)
+
+    if name is not None:
+        try:
+            rename_term(db, term=term, new_name=name)
+        except ValueError as exc:
+            raise map_value_error(
+                exc,
+                conflict_patterns=("already exists",),
+            ) from exc
+    if "description" in fields_set:
+        set_term_description(term, description)
+        db.add(term)
+
+    return term
 
 
 def list_term_name_description_pairs(

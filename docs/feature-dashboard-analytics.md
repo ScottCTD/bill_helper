@@ -27,8 +27,8 @@ Classification logic lives in `backend/services/finance.py`.
 
 ## Backend Flow
 
-1. `backend/routers/dashboard.py` parses `month`.
-2. `backend/services/finance.py` computes:
+1. `backend/routers/dashboard.py` validates the `month` format and delegates to `backend/services/finance.py`.
+2. `backend/services/finance.py` resolves dashboard currency/runtime settings, computes:
    - `kpis`
    - `daily_spending`
    - `monthly_trend`
@@ -36,7 +36,7 @@ Classification logic lives in `backend/services/finance.py`.
    - `weekday_spending`
    - `largest_expenses`
    - `projection`
-3. Router returns `DashboardRead` from `backend/schemas_finance.py`.
+3. The same service module loads principal-scoped reconciliation accounts and returns `DashboardRead` from `backend/schemas_finance.py`.
 
 ## Frontend Mapping
 

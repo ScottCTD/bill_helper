@@ -13,7 +13,7 @@ This file is the backend index. Use it to find the focused backend docs under `d
 ## Stable Boundaries
 
 - Routers own HTTP translation and principal-boundary enforcement.
-- Services own domain policy and orchestration.
+- Services own domain policy, principal-scoped queries, and orchestration.
 - The agent subsystem lives under `backend/services/agent/*` with `backend/routers/agent.py` as the transport layer.
 - Shared persistence and runtime configuration are centralized in `backend/database.py` and `backend/services/runtime_settings.py`.
 
