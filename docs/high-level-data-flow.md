@@ -116,6 +116,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `backend/services/finance.py`
 - Agent services:
   - `backend/services/agent/runtime.py`
+  - `backend/services/agent/runtime_loop.py`
   - `backend/services/agent/tool_runtime.py`
   - `backend/services/agent/read_tools/`
   - `backend/services/agent/proposals/`
