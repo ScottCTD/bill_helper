@@ -273,14 +273,17 @@ def apply_delete_entity(db: Session, payload: DeleteEntityPayload) -> AppliedRes
 def apply_create_account(db: Session, payload: CreateAccountPayload) -> AppliedResource:
     settings = resolve_runtime_settings(db)
     owner_user = ensure_current_user(db, settings.current_user_name)
-    account = create_account_root(
-        db,
-        name=payload.name,
-        owner_user_id=owner_user.id,
-        markdown_body=payload.markdown_body,
-        currency_code=payload.currency_code,
-        is_active=payload.is_active,
-    )
+    try:
+        account = create_account_root(
+            db,
+            name=payload.name,
+            owner_user_id=owner_user.id,
+            markdown_body=payload.markdown_body,
+            currency_code=payload.currency_code,
+            is_active=payload.is_active,
+        )
+    except PolicyViolation as exc:
+        raise ValueError(exc.detail) from exc
     return AppliedResource(resource_type="account", resource_id=account.id)
 
 
@@ -290,7 +293,10 @@ def apply_update_account(db: Session, payload: UpdateAccountPayload) -> AppliedR
         raise ValueError("Account not found")
 
     patch = AccountPatch.model_validate(payload.patch.model_dump(exclude_unset=True))
-    update_account_root(db, account=account, patch=patch)
+    try:
+        update_account_root(db, account=account, patch=patch)
+    except PolicyViolation as exc:
+        raise ValueError(exc.detail) from exc
     return AppliedResource(resource_type="account", resource_id=account.id)
 
 

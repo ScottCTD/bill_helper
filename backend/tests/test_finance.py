@@ -261,6 +261,22 @@ def test_account_patch_can_clear_markdown_body(client):
     assert update_response.json()["markdown_body"] is None
 
 
+def test_create_account_duplicate_name_returns_conflict(client):
+    create_account(client, name="Duplicate Account")
+
+    duplicate_response = client.post(
+        "/api/v1/accounts",
+        json={
+            "name": "Duplicate Account",
+            "currency_code": "CAD",
+            "is_active": True,
+        },
+    )
+
+    assert duplicate_response.status_code == 409
+    assert duplicate_response.json()["detail"] == "Entity name already exists"
+
+
 def test_dashboard_is_scoped_by_principal(client):
     create_account(client, name="Admin Account")
     admin_account = create_account(client, name="Admin Ledger")

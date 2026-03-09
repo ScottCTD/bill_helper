@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
@@ -11,7 +10,11 @@ from backend.auth import RequestPrincipal
 from backend.models_finance import Account, Entity, Entry, User
 from backend.schemas_finance import AccountCreate, AccountUpdate
 from backend.services.access_scope import ensure_principal_can_assign_user
-from backend.services.crud_policy import assert_unique_name
+from backend.services.crud_policy import (
+    PolicyViolation,
+    assert_unique_name,
+    normalize_required_name,
+)
 from backend.services.entities import (
     clear_entity_category,
     detach_entity_references_preserve_labels,
@@ -62,7 +65,7 @@ def validate_account_owner_user_id(
         return None
     user = db.get(User, owner_user_id)
     if user is None:
-        raise ValueError("Owner user not found")
+        raise PolicyViolation.not_found("Owner user not found")
     return owner_user_id
 
 
@@ -73,10 +76,7 @@ def resolve_owner_user_id(
     principal: RequestPrincipal,
 ) -> str | None:
     if owner_user_id is not None:
-        try:
-            validated_owner_user_id = validate_account_owner_user_id(db, owner_user_id=owner_user_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        validated_owner_user_id = validate_account_owner_user_id(db, owner_user_id=owner_user_id)
         ensure_principal_can_assign_user(principal, user_id=validated_owner_user_id)
         return validated_owner_user_id
     return principal.user_id
@@ -103,14 +103,19 @@ def create_account_root(
     currency_code: str,
     is_active: bool,
 ) -> Account:
-    normalized_name = normalize_entity_name(name)
-    if not normalized_name:
-        raise ValueError("Account name cannot be empty")
+    normalized_name = normalize_required_name(
+        name,
+        normalizer=normalize_entity_name,
+        empty_detail="Account name cannot be empty",
+    )
 
     validated_owner_user_id = validate_account_owner_user_id(db, owner_user_id=owner_user_id)
     existing_entity = find_entity_by_name(db, normalized_name)
-    if existing_entity is not None:
-        raise ValueError("Entity name already exists")
+    assert_unique_name(
+        existing_id=existing_entity.id if existing_entity is not None else None,
+        current_id=None,
+        conflict_detail="Entity name already exists",
+    )
 
     entity = Entity(name=normalized_name, category=None)
     db.add(entity)
@@ -137,7 +142,7 @@ def update_account_root(
 ) -> Account:
     if patch.includes("name") and patch.name is not None:
         if account.entity is None:
-            raise ValueError("Account entity not found")
+            raise PolicyViolation.not_found("Account entity not found")
         existing_entity = find_entity_by_name(db, patch.name)
         assert_unique_name(
             existing_id=existing_entity.id if existing_entity is not None else None,
@@ -173,25 +178,18 @@ def create_account_from_payload(
     payload: AccountCreate,
     principal: RequestPrincipal,
 ) -> Account:
-    try:
-        return create_account_root(
+    return create_account_root(
+        db,
+        name=payload.name,
+        owner_user_id=resolve_owner_user_id(
             db,
-            name=payload.name,
-            owner_user_id=resolve_owner_user_id(
-                db,
-                owner_user_id=payload.owner_user_id,
-                principal=principal,
-            ),
-            markdown_body=payload.markdown_body,
-            currency_code=payload.currency_code,
-            is_active=payload.is_active,
-        )
-    except ValueError as exc:
-        detail = str(exc)
-        status_code = status.HTTP_404_NOT_FOUND if "not found" in detail.lower() else status.HTTP_409_CONFLICT
-        if detail == "Account name cannot be empty":
-            status_code = status.HTTP_400_BAD_REQUEST
-        raise HTTPException(status_code=status_code, detail=detail) from exc
+            owner_user_id=payload.owner_user_id,
+            principal=principal,
+        ),
+        markdown_body=payload.markdown_body,
+        currency_code=payload.currency_code,
+        is_active=payload.is_active,
+    )
 
 
 def update_account_from_payload(
@@ -209,19 +207,12 @@ def update_account_from_payload(
             principal=principal,
         )
 
-    try:
-        patch = AccountPatch.model_validate(update_data)
-        return update_account_root(
-            db,
-            account=account,
-            patch=patch,
-        )
-    except ValueError as exc:
-        detail = str(exc)
-        status_code = status.HTTP_404_NOT_FOUND if "not found" in detail.lower() else status.HTTP_409_CONFLICT
-        if detail == "Account name cannot be empty":
-            status_code = status.HTTP_400_BAD_REQUEST
-        raise HTTPException(status_code=status_code, detail=detail) from exc
+    patch = AccountPatch.model_validate(update_data)
+    return update_account_root(
+        db,
+        account=account,
+        patch=patch,
+    )
 
 
 def delete_account_and_entity_root(db: Session, *, account: Account) -> None:

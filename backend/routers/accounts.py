@@ -26,6 +26,7 @@ from backend.services.accounts import (
     delete_account_and_entity_root,
     update_account_from_payload,
 )
+from backend.services.crud_policy import PolicyViolation, translate_policy_violation
 from backend.services.finance import build_reconciliation
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
@@ -37,11 +38,14 @@ def create_account(
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_current_principal),
 ) -> AccountRead:
-    account = create_account_from_payload(
-        db,
-        payload=payload,
-        principal=principal,
-    )
+    try:
+        account = create_account_from_payload(
+            db,
+            payload=payload,
+            principal=principal,
+        )
+    except PolicyViolation as exc:
+        raise translate_policy_violation(exc) from exc
     db.commit()
     db.refresh(account)
     db.refresh(account, attribute_names=["entity"])
@@ -73,12 +77,15 @@ def update_account(
     principal: RequestPrincipal = Depends(get_current_principal),
 ) -> AccountRead:
     account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
-    update_account_from_payload(
-        db,
-        account=account,
-        payload=payload,
-        principal=principal,
-    )
+    try:
+        update_account_from_payload(
+            db,
+            account=account,
+            payload=payload,
+            principal=principal,
+        )
+    except PolicyViolation as exc:
+        raise translate_policy_violation(exc) from exc
     db.commit()
     db.refresh(account)
     db.refresh(account, attribute_names=["entity"])
