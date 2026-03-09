@@ -40,26 +40,6 @@ from backend.services.agent.tool_args import (
     UpdatePendingProposalArgs,
 )
 from backend.services.agent.tool_handlers_memory import add_user_memory
-from backend.services.agent.tool_handlers_propose import (
-    propose_create_account,
-    propose_create_entity,
-    propose_create_entry,
-    propose_create_group,
-    propose_create_tag,
-    propose_delete_account,
-    propose_delete_entity,
-    propose_delete_entry,
-    propose_delete_group,
-    propose_delete_tag,
-    propose_update_account,
-    propose_update_entity,
-    propose_update_entry,
-    propose_update_group,
-    propose_update_group_membership,
-    propose_update_tag,
-    remove_pending_proposal,
-    update_pending_proposal,
-)
 from backend.services.agent.tool_handlers_read import (
     error_result,
     list_accounts,
@@ -72,6 +52,32 @@ from backend.services.agent.tool_handlers_read import (
 )
 from backend.services.agent.tool_handlers_threads import rename_thread
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
+from backend.services.agent.proposals.catalog import (
+    propose_create_account,
+    propose_create_entity,
+    propose_create_tag,
+    propose_delete_account,
+    propose_delete_entity,
+    propose_delete_tag,
+    propose_update_account,
+    propose_update_entity,
+    propose_update_tag,
+)
+from backend.services.agent.proposals.entries import (
+    propose_create_entry,
+    propose_delete_entry,
+    propose_update_entry,
+)
+from backend.services.agent.proposals.group_memberships import propose_update_group_membership
+from backend.services.agent.proposals.groups import (
+    propose_create_group,
+    propose_delete_group,
+    propose_update_group,
+)
+from backend.services.agent.proposals.pending import (
+    remove_pending_proposal,
+    update_pending_proposal,
+)
 from backend.services.runtime_settings import resolve_runtime_settings
 
 
