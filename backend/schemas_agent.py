@@ -15,7 +15,7 @@ from backend.enums_agent import (
     AgentRunStatus,
     AgentToolCallStatus,
 )
-from backend.services.agent.threads import THREAD_TITLE_MAX_LENGTH, validate_thread_title
+from backend.validation.agent_threads import THREAD_TITLE_MAX_LENGTH, validate_thread_title
 
 
 class AgentThreadCreate(BaseModel):

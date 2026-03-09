@@ -6,16 +6,10 @@ from sqlalchemy.orm import Session
 
 from backend.models_agent import AgentRun, AgentThread
 from backend.models_shared import utc_now
-
-THREAD_TITLE_MAX_LENGTH = 80
-THREAD_TITLE_MAX_WORDS = 5
+from backend.validation.agent_threads import validate_thread_title
 
 
 class AgentThreadNotFoundError(LookupError):
-    pass
-
-
-class AgentThreadTitleError(ValueError):
     pass
 
 
@@ -23,28 +17,6 @@ class AgentThreadTitleError(ValueError):
 class ThreadRenameResult:
     thread: AgentThread
     previous_title: str | None
-
-
-def normalize_thread_title(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = " ".join(value.split()).strip()
-    return normalized or None
-
-
-def validate_thread_title(value: str) -> str:
-    normalized = normalize_thread_title(value)
-    if normalized is None:
-        raise AgentThreadTitleError("thread title cannot be empty")
-    if len(normalized) > THREAD_TITLE_MAX_LENGTH:
-        raise AgentThreadTitleError(
-            f"thread title must be {THREAD_TITLE_MAX_LENGTH} characters or fewer"
-        )
-    if len(normalized.split()) > THREAD_TITLE_MAX_WORDS:
-        raise AgentThreadTitleError(
-            f"thread title must be {THREAD_TITLE_MAX_WORDS} words or fewer"
-        )
-    return normalized
 
 
 def rename_thread_by_id(

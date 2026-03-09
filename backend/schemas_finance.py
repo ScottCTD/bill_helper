@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
-from backend.services.runtime_settings_normalization import (
+from backend.validation.runtime_settings import (
     normalize_agent_model_items_or_none,
     normalize_currency_code_or_none,
     normalize_text_or_none,

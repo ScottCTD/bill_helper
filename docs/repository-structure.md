@@ -64,6 +64,7 @@
 - `schemas_finance.py`: ledger/dashboard/settings request/response schemas.
 - `schemas_agent.py`: agent thread/message/run/review request/response schemas.
 - `auth/`: request-principal contracts, explicit dev-session header parsing, and FastAPI auth dependencies.
+- `validation/`: neutral validation/normalization helpers shared by schemas, services, and tool-input models.
 - `main.py`: FastAPI app creation, routing, CORS, health check.
 - `README.md`: thin backend-local navigation doc that points to canonical docs.
 
@@ -97,12 +98,11 @@
 - `serializers.py`: ORM-to-schema mapping helpers.
 - `taxonomy.py`: shared taxonomy normalization, term assignment, and usage-count helpers.
 - `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, including DB-backed ordered `user_memory` and `available_agent_models` support.
-- `runtime_settings_normalization.py`: shared normalization/validation helpers used by runtime settings schemas + service resolver.
 - `agent/`: agent runtime, tool execution, prompt-size counting, serialization, prompt/model adapters, and review apply handlers.
   - `tool_args/`: focused tool-input package for read filters, progress/session commands, thread rename, and pending-proposal admin wrappers.
   - `tool_handlers_memory.py`: add-only runtime memory append handler for explicit remember-this requests.
   - `tool_handlers_threads.py`: thread rename tool handler for short topical thread labels.
-  - `threads.py`: shared thread-title validation and persistence helpers used by the router and tool runtime.
+  - `threads.py`: thread lookup and rename persistence helpers used by the router and tool runtime.
   - `protocol_helpers.py`: shared helper contracts for tool-call decoding and usage-shape normalization.
   - `protocol.py`: compatibility facade re-exporting protocol helper APIs.
   - `error_policy.py`: shared recoverable-error policy/result primitives and contextual fallback logging.
