@@ -64,6 +64,10 @@ def _runtime_settings(*, max_size: int = 1024, max_attachments: int = 4) -> Runt
         default_currency_code="CAD",
         dashboard_currency_code="CAD",
         agent_model="openai/gpt-4.1",
+        available_agent_models=[
+            "openai/gpt-4.1",
+            "openai/gpt-4.1-mini",
+        ],
         agent_max_steps=100,
         agent_bulk_max_concurrent_threads=4,
         agent_retry_max_attempts=3,

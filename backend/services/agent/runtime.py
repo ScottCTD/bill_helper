@@ -196,7 +196,6 @@ def _create_run(
         status=AgentRunStatus.RUNNING,
         model_name=selected_model_name,
         surface=surface,
-        model_name=selected_model_name,
         context_tokens=calculate_context_tokens(
             model_name=selected_model_name,
             llm_messages=llm_messages,

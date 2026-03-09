@@ -29,6 +29,10 @@ class FakeBillHelperApiClient:
             default_currency_code="CAD",
             dashboard_currency_code="CAD",
             agent_model="openrouter/qwen/qwen3.5-27b",
+            available_agent_models=[
+                "openrouter/qwen/qwen3.5-27b",
+                "openai/gpt-4.1-mini",
+            ],
             agent_max_steps=100,
             agent_bulk_max_concurrent_threads=4,
             agent_retry_max_attempts=3,
