@@ -34,7 +34,7 @@ from backend.services.agent.runtime_state import (
     tool_result_llm_message as _tool_result_llm_message,
 )
 from backend.services.agent.serializers import stream_run_event_to_payload
-from backend.services.agent.tool_args import INTERMEDIATE_UPDATE_TOOL_NAME
+from backend.services.agent.tool_args.shared import INTERMEDIATE_UPDATE_TOOL_NAME
 from backend.services.agent.tool_runtime import execute_tool
 from backend.services.agent.tool_types import ToolContext, ToolExecutionStatus
 from backend.services.runtime_settings import resolve_runtime_settings

@@ -44,7 +44,7 @@ from backend.services.agent.proposals.groups import (
     resolved_group_type_from_ref,
     sorted_group_memberships,
 )
-from backend.services.agent.tool_args import ProposeUpdateGroupMembershipArgs
+from backend.services.agent.tool_args.proposal_admin import ProposeUpdateGroupMembershipArgs
 from backend.services.agent.tool_results import error_result
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.services.agent.tool_args import SendIntermediateUpdateArgs
+from backend.services.agent.tool_args.shared import SendIntermediateUpdateArgs
 from backend.services.agent.tool_results import format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 

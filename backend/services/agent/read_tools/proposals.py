@@ -10,7 +10,7 @@ from backend.services.agent.proposals.common import (
     proposal_short_id,
     proposals_for_thread as thread_proposals_for_thread,
 )
-from backend.services.agent.tool_args import ListProposalsArgs
+from backend.services.agent.tool_args.read import ListProposalsArgs
 from backend.services.agent.tool_results import error_result, format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 

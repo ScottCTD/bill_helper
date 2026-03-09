@@ -23,7 +23,7 @@ from backend.models_agent import (
     AgentToolCall,
 )
 from backend.services.agent.protocol_helpers import decode_tool_call
-from backend.services.agent.tool_args import INTERMEDIATE_UPDATE_TOOL_NAME
+from backend.services.agent.tool_args.shared import INTERMEDIATE_UPDATE_TOOL_NAME
 from backend.services.agent.tool_types import ToolExecutionResult
 
 
