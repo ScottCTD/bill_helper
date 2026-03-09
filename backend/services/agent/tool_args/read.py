@@ -12,8 +12,7 @@ from backend.services.agent.payload_normalization import (
     normalize_optional_category,
     normalize_required_text,
 )
-from backend.services.entries import normalize_tag_name
-from backend.services.entities import normalize_entity_name
+from backend.validation.finance_names import normalize_entity_name, normalize_tag_name
 
 
 _DATE_DESC = "ISO date YYYY-MM-DD, e.g. '2026-03-02'"

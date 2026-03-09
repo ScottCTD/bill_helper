@@ -198,3 +198,36 @@ def test_runtime_settings_service_does_not_import_api_schemas() -> None:
         "runtime_settings service should expose service-local contracts and leave HTTP schemas in the router:\n"
         + "\n".join(violations)
     )
+
+
+def test_finance_write_services_do_not_import_http_write_schemas() -> None:
+    write_schema_names = {
+        "AccountCreate",
+        "AccountUpdate",
+        "EntityCreate",
+        "EntityUpdate",
+        "TagCreate",
+        "TagUpdate",
+    }
+    service_paths = [
+        BACKEND_DIR / "services" / "accounts.py",
+        BACKEND_DIR / "services" / "entities.py",
+        BACKEND_DIR / "services" / "tags.py",
+        BACKEND_DIR / "services" / "agent" / "change_apply.py",
+    ]
+    violations: list[str] = []
+    for service_path in service_paths:
+        module = ast.parse(service_path.read_text(encoding="utf-8"), filename=str(service_path))
+        for node in ast.walk(module):
+            if isinstance(node, ast.ImportFrom) and node.module == "backend.schemas_finance":
+                imported_names = {alias.name for alias in node.names}
+                leaked_names = sorted(imported_names & write_schema_names)
+                if leaked_names:
+                    violations.append(
+                        f"{service_path.relative_to(REPO_ROOT)}:{node.lineno} imports HTTP write schemas "
+                        + ", ".join(leaked_names)
+                    )
+    assert not violations, (
+        "Finance write services should use backend.services.finance_contracts instead of HTTP write schemas:\n"
+        + "\n".join(violations)
+    )

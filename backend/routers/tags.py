@@ -11,13 +11,14 @@ from backend.services.crud_policy import (
     PolicyViolation,
     translate_policy_violation,
 )
+from backend.services.finance_contracts import TagCreateCommand, TagPatch
 from backend.services.tags import (
     build_tag_read,
-    create_tag_from_payload,
+    create_tag as create_tag_service,
     delete_tag as delete_tag_service,
     list_tag_reads,
     load_tag,
-    update_tag_from_payload,
+    update_tag as update_tag_service,
 )
 
 router = APIRouter(prefix="/tags", tags=["tags"])
@@ -34,7 +35,10 @@ def create_tag(
     _: RequestPrincipal = Depends(require_admin_principal),
 ) -> TagRead:
     try:
-        tag = create_tag_from_payload(db, payload=payload)
+        tag = create_tag_service(
+            db,
+            command=TagCreateCommand.model_validate(payload.model_dump()),
+        )
     except PolicyViolation as exc:
         raise translate_policy_violation(exc) from exc
 
@@ -52,7 +56,11 @@ def update_tag(
 ) -> TagRead:
     try:
         tag = load_tag(db, tag_id=tag_id)
-        update_tag_from_payload(db, tag=tag, payload=payload)
+        update_tag_service(
+            db,
+            tag=tag,
+            patch=TagPatch.model_validate(payload.model_dump(exclude_unset=True)),
+        )
     except PolicyViolation as exc:
         raise translate_policy_violation(exc) from exc
 

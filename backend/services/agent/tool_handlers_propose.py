@@ -76,13 +76,12 @@ from backend.services.entities import (
     ACCOUNT_CATEGORY_DETAIL,
     find_entity_by_name,
     is_account_entity,
-    normalize_entity_category,
-    normalize_entity_name,
 )
 from backend.services.groups import build_group_graph, build_group_summary, group_tree_options
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.taxonomy import get_single_term_name_map
 from backend.services.users import ensure_current_user
+from backend.validation.finance_names import normalize_entity_category, normalize_entity_name
 
 
 def proposal_short_id(item_id: str) -> str:

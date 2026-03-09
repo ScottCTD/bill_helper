@@ -90,6 +90,7 @@
 
 - `accounts.py`: account create/update/delete workflows for shared account/entity roots.
 - `entries.py`: typed entry create/update workflows, typed entity/user refs, tag handling, and entry soft-delete helper.
+- `finance_contracts.py`: service-owned account/entity/tag write commands shared across routers and agent apply flows.
 - `tags.py`: tag CRUD helpers, taxonomy cleanup, and random default color generation.
 - `entities.py`: entity normalization, account-backed guards, and preserve-label delete helpers.
 - `users.py`: user normalization, lookup, and current-user helpers.

@@ -18,10 +18,11 @@ from backend.services.access_scope import (
     load_user_for_principal,
 )
 from backend.services.crud_policy import PolicyViolation, map_value_error
-from backend.services.entities import ensure_entity_by_name, normalize_entity_name
+from backend.services.entities import ensure_entity_by_name
 from backend.services.groups import entry_group_options, group_tree_options, set_entry_direct_group
 from backend.services.tags import generate_random_tag_color
 from backend.services.users import ensure_user_by_name, normalize_user_name
+from backend.validation.finance_names import normalize_entity_name, normalize_tag_name
 
 
 def utc_now() -> datetime:
@@ -114,10 +115,6 @@ def signed_amount_minor(kind: EntryKind, amount_minor: int) -> int:
     if kind == EntryKind.INCOME:
         return amount_minor
     return -amount_minor
-
-
-def normalize_tag_name(name: str) -> str:
-    return name.strip().lower()
 
 
 def normalize_required_tag_name(name: str) -> str:

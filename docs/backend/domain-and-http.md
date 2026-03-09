@@ -74,6 +74,8 @@ Important read models:
   - principal-scoped query and authorization helpers for owned resources
 - `backend/services/bootstrap.py`
   - schema bootstrap helpers used by local reset, seed, and benchmark scripts
+- `backend/services/finance_contracts.py`
+  - service-owned account/entity/tag write commands shared by routers and agent apply flows
 - `backend/services/serializers.py`
 - `backend/services/taxonomy.py`
 - `backend/services/runtime_settings.py`
@@ -82,6 +84,8 @@ Important read models:
   - single-source normalization shared by schemas, tool-input models, and runtime resolution
 - `backend/validation/agent_threads.py`
   - shared thread-title validation contract used by schemas, tool args, and thread services
+- `backend/validation/finance_names.py`
+  - shared name/category/tag normalization used by finance services, routers, and agent contracts
 
 Current account/entity helpers:
 
@@ -119,6 +123,7 @@ Router behavior:
 - protected routes fail with `401` when `X-Bill-Helper-Principal` is absent; no backend fallback principal is injected anymore
 - `backend/routers/entries.py` stays at HTTP parsing/translation while `backend/services/entries.py` owns entry create/update orchestration
 - `backend/routers/entries.py` translates flat HTTP payload pairs (`from_entity_id` + `from_entity`, `owner_user_id` + `owner`, etc.) into typed service refs before calling `backend/services/entries.py`
+- `backend/routers/accounts.py`, `entities.py`, and `tags.py` translate HTTP write schemas into `backend/services/finance_contracts.py` commands before calling service workflows
 - `backend/routers/tags.py`, `taxonomies.py`, `users.py`, and `dashboard.py` delegate read/write orchestration to their service modules instead of assembling persistence queries inline
 - non-admin principals are restricted to their own owned resources; admin access is checked from `RequestPrincipal.is_admin`, not by matching the user name string
 - `groups.py` exposes first-class group CRUD, membership mutation, and derived group graphs

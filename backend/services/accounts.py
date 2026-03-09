@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal
-
-from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from backend.auth.contracts import RequestPrincipal
 from backend.models_finance import Account, Entity, Entry, User
-from backend.schemas_finance import AccountCreate, AccountUpdate
 from backend.services.access_scope import ensure_principal_can_assign_user
 from backend.services.crud_policy import (
     PolicyViolation,
@@ -19,41 +15,10 @@ from backend.services.entities import (
     clear_entity_category,
     detach_entity_references_preserve_labels,
     find_entity_by_name,
-    normalize_entity_name,
     rename_entity_and_sync_entry_labels,
 )
-
-AccountPatchField = Literal["owner_user_id", "name", "markdown_body", "currency_code", "is_active"]
-
-
-class AccountPatch(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    owner_user_id: str | None = None
-    name: str | None = Field(default=None, min_length=1, max_length=200)
-    markdown_body: str | None = None
-    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
-    is_active: bool | None = None
-
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = normalize_entity_name(value)
-        if not normalized:
-            raise ValueError("Account name cannot be empty")
-        return normalized
-
-    @field_validator("currency_code")
-    @classmethod
-    def normalize_currency_code(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return value.strip().upper()
-
-    def includes(self, field: AccountPatchField) -> bool:
-        return field in self.model_fields_set
+from backend.services.finance_contracts import AccountCreateCommand, AccountPatch
+from backend.validation.finance_names import normalize_entity_name
 
 
 def validate_account_owner_user_id(
@@ -172,34 +137,34 @@ def update_account_root(
     return account
 
 
-def create_account_from_payload(
+def create_account(
     db: Session,
     *,
-    payload: AccountCreate,
+    command: AccountCreateCommand,
     principal: RequestPrincipal,
 ) -> Account:
     return create_account_root(
         db,
-        name=payload.name,
+        name=command.name,
         owner_user_id=resolve_owner_user_id(
             db,
-            owner_user_id=payload.owner_user_id,
+            owner_user_id=command.owner_user_id,
             principal=principal,
         ),
-        markdown_body=payload.markdown_body,
-        currency_code=payload.currency_code,
-        is_active=payload.is_active,
+        markdown_body=command.markdown_body,
+        currency_code=command.currency_code,
+        is_active=command.is_active,
     )
 
 
-def update_account_from_payload(
+def update_account(
     db: Session,
     *,
     account: Account,
-    payload: AccountUpdate,
+    patch: AccountPatch,
     principal: RequestPrincipal,
 ) -> Account:
-    update_data = payload.model_dump(exclude_unset=True)
+    update_data = patch.model_dump(exclude_unset=True)
     if "owner_user_id" in update_data:
         update_data["owner_user_id"] = resolve_owner_user_id(
             db,
@@ -207,11 +172,11 @@ def update_account_from_payload(
             principal=principal,
         )
 
-    patch = AccountPatch.model_validate(update_data)
+    resolved_patch = AccountPatch.model_validate(update_data)
     return update_account_root(
         db,
         account=account,
-        patch=patch,
+        patch=resolved_patch,
     )
 
 

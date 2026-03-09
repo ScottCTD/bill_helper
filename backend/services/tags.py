@@ -7,19 +7,17 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.models_finance import Entry, EntryTag, Tag
-from backend.schemas_finance import TagCreate, TagRead, TagUpdate
 from backend.services.crud_policy import PolicyViolation, assert_unique_name, normalize_required_name
+from backend.services.finance_contracts import TagCreateCommand, TagPatch
 from backend.services.taxonomy_constants import (
     TAG_TYPE_SUBJECT_TYPE,
     TAG_TYPE_TAXONOMY_KEY,
 )
 from backend.services.taxonomy import assign_single_term_by_name, get_single_term_name, get_single_term_name_map
+from backend.schemas_finance import TagRead
+from backend.validation.finance_names import normalize_tag_name
 
 _RNG = random.SystemRandom()
-
-
-def _normalize_tag_name(name: str) -> str:
-    return name.strip().lower()
 
 
 def normalize_tag_color(color: str | None) -> str | None:
@@ -45,10 +43,10 @@ def resolve_tag_color(color: str | None) -> str:
     return generate_random_tag_color()
 
 
-def create_tag_from_payload(db: Session, *, payload: TagCreate) -> Tag:
+def create_tag(db: Session, *, command: TagCreateCommand) -> Tag:
     normalized_name = normalize_required_name(
-        payload.name,
-        normalizer=_normalize_tag_name,
+        command.name,
+        normalizer=normalize_tag_name,
         empty_detail="Tag name cannot be empty",
     )
     existing = db.scalar(select(Tag).where(Tag.name == normalized_name))
@@ -60,8 +58,8 @@ def create_tag_from_payload(db: Session, *, payload: TagCreate) -> Tag:
 
     tag = Tag(
         name=normalized_name,
-        color=resolve_tag_color(payload.color),
-        description=payload.description,
+        color=resolve_tag_color(command.color),
+        description=command.description,
     )
     db.add(tag)
     db.flush()
@@ -70,7 +68,7 @@ def create_tag_from_payload(db: Session, *, payload: TagCreate) -> Tag:
         taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
         subject_type=TAG_TYPE_SUBJECT_TYPE,
         subject_id=tag.id,
-        term_name=payload.type,
+        term_name=command.type,
     )
     return tag
 
@@ -82,12 +80,11 @@ def load_tag(db: Session, *, tag_id: int) -> Tag:
     return tag
 
 
-def update_tag_from_payload(db: Session, *, tag: Tag, payload: TagUpdate) -> Tag:
-    update_data = payload.model_dump(exclude_unset=True)
-    if "name" in update_data:
+def update_tag(db: Session, *, tag: Tag, patch: TagPatch) -> Tag:
+    if "name" in patch.model_fields_set and patch.name is not None:
         normalized_name = normalize_required_name(
-            update_data["name"],
-            normalizer=_normalize_tag_name,
+            patch.name,
+            normalizer=normalize_tag_name,
             empty_detail="Tag name cannot be empty",
         )
         existing = db.scalar(select(Tag).where(Tag.name == normalized_name))
@@ -97,17 +94,17 @@ def update_tag_from_payload(db: Session, *, tag: Tag, payload: TagUpdate) -> Tag
             conflict_detail="Tag already exists",
         )
         tag.name = normalized_name
-    if "color" in update_data:
-        tag.color = update_data["color"]
-    if "description" in update_data:
-        tag.description = update_data["description"]
-    if "type" in update_data:
+    if "color" in patch.model_fields_set:
+        tag.color = patch.color
+    if "description" in patch.model_fields_set:
+        tag.description = patch.description
+    if "type" in patch.model_fields_set:
         assign_single_term_by_name(
             db,
             taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
             subject_type=TAG_TYPE_SUBJECT_TYPE,
             subject_id=tag.id,
-            term_name=update_data["type"],
+            term_name=patch.type,
         )
     db.add(tag)
     db.flush()
