@@ -159,8 +159,9 @@ TOOLS: dict[str, AgentToolDefinition] = {
     "list_entities": AgentToolDefinition(
         name="list_entities",
         description=(
-            "List/query entities by name and category. Exact matches are ranked higher than substring matches. "
-            "Use this for non-account counterparties and categories. This tool is read-only."
+            "List/query non-account entities by name and category. Exact matches are ranked higher than substring matches. "
+            "Use this for non-account counterparties and categories; account roots are intentionally excluded. "
+            "This tool is read-only."
         ),
         args_model=ListEntitiesArgs,
         handler=list_entities,
