@@ -673,3 +673,85 @@ def test_migration_0028_adds_available_agent_models_column(tmp_path):
     assert "available_agent_models" in {
         column["name"] for column in inspector.get_columns("runtime_settings")
     }
+
+
+def test_migration_0030_adds_account_agent_change_types(tmp_path):
+    database_url = _sqlite_url(tmp_path, "migration_0030.sqlite")
+    cfg = _build_alembic_config(database_url)
+    command.upgrade(cfg, "0030_add_account_agent_change_types")
+
+    engine = create_engine(database_url, future=True)
+    now = datetime.now(timezone.utc)
+    thread_id = str(uuid4())
+    message_id = str(uuid4())
+    run_id = str(uuid4())
+    change_id = str(uuid4())
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                INSERT INTO agent_threads (id, title, created_at, updated_at)
+                VALUES (:id, NULL, :created_at, :updated_at)
+                """
+            ),
+            {
+                "id": thread_id,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO agent_messages (id, thread_id, role, content_markdown, created_at)
+                VALUES (:id, :thread_id, 'USER', 'Create my account', :created_at)
+                """
+            ),
+            {
+                "id": message_id,
+                "thread_id": thread_id,
+                "created_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO agent_runs
+                  (id, thread_id, user_message_id, assistant_message_id, status, model_name, created_at, completed_at)
+                VALUES
+                  (:id, :thread_id, :user_message_id, NULL, 'COMPLETED', 'gpt-test', :created_at, :completed_at)
+                """
+            ),
+            {
+                "id": run_id,
+                "thread_id": thread_id,
+                "user_message_id": message_id,
+                "created_at": now,
+                "completed_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO agent_change_items
+                  (id, run_id, change_type, payload_json, rationale_text, status, review_note, applied_resource_type, applied_resource_id, created_at, updated_at)
+                VALUES
+                  (:id, :run_id, 'CREATE_ACCOUNT', :payload_json, 'Agent proposed creating an account.', 'PENDING_REVIEW', NULL, NULL, NULL, :created_at, :updated_at)
+                """
+            ),
+            {
+                "id": change_id,
+                "run_id": run_id,
+                "payload_json": json.dumps({"name": "Travel Card", "currency_code": "CAD", "is_active": True}),
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+
+        stored_change_type = connection.execute(
+            text("SELECT change_type FROM agent_change_items WHERE id = :id"),
+            {"id": change_id},
+        ).scalar_one()
+
+    assert stored_change_type == "CREATE_ACCOUNT"

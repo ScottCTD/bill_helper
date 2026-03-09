@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from sqlalchemy.orm import Session
+
+from backend.database import build_engine
+from backend.models_finance import Entity
+
 
 def create_account(client, name: str = "Checking", *, headers: dict[str, str] | None = None) -> dict:
     response = client.post(
@@ -22,6 +27,12 @@ def create_entity(client, name: str, *, category: str | None = None) -> dict:
     response = client.post("/api/v1/entities", json=payload)
     response.raise_for_status()
     return response.json()
+
+
+def create_legacy_account_like_entity(name: str) -> None:
+    with Session(build_engine()) as db:
+        db.add(Entity(name=name, category="account"))
+        db.commit()
 
 
 def create_entry(
@@ -191,8 +202,8 @@ def test_dashboard_monthly_aggregations(client):
 
 def test_dashboard_keeps_generic_entities_even_when_categorized_as_account(client):
     account = create_account(client)
-    create_entity(client, "Legacy Debit", category="account")
-    create_entity(client, "Legacy Credit", category="account")
+    create_legacy_account_like_entity("Legacy Debit")
+    create_legacy_account_like_entity("Legacy Credit")
 
     create_entry(
         client,

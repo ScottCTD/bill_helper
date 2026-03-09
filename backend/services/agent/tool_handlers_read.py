@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from backend.enums_agent import AgentChangeType
 from backend.models_agent import AgentChangeItem, AgentReviewAction, AgentRun
-from backend.models_finance import Entity, Entry, EntryGroup, Tag
+from backend.models_finance import Account, Entity, Entry, EntryGroup, Tag
 from backend.services.agent.entry_references import entry_to_public_record
 from backend.services.agent.group_references import (
     find_groups_by_id,
@@ -19,6 +19,7 @@ from backend.services.agent.group_references import (
 )
 from backend.services.agent.proposal_metadata import proposal_metadata_for_change_type
 from backend.services.agent.tool_args import (
+    ListAccountsArgs,
     ListEntitiesArgs,
     ListEntriesArgs,
     ListGroupsArgs,
@@ -30,6 +31,7 @@ from backend.services.agent.tool_args import (
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
 from backend.services.groups import build_group_summary, group_tree_options
 from backend.services.runtime_settings import resolve_runtime_settings
+from backend.services.agent.user_context import normalize_account_markdown_for_context
 from backend.services.users import ensure_current_user
 from backend.services.entries import normalize_tag_name
 from backend.services.taxonomy import get_single_term_name_map
@@ -57,6 +59,17 @@ def format_entry_record(record: dict[str, Any]) -> str:
         f"entry_id={record.get('entry_id')} {record.get('date')} {record.get('name')} "
         f"{record.get('amount_minor')} {record.get('currency_code')} "
         f"from={record.get('from_entity') or '-'} to={record.get('to_entity') or '-'} tags={tags}"
+    )
+
+
+def format_account_record(record: dict[str, Any]) -> str:
+    notes = record.get("markdown_body")
+    if isinstance(notes, str):
+        notes = " / ".join(line.strip() for line in notes.splitlines() if line.strip())
+    notes_text = f"; notes: {notes}" if notes else ""
+    return (
+        f"{record.get('name')} ({record.get('currency_code')}; "
+        f"{'active' if record.get('is_active') else 'inactive'}{notes_text})"
     )
 
 
@@ -172,6 +185,15 @@ def proposal_summary(item: AgentChangeItem) -> str:
         return f"update entity name={payload.get('name')} patch={payload.get('patch') or {}}"
     if change_type == AgentChangeType.DELETE_ENTITY.value:
         return f"delete entity name={payload.get('name')}"
+    if change_type == AgentChangeType.CREATE_ACCOUNT.value:
+        return (
+            f"create account name={payload.get('name')} currency={payload.get('currency_code')} "
+            f"is_active={payload.get('is_active')}"
+        )
+    if change_type == AgentChangeType.UPDATE_ACCOUNT.value:
+        return f"update account name={payload.get('name')} patch={payload.get('patch') or {}}"
+    if change_type == AgentChangeType.DELETE_ACCOUNT.value:
+        return f"delete account name={payload.get('name')}"
     return f"{change_type} payload={payload}"
 
 
@@ -478,6 +500,65 @@ def list_tags(context: ToolContext, args: ListTagsArgs) -> ToolExecutionResult:
                 "OK",
                 f"summary: returned {len(records)} of {total_available} matching tags",
                 f"tags: {tags_text}",
+            ]
+        ),
+        output_json=output_json,
+        status="ok",
+    )
+
+
+def list_accounts(context: ToolContext, args: ListAccountsArgs) -> ToolExecutionResult:
+    settings = resolve_runtime_settings(context.db)
+    current_user = ensure_current_user(context.db, settings.current_user_name)
+
+    conditions = []
+    if current_user.name.lower() != "admin":
+        conditions.append(or_(Account.owner_user_id == current_user.id, Account.owner_user_id.is_(None)))
+    if args.currency_code is not None:
+        conditions.append(Account.currency_code == args.currency_code)
+    if args.is_active is not None:
+        conditions.append(Account.is_active.is_(args.is_active))
+
+    accounts = list(
+        context.db.scalars(
+            select(Account)
+            .join(Entity, Entity.id == Account.id)
+            .where(*conditions)
+            .options(selectinload(Account.entity))
+            .order_by(func.lower(Entity.name).asc(), Account.created_at.asc())
+        )
+    )
+
+    ranked: list[tuple[tuple[int, str], dict[str, Any]]] = []
+    for account in accounts:
+        name_rank, name_ok = string_match_rank(account.name, args.name)
+        if not name_ok:
+            continue
+        record = {
+            "name": account.name,
+            "currency_code": account.currency_code,
+            "is_active": account.is_active,
+            "markdown_body": normalize_account_markdown_for_context(account.markdown_body),
+        }
+        ranked.append(((name_rank, account.name.lower()), record))
+
+    ranked.sort(key=lambda pair: pair[0])
+    total_available = len(ranked)
+    records = [record for _, record in ranked[: args.limit]]
+    accounts_text = "; ".join(format_account_record(record) for record in records) if records else "(none)"
+    output_json = {
+        "status": "OK",
+        "summary": f"returned {len(records)} of {total_available} matching accounts",
+        "returned_count": len(records),
+        "total_available": total_available,
+        "accounts": records,
+    }
+    return ToolExecutionResult(
+        output_text=format_lines(
+            [
+                "OK",
+                f"summary: returned {len(records)} of {total_available} matching accounts",
+                f"accounts: {accounts_text}",
             ]
         ),
         output_json=output_json,

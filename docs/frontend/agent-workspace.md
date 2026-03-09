@@ -42,9 +42,9 @@ Supporting modules include:
 
 - review actions are handled in `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`
 - the header `Review` button is the only review entry point and opens one thread-scoped dialog for all proposal items across the selected thread
-- the dialog uses responsive width rules, lets reviewers collapse the left TOC, groups TOC rows by proposal domain (`Entries`, `Groups`, `Entities`, `Tags`) within `Pending` and `Reviewed / Failed`, and surfaces batch plus per-item review controls in a full-width bar above the denser review surface
-- proposals render CRUD-aware field-level diffs, and reviewer overrides update the preview for create and update entry/tag/entity/group proposals plus add-member group proposals
-- entry create/update review uses the same field model as `EntryEditorModal` through `frontend/src/features/agent/review/drafts.ts`; tag review edits only `name` and `type`, entity review edits only `name` and `category`, create/update group review edits `name` plus create-only `group_type`
+- the dialog uses responsive width rules, lets reviewers collapse the left TOC, groups TOC rows by proposal domain (`Entries`, `Accounts`, `Groups`, `Entities`, `Tags`) within `Pending` and `Reviewed / Failed`, and surfaces batch plus per-item review controls in a full-width bar above the denser review surface
+- proposals render CRUD-aware field-level diffs, and reviewer overrides update the preview for create and update entry/account/tag/entity/group proposals plus add-member group proposals
+- entry create/update review uses the same field model as `EntryEditorModal` through `frontend/src/features/agent/review/drafts.ts`; account review edits `name`, `currency`, `active`, and `notes`; tag review edits only `name` and `type`; entity review edits only `name` and `category`; create/update group review edits `name` plus create-only `group_type`
 - create-group-member review shows the resolved parent group name plus a read-only full entry snapshot for entry members; the only editable field in v1 is split role, and the diff preview treats membership changes as a group assignment update so only the `group` field (and split role when relevant) changes instead of re-highlighting the whole entry payload
 - proposal-backed group or entry dependencies show chips only while the referenced create proposal is still unresolved; once that dependency is `APPLIED`, the review surface falls back to the resolved group name and entry snapshot without a dependency banner
 - delete-group and delete-group-member proposals stay confirmation-only in v1
@@ -75,4 +75,4 @@ Supporting modules include:
 - cumulative usage bar shows `Context`, `Total input`, `Output`, `Cache read`, `Cache hit rate`, and total cost
 - `Context` comes from backend persisted run snapshots
 - live activity is driven by `run_event`; usage totals remain query-time read models rather than incremental SSE counters
-- run summary cards count pending change types across entries, groups, tags, and entities
+- run summary cards count pending change types across entries, accounts, groups, tags, and entities

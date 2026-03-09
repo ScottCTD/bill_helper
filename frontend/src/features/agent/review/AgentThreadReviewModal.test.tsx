@@ -53,7 +53,8 @@ describe("AgentThreadReviewModal", () => {
       }
     });
     vi.mocked(listCurrencies).mockResolvedValue([
-      { code: "USD", name: "US Dollar", entry_count: 1, is_placeholder: false }
+      { code: "USD", name: "US Dollar", entry_count: 1, is_placeholder: false },
+      { code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }
     ]);
     vi.mocked(listEntities).mockResolvedValue([
       { id: "entity-1", name: "Main Checking", category: "account", is_account: true },
@@ -85,12 +86,14 @@ describe("AgentThreadReviewModal", () => {
           }
         }),
         buildChangeItem({
-          id: "change-pending-entity",
+          id: "change-pending-account",
           run_id: "run-pending",
-          change_type: "create_entity",
+          change_type: "create_account",
           payload_json: {
             name: "Savings Vault",
-            category: "account"
+            currency_code: "USD",
+            is_active: true,
+            markdown_body: "Savings notes"
           }
         }),
         buildChangeItem({
@@ -154,7 +157,7 @@ describe("AgentThreadReviewModal", () => {
     expect(within(sidebar as HTMLElement).queryByRole("button", { name: "Approve All" })).not.toBeInTheDocument();
     const pendingSection = within(sidebar as HTMLElement).getByLabelText("Pending");
     expect(within(pendingSection).getByText("Entries")).toBeInTheDocument();
-    expect(within(pendingSection).getByText("Entities")).toBeInTheDocument();
+    expect(within(pendingSection).getByText("Accounts")).toBeInTheDocument();
     expect(within(pendingSection).getByText("Tags")).toBeInTheDocument();
     expect(within(sidebar as HTMLElement).queryByText("REJECTED")).not.toBeInTheDocument();
     expect(within(sidebar as HTMLElement).getByLabelText("Rejected")).toBeInTheDocument();
@@ -469,6 +472,67 @@ describe("AgentThreadReviewModal", () => {
         payloadOverride: {
           name: "streaming",
           type: "Media"
+        }
+      })
+    );
+  });
+
+  it("serializes account review edits into payload overrides", async () => {
+    const run = buildRun({
+      id: "run-account",
+      created_at: "2026-03-06T10:00:00Z",
+      change_items: [
+        buildChangeItem({
+          id: "proposal-account",
+          run_id: "run-account",
+          change_type: "create_account",
+          payload_json: {
+            name: "Travel Card",
+            currency_code: "USD",
+            is_active: true,
+            markdown_body: null
+          }
+        })
+      ]
+    });
+    const onApproveItem = vi.fn().mockResolvedValue({
+      ...run.change_items[0],
+      status: "APPLIED",
+      applied_resource_type: "account",
+      applied_resource_id: "account-1"
+    });
+
+    renderWithQueryClient(
+      <AgentThreadReviewModal
+        open
+        runs={[run]}
+        onOpenChange={() => undefined}
+        onApproveItem={onApproveItem}
+        onRejectItem={vi.fn()}
+        onReopenItem={vi.fn()}
+      />
+    );
+
+    const nameInput = await screen.findByLabelText("Name");
+    const currencySelect = screen.getByLabelText("Currency");
+    const statusSelect = screen.getByLabelText("Status");
+    const notesInput = screen.getByLabelText("Notes");
+
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, "Travel Card CAD");
+    await userEvent.selectOptions(currencySelect, "CAD");
+    await userEvent.selectOptions(statusSelect, "inactive");
+    await userEvent.type(notesInput, "Trip only");
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+
+    await waitFor(() =>
+      expect(onApproveItem).toHaveBeenCalledWith({
+        itemId: "proposal-account",
+        payloadOverride: {
+          name: "Travel Card CAD",
+          currency_code: "CAD",
+          is_active: false,
+          markdown_body: "Trip only"
         }
       })
     );

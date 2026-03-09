@@ -142,7 +142,7 @@ def _entry_entity_labels_for_payload(
     return labels
 
 
-def _pending_create_entity_names(
+def _pending_create_entity_root_names(
     pending_items: list[AgentChangeItem],
     *,
     exclude_item_ids: set[str] | None = None,
@@ -150,7 +150,10 @@ def _pending_create_entity_names(
     excluded = exclude_item_ids or set()
     names: set[str] = set()
     for item in pending_items:
-        if item.id in excluded or item.change_type != AgentChangeType.CREATE_ENTITY:
+        if item.id in excluded or item.change_type not in {
+            AgentChangeType.CREATE_ENTITY,
+            AgentChangeType.CREATE_ACCOUNT,
+        }:
             continue
         raw_name = item.payload_json.get("name")
         normalized = _normalized_entity_reference(raw_name)
@@ -181,7 +184,7 @@ def _validate_entry_dependencies_ready_for_approval(
         thread_id=thread_id,
         exclude_item_ids={item.id},
     )
-    pending_entity_names = _pending_create_entity_names(pending_items)
+    pending_entity_names = _pending_create_entity_root_names(pending_items)
 
     pending_blockers: list[str] = []
     missing_entities: list[str] = []
@@ -195,15 +198,15 @@ def _validate_entry_dependencies_ready_for_approval(
 
     if pending_blockers:
         quoted = ", ".join(f"'{name}'" for name in pending_blockers)
-        noun = "entity proposal" if len(pending_blockers) == 1 else "entity proposals"
+        noun = "create proposal" if len(pending_blockers) == 1 else "create proposals"
         raise ValueError(
-            f"Entry depends on pending {noun} for {quoted}. Approve or reject those entity proposals first."
+            f"Entry depends on pending {noun} for {quoted}. Approve or reject those proposals first."
         )
     if missing_entities:
         quoted = ", ".join(f"'{name}'" for name in missing_entities)
         noun = "entity" if len(missing_entities) == 1 else "entities"
         raise ValueError(
-            f"Entry references missing {noun} {quoted}. Propose and approve create_entity first."
+            f"Entry references missing {noun} {quoted}. Propose and approve create_entity or create_account first."
         )
 
 
@@ -268,6 +271,8 @@ EDITABLE_CHANGE_TYPES = {
     AgentChangeType.UPDATE_TAG,
     AgentChangeType.CREATE_ENTITY,
     AgentChangeType.UPDATE_ENTITY,
+    AgentChangeType.CREATE_ACCOUNT,
+    AgentChangeType.UPDATE_ACCOUNT,
     AgentChangeType.CREATE_ENTRY,
     AgentChangeType.UPDATE_ENTRY,
     AgentChangeType.CREATE_GROUP,
@@ -281,7 +286,7 @@ def _validate_payload_override_supported(item: AgentChangeItem, payload_override
         return
     if item.change_type not in EDITABLE_CHANGE_TYPES:
         raise ValueError(
-            "payload_override is only supported for editable create/update entry, tag, entity, and group items"
+            "payload_override is only supported for editable create/update entry, tag, entity, account, and group items"
         )
 
 

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { buildChangeItem } from "../../../test/factories/agent";
 import {
+  buildAccountOverrideState,
+  buildAccountReviewDraft,
   buildGroupMembershipOverrideState,
   buildGroupMembershipReviewDraft,
   buildGroupOverrideState,
@@ -262,6 +264,69 @@ describe("review draft serialization", () => {
         name: "Molly Tea",
         patch: {
           category: "merchant"
+        }
+      },
+      validationError: null
+    });
+  });
+
+  it("serializes create and update account drafts within the review contract", () => {
+    const createItem = buildChangeItem({
+      change_type: "create_account",
+      payload_json: {
+        name: "Travel Card",
+        currency_code: "USD",
+        is_active: true,
+        markdown_body: null
+      }
+    });
+    const updateItem = buildChangeItem({
+      change_type: "update_account",
+      payload_json: {
+        name: "Travel Card",
+        current: {
+          name: "Travel Card",
+          currency_code: "USD",
+          is_active: true,
+          markdown_body: null
+        },
+        patch: {
+          is_active: false
+        }
+      }
+    });
+
+    expect(
+      buildAccountOverrideState(createItem, {
+        ...buildAccountReviewDraft(createItem),
+        currencyCode: "CAD",
+        markdownBody: "Trip only"
+      })
+    ).toEqual({
+      hasChanges: true,
+      payloadOverride: {
+        name: "Travel Card",
+        currency_code: "CAD",
+        is_active: true,
+        markdown_body: "Trip only"
+      },
+      validationError: null
+    });
+
+    expect(
+      buildAccountOverrideState(updateItem, {
+        ...buildAccountReviewDraft(updateItem),
+        name: "Travel Card CAD",
+        markdownBody: "Closed after trip"
+      })
+    ).toEqual({
+      hasChanges: true,
+      payloadOverride: {
+        name: "Travel Card",
+        patch: {
+          name: "Travel Card CAD",
+          is_active: false,
+          markdown_body: "Closed after trip"
         }
       },
       validationError: null

@@ -15,6 +15,7 @@ from backend.database import build_engine, build_session_maker
 from backend.db_meta import Base
 from backend.enums_finance import EntryKind
 from backend.models_finance import Account, Entry
+from backend.services.accounts import create_account_root
 from backend.services.bootstrap import (
     run_schema_seed_and_stamp,
     stamp_alembic_head_for_database_url,
@@ -121,7 +122,7 @@ def _resolve_counterparty(
 ):
     lowered = description.lower()
     if kind == EntryKind.INCOME and lowered.startswith("payment from"):
-        return ensure_entity_by_name(db, debit_account_entity_name, category="account")
+        return ensure_entity_by_name(db, debit_account_entity_name)
     return ensure_entity_by_name(db, _title_case(description), category="merchant")
 
 
@@ -148,25 +149,24 @@ def _seed_demo_rows(
 
     default_user = ensure_user_by_name(db, "admin")
 
-    debit_entity = ensure_entity_by_name(db, "Demo Debit", category="account")
-    credit_entity = ensure_entity_by_name(db, "Demo Credit", category="account")
-
-    debit_account = Account(
-        id=debit_entity.id,
+    debit_account = create_account_root(
+        db,
+        name="Demo Debit",
         owner_user_id=default_user.id,
-        name=debit_entity.name,
+        markdown_body=None,
         currency_code=DEFAULT_ENTRY_CURRENCY,
         is_active=True,
     )
-    credit_account = Account(
-        id=credit_entity.id,
+    credit_account = create_account_root(
+        db,
+        name="Demo Credit",
         owner_user_id=default_user.id,
-        name=credit_entity.name,
+        markdown_body=None,
         currency_code=DEFAULT_ENTRY_CURRENCY,
         is_active=True,
     )
-    db.add_all([debit_account, credit_account])
-    db.flush()
+    debit_entity = debit_account.entity
+    credit_entity = credit_account.entity
 
     for row in credit_rows:
         description = _normalize_whitespace(row.get("Description", ""))

@@ -44,25 +44,29 @@ const ENTRY_FIELD_ORDER: Record<string, number> = {
   kind: 2,
   amount_minor: 3,
   currency_code: 4,
-  from_entity: 5,
-  to_entity: 6,
-  tags: 7,
-  markdown_notes: 8,
-  group: 9,
-  group_type: 10,
-  parent_group: 11,
-  parent_group_ref: 12,
-  member_kind: 13,
-  member: 14,
-  member_ref: 15,
-  member_role: 16
+  is_active: 5,
+  from_entity: 6,
+  to_entity: 7,
+  tags: 8,
+  markdown_body: 9,
+  markdown_notes: 10,
+  group: 11,
+  group_type: 12,
+  parent_group: 13,
+  parent_group_ref: 14,
+  member_kind: 15,
+  member: 16,
+  member_ref: 17,
+  member_role: 18
 };
 
 const FIELD_LABELS: Record<string, string> = {
   amount_minor: "amount",
   currency_code: "currency",
+  is_active: "active",
   from_entity: "from",
   to_entity: "to",
+  markdown_body: "notes",
   markdown_notes: "notes",
   group_type: "group type",
   parent_group: "parent group",
@@ -432,6 +436,48 @@ function buildGroupRecord(payload: JsonRecord): JsonRecord {
   };
 }
 
+function buildAccountRecord(payload: JsonRecord): JsonRecord {
+  return {
+    name: typeof payload.name === "string" ? payload.name : "",
+    currency_code: typeof payload.currency_code === "string" ? payload.currency_code : "",
+    is_active: typeof payload.is_active === "boolean" ? payload.is_active : true,
+    markdown_body:
+      typeof payload.markdown_body === "string" || payload.markdown_body === null ? payload.markdown_body : null
+  };
+}
+
+function buildUpdateAccountBeforeRecord(payload: JsonRecord): JsonRecord {
+  const current = asRecord(payload.current);
+  return buildAccountRecord({
+    name: typeof current.name === "string" ? current.name : payload.name,
+    currency_code: current.currency_code,
+    is_active: current.is_active,
+    markdown_body: Object.prototype.hasOwnProperty.call(current, "markdown_body") ? current.markdown_body : null
+  });
+}
+
+function buildUpdateAccountAfterRecord(
+  payload: JsonRecord,
+  reviewerOverride?: JsonRecord
+): { before: JsonRecord; after: JsonRecord; reviewerEdited: boolean } {
+  const before = buildUpdateAccountBeforeRecord(payload);
+  const reviewerEdited = Boolean(reviewerOverride && !jsonRecordsAreEquivalent(payload, reviewerOverride));
+  const effectivePatch = reviewerEdited ? asRecord(reviewerOverride?.patch) : asRecord(payload.patch);
+  return {
+    before,
+    after: buildAccountRecord({
+      ...before,
+      ...(typeof effectivePatch.name === "string" ? { name: effectivePatch.name } : {}),
+      ...(typeof effectivePatch.currency_code === "string" ? { currency_code: effectivePatch.currency_code } : {}),
+      ...(typeof effectivePatch.is_active === "boolean" ? { is_active: effectivePatch.is_active } : {}),
+      ...(Object.prototype.hasOwnProperty.call(effectivePatch, "markdown_body")
+        ? { markdown_body: effectivePatch.markdown_body }
+        : {})
+    }),
+    reviewerEdited
+  };
+}
+
 function buildUpdateGroupBeforeRecord(payload: JsonRecord): JsonRecord {
   const current = asRecord(payload.current);
   const target = asRecord(payload.target);
@@ -603,15 +649,21 @@ export function buildProposalDiff(
   if (Object.keys(impactPreview).length > 0) {
     const entryCount = typeof impactPreview.entry_count === "number" ? impactPreview.entry_count : null;
     const accountCount = typeof impactPreview.account_count === "number" ? impactPreview.account_count : null;
+    const snapshotCount = typeof impactPreview.snapshot_count === "number" ? impactPreview.snapshot_count : null;
     if (entryCount !== null) {
       pushMetadata(metadata, "Impacted entries", entryCount, entryCount > 0 ? "warning" : "neutral");
     }
     if (accountCount !== null) {
       pushMetadata(metadata, "Impacted accounts", accountCount, accountCount > 0 ? "warning" : "neutral");
     }
+    if (snapshotCount !== null) {
+      pushMetadata(metadata, "Snapshots", snapshotCount, snapshotCount > 0 ? "warning" : "neutral");
+    }
   }
 
   switch (changeType) {
+    case "create_account":
+      return buildCreateDiff(buildAccountRecord(payload), metadata, reviewerOverride ? buildAccountRecord(reviewerOverride) : undefined);
     case "create_entry":
     case "create_tag":
     case "create_entity":
@@ -619,6 +671,10 @@ export function buildProposalDiff(
     case "create_group": {
       pushMetadata(metadata, "Group type", (reviewerOverride?.group_type as unknown) ?? payload.group_type);
       return buildCreateDiff(buildGroupRecord(payload), metadata, reviewerOverride ? buildGroupRecord(reviewerOverride) : undefined);
+    }
+    case "update_account": {
+      const { before, after, reviewerEdited } = buildUpdateAccountAfterRecord(payload, reviewerOverride);
+      return buildRecordUpdateDiff(before, after, metadata, { reviewerEdited });
     }
     case "update_entry":
     case "update_tag":
@@ -632,6 +688,8 @@ export function buildProposalDiff(
     }
     case "delete_entry":
       return buildDeleteDiff(payload, metadata, selector);
+    case "delete_account":
+      return buildDeleteDiff(payload, metadata, asRecord(impactPreview.current));
     case "delete_group": {
       pushMetadata(metadata, "Group ID", payload.group_id);
       return buildDeleteDiff(payload, metadata, buildUpdateGroupBeforeRecord(payload));

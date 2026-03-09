@@ -64,6 +64,7 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 Read tools:
 
 - `list_entries`
+- `list_accounts`
 - `list_tags`
 - `list_entities`
 - `list_proposals`
@@ -71,12 +72,14 @@ Read tools:
 Proposal tools:
 
 - entries: `propose_create_entry`, `propose_update_entry`, `propose_delete_entry`
+- accounts: `propose_create_account`, `propose_update_account`, `propose_delete_account`
 - tags: `propose_create_tag`, `propose_update_tag`, `propose_delete_tag`
 - entities: `propose_create_entity`, `propose_update_entity`, `propose_delete_entity`
 
 Contract notes:
 
 - model-facing tool interfaces avoid requiring full domain IDs; entry mutations prefer `entry_id` aliases from `list_entries`
+- account mutations are first-class proposals; generic entity proposals reject `category="account"` and account grounding/editing should use `list_accounts`
 - entry update/delete fall back to selectors: `date + amount_minor + from_entity + to_entity + name`
 - entry-id or selector ambiguity is reported to the model as a tool error so the model asks user clarification
 

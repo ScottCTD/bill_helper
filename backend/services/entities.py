@@ -19,6 +19,9 @@ from backend.services.taxonomy_constants import (
 from backend.services.taxonomy import assign_single_term_by_name, get_single_term_name
 
 
+ACCOUNT_CATEGORY_DETAIL = "Account category is reserved for Accounts. Use /accounts instead."
+
+
 @dataclass(frozen=True, slots=True)
 class EntityUsageRow:
     entity: Entity
@@ -38,6 +41,11 @@ def normalize_entity_category(category: str | None) -> str | None:
         return None
     normalized = " ".join(category.split()).strip().lower()
     return normalized or None
+
+
+def ensure_entity_category_is_not_account(category: str | None) -> None:
+    if normalize_entity_category(category) == "account":
+        raise PolicyViolation.conflict(ACCOUNT_CATEGORY_DETAIL)
 
 
 def set_entity_category(db: Session, entity: Entity, category: str | None) -> str | None:
@@ -179,6 +187,7 @@ def create_entity_from_payload(db: Session, *, payload: EntityCreate) -> Entity:
         normalizer=normalize_entity_name,
         empty_detail="Entity name cannot be empty",
     )
+    ensure_entity_category_is_not_account(payload.category)
     existing = find_entity_by_name(db, normalized_name)
     assert_unique_name(
         existing_id=existing.id if existing is not None else None,
@@ -242,6 +251,7 @@ def update_entity_from_payload(
         )
 
     if "category" in update_data:
+        ensure_entity_category_is_not_account(update_data["category"])
         set_entity_category(db, entity, update_data["category"])
 
     db.add(entity)

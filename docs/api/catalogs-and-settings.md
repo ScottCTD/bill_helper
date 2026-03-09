@@ -51,6 +51,10 @@ Authorization: admin principal only.
 
 Errors: `400` empty name, `409` duplicate normalized name.
 
+Behavior:
+
+- `category="account"` is rejected with `409`; use `/accounts` for real accounts
+
 ### `PATCH /entities/{entity_id}`
 
 Update entity name or category. Response: `EntityRead`
@@ -60,6 +64,7 @@ Authorization: admin principal only.
 Behavior:
 
 - response category is resolved from taxonomy assignments
+- returns `409` if `category="account"` is requested
 - returns `409` for account-backed entities
 
 ### `DELETE /entities/{entity_id}`
