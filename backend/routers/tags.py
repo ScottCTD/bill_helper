@@ -14,7 +14,7 @@ from backend.services.crud_policy import (
 from backend.services.tags import (
     build_tag_read,
     create_tag_from_payload,
-    delete_tag,
+    delete_tag as delete_tag_service,
     list_tag_reads,
     load_tag,
     update_tag_from_payload,
@@ -62,13 +62,13 @@ def update_tag(
 
 
 @router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_tag_route(
+def delete_tag(
     tag_id: int,
     db: Session = Depends(get_db),
     _: RequestPrincipal = Depends(require_admin_principal),
 ) -> None:
     try:
-        delete_tag(db, tag=load_tag(db, tag_id=tag_id))
+        delete_tag_service(db, tag=load_tag(db, tag_id=tag_id))
     except PolicyViolation as exc:
         raise translate_policy_violation(exc) from exc
     db.commit()

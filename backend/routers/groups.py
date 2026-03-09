@@ -22,14 +22,14 @@ from backend.services.access_scope import (
     group_owner_filter,
 )
 from backend.services.groups import (
-    add_group_member,
+    add_group_member as add_group_member_service,
     build_group_graph,
     build_group_summary,
-    create_group,
-    delete_group,
+    create_group as create_group_service,
+    delete_group as delete_group_service,
     group_tree_options,
     load_group_tree,
-    remove_group_member,
+    remove_group_member as remove_group_member_service,
     rename_group,
 )
 
@@ -51,13 +51,13 @@ def _get_group_tree_or_404(
 
 
 @router.post("", response_model=GroupSummaryRead, status_code=status.HTTP_201_CREATED)
-def create_group_route(
+def create_group(
     payload: GroupCreate,
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> GroupSummaryRead:
     try:
-        group = create_group(
+        group = create_group_service(
             db,
             name=payload.name,
             group_type=payload.group_type,
@@ -128,14 +128,14 @@ def update_group(
 
 
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_group_route(
+def delete_group(
     group_id: str,
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> None:
     group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
     try:
-        delete_group(db, group=group)
+        delete_group_service(db, group=group)
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -143,7 +143,7 @@ def delete_group_route(
 
 
 @router.post("/{group_id}/members", response_model=GroupGraphRead, status_code=status.HTTP_201_CREATED)
-def add_group_member_route(
+def add_group_member(
     group_id: str,
     payload: GroupMemberCreate,
     db: Session = Depends(get_db),
@@ -159,7 +159,7 @@ def add_group_member_route(
         child_group = _get_group_tree_or_404(db, group_id=payload.child_group_id, principal=principal)
 
     try:
-        add_group_member(
+        add_group_member_service(
             db,
             group=group,
             entry=entry,
@@ -181,7 +181,7 @@ def add_group_member_route(
 
 
 @router.delete("/{group_id}/members/{membership_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_group_member_route(
+def delete_group_member(
     group_id: str,
     membership_id: str,
     db: Session = Depends(get_db),
@@ -189,7 +189,7 @@ def delete_group_member_route(
 ) -> None:
     group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
     try:
-        remove_group_member(db, group=group, membership_id=membership_id)
+        remove_group_member_service(db, group=group, membership_id=membership_id)
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
