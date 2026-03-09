@@ -20,8 +20,8 @@
   - LiteLLM adapter, retry policy, stream handling, and usage normalization
 - `backend/services/agent/pricing.py`
   - LiteLLM-backed pricing helper
-- `backend/services/agent/tool_args.py`
-  - tool argument schemas and nested JSON normalization
+- `backend/services/agent/tool_args/`
+  - focused tool-input package: `read.py` for read filters, `shared.py` for progress/common args, `threads.py` for thread rename args, `memory.py` for add-only memory args, and `proposal_admin.py` for pending-proposal/group-membership tool inputs
 - `backend/services/agent/tool_handlers_read.py`
   - read tools and `send_intermediate_update`
 - `backend/services/agent/tool_handlers_threads.py`

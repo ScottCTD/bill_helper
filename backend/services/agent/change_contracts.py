@@ -65,6 +65,16 @@ def _is_complete_entry_selector_payload(value: Any) -> bool:
     return all(normalize_loose_text(value.get(field)) is not None for field in ("from_entity", "to_entity", "name"))
 
 
+def normalize_group_member_reference_payload(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return value
+    normalized = dict(value)
+    normalized["group_ref"] = normalize_object_json_string(normalized.get("group_ref"))
+    normalized["entry_ref"] = normalize_object_json_string(normalized.get("entry_ref"))
+    normalized["child_group_ref"] = normalize_object_json_string(normalized.get("child_group_ref"))
+    return normalized
+
+
 class CreateTagPayload(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     type: str = Field(min_length=1, max_length=100)
@@ -525,13 +535,7 @@ class CreateGroupMemberPayload(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_nested_object_args(cls, value: Any) -> Any:
-        if not isinstance(value, dict):
-            return value
-        normalized = dict(value)
-        normalized["group_ref"] = normalize_object_json_string(normalized.get("group_ref"))
-        normalized["entry_ref"] = normalize_object_json_string(normalized.get("entry_ref"))
-        normalized["child_group_ref"] = normalize_object_json_string(normalized.get("child_group_ref"))
-        return normalized
+        return normalize_group_member_reference_payload(value)
 
     @model_validator(mode="after")
     def ensure_target_present(self) -> CreateGroupMemberPayload:
@@ -549,13 +553,7 @@ class DeleteGroupMemberPayload(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_nested_object_args(cls, value: Any) -> Any:
-        if not isinstance(value, dict):
-            return value
-        normalized = dict(value)
-        normalized["group_ref"] = normalize_object_json_string(normalized.get("group_ref"))
-        normalized["entry_ref"] = normalize_object_json_string(normalized.get("entry_ref"))
-        normalized["child_group_ref"] = normalize_object_json_string(normalized.get("child_group_ref"))
-        return normalized
+        return normalize_group_member_reference_payload(value)
 
     @model_validator(mode="after")
     def ensure_existing_target_present(self) -> DeleteGroupMemberPayload:
