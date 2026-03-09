@@ -63,6 +63,7 @@
 - `models_shared.py`: shared model defaults (`utc_now`, `uuid_str`) used by both model domains.
 - `schemas_finance.py`: ledger/dashboard/settings request/response schemas.
 - `schemas_agent.py`: agent thread/message/run/review request/response schemas.
+- `auth/`: request-principal contracts, explicit dev-session header parsing, and FastAPI auth dependencies.
 - `main.py`: FastAPI app creation, routing, CORS, health check.
 - `README.md`: thin backend-local navigation doc that points to canonical docs.
 
@@ -89,6 +90,7 @@
 - `tags.py`: tag CRUD helpers, taxonomy cleanup, and random default color generation.
 - `entities.py`: entity normalization, account-backed guards, and preserve-label delete helpers.
 - `users.py`: user normalization, lookup, and current-user helpers.
+- `principals.py`: explicit request-principal materialization from the development-session header and persisted user role.
 - `groups.py`: group CRUD, membership validation, depth-1 nesting enforcement, and derived graph generation.
 - `finance.py`: reconciliation, CAD dashboard analytics, projections, and chart-ready breakdown aggregations.
 - `crud_policy.py`: shared CRUD validation/conflict policy primitives and standardized error-translation helpers.
@@ -139,14 +141,14 @@
 
 ### Frontend Source (`/frontend/src`)
 
-- `main.tsx`: React root and providers.
+- `main.tsx`: React root and providers, including the principal-session provider.
 - `App.tsx`: top-level shell layout (sidebar + content) and route map.
 - `styles.css`: global styling including sidebar and app-shell classes.
 - `test/`: frontend test setup, typed fixture factories, and shared query-client test renderer.
 
 #### Components (`/frontend/src/components`)
 
-- `Sidebar.tsx`: collapsible left-panel navigation with icon+label links.
+- `Sidebar.tsx`: collapsible left-panel navigation with icon+label links and the active-principal switcher.
 - `MetricCard.tsx`: reusable metric container.
 - `LineChart.tsx`: legacy SVG daily expense chart helper (dashboard now uses Recharts).
 - `GroupGraphView.tsx`: React Flow-based graph rendering for entry groups.
@@ -193,11 +195,16 @@
   - `usePropertiesFilteredData.ts`: filtered list derivation by section search state.
   - `sections/*.tsx`: dedicated users/entities/tags/currencies/taxonomy section UI blocks.
   - `helpers.ts`, `types.ts`: filtering/taxonomy helpers and section contracts.
+- `session/`
+  - `principalStorage.ts`: localStorage-backed development principal session state plus shared header constant.
+  - `PrincipalSessionProvider.tsx`: app-wide principal-session context.
+  - `PrincipalSessionGate.tsx`: startup gate for selecting a principal before protected routes load.
+  - `PrincipalSessionCard.tsx`: sidebar control for switching or clearing the active principal.
 
 #### Frontend Lib (`/frontend/src/lib`)
 
 - `types.ts`: shared TS API/data types.
-- `api.ts`: fetch wrappers and API request functions, including group CRUD and membership helpers.
+- `api.ts`: fetch wrappers and API request functions, including shared principal-header injection plus group CRUD and membership helpers.
 - `format.ts`: money formatting and date helpers.
 - `queryKeys.ts`: centralized TanStack Query key factory for all domains.
 - `queryInvalidation.ts`: shared cache invalidation rules after mutations/review actions, including group-driven entry/group refresh.

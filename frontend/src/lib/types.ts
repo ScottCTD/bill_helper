@@ -25,6 +25,7 @@ export interface Entity {
 export interface User {
   id: string;
   name: string;
+  is_admin: boolean;
   is_current_user: boolean;
   account_count?: number | null;
   entry_count?: number | null;

@@ -4,7 +4,9 @@ from functools import lru_cache
 import os
 from pathlib import Path
 
-from pydantic import AliasChoices, Field, model_validator
+from typing import Literal
+
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ── XDG-conventional shared paths ────────────────────────────────────────────
@@ -80,6 +82,8 @@ class Settings(BaseSettings):
     data_dir: Path = SHARED_DATA_DIR
     database_url: str = ""
     cors_origins: list[str] = Field(default_factory=_default_cors_origins)
+    auth_mode: Literal["development_header"] = "development_header"
+    development_admin_principal_names: tuple[str, ...] = ("admin",)
     current_user_name: str = "admin"
     current_user_timezone: str = Field(
         default="America/Toronto",
@@ -129,6 +133,17 @@ class Settings(BaseSettings):
         if not self.database_url:
             self.database_url = f"sqlite:///{self.data_dir}/bill_helper.db"
         return self
+
+    @field_validator("development_admin_principal_names", mode="before")
+    @classmethod
+    def _parse_development_admin_principal_names(
+        cls,
+        value: object,
+    ) -> object:
+        if isinstance(value, str):
+            items = tuple(part.strip() for part in value.split(",") if part.strip())
+            return items or ("admin",)
+        return value
 
     def ensure_data_dir(self) -> Path:
         """Create data_dir if it doesn't exist and return it."""

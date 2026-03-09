@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from backend.auth import RequestPrincipal, require_admin_principal
+from backend.auth.contracts import RequestPrincipal
+from backend.auth.dependencies import require_admin_principal
 from backend.database import get_db
 from backend.models_finance import Entity
 from backend.schemas_finance import EntityCreate, EntityRead, EntityUpdate

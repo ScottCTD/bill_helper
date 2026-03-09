@@ -37,7 +37,9 @@ Core app settings include:
 - `DATA_DIR` (default `~/.local/share/bill-helper`)
 - `DATABASE_URL` (derived from `DATA_DIR` unless explicitly set)
 - `CORS_ORIGINS` (default `http://localhost:5173`)
-- `CURRENT_USER_NAME` (default `admin`)
+- `AUTH_MODE` (default `development_header`)
+- `DEVELOPMENT_ADMIN_PRINCIPAL_NAMES` (default `admin`)
+- `CURRENT_USER_NAME` (default `admin`; background-agent and benchmark fallback context, not HTTP auth)
 - `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` (default `America/Toronto`)
 - `DEFAULT_CURRENCY_CODE` (default `CAD`)
 - `DASHBOARD_CURRENCY_CODE` (default `CAD`)
@@ -59,6 +61,7 @@ Runtime override behavior:
 - `user_memory` is DB-backed only, normalized as an ordered `list[str]`, and injected into every agent system prompt as a markdown unordered list when set
 - `available_agent_models` is DB-backed only, normalized as an ordered `list[str]`, and always resolved to include the effective `agent_model`
 - identity is request-principal-based at API boundaries; `current_user_name` is read-only in `/settings`
+- protected HTTP routes require explicit `X-Bill-Helper-Principal`; the frontend owns that header through the local principal session
 - `agent_base_url` overrides allow only `http` and `https` and block localhost domains and non-public IP literals
 
 Behavior notes:

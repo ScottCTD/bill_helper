@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import Select, or_, select, true
 from sqlalchemy.orm import Session
 
-from backend.auth import RequestPrincipal, is_admin_principal
+from backend.auth.contracts import RequestPrincipal, is_admin_principal
 from backend.models_finance import Account, Entry, EntryGroup, User
 from backend.services.crud_policy import PolicyViolation, translate_policy_violation
 

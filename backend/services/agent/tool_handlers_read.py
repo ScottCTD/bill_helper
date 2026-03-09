@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
-from backend.auth import is_admin_principal_name
+from backend.auth.dev_session import is_admin_principal_name
 from backend.enums_agent import AgentChangeType
 from backend.models_agent import AgentChangeItem, AgentReviewAction, AgentRun
 from backend.models_finance import Account, Entity, Entry, EntryGroup, Tag

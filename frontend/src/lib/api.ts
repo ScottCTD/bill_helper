@@ -25,6 +25,7 @@ import type {
   Tag,
   User
 } from "./types";
+import { PRINCIPAL_SESSION_HEADER_NAME, getStoredPrincipalName } from "../features/session/principalStorage";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -47,6 +48,11 @@ function extractErrorMessage(body: string, status: number): string {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers ?? {});
+  const principalName = getStoredPrincipalName();
+  if (!principalName) {
+    throw new Error("Select a local principal before calling the API.");
+  }
+  headers.set(PRINCIPAL_SESSION_HEADER_NAME, principalName);
   const isFormData = init?.body instanceof FormData;
   if (!isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -474,12 +480,17 @@ export async function streamAgentMessage(payload: {
   signal?: AbortSignal;
   onEvent: (event: AgentStreamEvent) => void;
 }): Promise<void> {
+  const principalName = getStoredPrincipalName();
+  if (!principalName) {
+    throw new Error("Select a local principal before calling the API.");
+  }
   const response = await fetch(`${API_BASE_URL}/api/v1/agent/threads/${payload.threadId}/messages/stream`, {
     method: "POST",
     body: buildAgentMessageFormData(payload.content, payload.files, payload.modelName),
     signal: payload.signal,
     headers: {
-      Accept: "text/event-stream"
+      Accept: "text/event-stream",
+      [PRINCIPAL_SESSION_HEADER_NAME]: principalName
     }
   });
   if (!response.ok) {

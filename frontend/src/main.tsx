@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
 import { NotificationProvider } from "./components/ui/notification-center";
+import { PrincipalSessionProvider } from "./features/session";
 import "./styles.css";
 
 const queryClient = new QueryClient();
@@ -13,9 +14,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <NotificationProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
+        <PrincipalSessionProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </PrincipalSessionProvider>
       </NotificationProvider>
     </QueryClientProvider>
   </React.StrictMode>

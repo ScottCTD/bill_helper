@@ -11,7 +11,8 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, load_only, selectinload
 
-from backend.auth import RequestPrincipal, get_or_create_current_principal, require_admin_principal
+from backend.auth.contracts import RequestPrincipal
+from backend.auth.dependencies import get_or_create_current_principal, require_admin_principal
 from backend.config import get_settings
 from backend.database import get_db, get_session_maker
 from backend.enums_agent import AgentChangeStatus, AgentRunStatus, SUPPORTED_AGENT_CHANGE_TYPES

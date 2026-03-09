@@ -55,7 +55,7 @@ function mockBasePropertiesApi() {
     { id: "entity-1", name: "Grocer", category: "Food", is_account: false, from_count: 1, to_count: 2, account_count: 0, entry_count: 3 },
     { id: "entity-account", name: "Checking", category: null, is_account: true, from_count: 0, to_count: 0, account_count: 1, entry_count: 0 }
   ]);
-  vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true }]);
+  vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: true, is_current_user: true }]);
   vi.mocked(listTags).mockResolvedValue([{ id: 1, name: "groceries", color: "#22aa66", type: "Food", entry_count: 2 }]);
   vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 3, is_placeholder: false }]);
   vi.mocked(listTaxonomies).mockResolvedValue([
@@ -102,8 +102,8 @@ function mockBasePropertiesApi() {
   });
   vi.mocked(createTag).mockResolvedValue({ id: 2, name: "rent", color: null, type: "Housing", entry_count: 0 });
   vi.mocked(updateTag).mockResolvedValue({ id: 1, name: "groceries", color: "#22aa66", type: "Food", entry_count: 2 });
-  vi.mocked(createUser).mockResolvedValue({ id: "user-2", name: "Bob", is_current_user: false });
-  vi.mocked(updateUser).mockResolvedValue({ id: "user-1", name: "Alice", is_current_user: true });
+  vi.mocked(createUser).mockResolvedValue({ id: "user-2", name: "Bob", is_admin: false, is_current_user: false });
+  vi.mocked(updateUser).mockResolvedValue({ id: "user-1", name: "Alice", is_admin: true, is_current_user: true });
   vi.mocked(deleteEntity).mockResolvedValue(undefined);
   vi.mocked(deleteTag).mockResolvedValue(undefined);
   vi.mocked(createTaxonomyTerm).mockImplementation(async (_taxonomyKey, payload) => ({

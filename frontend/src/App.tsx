@@ -2,6 +2,7 @@ import { Suspense, lazy, useState } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 
 import { Sidebar } from "./components/Sidebar";
+import { PrincipalSessionGate, usePrincipalSession } from "./features/session";
 import { useResizablePanel } from "./hooks/useResizablePanel";
 import { cn } from "./lib/utils";
 
@@ -46,6 +47,7 @@ const SettingsPage = lazy(async () => {
 });
 
 export function App() {
+  const { principalName } = usePrincipalSession();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { panelWidth: sidebarWidth, handleMouseDown: handleSidebarResizeMouseDown } = useResizablePanel({
     storageKey: "app-sidebar-width",
@@ -56,6 +58,10 @@ export function App() {
   });
   const location = useLocation();
   const isAgentPage = location.pathname === "/";
+
+  if (!principalName) {
+    return <PrincipalSessionGate />;
+  }
 
   return (
     <div className="app-shell">

@@ -5,12 +5,13 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from backend.auth.dev_session import is_admin_principal_name
 from backend.models_finance import Account, Entry, User
 from backend.schemas_finance import UserRead
 from backend.services.crud_policy import PolicyViolation, assert_unique_name, normalize_required_name
 
 if TYPE_CHECKING:
-    from backend.auth import RequestPrincipal
+    from backend.auth.contracts import RequestPrincipal
 
 
 def normalize_user_name(name: str) -> str:
@@ -18,7 +19,7 @@ def normalize_user_name(name: str) -> str:
 
 
 def _is_admin_principal(principal: RequestPrincipal) -> bool:
-    return normalize_user_name(principal.user_name).lower() == "admin"
+    return principal.is_admin
 
 
 def find_user_by_name(db: Session, name: str) -> User | None:
@@ -28,26 +29,49 @@ def find_user_by_name(db: Session, name: str) -> User | None:
     return db.scalar(select(User).where(func.lower(User.name) == normalized.lower()))
 
 
-def ensure_user_by_name(db: Session, name: str) -> User:
+def ensure_user_by_name(
+    db: Session,
+    name: str,
+    *,
+    is_admin: bool = False,
+) -> User:
     normalized = normalize_user_name(name)
     if not normalized:
         raise ValueError("User name cannot be empty")
 
     existing = find_user_by_name(db, normalized)
     if existing is not None:
+        if is_admin and not existing.is_admin:
+            existing.is_admin = True
+            db.add(existing)
+            db.flush()
         return existing
 
-    user = User(name=normalized)
+    user = User(name=normalized, is_admin=is_admin)
     db.add(user)
     db.flush()
     return user
 
 
-def ensure_current_user(db: Session, current_user_name: str) -> User:
-    return ensure_user_by_name(db, current_user_name)
+def ensure_current_user(
+    db: Session,
+    current_user_name: str,
+    *,
+    is_admin: bool | None = None,
+) -> User:
+    return ensure_user_by_name(
+        db,
+        current_user_name,
+        is_admin=is_admin_principal_name(current_user_name) if is_admin is None else is_admin,
+    )
 
 
-def create_user_with_unique_name(db: Session, *, raw_name: str) -> User:
+def create_user_with_unique_name(
+    db: Session,
+    *,
+    raw_name: str,
+    is_admin: bool = False,
+) -> User:
     normalized_name = normalize_required_name(
         raw_name,
         normalizer=normalize_user_name,
@@ -60,7 +84,7 @@ def create_user_with_unique_name(db: Session, *, raw_name: str) -> User:
         conflict_detail="User already exists",
     )
 
-    user = User(name=normalized_name)
+    user = User(name=normalized_name, is_admin=is_admin)
     db.add(user)
     db.flush()
     return user
@@ -95,6 +119,7 @@ def _to_user_read(
     return UserRead(
         id=user.id,
         name=user.name,
+        is_admin=user.is_admin,
         is_current_user=user.name.lower() == principal_name.lower(),
         account_count=account_count,
         entry_count=entry_count,
@@ -191,7 +216,7 @@ def create_user_for_principal(
 ) -> User:
     if not _is_admin_principal(principal):
         raise PolicyViolation.forbidden("Only admin principal can create users.")
-    return create_user_with_unique_name(db, raw_name=raw_name)
+    return create_user_with_unique_name(db, raw_name=raw_name, is_admin=False)
 
 
 def update_user_for_principal(

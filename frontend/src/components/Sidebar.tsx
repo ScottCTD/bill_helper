@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { NavLink } from "react-router-dom";
 import { Bot, CreditCard, FolderKanban, Home, Layers3, Network, Settings2, PanelLeftClose, PanelLeft } from "lucide-react";
 
+import { PrincipalSessionCard } from "../features/session";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 
@@ -77,6 +78,7 @@ export function Sidebar({ collapsed, width, onToggle }: SidebarProps) {
           <p className="sidebar-footer-text">
             Local-first ledger with AI review
           </p>
+          <PrincipalSessionCard />
         </div>
       )}
     </aside>

@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from backend.auth import RequestPrincipal
+from backend.auth.contracts import RequestPrincipal
 from backend.database import get_session_maker
 from backend.enums_finance import EntryKind, GroupType
 from backend.models_finance import Account, Entity, EntryGroup, User
@@ -21,7 +21,7 @@ from backend.services.entries import (
 
 
 def _create_user(db, name: str) -> User:
-    user = User(name=name)
+    user = User(name=name, is_admin=name.lower() == "admin")
     db.add(user)
     db.flush()
     return user
@@ -61,7 +61,7 @@ def test_create_entry_from_command_assigns_tags_and_direct_group() -> None:
         admin = _create_user(db, "admin")
         account = _create_account(db, name="Checking", owner_user_id=admin.id)
         group = _create_group(db, name="Bills", owner_user_id=admin.id)
-        principal = RequestPrincipal(user_id=admin.id, user_name=admin.name)
+        principal = RequestPrincipal(user_id=admin.id, user_name=admin.name, is_admin=True)
 
         entry = create_entry_from_command(
             db,
@@ -100,7 +100,7 @@ def test_update_entry_from_command_uses_policy_violation_for_cross_principal_own
         admin = _create_user(db, "admin")
         alice = _create_user(db, "alice")
         account = _create_account(db, name="Alice Checking", owner_user_id=alice.id)
-        principal = RequestPrincipal(user_id=alice.id, user_name=alice.name)
+        principal = RequestPrincipal(user_id=alice.id, user_name=alice.name, is_admin=False)
 
         entry = create_entry_from_command(
             db,

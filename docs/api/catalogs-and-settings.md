@@ -1,5 +1,7 @@
 # API Catalogs And Settings
 
+Protected routes in this family require `X-Bill-Helper-Principal`. Missing the header returns `401`.
+
 ## Users
 
 ### `GET /users`
@@ -10,6 +12,7 @@ Behavior:
 
 - admin principal returns all users
 - non-admin principal returns only the caller row
+- each row includes persisted `is_admin` plus `is_current_user`
 
 ### `POST /users`
 
@@ -176,6 +179,7 @@ Behavior:
 
 - `user_memory` is DB-backed only and returned as an ordered list of strings
 - `available_agent_models` is DB-backed only and returned as an ordered list of model identifiers; the effective list always includes `agent_model`
+- `current_user_name` comes from the explicit request principal, not mutable runtime settings state
 - `agent_api_key` is never returned
 - `agent_base_url` reflects only an explicit custom override from runtime settings or `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL`
 - `agent_api_key_configured` reports whether an explicit override key exists or LiteLLM can resolve provider credentials for the selected model; `overrides.agent_api_key_configured` reports only whether a stored runtime override exists

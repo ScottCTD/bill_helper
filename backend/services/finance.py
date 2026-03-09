@@ -9,7 +9,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
-from backend.auth import RequestPrincipal
+from backend.auth.contracts import RequestPrincipal
 from backend.enums_finance import EntryKind
 from backend.models_finance import Account, AccountSnapshot, Entity, Entry, EntryTag, Tag
 from backend.schemas_finance import (

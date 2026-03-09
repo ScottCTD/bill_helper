@@ -1,5 +1,7 @@
 # API Agent
 
+All agent routes require `X-Bill-Helper-Principal`, and the resolved user must have persisted admin access (`users.is_admin=true`).
+
 ## Threads
 
 ### `GET /agent/threads`
