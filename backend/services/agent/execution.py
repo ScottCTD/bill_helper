@@ -22,7 +22,7 @@ from backend.services.agent.runtime import (
 )
 from backend.services.agent.tool_runtime import build_openai_tool_schemas
 from backend.services.runtime_settings import resolve_runtime_settings
-from backend.services.runtime_settings_normalization import normalize_text_or_none
+from backend.validation.runtime_settings import normalize_text_or_none
 
 
 @dataclass(slots=True)

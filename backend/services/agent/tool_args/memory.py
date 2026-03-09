@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
-from backend.services.runtime_settings_normalization import (
+from backend.validation.runtime_settings import (
     normalize_user_memory_items_or_none,
     validate_user_memory_size,
 )

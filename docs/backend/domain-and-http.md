@@ -76,8 +76,10 @@ Important read models:
 - `backend/services/taxonomy.py`
 - `backend/services/runtime_settings.py`
   - resolves effective runtime settings from DB overrides plus env defaults
-- `backend/services/runtime_settings_normalization.py`
-  - single-source normalization shared by schemas and runtime resolution
+- `backend/validation/runtime_settings.py`
+  - single-source normalization shared by schemas, tool-input models, and runtime resolution
+- `backend/validation/agent_threads.py`
+  - shared thread-title validation contract used by schemas, tool args, and thread services
 
 Current account/entity helpers:
 

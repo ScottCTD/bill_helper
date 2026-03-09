@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
-from backend.services.agent.threads import THREAD_TITLE_MAX_LENGTH, validate_thread_title
+from backend.validation.agent_threads import THREAD_TITLE_MAX_LENGTH, validate_thread_title
 
 
 class RenameThreadArgs(BaseModel):

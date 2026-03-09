@@ -9,7 +9,7 @@ from backend.config import DEFAULT_AGENT_MODEL, get_settings
 from backend.models_finance import RuntimeSettings as RuntimeSettingsRow
 from backend.schemas_finance import RuntimeSettingsOverridesRead, RuntimeSettingsRead, RuntimeSettingsUpdate
 from backend.services.agent.model_client import validate_litellm_environment
-from backend.services.runtime_settings_normalization import (
+from backend.validation.runtime_settings import (
     parse_agent_models_or_none,
     normalize_currency_code_or_none,
     parse_user_memory_or_none,

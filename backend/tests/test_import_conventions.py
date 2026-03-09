@@ -52,6 +52,7 @@ def _assert_marker_module(path: Path) -> None:
 def test_service_package_init_modules_are_marker_only() -> None:
     _assert_marker_module(BACKEND_DIR / "services" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "__init__.py")
+    _assert_marker_module(BACKEND_DIR / "validation" / "__init__.py")
 
 
 def test_backend_modules_do_not_import_agent_api_from_backend_services() -> None:
@@ -112,3 +113,30 @@ def test_legacy_domain_facades_are_removed() -> None:
 def test_agent_tool_args_are_grouped_in_a_package() -> None:
     assert not REMOVED_AGENT_TOOL_ARGS_MODULE.exists(), "tool_args should stay split into a package"
     assert AGENT_TOOL_ARGS_PACKAGE.is_dir(), "tool_args package should exist"
+
+
+def test_schema_modules_do_not_import_service_modules() -> None:
+    violations: list[str] = []
+    for path in (BACKEND_DIR / "schemas_agent.py", BACKEND_DIR / "schemas_finance.py"):
+        module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(module):
+            if isinstance(node, ast.ImportFrom):
+                if not (node.module or "").startswith("backend.services"):
+                    continue
+                relpath = path.relative_to(REPO_ROOT)
+                violations.append(
+                    f"{relpath}:{node.lineno} imports from '{node.module}' "
+                    "(extract shared validators into backend.validation)"
+                )
+                continue
+            if not isinstance(node, ast.Import):
+                continue
+            for alias in node.names:
+                if not alias.name.startswith("backend.services"):
+                    continue
+                relpath = path.relative_to(REPO_ROOT)
+                violations.append(
+                    f"{relpath}:{node.lineno} imports '{alias.name}' "
+                    "(extract shared validators into backend.validation)"
+                )
+    assert not violations, "Schema modules must not depend on service modules:\n" + "\n".join(violations)

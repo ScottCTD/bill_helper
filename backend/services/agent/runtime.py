@@ -61,8 +61,8 @@ from backend.services.agent.tool_args import INTERMEDIATE_UPDATE_TOOL_NAME
 from backend.services.agent.tool_runtime import build_openai_tool_schemas, execute_tool
 from backend.services.agent.tool_types import ToolContext, ToolExecutionStatus
 from backend.services.runtime_settings import resolve_runtime_settings
-from backend.services.runtime_settings_normalization import normalize_text_or_none
 from backend.services.users import find_user_by_name
+from backend.validation.runtime_settings import normalize_text_or_none
 
 
 EMPTY_PENDING_REVIEW_FOOTER_PATTERN = re.compile(
