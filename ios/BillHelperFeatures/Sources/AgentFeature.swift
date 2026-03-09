@@ -1120,6 +1120,9 @@ private func changeTypeLabel(_ changeType: AgentChangeType) -> String {
     case .createEntry: "Create Entry"
     case .updateEntry: "Update Entry"
     case .deleteEntry: "Delete Entry"
+    case .createAccount: "Create Account"
+    case .updateAccount: "Update Account"
+    case .deleteAccount: "Delete Account"
     case .createGroup: "Create Group"
     case .updateGroup: "Update Group"
     case .deleteGroup: "Delete Group"
@@ -1143,6 +1146,12 @@ private func reviewSummary(_ item: AgentChangeItem) -> String {
     case .updateEntry, .deleteEntry:
         let selectorName = item.payloadJson["selector"]?.objectValue?["name"]?.stringValue ?? "Unknown entry"
         return "\(changeTypeLabel(item.changeType)): \(selectorName)"
+    case .createAccount, .deleteAccount:
+        let name = item.payloadJson["name"]?.stringValue ?? "Untitled"
+        return "\(changeTypeLabel(item.changeType)): \(name)"
+    case .updateAccount:
+        let name = item.payloadJson["name"]?.stringValue ?? "Untitled"
+        return "\(changeTypeLabel(item.changeType)): \(name)"
     case .createGroup, .deleteGroup:
         let name = item.payloadJson["name"]?.stringValue ?? "Untitled group"
         return "\(changeTypeLabel(item.changeType)): \(name)"

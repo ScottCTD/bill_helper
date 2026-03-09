@@ -48,6 +48,39 @@ describe("proposal diff", () => {
     expect(diff.metadata.some((item) => item.label === "Patch fields" && item.value === "1")).toBe(true);
   });
 
+  it("builds account update diffs from account records", () => {
+    const diff = buildProposalDiff(
+      "update_account",
+      {
+        name: "Travel Card",
+        current: {
+          name: "Travel Card",
+          currency_code: "USD",
+          is_active: true,
+          markdown_body: null
+        },
+        patch: {
+          currency_code: "CAD",
+          is_active: false
+        }
+      },
+      {
+        name: "Travel Card",
+        patch: {
+          currency_code: "CAD",
+          is_active: false,
+          markdown_body: "Trip only"
+        }
+      }
+    );
+
+    expect(diff.mode).toBe("update");
+    expect(diff.note).toContain("reviewer-edited payload");
+    expect(diff.lines.some((line) => line.path === "currency" && line.value === "CAD")).toBe(true);
+    expect(diff.lines.some((line) => line.path === "active" && line.value === "false")).toBe(true);
+    expect(diff.lines.some((line) => line.path === "notes" && line.value === "Trip only")).toBe(true);
+  });
+
   it("builds delete diff from target snapshot", () => {
     const diff = buildProposalDiff("delete_tag", {
       name: "groceries",
@@ -57,6 +90,27 @@ describe("proposal diff", () => {
     expect(diff.mode).toBe("delete");
     expect(diff.lines.every((line) => line.sign === "-")).toBe(true);
     expect(diff.lines.map((line) => line.path)).toEqual(["name", "color"]);
+  });
+
+  it("builds account delete diffs from impact previews", () => {
+    const diff = buildProposalDiff("delete_account", {
+      name: "Travel Card",
+      impact_preview: {
+        entry_count: 2,
+        snapshot_count: 1,
+        current: {
+          name: "Travel Card",
+          currency_code: "CAD",
+          is_active: false,
+          markdown_body: "Trip only"
+        }
+      }
+    });
+
+    expect(diff.mode).toBe("delete");
+    expect(diff.lines.every((line) => line.sign === "-")).toBe(true);
+    expect(diff.metadata.some((item) => item.label === "Impacted entries" && item.value === "2")).toBe(true);
+    expect(diff.metadata.some((item) => item.label === "Snapshots" && item.value === "1")).toBe(true);
   });
 
   it("normalizes record equality regardless of key order", () => {

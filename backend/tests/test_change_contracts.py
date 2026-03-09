@@ -29,6 +29,21 @@ def test_validate_change_payload_normalizes_create_entry_contract() -> None:
     assert parsed.tags == ["cafe", "food"]
 
 
+def test_validate_change_payload_normalizes_create_account_contract() -> None:
+    payload = {
+        "name": "  Travel Card  ",
+        "currency_code": "cad",
+        "is_active": False,
+        "markdown_body": "Trip spending only",
+    }
+
+    parsed = validate_change_payload(AgentChangeType.CREATE_ACCOUNT, payload)
+    assert parsed.name == "Travel Card"
+    assert parsed.currency_code == "CAD"
+    assert parsed.is_active is False
+    assert parsed.markdown_body == "Trip spending only"
+
+
 def test_validate_patch_map_paths_rejects_non_mutable_roots() -> None:
     with pytest.raises(ValueError):
         validate_patch_map_paths(

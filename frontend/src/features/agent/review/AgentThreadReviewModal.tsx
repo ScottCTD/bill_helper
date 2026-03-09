@@ -16,6 +16,8 @@ import { queryKeys } from "../../../lib/queryKeys";
 import type { AgentChangeItem, AgentChangeStatus, AgentChangeType, AgentRun, Currency, Entity, Tag } from "../../../lib/types";
 import { cn } from "../../../lib/utils";
 import {
+  buildAccountOverrideState,
+  buildAccountReviewDraft,
   buildGroupMembershipOverrideState,
   buildGroupMembershipReviewDraft,
   buildGroupOverrideState,
@@ -27,6 +29,7 @@ import {
   buildEntryReviewDraft,
   buildTagOverrideState,
   buildTagReviewDraft,
+  type AccountReviewDraft,
   type EntityReviewDraft,
   type EntryReviewDraft,
   type GroupMembershipReviewDraft,
@@ -63,7 +66,7 @@ interface BatchSummary {
   failedItemIds: string[];
 }
 
-type TocProposalGroupKey = "entry" | "entity" | "tag" | "group";
+type TocProposalGroupKey = "entry" | "account" | "entity" | "tag" | "group";
 
 interface TocProposalGroup {
   key: TocProposalGroupKey;
@@ -152,6 +155,7 @@ function proposalGroupKey(changeType: AgentChangeType): TocProposalGroupKey {
 function groupReviewItems(items: ThreadReviewItem[]): TocProposalGroup[] {
   const grouped: Record<TocProposalGroupKey, ThreadReviewItem[]> = {
     entry: [],
+    account: [],
     entity: [],
     tag: [],
     group: []
@@ -161,6 +165,7 @@ function groupReviewItems(items: ThreadReviewItem[]): TocProposalGroup[] {
   }
   const groups: TocProposalGroup[] = [
     { key: "entry", label: "Entries", items: grouped.entry },
+    { key: "account", label: "Accounts", items: grouped.account },
     { key: "group", label: "Groups", items: grouped.group },
     { key: "entity", label: "Entities", items: grouped.entity },
     { key: "tag", label: "Tags", items: grouped.tag }
@@ -247,10 +252,10 @@ function findRelativeItemId(items: ThreadReviewItem[], currentItemId: string | n
   return items[nextIndex]?.item.id ?? null;
 }
 
-function collectCurrencyOptions(currencies: Currency[], draft?: EntryReviewDraft): string[] {
+function collectCurrencyOptions(currencies: Currency[], draftCurrencyCode?: string): string[] {
   const codes = new Set(currencies.map((currency) => currency.code));
-  if (draft?.currencyCode) {
-    codes.add(draft.currencyCode.toUpperCase());
+  if (draftCurrencyCode) {
+    codes.add(draftCurrencyCode.toUpperCase());
   }
   return Array.from(codes).sort();
 }
@@ -342,7 +347,10 @@ function ReviewEntryEditor({
   isDisabled: boolean;
   onDraftChange: (nextDraft: EntryReviewDraft) => void;
 }) {
-  const currencyOptions = useMemo(() => collectCurrencyOptions(currencies, draft), [currencies, draft]);
+  const currencyOptions = useMemo(
+    () => collectCurrencyOptions(currencies, draft.currencyCode),
+    [currencies, draft.currencyCode]
+  );
   const entityOptions = useMemo(
     () => uniqueEntityOptionNames(entities, [draft.fromEntity, draft.toEntity]),
     [draft.fromEntity, draft.toEntity, entities]
@@ -475,6 +483,70 @@ function ReviewTagEditor({
           ariaLabel="Tag type"
           placeholder="Select or create type..."
           onChange={(nextValue) => onDraftChange({ ...draft, type: nextValue })}
+        />
+      </FormField>
+    </div>
+  );
+}
+
+function ReviewAccountEditor({
+  draft,
+  currencies,
+  validationError,
+  isDisabled,
+  onDraftChange
+}: {
+  draft: AccountReviewDraft;
+  currencies: Currency[];
+  validationError: string | null;
+  isDisabled: boolean;
+  onDraftChange: (nextDraft: AccountReviewDraft) => void;
+}) {
+  const currencyOptions = useMemo(
+    () => collectCurrencyOptions(currencies, draft.currencyCode),
+    [currencies, draft.currencyCode]
+  );
+  const nameError = validationError === "Name is required." ? validationError : undefined;
+  const currencyError = validationError === "Currency is required." ? validationError : undefined;
+
+  return (
+    <div className="agent-review-editor-grid">
+      <FormField label="Name" error={nameError}>
+        <Input value={draft.name} disabled={isDisabled} onChange={(event) => onDraftChange({ ...draft, name: event.target.value })} />
+      </FormField>
+
+      <div className="agent-review-editor-row">
+        <FormField label="Currency" error={currencyError}>
+          <NativeSelect
+            value={draft.currencyCode}
+            disabled={isDisabled}
+            onChange={(event) => onDraftChange({ ...draft, currencyCode: event.target.value })}
+          >
+            {currencyOptions.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+        <FormField label="Status">
+          <NativeSelect
+            value={draft.isActive ? "active" : "inactive"}
+            disabled={isDisabled}
+            onChange={(event) => onDraftChange({ ...draft, isActive: event.target.value === "active" })}
+          >
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </NativeSelect>
+        </FormField>
+      </div>
+
+      <FormField label="Notes">
+        <Textarea
+          rows={5}
+          value={draft.markdownBody}
+          disabled={isDisabled}
+          onChange={(event) => onDraftChange({ ...draft, markdownBody: event.target.value })}
         />
       </FormField>
     </div>
@@ -725,6 +797,7 @@ export function AgentThreadReviewModal({
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [entryDrafts, setEntryDrafts] = useState<Record<string, EntryReviewDraft>>({});
   const [tagDrafts, setTagDrafts] = useState<Record<string, TagReviewDraft>>({});
+  const [accountDrafts, setAccountDrafts] = useState<Record<string, AccountReviewDraft>>({});
   const [entityDrafts, setEntityDrafts] = useState<Record<string, EntityReviewDraft>>({});
   const [groupDrafts, setGroupDrafts] = useState<Record<string, GroupReviewDraft>>({});
   const [groupMembershipDrafts, setGroupMembershipDrafts] = useState<Record<string, GroupMembershipReviewDraft>>({});
@@ -763,6 +836,7 @@ export function AgentThreadReviewModal({
       setActiveItemId(null);
       setEntryDrafts({});
       setTagDrafts({});
+      setAccountDrafts({});
       setEntityDrafts({});
       setGroupDrafts({});
       setGroupMembershipDrafts({});
@@ -835,6 +909,12 @@ export function AgentThreadReviewModal({
     }
     if (reviewItem.item.change_type === "create_tag" || reviewItem.item.change_type === "update_tag") {
       return buildTagOverrideState(reviewItem.item, tagDrafts[reviewItem.item.id] ?? buildTagReviewDraft(reviewItem.item));
+    }
+    if (reviewItem.item.change_type === "create_account" || reviewItem.item.change_type === "update_account") {
+      return buildAccountOverrideState(
+        reviewItem.item,
+        accountDrafts[reviewItem.item.id] ?? buildAccountReviewDraft(reviewItem.item)
+      );
     }
     if (reviewItem.item.change_type === "create_entity" || reviewItem.item.change_type === "update_entity") {
       return buildEntityOverrideState(
@@ -1073,6 +1153,10 @@ export function AgentThreadReviewModal({
   const activeTagDraft =
     activeReviewItem && (activeReviewItem.item.change_type === "create_tag" || activeReviewItem.item.change_type === "update_tag")
       ? tagDrafts[activeReviewItem.item.id] ?? buildTagReviewDraft(activeReviewItem.item)
+      : null;
+  const activeAccountDraft =
+    activeReviewItem && (activeReviewItem.item.change_type === "create_account" || activeReviewItem.item.change_type === "update_account")
+      ? accountDrafts[activeReviewItem.item.id] ?? buildAccountReviewDraft(activeReviewItem.item)
       : null;
   const activeEntityDraft =
     activeReviewItem && (activeReviewItem.item.change_type === "create_entity" || activeReviewItem.item.change_type === "update_entity")
@@ -1349,6 +1433,27 @@ export function AgentThreadReviewModal({
                           isDisabled={isBusy || isBatchRunning}
                           onDraftChange={(nextDraft) =>
                             setTagDrafts((current) => ({
+                              ...current,
+                              [activeReviewItem.item.id]: nextDraft
+                            }))
+                          }
+                        />
+                      </section>
+                    ) : null}
+
+                    {isActiveEditable && activeAccountDraft ? (
+                      <section className="agent-review-panel-section">
+                        <div className="agent-review-section-heading">
+                          <h4>Review edits</h4>
+                          <p>{isActivePending ? "Adjust the proposed account before approval." : "Adjust the proposal payload before changing review status."}</p>
+                        </div>
+                        <ReviewAccountEditor
+                          draft={activeAccountDraft}
+                          currencies={currenciesQuery.data ?? []}
+                          validationError={activeOverrideState.validationError}
+                          isDisabled={isBusy || isBatchRunning}
+                          onDraftChange={(nextDraft) =>
+                            setAccountDrafts((current) => ({
                               ...current,
                               [activeReviewItem.item.id]: nextDraft
                             }))

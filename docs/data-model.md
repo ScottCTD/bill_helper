@@ -21,6 +21,7 @@ Agent:
 - `AgentToolCallStatus`: `ok`, `error`
 - `AgentChangeType`:
   - entries: `create_entry`, `update_entry`, `delete_entry`
+  - accounts: `create_account`, `update_account`, `delete_account`
   - tags: `create_tag`, `update_tag`, `delete_tag`
   - entities: `create_entity`, `update_entity`, `delete_entity`
   - compatibility: legacy persisted `CREATE_GROUP_MEMBER` rows may still exist in `agent_change_items`; backend hydration accepts them, but current API review payloads omit them because the active client contract no longer includes that proposal type
@@ -226,7 +227,7 @@ Deletion semantics:
 - soft-deleting an entry removes its direct `entry_group_members` row if one exists
 - deleting a group is allowed only when it has no direct members and is not attached as a child group
 
-## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`, `0020_add_agent_message_attachment_original_filename`, `0021_add_agent_run_context_tokens`, `0022_agent_run_events_and_tool_lifecycle`, `0029_add_agent_run_surface`)
+## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`, `0020_add_agent_message_attachment_original_filename`, `0021_add_agent_run_context_tokens`, `0022_agent_run_events_and_tool_lifecycle`, `0029_add_agent_run_surface`, `0030_add_account_agent_change_types`)
 
 ## `agent_threads`
 
@@ -340,7 +341,7 @@ Fields:
 
 ## `agent_change_items`
 
-Purpose: review-gated proposed changes (CRUD proposals across entries/tags/entities).
+Purpose: review-gated proposed changes (CRUD proposals across entries/accounts/tags/entities/groups).
 
 Fields:
 
@@ -377,8 +378,10 @@ Fields:
 - approving applies exactly one proposed mutation and records review action.
 - rejecting records review action and does not create domain resources.
 - approving `create_entry` persists an entry directly without an entry-level status column.
+- approving `create_account` creates both the account row and its shared entity root (`accounts.id == entities.id`).
 - `delete_tag` is allowed only when the tag has no non-deleted entry references.
 - `delete_entity` nulls/detaches entity references from entries/accounts before deleting the entity.
+- `delete_account` deletes snapshots, clears `entries.account_id`, and detaches account-root entity refs while preserving denormalized labels.
 - resolved runtime settings drive current-user attribution defaults, dashboard currency, and agent runtime limits/model selection.
 
 ## Currency Catalog (Current)

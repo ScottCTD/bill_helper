@@ -7,7 +7,7 @@ export interface ThreadReviewItem {
   runIndex: number;
 }
 
-export type ProposalDomain = "entry" | "entity" | "tag" | "group";
+export type ProposalDomain = "entry" | "account" | "entity" | "tag" | "group";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -15,6 +15,9 @@ const CHANGE_TYPE_LABEL: Record<AgentChangeType, string> = {
   create_entry: "Create Entry",
   update_entry: "Update Entry",
   delete_entry: "Delete Entry",
+  create_account: "Create Account",
+  update_account: "Update Account",
+  delete_account: "Delete Account",
   create_group: "Create Group",
   update_group: "Update Group",
   delete_group: "Delete Group",
@@ -32,6 +35,9 @@ const CHANGE_TYPE_DOMAIN: Record<AgentChangeType, ProposalDomain> = {
   create_entry: "entry",
   update_entry: "entry",
   delete_entry: "entry",
+  create_account: "account",
+  update_account: "account",
+  delete_account: "account",
   create_group: "group",
   update_group: "group",
   delete_group: "group",
@@ -71,6 +77,11 @@ function itemSummaryFromPayload(changeType: AgentChangeType, payload: JsonRecord
       const name = typeof payload.name === "string" ? payload.name : "Untitled";
       return `${CHANGE_TYPE_LABEL[changeType]}: ${name}`;
     }
+    case "create_account":
+    case "delete_account": {
+      const name = typeof payload.name === "string" ? payload.name : "Untitled";
+      return `${CHANGE_TYPE_LABEL[changeType]}: ${name}`;
+    }
     case "create_group":
     case "delete_group": {
       const target = asRecord(payload.target);
@@ -98,6 +109,10 @@ function itemSummaryFromPayload(changeType: AgentChangeType, payload: JsonRecord
     case "update_tag": {
       const currentName = typeof payload.name === "string" ? payload.name : "Untitled";
       return `Update Tag: ${currentName}`;
+    }
+    case "update_account": {
+      const currentName = typeof payload.name === "string" ? payload.name : "Untitled";
+      return `Update Account: ${currentName}`;
     }
     case "create_entity":
     case "delete_entity": {

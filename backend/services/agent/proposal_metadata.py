@@ -35,6 +35,9 @@ _METADATA_BY_CHANGE_TYPE: dict[str, ProposalMetadata] = {
     AgentChangeType.CREATE_ENTITY.value: ProposalMetadata("create", "entity", "propose_create_entity"),
     AgentChangeType.UPDATE_ENTITY.value: ProposalMetadata("update", "entity", "propose_update_entity"),
     AgentChangeType.DELETE_ENTITY.value: ProposalMetadata("delete", "entity", "propose_delete_entity"),
+    AgentChangeType.CREATE_ACCOUNT.value: ProposalMetadata("create", "account", "propose_create_account"),
+    AgentChangeType.UPDATE_ACCOUNT.value: ProposalMetadata("update", "account", "propose_update_account"),
+    AgentChangeType.DELETE_ACCOUNT.value: ProposalMetadata("delete", "account", "propose_delete_account"),
 }
 
 

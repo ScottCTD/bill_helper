@@ -13,14 +13,18 @@ from backend.services.runtime_settings_normalization import (
     validate_user_memory_size,
 )
 from backend.services.agent.change_contracts import (
+    CreateAccountPayload as ProposeCreateAccountArgs,
     CreateEntityPayload as ProposeCreateEntityArgs,
     CreateEntryPayload as ProposeCreateEntryArgs,
     CreateGroupPayload as ProposeCreateGroupArgs,
     CreateTagPayload as ProposeCreateTagArgs,
+    DeleteAccountPayload as ProposeDeleteAccountArgs,
     DeleteEntityPayload as ProposeDeleteEntityArgs,
     DeleteEntryPayload as ProposeDeleteEntryArgs,
     DeleteGroupPayload as ProposeDeleteGroupArgs,
     DeleteTagPayload as ProposeDeleteTagArgs,
+    UpdateAccountPatchPayload as AccountPatchArgs,
+    UpdateAccountPayload as ProposeUpdateAccountArgs,
     EntryReferencePayload,
     EntrySelectorPayload as EntrySelectorArgs,
     GroupReferencePayload,
@@ -192,6 +196,30 @@ class ListEntitiesArgs(BaseModel):
         return normalize_optional_category(value)
 
 
+class ListAccountsArgs(BaseModel):
+    name: str | None = None
+    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
+    is_active: bool | None = None
+    limit: int = Field(
+        default=10,
+        ge=1,
+        description="Max accounts to return. No upper bound; be cautious with very large values.",
+    )
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        normalized = normalize_loose_text(value)
+        return normalize_entity_name(normalized) if normalized is not None else None
+
+    @field_validator("currency_code")
+    @classmethod
+    def normalize_currency_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_required_text(value).upper()
+
+
 class ListGroupsArgs(BaseModel):
     group_id: str | None = Field(
         default=None,
@@ -230,14 +258,14 @@ class ListGroupsArgs(BaseModel):
         return self
 
 
-ProposalType = Literal["entry", "tag", "entity", "group"]
+ProposalType = Literal["entry", "tag", "entity", "account", "group"]
 ProposalAction = Literal["create", "update", "delete"]
 
 
 class ListProposalsArgs(BaseModel):
     proposal_type: ProposalType | None = Field(
         default=None,
-        description="Filter by proposal domain: entry, group, tag, or entity.",
+        description="Filter by proposal domain: entry, account, group, tag, or entity.",
     )
     proposal_status: AgentChangeStatus | None = Field(
         default=None,

@@ -543,6 +543,28 @@ def test_entity_update_syncs_denormalized_entry_labels(client):
     assert payload["from_entity_id"] == from_entity["id"]
 
 
+def test_create_entity_rejects_account_category(client):
+    response = client.post(
+        "/api/v1/entities",
+        json={"name": "Travel Card", "category": "account"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Account category is reserved for Accounts. Use /accounts instead."
+
+
+def test_entity_update_rejects_account_category(client):
+    entity = create_entity(client, "Travel Card", category="merchant")
+
+    response = client.patch(
+        f"/api/v1/entities/{entity['id']}",
+        json={"category": "account"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Account category is reserved for Accounts. Use /accounts instead."
+
+
 def test_accounts_are_entities_linked_to_users(client):
     account_id = create_account(client)
     account = client.get("/api/v1/accounts").json()[0]

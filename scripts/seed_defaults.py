@@ -17,6 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from backend.database import build_engine_for_url, build_session_maker
+from backend.services.accounts import create_account_root
 
 logger = logging.getLogger(__name__)
 
@@ -107,35 +108,28 @@ DEFAULT_ENTITY_CATEGORIES: list[dict[str, str]] = [
 
 def seed_accounts(db: Session) -> tuple["User", "Account", "Account"]:
     """Create admin user and Scotiabank Debit/Credit accounts. Returns (user, debit_account, credit_account)."""
-    from backend.models_finance import Account, Entity, User
+    from backend.models_finance import User
 
     user = User(name="admin")
     db.add(user)
     db.flush()
 
-    debit_entity = Entity(name="Scotiabank Debit", category="account")
-    credit_entity = Entity(name="Scotiabank Credit", category="account")
-    db.add_all([debit_entity, credit_entity])
-    db.flush()
-
-    debit_account = Account(
-        id=debit_entity.id,
+    debit_account = create_account_root(
+        db,
+        name="Scotiabank Debit",
         owner_user_id=user.id,
+        markdown_body=None,
         currency_code="CAD",
         is_active=True,
     )
-    credit_account = Account(
-        id=credit_entity.id,
+    credit_account = create_account_root(
+        db,
+        name="Scotiabank Credit",
         owner_user_id=user.id,
+        markdown_body=None,
         currency_code="CAD",
         is_active=True,
     )
-    db.add_all([debit_account, credit_account])
-    db.flush()
-
-    from backend.services.taxonomy import assign_single_term_by_name
-    assign_single_term_by_name(db, taxonomy_key="entity_category", subject_type="entity", subject_id=debit_entity.id, term_name="account")
-    assign_single_term_by_name(db, taxonomy_key="entity_category", subject_type="entity", subject_id=credit_entity.id, term_name="account")
 
     return user, debit_account, credit_account
 

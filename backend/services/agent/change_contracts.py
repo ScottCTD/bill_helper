@@ -209,6 +209,81 @@ class DeleteEntityPayload(BaseModel):
         return normalized
 
 
+class CreateAccountPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    currency_code: str = Field(min_length=3, max_length=3)
+    is_active: bool = True
+    markdown_body: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = normalize_entity_name(value)
+        if not normalized:
+            raise ValueError("name cannot be empty")
+        return normalized
+
+    @field_validator("currency_code")
+    @classmethod
+    def normalize_currency_code(cls, value: str) -> str:
+        return normalize_required_text(value).upper()
+
+
+class UpdateAccountPatchPayload(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
+    is_active: bool | None = None
+    markdown_body: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = normalize_entity_name(value)
+        if not normalized:
+            raise ValueError("name cannot be empty")
+        return normalized
+
+    @field_validator("currency_code")
+    @classmethod
+    def normalize_currency_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_required_text(value).upper()
+
+    @model_validator(mode="after")
+    def ensure_any_field_set(self) -> UpdateAccountPatchPayload:
+        if not self.model_fields_set:
+            raise ValueError("patch must include at least one field")
+        return self
+
+
+class UpdateAccountPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    patch: UpdateAccountPatchPayload
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = normalize_entity_name(value)
+        if not normalized:
+            raise ValueError("name cannot be empty")
+        return normalized
+
+
+class DeleteAccountPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = normalize_entity_name(value)
+        if not normalized:
+            raise ValueError("name cannot be empty")
+        return normalized
+
+
 class CreateEntryPayload(BaseModel):
     kind: EntryKind
     date: DateValue
@@ -502,6 +577,9 @@ CHANGE_PAYLOAD_MODELS: dict[AgentChangeType, type[BaseModel]] = {
     AgentChangeType.CREATE_ENTITY: CreateEntityPayload,
     AgentChangeType.UPDATE_ENTITY: UpdateEntityPayload,
     AgentChangeType.DELETE_ENTITY: DeleteEntityPayload,
+    AgentChangeType.CREATE_ACCOUNT: CreateAccountPayload,
+    AgentChangeType.UPDATE_ACCOUNT: UpdateAccountPayload,
+    AgentChangeType.DELETE_ACCOUNT: DeleteAccountPayload,
     AgentChangeType.CREATE_ENTRY: CreateEntryPayload,
     AgentChangeType.UPDATE_ENTRY: UpdateEntryPayload,
     AgentChangeType.DELETE_ENTRY: DeleteEntryPayload,
@@ -527,6 +605,9 @@ PROPOSAL_MUTABLE_ROOTS: dict[AgentChangeType, set[str]] = {
     AgentChangeType.CREATE_ENTITY: {"name", "category"},
     AgentChangeType.UPDATE_ENTITY: {"name", "patch"},
     AgentChangeType.DELETE_ENTITY: {"name"},
+    AgentChangeType.CREATE_ACCOUNT: {"name", "currency_code", "is_active", "markdown_body"},
+    AgentChangeType.UPDATE_ACCOUNT: {"name", "patch"},
+    AgentChangeType.DELETE_ACCOUNT: {"name"},
     AgentChangeType.CREATE_ENTRY: {
         "kind",
         "date",

@@ -11,11 +11,13 @@ from backend.enums_agent import AgentChangeType
 from backend.models_agent import AgentChangeItem
 from backend.models_finance import Entry, EntryGroup, EntryGroupMember, Tag
 from backend.services.agent.change_contracts import (
+    CreateAccountPayload,
     CreateGroupMemberPayload,
     CreateGroupPayload,
     CreateEntryPayload,
     CreateEntityPayload,
     CreateTagPayload,
+    DeleteAccountPayload,
     DeleteGroupMemberPayload,
     DeleteGroupPayload,
     DeleteEntryPayload,
@@ -24,6 +26,7 @@ from backend.services.agent.change_contracts import (
     EntryReferencePayload,
     EntrySelectorPayload,
     GroupReferencePayload,
+    UpdateAccountPayload,
     UpdateGroupPayload,
     UpdateEntryPayload,
     UpdateEntityPayload,
@@ -40,14 +43,21 @@ from backend.services.agent.group_references import (
     group_owner_condition,
     group_public_summary,
 )
+from backend.schemas_finance import EntityCreate, EntityUpdate
+from backend.services.accounts import (
+    create_account_root,
+    delete_account_and_entity_root,
+    find_account_by_name,
+    update_account_root,
+)
 from backend.services.crud_policy import PolicyViolation
 from backend.services.entries import set_entry_tags, soft_delete_entry
 from backend.services.entities import (
+    create_entity_from_payload,
     delete_entity_and_preserve_labels,
     ensure_entity_by_name,
-    ensure_entity_is_not_account_backed,
     find_entity_by_name,
-    set_entity_category,
+    update_entity_from_payload,
 )
 from backend.services.tags import delete_tag
 from backend.services.runtime_settings import resolve_runtime_settings
@@ -248,8 +258,13 @@ def apply_delete_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
 def apply_create_entity(db: Session, payload: dict[str, Any]) -> AppliedResource:
     parsed = _parse_payload(payload, change_type=AgentChangeType.CREATE_ENTITY, model_type=CreateEntityPayload)
 
-    entity = ensure_entity_by_name(db, parsed.name, category=parsed.category)
-    db.flush()
+    try:
+        entity = create_entity_from_payload(
+            db,
+            payload=EntityCreate(name=parsed.name, category=parsed.category),
+        )
+    except PolicyViolation as exc:
+        raise ValueError(exc.detail) from exc
     return AppliedResource(resource_type="entity", resource_id=entity.id)
 
 
@@ -260,23 +275,13 @@ def apply_update_entity(db: Session, payload: dict[str, Any]) -> AppliedResource
     if entity is None:
         raise ValueError("Entity not found")
     try:
-        ensure_entity_is_not_account_backed(entity)
+        update_entity_from_payload(
+            db,
+            entity=entity,
+            payload=EntityUpdate.model_validate(parsed.patch.model_dump(exclude_unset=True)),
+        )
     except PolicyViolation as exc:
         raise ValueError(exc.detail) from exc
-
-    if "name" in parsed.patch.model_fields_set and parsed.patch.name is not None:
-        existing = find_entity_by_name(db, parsed.patch.name)
-        if existing is not None and existing.id != entity.id:
-            raise ValueError("Entity name already exists")
-        entity.name = parsed.patch.name
-        db.execute(update(Entry).where(Entry.from_entity_id == entity.id).values(from_entity=parsed.patch.name))
-        db.execute(update(Entry).where(Entry.to_entity_id == entity.id).values(to_entity=parsed.patch.name))
-
-    if "category" in parsed.patch.model_fields_set:
-        set_entity_category(db, entity, parsed.patch.category)
-
-    db.add(entity)
-    db.flush()
     return AppliedResource(resource_type="entity", resource_id=entity.id)
 
 
@@ -293,6 +298,46 @@ def apply_delete_entity(db: Session, payload: dict[str, Any]) -> AppliedResource
     except PolicyViolation as exc:
         raise ValueError(exc.detail) from exc
     return AppliedResource(resource_type="entity", resource_id=resource_id)
+
+
+def apply_create_account(db: Session, payload: dict[str, Any]) -> AppliedResource:
+    parsed = _parse_payload(payload, change_type=AgentChangeType.CREATE_ACCOUNT, model_type=CreateAccountPayload)
+
+    settings = resolve_runtime_settings(db)
+    owner_user = ensure_current_user(db, settings.current_user_name)
+    account = create_account_root(
+        db,
+        name=parsed.name,
+        owner_user_id=owner_user.id,
+        markdown_body=parsed.markdown_body,
+        currency_code=parsed.currency_code,
+        is_active=parsed.is_active,
+    )
+    return AppliedResource(resource_type="account", resource_id=account.id)
+
+
+def apply_update_account(db: Session, payload: dict[str, Any]) -> AppliedResource:
+    parsed = _parse_payload(payload, change_type=AgentChangeType.UPDATE_ACCOUNT, model_type=UpdateAccountPayload)
+
+    account = find_account_by_name(db, parsed.name)
+    if account is None:
+        raise ValueError("Account not found")
+
+    update_kwargs = parsed.patch.model_dump(exclude_unset=True)
+    update_account_root(db, account=account, **update_kwargs)
+    return AppliedResource(resource_type="account", resource_id=account.id)
+
+
+def apply_delete_account(db: Session, payload: dict[str, Any]) -> AppliedResource:
+    parsed = _parse_payload(payload, change_type=AgentChangeType.DELETE_ACCOUNT, model_type=DeleteAccountPayload)
+
+    account = find_account_by_name(db, parsed.name)
+    if account is None:
+        raise ValueError("Account not found")
+
+    resource_id = account.id
+    delete_account_and_entity_root(db, account=account)
+    return AppliedResource(resource_type="account", resource_id=resource_id)
 
 
 def apply_create_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
@@ -503,6 +548,9 @@ APPLY_CHANGE_HANDLERS: dict[AgentChangeType, ChangeApplyHandler] = {
     AgentChangeType.CREATE_ENTRY: apply_create_entry,
     AgentChangeType.UPDATE_ENTRY: apply_update_entry,
     AgentChangeType.DELETE_ENTRY: apply_delete_entry,
+    AgentChangeType.CREATE_ACCOUNT: apply_create_account,
+    AgentChangeType.UPDATE_ACCOUNT: apply_update_account,
+    AgentChangeType.DELETE_ACCOUNT: apply_delete_account,
     AgentChangeType.CREATE_GROUP: apply_create_group,
     AgentChangeType.UPDATE_GROUP: apply_update_group,
     AgentChangeType.DELETE_GROUP: apply_delete_group,

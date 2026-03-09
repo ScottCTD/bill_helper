@@ -603,7 +603,7 @@ def test_system_prompt_requires_duplicate_then_reconcile_then_propose_entries():
 
     prompt = system_prompt()
     duplicate_phrase = "Before proposing any entry, check for duplicates"
-    reconcile_phrase = "list existing tags and entities, then propose missing tags/entities first"
+    reconcile_phrase = "list existing tags, accounts, and entities, then propose any missing records first"
     propose_phrase = "Only after duplicate checks and tag/entity reconciliation, propose entries"
 
     assert duplicate_phrase in prompt
@@ -981,8 +981,8 @@ def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
     from backend.services.agent.tools import build_openai_tool_schemas
 
     names = [tool["function"]["name"] for tool in build_openai_tool_schemas()]
-    assert "list_accounts" not in names
     assert "search_entries" not in names
+    assert "list_accounts" in names
     assert "list_entries" in names
     assert "list_groups" in names
     assert "list_proposals" in names
@@ -999,6 +999,9 @@ def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
     assert "propose_delete_tag" in names
     assert "propose_update_entity" in names
     assert "propose_delete_entity" in names
+    assert "propose_create_account" in names
+    assert "propose_update_account" in names
+    assert "propose_delete_account" in names
     assert "update_pending_proposal" in names
     assert "remove_pending_proposal" in names
 
@@ -2203,7 +2206,7 @@ def test_proposal_creation_for_each_create_change_type(client, monkeypatch):
     thread_entity = create_thread(client)
     thread_entry = create_thread(client)
     create_tag(client, "food")
-    create_entity(client, "Main Checking", category="account")
+    create_account(client, name="Main Checking")
     create_entity(client, "Coffee Shop", category="merchant")
     run_tag = send_message(client, thread_tag["id"], "Please propose a new tag.")
     run_entity = send_message(client, thread_entity["id"], "Please propose a new entity.")
@@ -2251,7 +2254,7 @@ def test_propose_create_entry_accepts_double_encoded_tool_arguments(client, monk
         }
 
     patch_model(monkeypatch, fake_model)
-    create_entity(client, "TD Checking", category="account")
+    create_account(client, name="TD Checking")
     create_entity(client, "Transit Agency", category="merchant")
 
     thread = create_thread(client)
@@ -2377,7 +2380,7 @@ def test_update_entry_can_target_entry_id_from_list_entries(client, monkeypatch)
 
 
 def test_list_entries_source_matches_name_and_counterparties(client, monkeypatch):
-    create_entity(client, "Scotiabank Credit", "account")
+    create_account(client, name="Scotiabank Credit")
     create_entity(client, "OpenAI", "merchant")
     create_entity(client, "Apple App Store", "merchant")
 
@@ -2498,6 +2501,168 @@ def test_list_entities_category_account_returns_account_backed_entities(client, 
     assert output["entities"][0]["is_account"] is True
 
 
+def test_list_accounts_returns_account_records(client, monkeypatch):
+    client.post(
+        "/api/v1/accounts",
+        json={
+            "name": "Primary Checking",
+            "currency_code": "CAD",
+            "is_active": True,
+            "markdown_body": "Main daily account",
+        },
+    ).raise_for_status()
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Found the account."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_list_accounts",
+                    "type": "function",
+                    "function": {
+                        "name": "list_accounts",
+                        "arguments": json.dumps({"name": "Primary"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "List my accounts")
+
+    assert run["status"] == "completed"
+    output = run["tool_calls"][0]["output_json"]
+    assert output["returned_count"] == 1
+    assert output["accounts"][0]["name"] == "Primary Checking"
+    assert output["accounts"][0]["currency_code"] == "CAD"
+    assert output["accounts"][0]["is_active"] is True
+    assert output["accounts"][0]["markdown_body"] == "Main daily account"
+
+
+def test_entry_proposal_can_reference_pending_account_in_same_turn(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done. Please review pending items."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_account",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_account",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Travel Card",
+                                "currency_code": "CAD",
+                                "is_active": True,
+                            }
+                        ),
+                    },
+                },
+                {
+                    "id": "call_propose_entry",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entry",
+                        "arguments": json.dumps(
+                            {
+                                "kind": "TRANSFER",
+                                "date": "2026-01-04",
+                                "name": "Move to travel card",
+                                "amount_minor": 5000,
+                                "currency_code": "CAD",
+                                "from_entity": "Main Checking",
+                                "to_entity": "Travel Card",
+                            }
+                        ),
+                    },
+                },
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    create_account(client, name="Main Checking")
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Move money into my new travel card")
+
+    assert run["status"] == "completed"
+    assert len(run["tool_calls"]) == 2
+    change_items_by_type = {item["change_type"]: item for item in run["change_items"]}
+    assert change_items_by_type["create_account"]["payload_json"]["name"] == "Travel Card"
+    assert change_items_by_type["create_entry"]["payload_json"]["to_entity"] == "Travel Card"
+    assert all(tool_call["output_json"]["status"] == "OK" for tool_call in run["tool_calls"])
+
+
+def test_entry_approval_waits_for_pending_account_dependency(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Done. Please review pending items."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_account",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_account",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Travel Card",
+                                "currency_code": "CAD",
+                                "is_active": True,
+                            }
+                        ),
+                    },
+                },
+                {
+                    "id": "call_propose_entry",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entry",
+                        "arguments": json.dumps(
+                            {
+                                "kind": "TRANSFER",
+                                "date": "2026-01-04",
+                                "name": "Move to travel card",
+                                "amount_minor": 5000,
+                                "currency_code": "CAD",
+                                "from_entity": "Main Checking",
+                                "to_entity": "Travel Card",
+                            }
+                        ),
+                    },
+                },
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    create_account(client, name="Main Checking")
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Move money into my new travel card")
+
+    account_item = next(item for item in run["change_items"] if item["change_type"] == "create_account")
+    entry_item = next(item for item in run["change_items"] if item["change_type"] == "create_entry")
+
+    approve_entry_first = client.post(f"/api/v1/agent/change-items/{entry_item['id']}/approve", json={})
+    assert approve_entry_first.status_code == 422
+    assert "Approve or reject those proposals first." in approve_entry_first.text
+
+    approve_account = client.post(f"/api/v1/agent/change-items/{account_item['id']}/approve", json={})
+    approve_account.raise_for_status()
+    assert approve_account.json()["status"] == "APPLIED"
+
+    approve_entry_second = client.post(f"/api/v1/agent/change-items/{entry_item['id']}/approve", json={})
+    approve_entry_second.raise_for_status()
+    assert approve_entry_second.json()["status"] == "APPLIED"
+
+
 def test_entry_proposal_can_reference_pending_entity_in_same_turn(client, monkeypatch):
     def fake_model(messages):
         if messages[-1]["role"] == "tool":
@@ -2541,7 +2706,7 @@ def test_entry_proposal_can_reference_pending_entity_in_same_turn(client, monkey
         }
 
     patch_model(monkeypatch, fake_model)
-    create_entity(client, "Main Checking", category="account")
+    create_account(client, name="Main Checking")
     thread = create_thread(client)
     run = send_message(client, thread["id"], "Log my bubble tea purchase from Molly Tea")
 
@@ -2598,7 +2763,7 @@ def test_entry_approval_waits_for_pending_entity_dependency(client, monkeypatch)
         }
 
     patch_model(monkeypatch, fake_model)
-    create_entity(client, "Main Checking", category="account")
+    create_account(client, name="Main Checking")
     thread = create_thread(client)
     run = send_message(client, thread["id"], "Log my bubble tea purchase from Molly Tea")
 
@@ -2607,7 +2772,7 @@ def test_entry_approval_waits_for_pending_entity_dependency(client, monkeypatch)
 
     approve_entry_first = client.post(f"/api/v1/agent/change-items/{entry_item['id']}/approve", json={})
     assert approve_entry_first.status_code == 422
-    assert "Approve or reject those entity proposals first." in approve_entry_first.text
+    assert "Approve or reject those proposals first." in approve_entry_first.text
 
     run_detail = client.get(f"/api/v1/agent/runs/{run['id']}")
     run_detail.raise_for_status()
@@ -2669,7 +2834,7 @@ def test_rejecting_pending_entity_keeps_dependent_entry_pending_until_revised(cl
         }
 
     patch_model(monkeypatch, fake_model)
-    create_entity(client, "Main Checking", category="account")
+    create_account(client, name="Main Checking")
     thread = create_thread(client)
     run = send_message(client, thread["id"], "Log my bubble tea purchase from Molly Tea")
 
@@ -2731,7 +2896,7 @@ def test_duplicate_pending_entity_creation_is_rejected_in_same_thread(client, mo
     assert second_run["change_items"] == []
     assert second_run["tool_calls"][0]["output_json"]["status"] == "ERROR"
     assert second_run["tool_calls"][0]["output_json"]["summary"] == (
-        "entity already has a pending creation proposal in this thread"
+        "entity or account already has a pending creation proposal in this thread"
     )
 
 
@@ -2980,6 +3145,164 @@ def test_update_entity_approval_accepts_payload_override(client, monkeypatch):
     entities = client.get("/api/v1/entities").json()
     assert any(entity["name"] == "Temp Vendor Final" and entity["category"] == "restaurant" for entity in entities)
     assert all(entity["name"] != "Temp Vendor" for entity in entities)
+
+
+def test_propose_create_entity_rejects_account_category(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Entity proposal blocked."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_entity",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_entity",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Travel Card",
+                                "category": "account",
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Create an account entity for Travel Card")
+
+    assert run["status"] == "completed"
+    assert run["change_items"] == []
+    assert run["tool_calls"][0]["output_json"]["status"] == "ERROR"
+    assert "Use /accounts instead" in run["tool_calls"][0]["output_json"]["summary"]
+
+
+def test_create_account_approval_accepts_payload_override(client, monkeypatch):
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Account proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_account",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_create_account",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Travel Card Draft",
+                                "currency_code": "USD",
+                                "is_active": True,
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Propose account Travel Card Draft")
+    item_id = run["change_items"][0]["id"]
+
+    approve_response = client.post(
+        f"/api/v1/agent/change-items/{item_id}/approve",
+        json={
+            "payload_override": {
+                "name": "Travel Card Final",
+                "currency_code": "CAD",
+                "is_active": False,
+                "markdown_body": "Travel-only card",
+            }
+        },
+    )
+    approve_response.raise_for_status()
+    approved = approve_response.json()
+    assert approved["status"] == "APPLIED"
+    assert approved["applied_resource_type"] == "account"
+
+    accounts = client.get("/api/v1/accounts").json()
+    assert any(
+        account["name"] == "Travel Card Final"
+        and account["currency_code"] == "CAD"
+        and account["is_active"] is False
+        and account["markdown_body"] == "Travel-only card"
+        for account in accounts
+    )
+
+
+def test_update_account_approval_accepts_payload_override(client, monkeypatch):
+    create_account_response = client.post(
+        "/api/v1/accounts",
+        json={
+            "name": "Travel Card",
+            "currency_code": "USD",
+            "is_active": True,
+        },
+    )
+    create_account_response.raise_for_status()
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Account update proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_update_account",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_account",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Travel Card",
+                                "patch": {
+                                    "currency_code": "CAD",
+                                    "is_active": False,
+                                },
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Update my travel card")
+    item_id = run["change_items"][0]["id"]
+
+    approve_response = client.post(
+        f"/api/v1/agent/change-items/{item_id}/approve",
+        json={
+            "payload_override": {
+                "name": "Travel Card",
+                "patch": {
+                    "name": "Travel Card Final",
+                    "currency_code": "CAD",
+                    "is_active": False,
+                    "markdown_body": "Closed after trip",
+                },
+            }
+        },
+    )
+    approve_response.raise_for_status()
+
+    accounts = client.get("/api/v1/accounts").json()
+    assert any(
+        account["name"] == "Travel Card Final"
+        and account["currency_code"] == "CAD"
+        and account["is_active"] is False
+        and account["markdown_body"] == "Closed after trip"
+        for account in accounts
+    )
 
 
 def test_reject_flow(client, monkeypatch):
@@ -3330,6 +3653,91 @@ def test_propose_delete_entity_rejects_account_backed_entity_roots(client, monke
     assert "managed from Accounts" in tool_output["summary"]
 
 
+def test_propose_delete_account_applies_account_delete_semantics(client, monkeypatch):
+    create_account_response = client.post(
+        "/api/v1/accounts",
+        json={
+            "name": "Main Checking",
+            "currency_code": "USD",
+            "is_active": True,
+        },
+    )
+    create_account_response.raise_for_status()
+    account_id = create_account_response.json()["id"]
+    destination = create_entity(client, "Broker", category="merchant")
+
+    create_entry_response = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-01",
+            "name": "Broker transfer",
+            "amount_minor": 1234,
+            "currency_code": "USD",
+            "from_entity": "Main Checking",
+            "to_entity": "Broker",
+            "from_entity_id": account_id,
+            "to_entity_id": destination["id"],
+            "tags": ["food"],
+        },
+    )
+    create_entry_response.raise_for_status()
+    entry_id = create_entry_response.json()["id"]
+
+    snapshot_response = client.post(
+        f"/api/v1/accounts/{account_id}/snapshots",
+        json={"snapshot_at": "2026-01-02", "balance_minor": 10000},
+    )
+    snapshot_response.raise_for_status()
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Account delete proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_delete_account",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_delete_account",
+                        "arguments": json.dumps({"name": "Main Checking"}),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Delete my main checking account")
+    item_id = run["change_items"][0]["id"]
+
+    approve_response = client.post(f"/api/v1/agent/change-items/{item_id}/approve", json={})
+    approve_response.raise_for_status()
+    approved = approve_response.json()
+    assert approved["status"] == "APPLIED"
+    assert approved["applied_resource_type"] == "account"
+
+    entry_detail = client.get(f"/api/v1/entries/{entry_id}")
+    entry_detail.raise_for_status()
+    payload = entry_detail.json()
+    assert payload["account_id"] is None
+    assert payload["from_entity"] == "Main Checking"
+    assert payload["from_entity_id"] is None
+    assert payload["from_entity_missing"] is True
+    assert payload["to_entity"] == "Broker"
+    assert payload["to_entity_id"] == destination["id"]
+
+    accounts = client.get("/api/v1/accounts")
+    accounts.raise_for_status()
+    assert accounts.json() == []
+
+    snapshots = client.get(f"/api/v1/accounts/{account_id}/snapshots")
+    assert snapshots.status_code == 404
+
+
 def test_entry_approve_applies_entry_and_allows_override(client, monkeypatch):
     def fake_model(messages):
         if messages[-1]["role"] == "tool":
@@ -3363,7 +3771,7 @@ def test_entry_approve_applies_entry_and_allows_override(client, monkeypatch):
     patch_model(monkeypatch, fake_model)
     create_tag(client, "food")
     create_tag(client, "team")
-    create_entity(client, "Main Checking", category="account")
+    create_account(client, name="Main Checking")
     create_entity(client, "Lunch Spot", category="merchant")
     thread = create_thread(client)
     run = send_message(client, thread["id"], "Propose an entry for lunch")
@@ -3427,7 +3835,7 @@ def test_entry_approve_invalid_override_keeps_item_pending(client, monkeypatch):
         }
 
     patch_model(monkeypatch, fake_model)
-    create_entity(client, "Main Checking", category="account")
+    create_account(client, name="Main Checking")
     create_entity(client, "Store", category="merchant")
     thread = create_thread(client)
     run = send_message(client, thread["id"], "Propose entry")
@@ -3818,7 +4226,7 @@ def test_update_pending_proposal_tool_updates_existing_item(client, monkeypatch)
 
     patch_model(monkeypatch, fake_model)
     create_tag(client, "food")
-    create_entity(client, "Main Checking", category="account")
+    create_account(client, name="Main Checking")
     create_entity(client, "Lunch Spot", category="merchant")
     thread = create_thread(client)
     first_run = send_message(client, thread["id"], "Please create initial proposal")
@@ -4214,7 +4622,7 @@ def test_list_proposals_tool_can_lookup_single_proposal_by_short_id(client, monk
 
 
 def test_group_membership_approval_blocks_pending_and_rejected_dependencies(client, monkeypatch):
-    create_entity(client, "Main Checking", "account")
+    create_account(client, name="Main Checking")
     create_entity(client, "Landlord", "merchant")
 
     thread = create_thread(client)
@@ -4324,7 +4732,7 @@ def test_group_membership_approval_blocks_pending_and_rejected_dependencies(clie
 
 
 def test_group_membership_apply_resolves_pending_group_and_entry_references(client, monkeypatch):
-    create_entity(client, "Main Checking", "account")
+    create_account(client, name="Main Checking")
     create_entity(client, "Landlord", "merchant")
 
     thread = create_thread(client)
@@ -4432,7 +4840,7 @@ def test_group_membership_apply_resolves_pending_group_and_entry_references(clie
 
 
 def test_group_membership_canonicalizes_short_pending_proposal_refs(client, monkeypatch):
-    create_entity(client, "Main Checking", "account")
+    create_account(client, name="Main Checking")
     create_entity(client, "Landlord", "merchant")
 
     thread = create_thread(client)
@@ -4836,7 +5244,7 @@ def test_create_entry_uses_default_currency_when_omitted(client, monkeypatch):
 
         patch_model(monkeypatch, fake_model)
         create_tag(client, "transport")
-        create_entity(client, "Main Checking", category="account")
+        create_account(client, name="Main Checking")
         create_entity(client, "Transit Agency", category="merchant")
         thread = create_thread(client)
         run = send_message(client, thread["id"], "Propose transit entry")

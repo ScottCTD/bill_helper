@@ -538,7 +538,7 @@ tags: name (type or untyped), ...
 
 #### `list_entities` (read)
 
-**Description:** List/query entities by name and category. Exact matches are ranked higher than substring matches. Account-backed rows are flagged in the returned records and exposed with `category="account"` for lookup purposes. This tool is read-only.
+**Description:** List/query entity roots by name and category. Exact matches are ranked higher than substring matches. Account-backed rows are still flagged with `is_account=true`, but account grounding and account edits should use `list_accounts` plus the account proposal tools. This tool is read-only.
 
 **Arguments:**
 
@@ -562,9 +562,94 @@ entities: name (category or uncategorized); ...
 
 ---
 
+### Accounts
+
+#### `list_accounts` (read)
+
+**Description:** List/query actual accounts by name, currency, or active status. Use this for account grounding before proposing account create, update, or delete changes. This tool is read-only.
+
+**Arguments:**
+
+
+| Parameter       | Type            | Required | Default | Constraints                                            |
+| --------------- | --------------- | -------- | ------- | ------------------------------------------------------ |
+| `name`          | string \| null  | no       | null    | substring filter                                       |
+| `currency_code` | string \| null  | no       | null    | 3-letter currency filter                               |
+| `is_active`     | boolean \| null | no       | null    | active-state filter                                    |
+| `limit`         | integer         | no       | 10      | ≥1; no upper bound; be cautious with very large values |
+
+
+**Expected output (text):**
+
+```
+OK
+summary: returned N of M matching accounts
+accounts: name (CAD, active); ...
+```
+
+`N` = count returned (limited by `limit`); `M` = total matching.
+
+---
+
+#### `propose_create_account` (proposal)
+
+**Description:** Create a review-gated proposal to add a new account. This does not mutate accounts immediately; it creates a pending review item only.
+
+**Arguments:**
+
+
+| Parameter       | Type           | Required | Constraints             |
+| --------------- | -------------- | -------- | ----------------------- |
+| `name`          | string         | yes      | 1–255 chars, normalized |
+| `currency_code` | string         | yes      | 3-letter currency       |
+| `is_active`     | boolean        | no       | defaults to `true`      |
+| `markdown_body` | string \| null | no       | optional notes          |
+
+
+**Expected output:** `OK` with status and preview. Returns `ERROR` if the account name already exists or a pending create proposal already reserves that name.
+
+---
+
+#### `propose_update_account` (proposal)
+
+**Description:** Create a review-gated proposal to rename an account and/or update its currency, active status, or notes. This does not mutate accounts immediately; it creates a pending review item only.
+
+**Arguments:**
+
+
+| Parameter | Type   | Required | Constraints                                                              |
+| --------- | ------ | -------- | ------------------------------------------------------------------------ |
+| `name`    | string | yes      | 1–255 chars, existing account name                                       |
+| `patch`   | object | yes      | At least one of `name`, `currency_code`, `is_active`, or `markdown_body` |
+
+
+**Patch fields:** `name` (string \| null), `currency_code` (string \| null), `is_active` (boolean \| null), `markdown_body` (string \| null).
+
+**Expected output:** `OK` with status and preview. Returns `ERROR` if the account is not found or the target name already exists.
+
+---
+
+#### `propose_delete_account` (proposal)
+
+**Description:** Create a review-gated proposal to delete an account. Referenced entries and snapshots do not block the proposal; impact is reported in the preview. Approval deletes snapshots, clears `account_id`, and preserves visible entity labels on affected entries.
+
+**Arguments:**
+
+
+| Parameter | Type   | Required | Constraints                        |
+| --------- | ------ | -------- | ---------------------------------- |
+| `name`    | string | yes      | 1–255 chars, existing account name |
+
+
+**Expected output:** `OK` with status and preview, including impacted-entry and snapshot counts. Returns `ERROR` only if the account is not found.
+
+---
+
+### Entities
+
 #### `propose_create_entity` (proposal)
 
-**Description:** Create a review-gated proposal to add a new entity. This does not mutate entities immediately; it creates a pending review item only.
+**Description:** Create a review-gated proposal to add a new generic entity. This does not mutate entities immediately; it creates a pending review item only. Do not use this for accounts.
 
 **Arguments:**
 
@@ -575,13 +660,13 @@ entities: name (category or uncategorized); ...
 | `category` | string | yes      | 1–100 chars, normalized |
 
 
-**Expected output:** `OK` with status and preview. Returns `ERROR` if entity already exists.
+**Expected output:** `OK` with status and preview. Returns `ERROR` if the entity already exists or if `category="account"` is requested.
 
 ---
 
 #### `propose_update_entity` (proposal)
 
-**Description:** Create a review-gated proposal to rename an entity and/or update its category. This does not mutate entities immediately; it creates a pending review item only.
+**Description:** Create a review-gated proposal to rename a generic entity and/or update its category. This does not mutate entities immediately; it creates a pending review item only. Do not use this for accounts.
 
 **Arguments:**
 
@@ -594,7 +679,7 @@ entities: name (category or uncategorized); ...
 
 **Patch fields:** `name` (string  null), `category` (string  null).
 
-**Expected output:** `OK` with status and preview. Returns `ERROR` if entity not found or target name already exists.
+**Expected output:** `OK` with status and preview. Returns `ERROR` if the entity is not found, the target name already exists, or `patch.category="account"` is requested.
 
 ---
 
@@ -625,7 +710,7 @@ entities: name (category or uncategorized); ...
 
 | Parameter         | Type          | Required | Default | Constraints                                                                                             |
 | ----------------- | ------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------- |
-| `proposal_type`   | string | null | no       | null    | `entry`, `group`, `tag`, or `entity`                                                                    |
+| `proposal_type`   | string | null | no       | null    | `entry`, `account`, `group`, `tag`, or `entity`                                                         |
 | `proposal_status` | string | null | no       | null    | case-insensitive; supports `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `APPLIED`, `APPLY_FAILED`; `pending` also maps to `PENDING_REVIEW`, `failed` to `APPLY_FAILED` |
 | `change_action`   | string | null | no       | null    | `create`, `update`, or `delete`                                                                         |
 | `proposal_id`     | string | null | no       | null    | full proposal id or unique short-id prefix                                                              |

@@ -10,19 +10,23 @@ from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_expo
 from backend.services.agent.tool_args import (
     AddUserMemoryArgs,
     INTERMEDIATE_UPDATE_TOOL_NAME,
+    ListAccountsArgs,
     ListEntitiesArgs,
     ListEntriesArgs,
     ListGroupsArgs,
     ListProposalsArgs,
     ListTagsArgs,
+    ProposeCreateAccountArgs,
     ProposeCreateEntityArgs,
     ProposeCreateEntryArgs,
     ProposeCreateGroupArgs,
     ProposeCreateTagArgs,
+    ProposeDeleteAccountArgs,
     ProposeDeleteEntityArgs,
     ProposeDeleteEntryArgs,
     ProposeDeleteGroupArgs,
     ProposeDeleteTagArgs,
+    ProposeUpdateAccountArgs,
     ProposeUpdateEntityArgs,
     ProposeUpdateEntryArgs,
     ProposeUpdateGroupArgs,
@@ -35,14 +39,17 @@ from backend.services.agent.tool_args import (
 )
 from backend.services.agent.tool_handlers_memory import add_user_memory
 from backend.services.agent.tool_handlers_propose import (
+    propose_create_account,
     propose_create_entity,
     propose_create_entry,
     propose_create_group,
     propose_create_tag,
+    propose_delete_account,
     propose_delete_entity,
     propose_delete_entry,
     propose_delete_group,
     propose_delete_tag,
+    propose_update_account,
     propose_update_entity,
     propose_update_entry,
     propose_update_group,
@@ -53,6 +60,7 @@ from backend.services.agent.tool_handlers_propose import (
 )
 from backend.services.agent.tool_handlers_read import (
     error_result,
+    list_accounts,
     list_entities,
     list_entries,
     list_groups,
@@ -135,12 +143,22 @@ TOOLS: dict[str, AgentToolDefinition] = {
         args_model=ListTagsArgs,
         handler=list_tags,
     ),
+    "list_accounts": AgentToolDefinition(
+        name="list_accounts",
+        description=(
+            "List/query accounts by name, currency_code, and active status. "
+            "Use this for account discovery, account edits, and account deletions. "
+            "Returned records include name, currency_code, is_active, and compact markdown_body notes. "
+            "This tool is read-only."
+        ),
+        args_model=ListAccountsArgs,
+        handler=list_accounts,
+    ),
     "list_entities": AgentToolDefinition(
         name="list_entities",
         description=(
             "List/query entities by name and category. Exact matches are ranked higher than substring matches. "
-            "Use category='account' when looking for account entities; account-backed entities are returned "
-            "with category='account'. This tool is read-only."
+            "Use this for non-account counterparties and categories. This tool is read-only."
         ),
         args_model=ListEntitiesArgs,
         handler=list_entities,
@@ -229,7 +247,8 @@ TOOLS: dict[str, AgentToolDefinition] = {
         name="propose_create_entity",
         description=(
             "Create a review-gated proposal to add a new entity. "
-            "This does not mutate entities immediately; it creates a pending review item only."
+            "This does not mutate entities immediately; it creates a pending review item only. "
+            "Do not use this for accounts; accounts must be managed with account proposal tools."
         ),
         args_model=ProposeCreateEntityArgs,
         handler=propose_create_entity,
@@ -238,7 +257,8 @@ TOOLS: dict[str, AgentToolDefinition] = {
         name="propose_update_entity",
         description=(
             "Create a review-gated proposal to rename an entity and/or update its category. "
-            "This does not mutate entities immediately; it creates a pending review item only."
+            "This does not mutate entities immediately; it creates a pending review item only. "
+            "Do not use this for accounts; accounts must be managed with account proposal tools."
         ),
         args_model=ProposeUpdateEntityArgs,
         handler=propose_update_entity,
@@ -252,6 +272,37 @@ TOOLS: dict[str, AgentToolDefinition] = {
         ),
         args_model=ProposeDeleteEntityArgs,
         handler=propose_delete_entity,
+    ),
+    "propose_create_account": AgentToolDefinition(
+        name="propose_create_account",
+        description=(
+            "Create a review-gated proposal to add a new account. "
+            "Use this instead of propose_create_entity when the record is one of the user's accounts. "
+            "This does not mutate accounts immediately; it creates a pending review item only."
+        ),
+        args_model=ProposeCreateAccountArgs,
+        handler=propose_create_account,
+    ),
+    "propose_update_account": AgentToolDefinition(
+        name="propose_update_account",
+        description=(
+            "Create a review-gated proposal to rename an account and/or update its currency_code, "
+            "active status, or markdown_body notes. This does not mutate accounts immediately; "
+            "it creates a pending review item only."
+        ),
+        args_model=ProposeUpdateAccountArgs,
+        handler=propose_update_account,
+    ),
+    "propose_delete_account": AgentToolDefinition(
+        name="propose_delete_account",
+        description=(
+            "Create a review-gated proposal to delete an account. "
+            "Delete behavior preserves denormalized entry labels, clears nullable account/entity references, "
+            "and deletes account snapshots. This does not mutate accounts immediately; "
+            "it creates a pending review item only."
+        ),
+        args_model=ProposeDeleteAccountArgs,
+        handler=propose_delete_account,
     ),
     "propose_create_entry": AgentToolDefinition(
         name="propose_create_entry",

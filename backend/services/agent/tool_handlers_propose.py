@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from backend.enums_agent import AgentChangeStatus, AgentChangeType
 from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
-from backend.models_finance import Account, Entry, EntryGroup, EntryGroupMember, Tag
+from backend.models_finance import Account, AccountSnapshot, Entry, EntryGroup, EntryGroupMember, Tag
 from backend.models_agent import AgentChangeItem, AgentRun
 from backend.services.agent.change_contracts import (
     CreateGroupMemberPayload,
@@ -41,15 +41,19 @@ from backend.services.agent.group_references import (
 from backend.services.agent.proposal_patching import apply_patch_map_to_payload
 from backend.services.agent.proposal_metadata import proposal_metadata_for_change_type
 from backend.services.agent.tool_args import (
+    AccountPatchArgs,
     EntryPatchArgs,
+    ProposeCreateAccountArgs,
     ProposeCreateEntityArgs,
     ProposeCreateEntryArgs,
     ProposeCreateGroupArgs,
     ProposeCreateTagArgs,
+    ProposeDeleteAccountArgs,
     ProposeDeleteEntityArgs,
     ProposeDeleteEntryArgs,
     ProposeDeleteGroupArgs,
     ProposeDeleteTagArgs,
+    ProposeUpdateAccountArgs,
     ProposeUpdateEntityArgs,
     ProposeUpdateEntryArgs,
     ProposeUpdateGroupArgs,
@@ -58,6 +62,7 @@ from backend.services.agent.tool_args import (
     RemovePendingProposalArgs,
     UpdatePendingProposalArgs,
 )
+from backend.services.accounts import find_account_by_name
 from backend.services.agent.tool_handlers_read import (
     entry_ambiguity_details,
     entry_to_public_record,
@@ -66,8 +71,10 @@ from backend.services.agent.tool_handlers_read import (
 )
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
 from backend.services.entities import (
+    ACCOUNT_CATEGORY_DETAIL,
     find_entity_by_name,
     is_account_entity,
+    normalize_entity_category,
     normalize_entity_name,
 )
 from backend.services.groups import build_group_graph, build_group_summary, group_tree_options
@@ -103,6 +110,15 @@ def proposal_result(summary: str, *, preview: dict[str, Any], item: AgentChangeI
         output_json=output_json,
         status="ok",
     )
+
+
+def account_payload_record(account: Account) -> dict[str, Any]:
+    return {
+        "name": account.name,
+        "currency_code": account.currency_code,
+        "is_active": account.is_active,
+        "markdown_body": account.markdown_body,
+    }
 
 
 def create_change_item(
@@ -175,7 +191,7 @@ def proposals_for_thread(
     )
 
 
-def normalized_pending_create_entity_names(
+def normalized_pending_create_entity_root_names(
     context: ToolContext,
     *,
     exclude_item_id: str | None = None,
@@ -184,7 +200,10 @@ def normalized_pending_create_entity_names(
     for item in pending_proposals_for_thread(context):
         if exclude_item_id is not None and item.id == exclude_item_id:
             continue
-        if item.change_type != AgentChangeType.CREATE_ENTITY:
+        if item.change_type not in {
+            AgentChangeType.CREATE_ENTITY,
+            AgentChangeType.CREATE_ACCOUNT,
+        }:
             continue
         raw_name = item.payload_json.get("name")
         if not isinstance(raw_name, str):
@@ -195,7 +214,7 @@ def normalized_pending_create_entity_names(
     return names
 
 
-def has_pending_create_entity_proposal(
+def has_pending_create_entity_root_proposal(
     context: ToolContext,
     entity_name: str,
     *,
@@ -204,7 +223,7 @@ def has_pending_create_entity_proposal(
     normalized = normalize_entity_name(entity_name)
     if not normalized:
         return False
-    return normalized.lower() in normalized_pending_create_entity_names(
+    return normalized.lower() in normalized_pending_create_entity_root_names(
         context,
         exclude_item_id=exclude_item_id,
     )
@@ -213,11 +232,11 @@ def has_pending_create_entity_proposal(
 def validate_proposed_entity_reference(context: ToolContext, entity_name: str) -> None:
     if find_entity_by_name(context.db, entity_name) is not None:
         return
-    if has_pending_create_entity_proposal(context, entity_name):
+    if has_pending_create_entity_root_proposal(context, entity_name):
         return
     raise ValueError(
         f"entity not found: '{entity_name}'. Use an existing entity or propose_create_entity "
-        "for it in the current thread first."
+        "or propose_create_account for it in the current thread first."
     )
 
 
@@ -943,6 +962,8 @@ def normalize_payload_for_change_type(
             payload=payload,
             model_type=ProposeCreateEntityArgs,
         )
+        if normalize_entity_category(parsed.category) == "account":
+            raise ValueError(ACCOUNT_CATEGORY_DETAIL)
         return parsed.model_dump(mode="json")
     if change_type == AgentChangeType.UPDATE_ENTITY:
         parsed = parse_change_payload(
@@ -950,6 +971,8 @@ def normalize_payload_for_change_type(
             payload={"name": payload.get("name"), "patch": payload.get("patch")},
             model_type=ProposeUpdateEntityArgs,
         )
+        if normalize_entity_category(parsed.patch.category) == "account":
+            raise ValueError(ACCOUNT_CATEGORY_DETAIL)
         normalized_payload = {
             "name": parsed.name,
             "patch": parsed.patch.model_dump(mode="json", exclude_unset=True),
@@ -962,6 +985,36 @@ def normalize_payload_for_change_type(
             change_type=change_type,
             payload=payload,
             model_type=ProposeDeleteEntityArgs,
+        )
+        normalized_payload = parsed.model_dump(mode="json")
+        if isinstance(payload.get("impact_preview"), dict):
+            normalized_payload["impact_preview"] = payload["impact_preview"]
+        return normalized_payload
+    if change_type == AgentChangeType.CREATE_ACCOUNT:
+        parsed = parse_change_payload(
+            change_type=change_type,
+            payload=payload,
+            model_type=ProposeCreateAccountArgs,
+        )
+        return parsed.model_dump(mode="json")
+    if change_type == AgentChangeType.UPDATE_ACCOUNT:
+        parsed = parse_change_payload(
+            change_type=change_type,
+            payload={"name": payload.get("name"), "patch": payload.get("patch")},
+            model_type=ProposeUpdateAccountArgs,
+        )
+        normalized_payload = {
+            "name": parsed.name,
+            "patch": parsed.patch.model_dump(mode="json", exclude_unset=True),
+        }
+        if isinstance(payload.get("current"), dict):
+            normalized_payload["current"] = payload["current"]
+        return normalized_payload
+    if change_type == AgentChangeType.DELETE_ACCOUNT:
+        parsed = parse_change_payload(
+            change_type=change_type,
+            payload=payload,
+            model_type=ProposeDeleteAccountArgs,
         )
         normalized_payload = parsed.model_dump(mode="json")
         if isinstance(payload.get("impact_preview"), dict):
@@ -1212,12 +1265,14 @@ def propose_delete_tag(context: ToolContext, args: ProposeDeleteTagArgs) -> Tool
 
 
 def propose_create_entity(context: ToolContext, args: ProposeCreateEntityArgs) -> ToolExecutionResult:
+    if normalize_entity_category(args.category) == "account":
+        return error_result(ACCOUNT_CATEGORY_DETAIL)
     existing = find_entity_by_name(context.db, args.name)
     if existing is not None:
         return error_result("entity already exists", details={"name": args.name})
-    if has_pending_create_entity_proposal(context, args.name):
+    if has_pending_create_entity_root_proposal(context, args.name):
         return error_result(
-            "entity already has a pending creation proposal in this thread",
+            "entity or account already has a pending creation proposal in this thread",
             details={"name": args.name},
         )
 
@@ -1242,6 +1297,8 @@ def propose_update_entity(context: ToolContext, args: ProposeUpdateEntityArgs) -
         )
 
     patch = args.patch.model_dump(exclude_unset=True)
+    if normalize_entity_category(patch.get("category")) == "account":
+        return error_result(ACCOUNT_CATEGORY_DETAIL)
     target_name = patch.get("name")
     if target_name is not None:
         duplicate = find_entity_by_name(context.db, target_name)
@@ -1313,6 +1370,96 @@ def propose_delete_entity(context: ToolContext, args: ProposeDeleteEntityArgs) -
         "impacted_accounts": impacted_account_count,
     }
     return proposal_result("proposed entity deletion", preview=preview, item=item)
+
+
+def propose_create_account(context: ToolContext, args: ProposeCreateAccountArgs) -> ToolExecutionResult:
+    if find_entity_by_name(context.db, args.name) is not None:
+        return error_result("entity name already exists", details={"name": args.name})
+    if has_pending_create_entity_root_proposal(context, args.name):
+        return error_result(
+            "entity or account already has a pending creation proposal in this thread",
+            details={"name": args.name},
+        )
+
+    payload = args.model_dump(mode="json")
+    item = create_change_item(
+        context,
+        change_type=AgentChangeType.CREATE_ACCOUNT,
+        payload=payload,
+        rationale_text="Agent proposed creating an account.",
+    )
+    return proposal_result("proposed account creation", preview=payload, item=item)
+
+
+def propose_update_account(context: ToolContext, args: ProposeUpdateAccountArgs) -> ToolExecutionResult:
+    existing = find_account_by_name(context.db, args.name)
+    if existing is None:
+        return error_result("account not found", details={"name": args.name})
+
+    patch = args.patch.model_dump(exclude_unset=True)
+    target_name = patch.get("name")
+    if target_name is not None:
+        duplicate = find_entity_by_name(context.db, target_name)
+        if duplicate is not None and duplicate.id != existing.id:
+            return error_result("target account name already exists", details={"name": target_name})
+
+    payload = {
+        "name": args.name,
+        "patch": patch,
+        "current": account_payload_record(existing),
+    }
+    item = create_change_item(
+        context,
+        change_type=AgentChangeType.UPDATE_ACCOUNT,
+        payload=payload,
+        rationale_text="Agent proposed updating an account.",
+    )
+    preview = {"name": args.name, "patch": patch}
+    return proposal_result("proposed account update", preview=preview, item=item)
+
+
+def propose_delete_account(context: ToolContext, args: ProposeDeleteAccountArgs) -> ToolExecutionResult:
+    existing = find_account_by_name(context.db, args.name)
+    if existing is None:
+        return error_result("account not found", details={"name": args.name})
+
+    impacted_entry_count = int(
+        context.db.scalar(
+            select(func.count(Entry.id)).where(
+                Entry.is_deleted.is_(False),
+                or_(
+                    Entry.account_id == existing.id,
+                    Entry.from_entity_id == existing.id,
+                    Entry.to_entity_id == existing.id,
+                ),
+            )
+        )
+        or 0
+    )
+    snapshot_count = int(
+        context.db.scalar(select(func.count(AccountSnapshot.id)).where(AccountSnapshot.account_id == existing.id))
+        or 0
+    )
+    payload = {
+        "name": args.name,
+        "impact_preview": {
+            "entry_count": impacted_entry_count,
+            "snapshot_count": snapshot_count,
+            "current": account_payload_record(existing),
+        },
+    }
+    item = create_change_item(
+        context,
+        change_type=AgentChangeType.DELETE_ACCOUNT,
+        payload=payload,
+        rationale_text="Agent proposed deleting an account.",
+    )
+    preview = {
+        "name": args.name,
+        "impacted_entries": impacted_entry_count,
+        "snapshots": snapshot_count,
+    }
+    return proposal_result("proposed account deletion", preview=preview, item=item)
 
 
 def propose_create_entry(context: ToolContext, args: ProposeCreateEntryArgs) -> ToolExecutionResult:

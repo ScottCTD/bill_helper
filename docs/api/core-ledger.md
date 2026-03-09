@@ -19,6 +19,7 @@ Response: `AccountRead`
 Behavior:
 
 - account id is the shared entity-root id
+- use `/accounts`, not `/entities`, for all new account-like records
 - response no longer includes `entity_id`
 
 ### `GET /accounts`
