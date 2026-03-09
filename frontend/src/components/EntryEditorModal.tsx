@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import type { Currency, Entity, Entry, EntryKind, GroupMemberRole, GroupSummary, Tag, User } from "../lib/types";
-import { CreatableSingleSelect } from "./CreatableSingleSelect";
+import { CreatableSingleSelect, type CreatableSingleSelectChangeMeta } from "./CreatableSingleSelect";
 import { MarkdownBlockEditor } from "./MarkdownBlockEditor";
 import { SingleSelect } from "./SingleSelect";
 import { TagMultiSelect } from "./TagMultiSelect";
@@ -17,6 +17,8 @@ interface EntryEditorFormState {
   currency_code: string;
   from_entity_value: string;
   to_entity_value: string;
+  from_entity_selected_id: string | null;
+  to_entity_selected_id: string | null;
   owner_user_id: string;
   direct_group_id: string;
   direct_group_member_role: GroupMemberRole;
@@ -86,6 +88,8 @@ function buildCreateForm(currentUserId: string, defaultCurrencyCode: string): En
     currency_code: defaultCurrencyCode,
     from_entity_value: "",
     to_entity_value: "",
+    from_entity_selected_id: null,
+    to_entity_selected_id: null,
     owner_user_id: currentUserId,
     direct_group_id: "",
     direct_group_member_role: "CHILD",
@@ -103,6 +107,8 @@ function buildEditForm(entry: Entry, currentUserId: string): EntryEditorFormStat
     currency_code: entry.currency_code,
     from_entity_value: entry.from_entity ?? "",
     to_entity_value: entry.to_entity ?? "",
+    from_entity_selected_id: entry.from_entity_id,
+    to_entity_selected_id: entry.to_entity_id,
     owner_user_id: entry.owner_user_id ?? currentUserId,
     direct_group_id: entry.direct_group?.id ?? "",
     direct_group_member_role: entry.direct_group_member_role ?? "CHILD",
@@ -130,7 +136,10 @@ function normalizeAmountForDiff(value: string) {
   return parsed.toFixed(2);
 }
 
-function normalizeFormStateForDiff(state: EntryEditorFormState) {
+function normalizeFormStateForDiff(
+  state: EntryEditorFormState,
+  options?: { includeFromSelectedId?: boolean; includeToSelectedId?: boolean }
+) {
   return {
     kind: state.kind,
     occurred_at: state.occurred_at,
@@ -139,6 +148,8 @@ function normalizeFormStateForDiff(state: EntryEditorFormState) {
     currency_code: state.currency_code.trim().toUpperCase(),
     from_entity_value: state.from_entity_value.trim(),
     to_entity_value: state.to_entity_value.trim(),
+    from_entity_selected_id: options?.includeFromSelectedId ? state.from_entity_selected_id : null,
+    to_entity_selected_id: options?.includeToSelectedId ? state.to_entity_selected_id : null,
     owner_user_id: state.owner_user_id,
     direct_group_id: state.direct_group_id,
     direct_group_member_role: state.direct_group_id ? state.direct_group_member_role : null,
@@ -166,10 +177,17 @@ function uniqueNormalizedEntityNames(values: string[]) {
   return uniqueValues.sort((left, right) => left.localeCompare(right));
 }
 
-function resolveEntityInput(rawValue: string, entities: Entity[]) {
+function resolveEntityInput(rawValue: string, entities: Entity[], selectedEntityId: string | null = null) {
   const trimmed = rawValue.trim();
   if (!trimmed) {
     return { entityId: null, entityName: null };
+  }
+
+  if (selectedEntityId) {
+    const selectedEntity = entities.find((entity) => entity.id === selectedEntityId);
+    if (selectedEntity && normalizeEntityValue(selectedEntity.name) === normalizeEntityValue(trimmed)) {
+      return { entityId: selectedEntity.id, entityName: null };
+    }
   }
 
   const normalized = normalizeEntityValue(trimmed);
@@ -181,8 +199,36 @@ function resolveEntityInput(rawValue: string, entities: Entity[]) {
   return { entityId: null, entityName: trimmed };
 }
 
-function areFormStatesEqual(left: EntryEditorFormState, right: EntryEditorFormState) {
-  return JSON.stringify(normalizeFormStateForDiff(left)) === JSON.stringify(normalizeFormStateForDiff(right));
+function areFormStatesEqual(
+  left: EntryEditorFormState,
+  right: EntryEditorFormState,
+  options?: { includeFromSelectedId?: boolean; includeToSelectedId?: boolean }
+) {
+  return JSON.stringify(normalizeFormStateForDiff(left, options)) === JSON.stringify(normalizeFormStateForDiff(right, options));
+}
+
+function matchingEntityId(value: string, entities: Entity[]) {
+  const normalized = normalizeEntityValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const matchedEntity = entities.find((entity) => normalizeEntityValue(entity.name) === normalized);
+  return matchedEntity?.id ?? null;
+}
+
+function nextSelectedEntityId(
+  nextValue: string,
+  entities: Entity[],
+  meta?: CreatableSingleSelectChangeMeta
+) {
+  if (meta?.source === "select") {
+    return matchingEntityId(nextValue, entities);
+  }
+  if (meta?.source === "create" || meta?.source === "input") {
+    return null;
+  }
+  return null;
 }
 
 export function EntryEditorModal({
@@ -297,7 +343,14 @@ export function EntryEditorModal({
     [entry?.direct_group, formState.direct_group_id, groups]
   );
 
-  const isDirty = useMemo(() => !areFormStatesEqual(formState, initialFormState), [formState, initialFormState]);
+  const isDirty = useMemo(
+    () =>
+      !areFormStatesEqual(formState, initialFormState, {
+        includeFromSelectedId: Boolean(entry?.from_entity_missing),
+        includeToSelectedId: Boolean(entry?.to_entity_missing)
+      }),
+    [entry?.from_entity_missing, entry?.to_entity_missing, formState, initialFormState]
+  );
 
   if (!isOpen) {
     return null;
@@ -306,8 +359,12 @@ export function EntryEditorModal({
   function buildSubmitPayload(): EntryEditorSubmitPayload | null {
     const amountMinor = Math.round(Number(formState.amount_major) * 100);
     const trimmedName = formState.name.trim();
-    const fromEntityResolution = resolveEntityInput(formState.from_entity_value, entities);
-    const toEntityResolution = resolveEntityInput(formState.to_entity_value, entities);
+    const fromEntityResolution = resolveEntityInput(
+      formState.from_entity_value,
+      entities,
+      formState.from_entity_selected_id
+    );
+    const toEntityResolution = resolveEntityInput(formState.to_entity_value, entities, formState.to_entity_selected_id);
 
     if (!trimmedName) {
       setValidationError("Name is required.");
@@ -479,7 +536,13 @@ export function EntryEditorModal({
                     onCreateOption={(createdValue) =>
                       setCreatedEntityOptionNames((current) => uniqueNormalizedEntityNames([...current, createdValue]))
                     }
-                    onChange={(nextValue) => setFormState((state) => ({ ...state, from_entity_value: nextValue }))}
+                    onChange={(nextValue, meta) =>
+                      setFormState((state) => ({
+                        ...state,
+                        from_entity_value: nextValue,
+                        from_entity_selected_id: nextSelectedEntityId(nextValue, entities, meta)
+                      }))
+                    }
                   />
                   <span className="entry-property-inline-label">To:</span>
                   <CreatableSingleSelect
@@ -492,7 +555,13 @@ export function EntryEditorModal({
                     onCreateOption={(createdValue) =>
                       setCreatedEntityOptionNames((current) => uniqueNormalizedEntityNames([...current, createdValue]))
                     }
-                    onChange={(nextValue) => setFormState((state) => ({ ...state, to_entity_value: nextValue }))}
+                    onChange={(nextValue, meta) =>
+                      setFormState((state) => ({
+                        ...state,
+                        to_entity_value: nextValue,
+                        to_entity_selected_id: nextSelectedEntityId(nextValue, entities, meta)
+                      }))
+                    }
                   />
                 </div>
                 {entry?.from_entity_missing || entry?.to_entity_missing ? (

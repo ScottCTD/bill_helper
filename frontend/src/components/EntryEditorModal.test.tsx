@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -107,5 +107,62 @@ describe("EntryEditorModal", () => {
     await user.click(screen.getByRole("option", { name: /Dinner Split/i }));
 
     expect(screen.getByRole("button", { name: "Split role" })).toBeInTheDocument();
+  });
+
+  it("submits when re-linking a preserved missing label to an existing entity with the same name", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const onClose = vi.fn();
+
+    render(
+      <EntryEditorModal
+        isOpen
+        mode="edit"
+        entry={{
+          ...entryFixture,
+          kind: "TRANSFER",
+          name: "Transfer to Saving Account",
+          to_entity_id: null,
+          to_entity: "Saving Account",
+          to_entity_missing: true
+        }}
+        currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
+        entities={[
+          { id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 },
+          {
+            id: "entity-3",
+            name: "Saving Account",
+            category: "Account",
+            is_account: true,
+            from_count: 0,
+            to_count: 1,
+            account_count: 1,
+            entry_count: 1
+          }
+        ]}
+        users={[{ id: "user-1", name: "Alice", is_current_user: true }]}
+        groups={[]}
+        tags={[]}
+        currentUserId="user-1"
+        defaultCurrencyCode="CAD"
+        isSaving={false}
+        onClose={onClose}
+        onSubmit={onSubmit}
+      />
+    );
+
+    await user.click(screen.getAllByRole("button", { name: "Toggle options" })[1]);
+    await user.click(screen.getByRole("button", { name: "Saving Account" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to_entity_id: "entity-3",
+          to_entity: null
+        })
+      )
+    );
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

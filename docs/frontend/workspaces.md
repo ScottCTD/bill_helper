@@ -16,6 +16,7 @@
 - rows show a `Missing entity` badge when preserved labels remain after entity or account deletion
 - entry create modal resolves default currency from runtime settings
 - entry create/edit modal includes a single direct-group picker; `SPLIT` groups also show a split-role picker
+- entry create/edit modal treats re-selecting a same-name existing entity as a real relink, so preserved missing labels can be restored without renaming the field
 
 ### `frontend/src/pages/EntryDetailPage.tsx`
 

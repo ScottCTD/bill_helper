@@ -4,12 +4,16 @@ import { ChevronDown } from "lucide-react";
 interface CreatableSingleSelectProps {
   options: string[];
   value: string;
-  onChange: (nextValue: string) => void;
+  onChange: (nextValue: string, meta?: CreatableSingleSelectChangeMeta) => void;
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
   onCreateOption?: (createdValue: string) => void;
   createLabelPrefix?: string;
+}
+
+export interface CreatableSingleSelectChangeMeta {
+  source: "input" | "select" | "create";
 }
 
 function normalizeValue(value: string) {
@@ -96,7 +100,7 @@ export function CreatableSingleSelect({
       setCreatedOptions((current) => uniqueNormalized([...current, nextValue]));
       onCreateOption?.(nextValue);
     }
-    onChange(nextValue);
+    onChange(nextValue, { source: markAsCreated ? "create" : "select" });
     setIsOpen(false);
     requestAnimationFrame(() => inputRef.current?.blur());
   }
@@ -164,7 +168,7 @@ export function CreatableSingleSelect({
           disabled={disabled}
           value={value}
           onChange={(event) => {
-            onChange(event.target.value);
+            onChange(event.target.value, { source: "input" });
             setIsOpen(true);
           }}
           onFocus={() => setIsOpen(true)}
