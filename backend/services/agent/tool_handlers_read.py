@@ -582,6 +582,8 @@ def list_entities(context: ToolContext, args: ListEntitiesArgs) -> ToolExecution
     entities = list(
         context.db.scalars(
             select(Entity)
+            .outerjoin(Account, Account.id == Entity.id)
+            .where(Account.id.is_(None))
             .options(selectinload(Entity.account))
             .order_by(func.lower(Entity.name).asc())
         )
@@ -600,14 +602,14 @@ def list_entities(context: ToolContext, args: ListEntitiesArgs) -> ToolExecution
         category_rank, category_ok = string_match_rank(category, args.category)
         if not (name_ok and category_ok):
             continue
-        record = {"name": entity.name, "category": category, "is_account": entity.account is not None}
+        record = {"name": entity.name, "category": category}
         ranked.append(((name_rank, category_rank, entity.name.lower()), record))
 
     ranked.sort(key=lambda pair: pair[0])
     total_available = len(ranked)
     records = [record for _, record in ranked[: args.limit]]
     entities_text = "; ".join(
-        f"{entity['name']} ({'account; ' if entity['is_account'] else ''}{entity['category'] or 'uncategorized'})"
+        f"{entity['name']} ({entity['category'] or 'uncategorized'})"
         for entity in records
     ) if records else "(none)"
     output_json = {

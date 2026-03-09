@@ -2557,7 +2557,7 @@ def test_list_entries_source_matches_name_and_counterparties(client, monkeypatch
     assert "ChatGPT Renewal" in names
 
 
-def test_list_entities_category_account_returns_account_backed_entities(client, monkeypatch):
+def test_list_entities_excludes_account_backed_entities(client, monkeypatch):
     create_account_response = client.post(
         "/api/v1/accounts",
         json={
@@ -2592,10 +2592,9 @@ def test_list_entities_category_account_returns_account_backed_entities(client, 
     assert run["status"] == "completed"
     assert len(run["tool_calls"]) == 1
     output = run["tool_calls"][0]["output_json"]
-    assert output["returned_count"] == 1
-    assert output["entities"][0]["name"] == "Primary Checking"
-    assert output["entities"][0]["category"] == "account"
-    assert output["entities"][0]["is_account"] is True
+    assert output["returned_count"] == 0
+    assert output["total_available"] == 0
+    assert output["entities"] == []
 
 
 def test_list_accounts_returns_account_records(client, monkeypatch):

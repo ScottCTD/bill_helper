@@ -537,7 +537,7 @@ tags: name (type or untyped), ...
 
 #### `list_entities` (read)
 
-**Description:** List/query entity roots by name and category. Exact matches are ranked higher than substring matches. Account-backed rows are still flagged with `is_account=true`, but account grounding and account edits should use `list_accounts` plus the account proposal tools. This tool is read-only.
+**Description:** List/query non-account entity roots by name and category. Exact matches are ranked higher than substring matches. Account grounding and account edits should use `list_accounts` plus the account proposal tools. This tool is read-only.
 
 **Arguments:**
 
