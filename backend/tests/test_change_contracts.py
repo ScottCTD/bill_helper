@@ -68,13 +68,15 @@ def test_validate_change_payload_normalizes_group_payloads() -> None:
         {
             "action": "add",
             "group_ref": {"group_id": " ABCD1234 "},
-            "entry_ref": {"entry_id": " efgh5678 "},
+            "target": {
+                "target_type": "entry",
+                "entry_ref": {"entry_id": " efgh5678 "},
+            },
             "member_role": "CHILD",
         },
     )
     assert create_member.group_ref.group_id == "abcd1234"
-    assert create_member.entry_ref is not None
-    assert create_member.entry_ref.entry_id == "efgh5678"
+    assert create_member.target.entry_ref.entry_id == "efgh5678"
     assert create_member.member_role.value == "CHILD"
 
 
@@ -85,6 +87,6 @@ def test_validate_change_payload_rejects_pending_refs_for_remove_group_member() 
             {
                 "action": "remove",
                 "group_ref": {"create_group_proposal_id": "proposal-1234"},
-                "entry_ref": {"entry_id": "entry-1234"},
+                "target": {"target_type": "entry", "entry_ref": {"entry_id": "entry-1234"}},
             },
         )

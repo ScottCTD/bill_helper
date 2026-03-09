@@ -166,13 +166,13 @@ def proposal_summary(item: AgentChangeItem) -> str:
     if change_type == AgentChangeType.CREATE_GROUP_MEMBER.value:
         return (
             f"add group member group_ref={payload.get('group_ref')} "
-            f"entry_ref={payload.get('entry_ref')} child_group_ref={payload.get('child_group_ref')} "
+            f"target={payload.get('target')} "
             f"member_role={payload.get('member_role')}"
         )
     if change_type == AgentChangeType.DELETE_GROUP_MEMBER.value:
         return (
             f"remove group member group_ref={payload.get('group_ref')} "
-            f"entry_ref={payload.get('entry_ref')} child_group_ref={payload.get('child_group_ref')}"
+            f"target={payload.get('target')}"
         )
     if change_type == AgentChangeType.CREATE_TAG.value:
         return f"create tag name={payload.get('name')} type={payload.get('type')}"

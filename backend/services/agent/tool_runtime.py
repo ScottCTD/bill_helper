@@ -354,10 +354,12 @@ TOOLS: dict[str, AgentToolDefinition] = {
         name="propose_update_group_membership",
         description=(
             "Create a review-gated proposal to add or remove one direct group member. "
-            "Use action='add' or action='remove'. Provide exactly one member target: entry_ref or child_group_ref. "
+            "Use action='add' or action='remove'. Provide target.target_type='entry' with target.entry_ref "
+            "or target.target_type='child_group' with target.group_ref. "
             "group_ref points to the parent group and may reference an existing group_id or, for add only, "
-            "a pending create_group proposal in the current thread. entry_ref may reference an existing entry_id "
-            "or, for add only, a pending create_entry proposal in the current thread. "
+            "a pending create_group proposal in the current thread. target.entry_ref may reference an existing entry_id "
+            "or, for add only, a pending create_entry proposal in the current thread. target.group_ref may reference "
+            "an existing child group_id or, for add only, a pending create_group proposal in the current thread. "
             "member_role is required for SPLIT-group adds and rejected otherwise. "
             "This does not mutate groups immediately; it creates a pending review item only."
         ),

@@ -432,7 +432,7 @@ Detail mode returns one `group` record with summary fields, `direct_members`, an
 
 #### `propose_update_group_membership` (proposal)
 
-**Description:** Create a review-gated proposal to add or remove one direct group member. Use `action="add"` or `action="remove"`. `group_ref` points to the parent group and may reference an existing `group_id` or, for adds only, a pending `create_group` proposal in the current thread. `entry_ref` may reference an existing `entry_id` or, for adds only, a pending `create_entry` proposal in the current thread. `member_role` is required for `SPLIT`-group adds and rejected otherwise.
+**Description:** Create a review-gated proposal to add or remove one direct group member. Use `action="add"` or `action="remove"`. `group_ref` points to the parent group and may reference an existing `group_id` or, for adds only, a pending `create_group` proposal in the current thread. `target` is a typed member object: use `{"target_type":"entry","entry_ref":...}` for entry members or `{"target_type":"child_group","group_ref":...}` for child-group members. `target.entry_ref` may reference an existing `entry_id` or, for adds only, a pending `create_entry` proposal in the current thread. `target.group_ref` may reference an existing child `group_id` or, for adds only, a pending `create_group` proposal in the current thread. `member_role` is required for `SPLIT`-group adds and rejected otherwise.
 
 **Arguments:**
 
@@ -440,15 +440,14 @@ Detail mode returns one `group` record with summary fields, `direct_members`, an
 | ----------------- | ----------------- | -------- | ----------- |
 | `action`          | string            | yes      | `add` or `remove` |
 | `group_ref`       | object            | yes      | exactly one of `group_id` or `create_group_proposal_id` |
-| `entry_ref`       | object | null     | no       | exactly one of `entry_ref` or `child_group_ref` |
-| `child_group_ref` | object | null     | no       | exactly one of `entry_ref` or `child_group_ref` |
+| `target`          | object            | yes      | `target_type="entry"` with `entry_ref`, or `target_type="child_group"` with `group_ref` |
 | `member_role`     | string | null     | no       | `PARENT` or `CHILD`; add-only and only for split groups |
 
 **Expected output:** `OK` with status and preview. Returns `ERROR` for invalid references, duplicate/conflicting pending membership proposals, or invalid group-type rules.
 
 Notes:
 
-- `remove` only supports existing applied `group_id` / `entry_id` / child `group_id` references.
+- `remove` only supports existing applied `group_id` references in both `group_ref` and `target`; pending proposal ids are add-only.
 - Existing short ids and pending create-proposal ids are canonicalized into full ids before the proposal is stored, so later review/apply steps use stable references.
 - If a pending create proposal referenced by an add-member proposal is later rejected or fails, the member proposal remains pending but cannot be approved until edited or removed.
 
