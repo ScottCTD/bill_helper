@@ -9,10 +9,12 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
+from backend.auth import RequestPrincipal
 from backend.enums_finance import EntryKind
-from backend.models_finance import Account, AccountSnapshot, Entry, EntryTag, Tag
+from backend.models_finance import Account, AccountSnapshot, Entity, Entry, EntryTag, Tag
 from backend.schemas_finance import (
     DailyExpensePoint,
+    DashboardRead,
     DashboardBreakdownItem,
     DashboardDailySpendingPoint,
     DashboardKpisRead,
@@ -23,6 +25,8 @@ from backend.schemas_finance import (
     ReconciliationRead,
     TagBreakdownItem,
 )
+from backend.services.access_scope import account_owner_filter, entry_owner_filter
+from backend.services.runtime_settings import resolve_runtime_settings
 
 DASHBOARD_DEFAULT_CURRENCY_CODE = "CAD"
 DASHBOARD_DAILY_TAG_NAME = "daily"
@@ -100,6 +104,27 @@ def build_reconciliation(db: Session, account: Account, as_of: date) -> Reconcil
     )
 
 
+def list_dashboard_reconciliation_accounts(
+    db: Session,
+    *,
+    currency_code: str,
+    principal: RequestPrincipal,
+) -> list[Account]:
+    return list(
+        db.scalars(
+            select(Account)
+            .join(Entity, Entity.id == Account.id)
+            .where(
+                Account.is_active.is_(True),
+                Account.currency_code == currency_code,
+                account_owner_filter(principal),
+            )
+            .options(selectinload(Account.entity))
+            .order_by(Entity.name.asc())
+        )
+    )
+
+
 def month_window(month: str) -> tuple[date, date]:
     year, month_num = map(int, month.split("-"))
     start = date(year, month_num, 1)
@@ -108,6 +133,44 @@ def month_window(month: str) -> tuple[date, date]:
     else:
         end = date(year, month_num + 1, 1)
     return start, end
+
+
+def build_dashboard_read(
+    db: Session,
+    *,
+    month: str,
+    principal: RequestPrincipal,
+) -> DashboardRead:
+    start, end = month_window(month)
+
+    runtime_settings = resolve_runtime_settings(db)
+    dashboard_currency_code = runtime_settings.dashboard_currency_code
+
+    analytics = build_dashboard_analytics(
+        db,
+        start=start,
+        end=end,
+        options=DashboardAnalyticsOptions(
+            currency_code=dashboard_currency_code,
+            entry_filter=entry_owner_filter(principal),
+            account_filter=account_owner_filter(principal),
+        ),
+    )
+
+    as_of = min(date.today(), end - timedelta(days=1))
+    accounts = list_dashboard_reconciliation_accounts(
+        db,
+        currency_code=dashboard_currency_code,
+        principal=principal,
+    )
+    reconciliation = [build_reconciliation(db, account, as_of) for account in accounts]
+
+    return DashboardRead(
+        month=month,
+        currency_code=dashboard_currency_code,
+        **analytics,
+        reconciliation=reconciliation,
+    )
 
 
 def _shift_month(month_start: date, month_delta: int) -> date:

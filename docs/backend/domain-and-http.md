@@ -105,6 +105,7 @@ Router behavior:
 
 - account, entry, and group handlers use shared principal-scoped helpers from `backend/services/access_scope.py`
 - `backend/routers/entries.py` stays at HTTP parsing/translation while `backend/services/entries.py` owns entry create/update orchestration
+- `backend/routers/tags.py`, `taxonomies.py`, `users.py`, and `dashboard.py` delegate read/write orchestration to their service modules instead of assembling persistence queries inline
 - non-admin principals are restricted to their own owned resources; admin principal retains cross-user visibility and mutation
 - `groups.py` exposes first-class group CRUD, membership mutation, and derived group graphs
 - `dashboard.py` is principal-scoped by visible accounts and entries
