@@ -1186,7 +1186,7 @@
   }
 
   .agent-panel-header h2 {
-    @apply m-0 shrink-0 text-sm font-medium text-foreground/90;
+    @apply m-0 shrink-0 text-xl font-semibold tracking-tight text-foreground;
   }
 
   .agent-panel-header p {

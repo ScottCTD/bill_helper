@@ -4,10 +4,10 @@ This document describes the architecture, prompts, tools, and usage workflow of 
 
 ## Agent UX Quick Path
 
-1. Open the app and navigate to the **Agent** route — this is the AI-native chat workspace.
+1. Open the app and navigate to the **Agent** route — this opens the **Bill Assistant** workspace.
 2. Use **Settings** to configure runtime defaults (currency, model, step limits) before running agent-heavy workflows if needed.
 3. Create or select a conversation thread.
-4. Send text and optional attachments (images or PDFs) via the composer.
+4. Pick the next-run model from the composer dropdown if needed, then send text and optional attachments (images or PDFs).
 5. Review the timeline as the agent works:
   - User/assistant messages render inline; assistant messages support markdown.
   - In-flight tool-call progress and reasoning updates appear while the run is active.
