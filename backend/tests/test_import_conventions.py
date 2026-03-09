@@ -37,6 +37,8 @@ REMOVED_AGENT_TOOL_ARGS_MODULE = BACKEND_DIR / "services" / "agent" / "tool_args
 AGENT_TOOL_ARGS_PACKAGE = BACKEND_DIR / "services" / "agent" / "tool_args"
 REMOVED_AGENT_PROPOSE_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "tool_handlers_propose.py"
 AGENT_PROPOSALS_PACKAGE = BACKEND_DIR / "services" / "agent" / "proposals"
+REMOVED_AGENT_CHANGE_APPLY_MODULE = BACKEND_DIR / "services" / "agent" / "change_apply.py"
+AGENT_APPLY_PACKAGE = BACKEND_DIR / "services" / "agent" / "apply"
 
 
 def _assert_marker_module(path: Path) -> None:
@@ -65,6 +67,7 @@ def _defined_class_names(path: Path) -> set[str]:
 def test_service_package_init_modules_are_marker_only() -> None:
     _assert_marker_module(BACKEND_DIR / "services" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "__init__.py")
+    _assert_marker_module(BACKEND_DIR / "services" / "agent" / "apply" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "proposals" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "validation" / "__init__.py")
 
@@ -134,6 +137,13 @@ def test_agent_proposals_are_grouped_in_a_package() -> None:
     assert AGENT_PROPOSALS_PACKAGE.is_dir(), "proposals package should exist"
     for name in ("catalog.py", "entries.py", "groups.py", "group_memberships.py", "normalization.py", "pending.py"):
         assert (AGENT_PROPOSALS_PACKAGE / name).exists(), f"missing proposal module: {name}"
+
+
+def test_agent_apply_handlers_are_grouped_in_a_package() -> None:
+    assert not REMOVED_AGENT_CHANGE_APPLY_MODULE.exists(), "apply handlers should stay split into the apply package"
+    assert AGENT_APPLY_PACKAGE.is_dir(), "apply package should exist"
+    for name in ("catalog.py", "common.py", "dispatch.py", "entries.py", "groups.py"):
+        assert (AGENT_APPLY_PACKAGE / name).exists(), f"missing apply module: {name}"
 
 
 def test_schema_modules_do_not_import_service_modules() -> None:
@@ -223,7 +233,7 @@ def test_finance_write_services_do_not_import_http_write_schemas() -> None:
         BACKEND_DIR / "services" / "accounts.py",
         BACKEND_DIR / "services" / "entities.py",
         BACKEND_DIR / "services" / "tags.py",
-        BACKEND_DIR / "services" / "agent" / "change_apply.py",
+        BACKEND_DIR / "services" / "agent" / "apply" / "catalog.py",
     ]
     violations: list[str] = []
     for service_path in service_paths:

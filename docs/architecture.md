@@ -93,7 +93,7 @@ Contract notes:
 - `user_context.py`: current-user/account context normalization and truncation for prompt assembly
 - `model_client.py`: LiteLLM adapter and normalized model errors
 - `model_client.py`: tenacity retries for model completion calls
-- `change_apply.py`: change-type handler registry for review-time resource application
+- `apply/`: change-type apply package for review-time resource application
 - `review.py`: approval/rejection transitions and audit writes
 - `benchmark_interface.py`: benchmark-facing case execution contract returning normalized predictions/trace payloads
 

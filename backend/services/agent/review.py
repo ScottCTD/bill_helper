@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.enums_agent import AgentChangeStatus, AgentChangeType, AgentReviewActionType
 from backend.models_agent import AgentChangeItem, AgentReviewAction, AgentRun
-from backend.services.agent.change_apply import apply_change_item_payload
+from backend.services.agent.apply.dispatch import apply_change_item_payload
 from backend.services.agent.change_contracts import (
     ChangePayloadModel,
     ChildGroupMemberTargetPayload,

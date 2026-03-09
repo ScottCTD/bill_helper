@@ -67,7 +67,7 @@ This doc is the fast path for understanding how entries are created, edited, gro
    - `frontend/src/features/agent/review/drafts.ts`
 4. Apply handler:
    - `backend/services/agent/review.py`
-   - `backend/services/agent/change_apply.py`
+   - `backend/services/agent/apply/`
 5. Apply handler resolves target by selector for update/delete:
    - `date + amount_minor + from_entity + to_entity + name`
 6. Entry mutation is applied directly to `entries` (no entry status field); agent-created entries remain ungrouped until a user assigns them to a group.
