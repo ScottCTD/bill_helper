@@ -34,7 +34,7 @@ def is_admin_principal(principal: RequestPrincipal) -> bool:
     return is_admin_principal_name(principal.user_name)
 
 
-def get_current_principal(
+def get_or_create_current_principal(
     db: Session = Depends(get_db),
     principal_header: str | None = Header(default=None, alias="X-Bill-Helper-Principal"),
 ) -> RequestPrincipal:
@@ -45,7 +45,7 @@ def get_current_principal(
 
 
 def require_admin_principal(
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> RequestPrincipal:
     if not is_admin_principal(principal):
         raise HTTPException(

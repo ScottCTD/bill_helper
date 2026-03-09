@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from backend.auth import RequestPrincipal, get_current_principal, require_admin_principal
+from backend.auth import RequestPrincipal, get_or_create_current_principal, require_admin_principal
 from backend.database import get_db
 from backend.schemas_finance import UserCreate, UserRead, UserUpdate
 from backend.services.crud_policy import (
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get("", response_model=list[UserRead])
 def list_users(
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> list[UserRead]:
     return list_user_reads(db, principal=principal)
 
@@ -50,7 +50,7 @@ def update_user(
     user_id: str,
     payload: UserUpdate,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> UserRead:
     try:
         user = update_user_for_principal(

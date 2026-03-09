@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, load_only, selectinload
 
-from backend.auth import RequestPrincipal, get_current_principal, require_admin_principal
+from backend.auth import RequestPrincipal, get_or_create_current_principal, require_admin_principal
 from backend.config import get_settings
 from backend.database import get_db, get_session_maker
 from backend.enums_agent import AgentChangeStatus, AgentRunStatus, SUPPORTED_AGENT_CHANGE_TYPES
@@ -358,7 +358,7 @@ def approve_item(
     item_id: str,
     payload: AgentChangeItemApproveRequest,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> AgentChangeItemRead:
     try:
         item = approve_change_item(
@@ -385,7 +385,7 @@ def reject_item(
     item_id: str,
     payload: AgentChangeItemRejectRequest,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> AgentChangeItemRead:
     try:
         item = reject_change_item(
@@ -412,7 +412,7 @@ def reopen_item(
     item_id: str,
     payload: AgentChangeItemReopenRequest,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> AgentChangeItemRead:
     try:
         item = reopen_change_item(

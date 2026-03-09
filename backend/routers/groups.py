@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.auth import RequestPrincipal, get_current_principal
+from backend.auth import RequestPrincipal, get_or_create_current_principal
 from backend.database import get_db
 from backend.models_finance import EntryGroup
 from backend.schemas_finance import (
@@ -53,7 +53,7 @@ def _get_group_tree_or_404(
 def create_group_route(
     payload: GroupCreate,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> GroupSummaryRead:
     try:
         group = create_group(
@@ -73,7 +73,7 @@ def create_group_route(
 @router.get("", response_model=list[GroupSummaryRead])
 def list_group_summaries(
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> list[GroupSummaryRead]:
     groups = list(
         db.scalars(
@@ -99,7 +99,7 @@ def list_group_summaries(
 def get_group_graph(
     group_id: str,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> GroupGraphRead:
     group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
     return build_group_graph(group)
@@ -110,7 +110,7 @@ def update_group(
     group_id: str,
     payload: GroupUpdate,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> GroupSummaryRead:
     group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
     if payload.name is None:
@@ -130,7 +130,7 @@ def update_group(
 def delete_group_route(
     group_id: str,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> None:
     group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
     try:
@@ -146,7 +146,7 @@ def add_group_member_route(
     group_id: str,
     payload: GroupMemberCreate,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> GroupGraphRead:
     group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
 
@@ -184,7 +184,7 @@ def delete_group_member_route(
     group_id: str,
     membership_id: str,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> None:
     group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
     try:
