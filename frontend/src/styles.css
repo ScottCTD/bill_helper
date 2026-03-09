@@ -1250,7 +1250,12 @@
   }
 
   .agent-thread-row {
-    @apply relative flex h-9 shrink-0 items-stretch overflow-hidden rounded-lg border border-transparent bg-transparent transition-all duration-150;
+    @apply relative grid h-9 shrink-0 items-center gap-1.5 overflow-hidden rounded-lg border border-transparent bg-transparent transition-all duration-150;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-thread-row.with-action-slot {
+    grid-template-columns: minmax(0, 1fr) 1.5rem;
   }
 
   .agent-thread-row:hover {
@@ -1261,16 +1266,38 @@
     @apply border-transparent bg-accent/80;
   }
 
+  .agent-thread-row.editing {
+    @apply border-border/60 bg-background/70 shadow-sm;
+  }
+
+  .agent-thread-row.editing:hover {
+    @apply bg-background/70;
+  }
+
   .agent-thread-button {
-    @apply m-0 flex h-full min-w-0 flex-1 appearance-none items-center justify-start rounded-md border-0 bg-transparent px-2.5 py-0 pr-14 text-left text-sm font-medium leading-5 shadow-none outline-none hover:bg-transparent focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0;
+    @apply m-0 flex h-full min-w-0 appearance-none items-center justify-start rounded-md border-0 bg-transparent px-2.5 py-0 text-left text-sm font-medium leading-5 shadow-none outline-none hover:bg-transparent focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0;
+    grid-column: 1;
+    align-self: center;
+    height: calc(100% - 2px);
+    min-height: 0;
+    -webkit-appearance: none;
+    color: inherit;
+    font-family: inherit;
   }
 
   .agent-thread-label {
-    @apply flex h-5 min-w-0 flex-1 items-center truncate leading-5;
+    @apply flex h-5 min-w-0 flex-1 items-center truncate;
+    line-height: 1.25rem;
   }
 
   .agent-thread-edit-slot {
-    @apply flex h-full min-w-0 flex-1 items-center px-2.5 pr-14;
+    @apply flex h-full min-w-0 items-center rounded-md border border-border/60 bg-background/85 px-2.5 shadow-sm transition-colors;
+    grid-column: 1;
+    height: calc(100% - 2px);
+  }
+
+  .agent-thread-edit-slot:focus-within {
+    @apply border-ring/70 bg-background ring-1 ring-ring/30;
   }
 
   .agent-thread-input {
@@ -1278,12 +1305,18 @@
     -webkit-appearance: none;
     font-family: inherit;
     color: inherit;
+    caret-color: hsl(var(--foreground));
     letter-spacing: inherit;
     font-feature-settings: inherit;
   }
 
+  .agent-thread-action-slot {
+    @apply relative h-6 w-6 justify-self-end;
+    grid-column: 2;
+  }
+
   .agent-thread-status-indicator {
-    @apply pointer-events-none absolute right-8 top-1/2 inline-flex h-4 w-4 -translate-y-1/2 items-center justify-center text-muted-foreground/85;
+    @apply pointer-events-none absolute inset-0 inline-flex items-center justify-center text-muted-foreground/85 transition-opacity duration-150;
   }
 
   .agent-thread-running-indicator {
@@ -1301,12 +1334,18 @@
   }
 
   .agent-thread-delete-button {
-    @apply absolute right-1.5 top-1/2 h-6 w-6 -translate-y-1/2 rounded-md border-none bg-transparent p-0 text-muted-foreground opacity-0 pointer-events-none shadow-none transition-opacity focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0;
+    @apply absolute inset-0 inline-flex h-6 w-6 items-center justify-center rounded-md border-none bg-transparent p-0 text-muted-foreground opacity-0 pointer-events-none shadow-none transition-opacity duration-150 focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0;
+    min-height: 0;
   }
 
   .agent-thread-row:hover .agent-thread-delete-button,
   .agent-thread-row:focus-within .agent-thread-delete-button {
     @apply opacity-100 pointer-events-auto;
+  }
+
+  .agent-thread-row:hover .agent-thread-action-slot.can-delete .agent-thread-status-indicator,
+  .agent-thread-row:focus-within .agent-thread-action-slot.can-delete .agent-thread-status-indicator {
+    @apply opacity-0;
   }
 
   .agent-thread-delete-button:hover {

@@ -12,10 +12,6 @@ export function PropertiesPage() {
         <CardContent className="space-y-5 pt-6">
           <div className="space-y-1.5">
             <h2 className="text-xl font-semibold">Property Databases</h2>
-            <p className="muted">
-              Manage core catalogs and taxonomy terms from one workspace. Category pickers for entities and type pickers for tags
-              are driven by taxonomy terms.
-            </p>
             {model.queries.taxonomiesQuery.isError ? <p className="error">{(model.queries.taxonomiesQuery.error as Error).message}</p> : null}
           </div>
 

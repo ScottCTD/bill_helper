@@ -26,8 +26,10 @@ from backend.services.runtime_settings_normalization import (
 RUNTIME_SETTINGS_SCOPE = "default"
 DEFAULT_AVAILABLE_AGENT_MODELS = (
     DEFAULT_AGENT_MODEL,
-    "openai/gpt-4.1-mini",
+    "bedrock/us.anthropic.claude-sonnet-4-6",
     "openrouter/qwen/qwen3.5-27b",
+    "openrouter/moonshotai/kimi-k2.5",
+    "openrouter/minimax/minimax-m2.5",
 )
 
 

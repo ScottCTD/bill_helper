@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 
 import type { AgentThreadSummary } from "../../../lib/types";
-import { Button } from "../../../components/ui/button";
-import { compactThreadName } from "./format";
+import { displayThreadName } from "./format";
 
 interface AgentThreadListProps {
   threads: AgentThreadSummary[] | undefined;
@@ -41,9 +40,8 @@ export function AgentThreadList(props: AgentThreadListProps) {
   } = props;
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
-  const inputRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const committingThreadIdRef = useRef<string | null>(null);
-  const initialDraftTitleRef = useRef("");
   const optimisticRunningThreadIdSet = new Set(optimisticRunningThreadIds);
 
   useEffect(() => {
@@ -54,26 +52,17 @@ export function AgentThreadList(props: AgentThreadListProps) {
     if (!editor) {
       return;
     }
-    editor.textContent = initialDraftTitleRef.current;
     editor.focus();
-    const selection = window.getSelection();
-    if (!selection) {
-      return;
-    }
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    const end = editor.value.length;
+    editor.setSelectionRange(end, end);
   }, [editingThreadId]);
 
   function beginRename(thread: AgentThreadSummary) {
     if (isRenameDisabled) {
       return;
     }
-    initialDraftTitleRef.current = thread.title ?? "";
+    setDraftTitle(thread.title ?? "");
     setEditingThreadId(thread.id);
-    setDraftTitle(initialDraftTitleRef.current);
   }
 
   function cancelRename() {
@@ -85,7 +74,7 @@ export function AgentThreadList(props: AgentThreadListProps) {
     if (committingThreadIdRef.current === thread.id) {
       return;
     }
-    const nextTitle = normalizeThreadTitleInput(inputRef.current?.textContent ?? draftTitle);
+    const nextTitle = normalizeThreadTitleInput(inputRef.current?.value ?? draftTitle);
     const currentTitle = normalizeThreadTitleInput(thread.title ?? "");
     if (!nextTitle || nextTitle === currentTitle) {
       cancelRename();
@@ -110,20 +99,40 @@ export function AgentThreadList(props: AgentThreadListProps) {
             const isSelected = thread.id === selectedThreadId;
             const isRunning = thread.has_running_run || optimisticRunningThreadIdSet.has(thread.id);
             const isEditing = editingThreadId === thread.id;
+            const threadName = displayThreadName(thread);
+            const showDeleteButton = !isDeleteDisabled && !isEditing;
+            const hasActionSlot = isRunning || showDeleteButton;
+            const rowClassName = [
+              "agent-thread-row group",
+              isSelected ? "selected" : null,
+              isEditing ? "editing" : null,
+              hasActionSlot ? "with-action-slot" : null
+            ]
+              .filter(Boolean)
+              .join(" ");
+            const actionSlotClassName = [
+              "agent-thread-action-slot",
+              showDeleteButton ? "can-delete" : null
+            ]
+              .filter(Boolean)
+              .join(" ");
             return (
-              <div key={thread.id} className={isSelected ? "agent-thread-row group selected" : "agent-thread-row group"}>
+              <div key={thread.id} className={rowClassName}>
                 {isEditing ? (
                   <div className="agent-thread-edit-slot">
-                    <div
+                    <input
                       ref={inputRef}
-                      role="textbox"
-                      contentEditable={renamingThreadId !== thread.id}
-                      suppressContentEditableWarning
+                      type="text"
                       className="agent-thread-input"
-                      aria-label={`Rename thread ${thread.title || "untitled thread"}`}
-                      aria-multiline={false}
-                      onInput={(event) => {
-                        setDraftTitle(event.currentTarget.textContent ?? "");
+                      aria-label={`Rename thread ${threadName}`}
+                      value={draftTitle}
+                      disabled={renamingThreadId === thread.id}
+                      spellCheck={false}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      autoComplete="off"
+                      onChange={(event) => {
+                        setDraftTitle(event.currentTarget.value);
                       }}
                       onBlur={() => {
                         void commitRename(thread);
@@ -148,33 +157,35 @@ export function AgentThreadList(props: AgentThreadListProps) {
                     className="agent-thread-button"
                     onClick={() => onSelectThread(thread.id)}
                     onDoubleClick={() => beginRename(thread)}
-                    title={thread.title || "Untitled thread"}
-                    aria-label={thread.title || "Untitled thread"}
+                    title={threadName}
+                    aria-label={threadName}
                   >
-                    <span className="agent-thread-label">{compactThreadName(thread)}</span>
+                    <span className="agent-thread-label">{threadName}</span>
                   </button>
                 )}
-                {isRunning ? (
-                  <span className="agent-thread-status-indicator" role="status" aria-label="Thread is processing">
-                    <Loader2 className="agent-thread-running-indicator h-3.5 w-3.5" aria-hidden="true" />
-                  </span>
-                ) : null}
-                {!isDeleteDisabled && !isEditing ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="agent-thread-delete-button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onDeleteThread(thread.id);
-                    }}
-                    disabled={deletingThreadId === thread.id}
-                    aria-label={`Delete thread ${thread.title || "untitled thread"}`}
-                    title="Delete thread"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  </Button>
+                {hasActionSlot ? (
+                  <div className={actionSlotClassName}>
+                    {isRunning ? (
+                      <span className="agent-thread-status-indicator" role="status" aria-label="Thread is processing">
+                        <Loader2 className="agent-thread-running-indicator h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
+                    ) : null}
+                    {showDeleteButton ? (
+                      <button
+                        type="button"
+                        className="agent-thread-delete-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onDeleteThread(thread.id);
+                        }}
+                        disabled={deletingThreadId === thread.id}
+                        aria-label={`Delete thread ${threadName}`}
+                        title="Delete thread"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             );

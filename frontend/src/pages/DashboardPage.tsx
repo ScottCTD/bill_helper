@@ -162,9 +162,6 @@ export function DashboardPage() {
           <div className="table-shell-header">
             <div>
               <h2 className="table-shell-title">Dashboard</h2>
-              <p className="table-shell-subtitle">
-                Interactive {data.currency_code} analytics with daily-tag based segmentation. Internal account transfers are excluded from in/out totals.
-              </p>
             </div>
           </div>
 

@@ -8,13 +8,12 @@ export function prettyDateTime(value: string): string {
   return parsed.toLocaleString();
 }
 
-export function compactThreadName(thread: AgentThreadSummary): string {
+export function displayThreadName(thread: Pick<AgentThreadSummary, "title">): string {
   const source = (thread.title || "").trim();
   if (!source) {
     return "Untitled thread";
   }
-  const normalized = source.replace(/\s+/g, " ");
-  return normalized.slice(0, 20);
+  return source.replace(/\s+/g, " ");
 }
 
 export function formatUsageTokens(value: number | null): string {

@@ -24,7 +24,7 @@ _env_files: tuple[str, ...] = (
 DEFAULT_CORS_SCHEME = "http"
 DEFAULT_CORS_HOST = "localhost"
 DEFAULT_CORS_PORT = 5173
-DEFAULT_AGENT_MODEL = "bedrock/us.anthropic.claude-sonnet-4-6"
+DEFAULT_AGENT_MODEL = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:

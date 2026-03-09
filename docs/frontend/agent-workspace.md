@@ -28,7 +28,7 @@ Supporting modules include:
 ## Timeline Behavior
 
 - thread rail is on the right, collapsible, resizable, and independently scrollable
-- thread rows expose hover/focus delete controls, support double-click inline rename, and reconcile multiple optimistic running ids with persisted `has_running_run`
+- thread rows expose hover/focus delete controls, support double-click inline rename with a visible active single-line field that preserves native selection and horizontal scrolling for long titles, render the full normalized title text before CSS truncation, and reuse one trailing action slot so hover/focus swaps delete in over the running spinner instead of reserving separate dead space
 - timeline is event-driven from persisted `run.events`
 - tool rows appear as queued, then update in place through running, completed, failed, or cancelled
 - live SSE `run_event` payloads can include a compact `tool_call` snapshot so tool rows show their real name before full hydration

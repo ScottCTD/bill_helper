@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { formatUsdCost, formatUsagePercent, formatUsageTokens } from "./format";
+import { displayThreadName, formatUsdCost, formatUsagePercent, formatUsageTokens } from "./format";
 
 describe("agent usage formatting", () => {
+  it("keeps full normalized thread titles for the rail", () => {
+    expect(displayThreadName({ title: null })).toBe("Untitled thread");
+    expect(displayThreadName({ title: "  Monthly   Budget   Planning  Thread  " })).toBe("Monthly Budget Planning Thread");
+  });
+
   it("formats token metrics in compact K units", () => {
     expect(formatUsageTokens(null)).toBe("-");
     expect(formatUsageTokens(0)).toBe("0.00K");

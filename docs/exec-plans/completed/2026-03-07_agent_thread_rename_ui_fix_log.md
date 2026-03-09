@@ -22,10 +22,16 @@ This fix log records the debugging path and durable frontend fixes for the agent
 
 ## Final state
 
+Update on 2026-03-09:
+
+- the inline rename surface now uses a dedicated native single-line `input` again
+- reason: long-title selection and horizontal auto-scroll during selection were materially worse with the `contentEditable` editor
+- the lightweight dedicated styling remains, so the inline field still avoids the heavyweight shared app input chrome
+
 The thread rename UI now uses lightweight dedicated primitives instead of shared form/button components:
 
 - read state: plain styled `button`
-- edit state: plain `contentEditable` textbox
+- edit state: dedicated inline single-line `input`
 
 That keeps the thread row visually stable and avoids nested control chrome inside the rounded thread shell.
 

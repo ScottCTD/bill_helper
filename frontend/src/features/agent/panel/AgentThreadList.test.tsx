@@ -79,6 +79,7 @@ describe("AgentThreadList", () => {
 
     await userEvent.dblClick(screen.getByRole("button", { name: "Groceries" }));
     const input = screen.getByRole("textbox", { name: "Rename thread Groceries" });
+    expect(input.closest(".agent-thread-row")).toHaveClass("editing");
     await userEvent.clear(input);
     await userEvent.type(input, "Monthly Budget{Enter}");
 
@@ -147,6 +148,71 @@ describe("AgentThreadList", () => {
     );
 
     expect(screen.getByLabelText("Thread is processing")).toBeInTheDocument();
+  });
+
+  it("renders the full normalized thread title text before CSS truncation", () => {
+    render(
+      <AgentThreadList
+        threads={[
+          {
+            ...THREADS[0],
+            title: "  Very   long    thread title that should stay available to the layout system  "
+          }
+        ]}
+        selectedThreadId="thread-1"
+        isLoading={false}
+        errorMessage={null}
+        onSelectThread={() => undefined}
+        onRenameThread={vi.fn().mockResolvedValue(undefined)}
+        onDeleteThread={() => undefined}
+        renamingThreadId={null}
+        deletingThreadId={null}
+        isDeleteDisabled={false}
+        isRenameDisabled={false}
+        optimisticRunningThreadIds={[]}
+      />
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Very long thread title that should stay available to the layout system"
+      })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Very long thread title that should stay available to the layout system")).toBeInTheDocument();
+  });
+
+  it("keeps the full thread title value in the inline rename input", async () => {
+    render(
+      <AgentThreadList
+        threads={[
+          {
+            ...THREADS[0],
+            title: "Very long thread title that should stay editable past the current view"
+          }
+        ]}
+        selectedThreadId="thread-1"
+        isLoading={false}
+        errorMessage={null}
+        onSelectThread={() => undefined}
+        onRenameThread={vi.fn().mockResolvedValue(undefined)}
+        onDeleteThread={() => undefined}
+        renamingThreadId={null}
+        deletingThreadId={null}
+        isDeleteDisabled={false}
+        isRenameDisabled={false}
+        optimisticRunningThreadIds={[]}
+      />
+    );
+
+    await userEvent.dblClick(
+      screen.getByRole("button", {
+        name: "Very long thread title that should stay editable past the current view"
+      })
+    );
+
+    expect(screen.getByRole("textbox", { name: "Rename thread Very long thread title that should stay editable past the current view" })).toHaveValue(
+      "Very long thread title that should stay editable past the current view"
+    );
   });
 
   it("shows running status indicators immediately for optimistic running thread ids", () => {
