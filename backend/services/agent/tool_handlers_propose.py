@@ -69,7 +69,7 @@ from backend.services.agent.tool_handlers_read import (
     error_result,
     format_lines,
 )
-from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
+from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 from backend.services.entities import (
     ACCOUNT_CATEGORY_DETAIL,
     find_entity_by_name,
@@ -108,7 +108,7 @@ def proposal_result(summary: str, *, preview: dict[str, Any], item: AgentChangeI
             ]
         ),
         output_json=output_json,
-        status="ok",
+        status=ToolExecutionStatus.OK,
     )
 
 
@@ -1863,7 +1863,7 @@ def update_pending_proposal(context: ToolContext, args: UpdatePendingProposalArg
     return ToolExecutionResult(
         output_text=format_lines(output_lines),
         output_json=output_json,
-        status="ok",
+        status=ToolExecutionStatus.OK,
     )
 
 
@@ -1916,5 +1916,5 @@ def remove_pending_proposal(context: ToolContext, args: RemovePendingProposalArg
     return ToolExecutionResult(
         output_text=format_lines(output_lines),
         output_json=output_json,
-        status="ok",
+        status=ToolExecutionStatus.OK,
     )

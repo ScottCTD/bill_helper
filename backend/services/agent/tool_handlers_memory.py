@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from backend.services.agent.tool_args import AddUserMemoryArgs
-from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
+from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 from backend.services.runtime_settings import append_user_memory_items
 
 
@@ -32,5 +32,5 @@ def add_user_memory(context: ToolContext, args: AddUserMemoryArgs) -> ToolExecut
             ]
         ),
         output_json=payload,
-        status="ok",
+        status=ToolExecutionStatus.OK,
     )

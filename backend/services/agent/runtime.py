@@ -56,7 +56,7 @@ from backend.services.agent.run_orchestrator import (
 )
 from backend.services.agent.tool_args import INTERMEDIATE_UPDATE_TOOL_NAME
 from backend.services.agent.tool_runtime import build_openai_tool_schemas, execute_tool
-from backend.services.agent.tool_types import ToolContext
+from backend.services.agent.tool_types import ToolContext, ToolExecutionStatus
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.runtime_settings_normalization import normalize_text_or_none
 
@@ -453,7 +453,7 @@ class _RuntimeRunLoopAdapterBase(AgentRunLoopAdapter[PreparedToolCall]):
         if tool_row.status == AgentToolCallStatus.CANCELLED:
             return payloads
 
-        if result.status == "ok":
+        if result.status == ToolExecutionStatus.OK:
             _finalize_tool_call_success(self.db, tool_call=tool_row, result=result)
             completion_type = AgentRunEventType.TOOL_CALL_COMPLETED
         else:
