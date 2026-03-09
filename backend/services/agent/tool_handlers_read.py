@@ -33,7 +33,7 @@ from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, 
 from backend.services.groups import build_group_summary, group_tree_options
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.agent.user_context import normalize_account_markdown_for_context
-from backend.services.users import ensure_current_user
+from backend.services.users import find_user_by_name
 from backend.services.entries import normalize_tag_name
 from backend.services.taxonomy import get_single_term_name_map
 
@@ -118,6 +118,15 @@ def error_result(summary: str, *, details: Any | None = None) -> ToolExecutionRe
         output_json=payload,
         status=ToolExecutionStatus.ERROR,
     )
+
+
+def _tool_principal_scope(context: ToolContext) -> tuple[str, str | None]:
+    if context.principal_name is not None:
+        return context.principal_name, context.principal_user_id
+    settings = resolve_runtime_settings(context.db)
+    principal_name = settings.current_user_name
+    principal_user = find_user_by_name(context.db, principal_name)
+    return principal_name, principal_user.id if principal_user is not None else None
 
 
 def effective_entity_category(
@@ -509,12 +518,14 @@ def list_tags(context: ToolContext, args: ListTagsArgs) -> ToolExecutionResult:
 
 
 def list_accounts(context: ToolContext, args: ListAccountsArgs) -> ToolExecutionResult:
-    settings = resolve_runtime_settings(context.db)
-    current_user = ensure_current_user(context.db, settings.current_user_name)
+    principal_name, principal_user_id = _tool_principal_scope(context)
 
     conditions = []
-    if not is_admin_principal_name(current_user.name):
-        conditions.append(or_(Account.owner_user_id == current_user.id, Account.owner_user_id.is_(None)))
+    if not is_admin_principal_name(principal_name):
+        if principal_user_id is None:
+            conditions.append(Account.owner_user_id.is_(None))
+        else:
+            conditions.append(or_(Account.owner_user_id == principal_user_id, Account.owner_user_id.is_(None)))
     if args.currency_code is not None:
         conditions.append(Account.currency_code == args.currency_code)
     if args.is_active is not None:
@@ -620,11 +631,12 @@ def list_entities(context: ToolContext, args: ListEntitiesArgs) -> ToolExecution
 
 
 def list_groups(context: ToolContext, args: ListGroupsArgs) -> ToolExecutionResult:
-    settings = resolve_runtime_settings(context.db)
-    current_user = ensure_current_user(context.db, settings.current_user_name)
+    _principal_name, principal_user_id = _tool_principal_scope(context)
 
     if args.group_id is not None:
-        matches = find_groups_by_id(context.db, group_id=args.group_id, owner_user_id=current_user.id)
+        if principal_user_id is None:
+            return error_result("no group matched group_id", details={"group_id": args.group_id})
+        matches = find_groups_by_id(context.db, group_id=args.group_id, owner_user_id=principal_user_id)
         if not matches:
             return error_result("no group matched group_id", details={"group_id": args.group_id})
         if len(matches) > 1:
@@ -670,7 +682,7 @@ def list_groups(context: ToolContext, args: ListGroupsArgs) -> ToolExecutionResu
     groups = list(
         context.db.scalars(
             select(EntryGroup)
-            .where(group_owner_condition(current_user.id))
+            .where(group_owner_condition(principal_user_id or ""))
             .options(*group_tree_options())
             .order_by(EntryGroup.created_at.desc())
         )
