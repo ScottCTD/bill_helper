@@ -111,12 +111,11 @@ def find_entries_by_selector(db: Session, selector: EntrySelectorPayload) -> lis
     )
 
 
-def find_entries_by_id(db: Session, entry_id: str) -> list[Entry]:
+def find_entries_by_exact_id(db: Session, entry_id: str) -> list[Entry]:
     normalized = entry_id.strip().lower()
     if not normalized:
         return []
-
-    exact_matches = list(
+    return list(
         db.scalars(
             select(Entry)
             .where(
@@ -127,9 +126,12 @@ def find_entries_by_id(db: Session, entry_id: str) -> list[Entry]:
             .order_by(Entry.created_at.asc())
         )
     )
-    if exact_matches:
-        return exact_matches
 
+
+def find_entries_by_public_id_prefix(db: Session, entry_id_prefix: str) -> list[Entry]:
+    normalized = entry_id_prefix.strip().lower()
+    if not normalized:
+        return []
     return list(
         db.scalars(
             select(Entry)
