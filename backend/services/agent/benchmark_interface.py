@@ -347,7 +347,7 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
                     "tool_name": prepared_tool_call.tool_name,
                     "input": prepared_tool_call.arguments,
                     "output": result.output_json,
-                    "status": result.status,
+                    "status": result.status.value,
                 }
             )
         return []

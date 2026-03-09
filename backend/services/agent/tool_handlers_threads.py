@@ -7,7 +7,7 @@ from backend.services.agent.threads import (
 )
 from backend.services.agent.tool_args import RenameThreadArgs
 from backend.services.agent.tool_handlers_read import error_result
-from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
+from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 
 
 def rename_thread(context: ToolContext, args: RenameThreadArgs) -> ToolExecutionResult:
@@ -33,5 +33,5 @@ def rename_thread(context: ToolContext, args: RenameThreadArgs) -> ToolExecution
             ]
         ),
         output_json=output_json,
-        status="ok",
+        status=ToolExecutionStatus.OK,
     )

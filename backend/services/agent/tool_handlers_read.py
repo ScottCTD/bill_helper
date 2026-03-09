@@ -28,7 +28,7 @@ from backend.services.agent.tool_args import (
     SendIntermediateUpdateArgs,
     normalize_loose_text,
 )
-from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
+from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 from backend.services.groups import build_group_summary, group_tree_options
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.agent.user_context import normalize_account_markdown_for_context
@@ -115,7 +115,7 @@ def error_result(summary: str, *, details: Any | None = None) -> ToolExecutionRe
     return ToolExecutionResult(
         output_text=format_lines(lines),
         output_json=payload,
-        status="error",
+        status=ToolExecutionStatus.ERROR,
     )
 
 
@@ -345,7 +345,7 @@ def list_proposals(context: ToolContext, args: ListProposalsArgs) -> ToolExecuti
             ]
         ),
         output_json=output_json,
-        status="ok",
+        status=ToolExecutionStatus.OK,
     )
 
 
@@ -456,7 +456,7 @@ def list_entries(context: ToolContext, args: ListEntriesArgs) -> ToolExecutionRe
             ]
         ),
         output_json=output_json,
-        status="ok",
+        status=ToolExecutionStatus.OK,
     )
 
 
@@ -503,7 +503,7 @@ def list_tags(context: ToolContext, args: ListTagsArgs) -> ToolExecutionResult:
             ]
         ),
         output_json=output_json,
-        status="ok",
+        status=ToolExecutionStatus.OK,
     )
 
 
@@ -562,7 +562,7 @@ def list_accounts(context: ToolContext, args: ListAccountsArgs) -> ToolExecution
             ]
         ),
         output_json=output_json,
-        status="ok",
+        status=ToolExecutionStatus.OK,
     )
 
 
@@ -614,7 +614,7 @@ def list_entities(context: ToolContext, args: ListEntitiesArgs) -> ToolExecution
             ]
         ),
         output_json=output_json,
-        status="ok",
+        status=ToolExecutionStatus.OK,
     )
 
 
@@ -663,7 +663,7 @@ def list_groups(context: ToolContext, args: ListGroupsArgs) -> ToolExecutionResu
                 ]
             ),
             output_json=output_json,
-            status="ok",
+            status=ToolExecutionStatus.OK,
         )
 
     groups = list(
@@ -708,7 +708,7 @@ def list_groups(context: ToolContext, args: ListGroupsArgs) -> ToolExecutionResu
             ]
         ),
         output_json=output_json,
-        status="ok",
+        status=ToolExecutionStatus.OK,
     )
 
 
@@ -727,5 +727,5 @@ def send_intermediate_update(_: ToolContext, args: SendIntermediateUpdateArgs) -
             ]
         ),
         output_json=payload,
-        status="ok",
+        status=ToolExecutionStatus.OK,
     )

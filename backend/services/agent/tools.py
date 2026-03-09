@@ -13,7 +13,7 @@ from backend.services.agent.tool_runtime import (
     build_openai_tool_schemas,
     execute_tool,
 )
-from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
+from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 
 __all__ = [
     "AgentToolDefinition",
@@ -21,6 +21,7 @@ __all__ = [
     "TOOLS",
     "ToolContext",
     "ToolExecutionResult",
+    "ToolExecutionStatus",
     "build_openai_tool_schemas",
     "execute_tool",
 ]
