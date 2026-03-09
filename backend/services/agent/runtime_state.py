@@ -23,7 +23,6 @@ from backend.models_agent import (
     AgentToolCall,
 )
 from backend.services.agent.protocol_helpers import decode_tool_call
-from backend.services.agent.serializers import stream_run_event_to_payload
 from backend.services.agent.tool_args import INTERMEDIATE_UPDATE_TOOL_NAME
 from backend.services.agent.tool_types import ToolExecutionResult
 
@@ -116,10 +115,6 @@ def persist_run_event(
     db.add(event_row)
     db.flush()
     return event_row
-
-
-def emit_run_event(run: AgentRun, persisted_event: AgentRunEvent) -> dict[str, Any]:
-    return stream_run_event_to_payload(run, persisted_event)
 
 
 def queue_tool_call_record(
