@@ -58,8 +58,8 @@
   - benchmark-facing `run_benchmark_case` contract
 - `backend/services/agent/review.py`
   - approve, reject, reopen, and apply state transitions
-- `backend/services/agent/change_apply.py`
-  - concrete apply handlers for approved proposals
+- `backend/services/agent/apply/`
+  - apply-family package: `common.py` for lookup and applied-reference helpers, `catalog.py` for tag/entity/account mutations, `entries.py` for entry mutations, `groups.py` for group and membership mutations, and `dispatch.py` for change-type routing
 - `backend/services/agent/serializers.py`
   - timeline-ready serializer helpers, including compatibility filtering for legacy unsupported change-item rows and surface-aware terminal reply shaping
 
@@ -144,7 +144,7 @@ Endpoints:
 - group-member approvals that reference pending `create_group` / `create_entry` proposals are blocked until those dependencies are applied; rejected or failed dependencies leave the member proposal unapprovable until edited or removed
 - apply-time group-member resolution canonicalizes existing short `group_id` and `entry_id` aliases to full ids before scoped lookup and membership matching, so approval semantics match proposal-time alias handling
 - `update_pending_proposal` re-runs group conflict checks after normalization, so revised group create/update/delete/member proposals cannot be patched into duplicate or conflicting pending states
-- `backend/services/agent/change_apply.py` still owns the actual domain mutation after approval, including group create/rename/delete and group membership add/remove
+- `backend/services/agent/apply/` owns the actual domain mutation after approval, including group create/rename/delete and group membership add/remove
 - `backend/services/agent/message_history.py` prepends compact review outcome lines before the next user feedback message and includes `review_override=...` when reviewer edits changed the applied payload
 - group-member proposal previews now carry enough entry fields, including `markdown_notes`, for the frontend to render a locked full-entry snapshot during review
 

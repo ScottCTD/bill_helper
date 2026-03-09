@@ -123,7 +123,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `backend/services/agent/proposal_patching.py`
   - `backend/services/agent/tools.py` (thin facade)
   - `backend/services/agent/review.py`
-  - `backend/services/agent/change_apply.py`
+  - `backend/services/agent/apply/`
 - Models/contracts:
   - `backend/models_finance.py`
   - `backend/models_agent.py`
