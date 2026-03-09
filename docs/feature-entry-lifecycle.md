@@ -59,7 +59,7 @@ This doc is the fast path for understanding how entries are created, edited, gro
 ## Agent-Proposed Entry Flow
 
 1. Agent proposes `create_entry` / `update_entry` / `delete_entry` via the split tool stack:
-   `backend/services/agent/proposals/entries.py` + `backend/services/agent/proposals/normalization.py` + `backend/services/agent/tool_runtime.py`
+   `backend/services/agent/proposals/entries.py` + `backend/services/agent/proposals/normalization_entries.py` + `backend/services/agent/proposals/normalization.py` + `backend/services/agent/tool_runtime.py`
    (re-exported through `backend/services/agent/tools.py`).
 2. Proposal persisted as `agent_change_items` (`PENDING_REVIEW`).
 3. Human reviews from the thread-scoped frontend review UI opened by the agent header `Review` button:

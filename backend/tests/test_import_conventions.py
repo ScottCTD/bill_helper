@@ -182,7 +182,18 @@ def test_production_modules_do_not_import_tool_args_barrel() -> None:
 def test_agent_proposals_are_grouped_in_a_package() -> None:
     assert not REMOVED_AGENT_PROPOSE_HANDLER_MODULE.exists(), "proposal handlers should stay split into the proposals package"
     assert AGENT_PROPOSALS_PACKAGE.is_dir(), "proposals package should exist"
-    for name in ("catalog.py", "entries.py", "groups.py", "group_memberships.py", "normalization.py", "pending.py"):
+    for name in (
+        "catalog.py",
+        "entries.py",
+        "groups.py",
+        "group_memberships.py",
+        "normalization.py",
+        "normalization_catalog.py",
+        "normalization_common.py",
+        "normalization_entries.py",
+        "normalization_groups.py",
+        "pending.py",
+    ):
         assert (AGENT_PROPOSALS_PACKAGE / name).exists(), f"missing proposal module: {name}"
 
 
