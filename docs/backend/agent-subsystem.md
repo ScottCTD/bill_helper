@@ -3,7 +3,9 @@
 ## Agent Service Layout
 
 - `backend/services/agent/runtime.py`
-  - run lifecycle coordinator and stable execution seam (`call_model`, `call_model_stream`, `calculate_context_tokens`)
+  - run lifecycle entrypoints plus stable execution seams (`call_model`, `call_model_stream`, `calculate_context_tokens`)
+- `backend/services/agent/runtime_loop.py`
+  - runtime adapter package-less split for tool-turn preparation, non-stream and stream run-loop adapters, and terminal completion/error handling
 - `backend/services/agent/run_orchestrator.py`
   - shared run-step state machine for sync, stream, and benchmark adapters
 - `backend/services/agent/protocol_helpers.py`
