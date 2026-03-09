@@ -4,14 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.auth import RequestPrincipal, get_current_principal
+from backend.auth import RequestPrincipal, get_current_principal, is_admin_principal
 from backend.database import get_db
 from backend.models_finance import Account, Entry, User
 from backend.schemas_finance import UserCreate, UserRead, UserUpdate
-from backend.services.access_scope import (
-    get_user_for_principal_or_404,
-    is_admin_principal,
-)
+from backend.services.access_scope import get_user_for_principal_or_404
 from backend.services.crud_policy import (
     PolicyViolation,
     translate_policy_violation,

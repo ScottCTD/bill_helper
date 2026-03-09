@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
+from backend.auth import is_admin_principal_name
 from backend.enums_agent import AgentChangeType
 from backend.models_agent import AgentChangeItem, AgentReviewAction, AgentRun
 from backend.models_finance import Account, Entity, Entry, EntryGroup, Tag
@@ -512,7 +513,7 @@ def list_accounts(context: ToolContext, args: ListAccountsArgs) -> ToolExecution
     current_user = ensure_current_user(context.db, settings.current_user_name)
 
     conditions = []
-    if current_user.name.lower() != "admin":
+    if not is_admin_principal_name(current_user.name):
         conditions.append(or_(Account.owner_user_id == current_user.id, Account.owner_user_id.is_(None)))
     if args.currency_code is not None:
         conditions.append(Account.currency_code == args.currency_code)

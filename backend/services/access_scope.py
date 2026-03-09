@@ -4,12 +4,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import Select, or_, select, true
 from sqlalchemy.orm import Session
 
-from backend.auth import RequestPrincipal
+from backend.auth import RequestPrincipal, is_admin_principal
 from backend.models_finance import Account, Entry, EntryGroup, User
-
-
-def is_admin_principal(principal: RequestPrincipal) -> bool:
-    return principal.user_name.lower() == "admin"
 
 
 def account_owner_filter(principal: RequestPrincipal):

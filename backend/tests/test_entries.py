@@ -846,3 +846,47 @@ def test_tag_management_and_currency_catalog(client):
     assert zzz["is_placeholder"] is True
     assert usd["entry_count"] >= 0
     assert usd["is_placeholder"] is False
+
+
+def test_currencies_are_scoped_by_principal(client):
+    admin_account_id = create_account(client, name="Admin Checking")
+    admin_entry_response = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": admin_account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-12",
+            "name": "Admin EUR expense",
+            "amount_minor": 1000,
+            "currency_code": "EUR",
+            "tags": ["food"],
+        },
+    )
+    admin_entry_response.raise_for_status()
+
+    alice_headers = {"X-Bill-Helper-Principal": "alice"}
+    alice_account_id = create_account(client, name="Alice Checking", headers=alice_headers)
+    alice_entry_response = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": alice_account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-13",
+            "name": "Alice special expense",
+            "amount_minor": 1500,
+            "currency_code": "ZZZ",
+            "tags": ["food"],
+        },
+        headers=alice_headers,
+    )
+    alice_entry_response.raise_for_status()
+
+    currencies_response = client.get("/api/v1/currencies", headers=alice_headers)
+    currencies_response.raise_for_status()
+    currencies = {currency["code"]: currency for currency in currencies_response.json()}
+
+    assert "EUR" not in currencies
+    assert currencies["ZZZ"]["entry_count"] == 1
+    assert currencies["ZZZ"]["is_placeholder"] is True
+    assert currencies["USD"]["entry_count"] == 0
+    assert currencies["USD"]["is_placeholder"] is False
