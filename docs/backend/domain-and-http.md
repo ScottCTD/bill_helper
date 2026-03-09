@@ -81,7 +81,7 @@ Important read models:
 - `backend/services/runtime_settings.py`
   - resolves effective runtime settings from DB overrides plus env defaults
 - `backend/services/agent/proposals/`
-  - proposal-family support split into shared helpers plus catalog and entry proposal modules
+  - proposal-family support split into shared helpers plus catalog, entries, groups, group-membership, normalization, and pending-admin modules
 - `backend/validation/runtime_settings.py`
   - single-source normalization shared by schemas, tool-input models, and runtime resolution
 - `backend/validation/agent_threads.py`

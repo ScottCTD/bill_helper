@@ -20,7 +20,7 @@ from backend.services.agent.change_contracts import (
     UpdateEntryPayload,
     parse_change_payload,
 )
-from backend.services.agent.tool_handlers_propose import normalize_payload_for_change_type
+from backend.services.agent.proposals.normalization import normalize_payload_for_change_type
 from backend.services.agent.tool_types import ToolContext
 from backend.services.entities import find_entity_by_name
 from backend.validation.finance_names import normalize_entity_name

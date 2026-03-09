@@ -35,6 +35,8 @@ SETTINGS_MODEL_PATH = BACKEND_DIR / "models_settings.py"
 SETTINGS_SCHEMA_PATH = BACKEND_DIR / "schemas_settings.py"
 REMOVED_AGENT_TOOL_ARGS_MODULE = BACKEND_DIR / "services" / "agent" / "tool_args.py"
 AGENT_TOOL_ARGS_PACKAGE = BACKEND_DIR / "services" / "agent" / "tool_args"
+REMOVED_AGENT_PROPOSE_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "tool_handlers_propose.py"
+AGENT_PROPOSALS_PACKAGE = BACKEND_DIR / "services" / "agent" / "proposals"
 
 
 def _assert_marker_module(path: Path) -> None:
@@ -125,6 +127,13 @@ def test_legacy_domain_facades_are_removed() -> None:
 def test_agent_tool_args_are_grouped_in_a_package() -> None:
     assert not REMOVED_AGENT_TOOL_ARGS_MODULE.exists(), "tool_args should stay split into a package"
     assert AGENT_TOOL_ARGS_PACKAGE.is_dir(), "tool_args package should exist"
+
+
+def test_agent_proposals_are_grouped_in_a_package() -> None:
+    assert not REMOVED_AGENT_PROPOSE_HANDLER_MODULE.exists(), "proposal handlers should stay split into the proposals package"
+    assert AGENT_PROPOSALS_PACKAGE.is_dir(), "proposals package should exist"
+    for name in ("catalog.py", "entries.py", "groups.py", "group_memberships.py", "normalization.py", "pending.py"):
+        assert (AGENT_PROPOSALS_PACKAGE / name).exists(), f"missing proposal module: {name}"
 
 
 def test_schema_modules_do_not_import_service_modules() -> None:

@@ -27,9 +27,7 @@
 - `backend/services/agent/tool_handlers_threads.py`
   - `rename_thread` handler for short thread-topic updates
 - `backend/services/agent/proposals/`
-  - proposal-family package: `common.py` for shared proposal/thread helpers, `catalog.py` for tag/entity/account proposals, and `entries.py` for entry proposal normalization plus handlers
-- `backend/services/agent/tool_handlers_propose.py`
-  - thin proposal coordinator for group/group-membership flows plus pending-proposal edit or remove tools
+  - proposal-family package: `common.py` for shared proposal/thread helpers, `catalog.py` for tag/entity/account proposals, `entries.py` for entry proposal normalization plus handlers, `groups.py` for group CRUD proposal flows, `group_memberships.py` for membership proposal rules and handlers, `normalization.py` for proposal payload canonicalization, and `pending.py` for pending-proposal edit/remove tools
 - `backend/services/agent/entry_references.py`
   - shared entry lookup helpers for `entry_id` aliases, selector fallback, and public entry snapshots
 - `backend/services/agent/group_references.py`
