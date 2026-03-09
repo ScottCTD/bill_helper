@@ -50,6 +50,7 @@ Important read models:
 
 - `backend/services/accounts.py`
 - `backend/services/entries.py`
+  - owns typed entry create/update command workflows, entity/user/group resolution, and soft-delete cleanup
 - `backend/services/entities.py`
 - `backend/services/users.py`
 - `backend/services/groups.py`
@@ -107,6 +108,7 @@ Core routers:
 Router behavior:
 
 - account, entry, and group handlers use shared principal-scoped helpers from `backend/services/access_scope.py`
+- `backend/routers/entries.py` stays at HTTP parsing/translation while `backend/services/entries.py` owns entry create/update orchestration
 - non-admin principals are restricted to their own owned resources; admin principal retains cross-user visibility and mutation
 - `groups.py` exposes first-class group CRUD, membership mutation, and derived group graphs
 - `dashboard.py` is principal-scoped by visible accounts and entries

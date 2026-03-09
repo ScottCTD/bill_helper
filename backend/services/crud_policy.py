@@ -24,6 +24,10 @@ class PolicyViolation(Exception):
         return cls(detail=detail, status_code=status.HTTP_409_CONFLICT)
 
     @classmethod
+    def forbidden(cls, detail: str) -> PolicyViolation:
+        return cls(detail=detail, status_code=status.HTTP_403_FORBIDDEN)
+
+    @classmethod
     def not_found(cls, detail: str) -> PolicyViolation:
         return cls(detail=detail, status_code=status.HTTP_404_NOT_FOUND)
 
