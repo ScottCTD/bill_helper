@@ -18,6 +18,7 @@ from backend.services.agent.group_references import (
     group_owner_condition,
     group_summary_to_public_record,
 )
+from backend.services.agent.payload_normalization import normalize_loose_text
 from backend.services.agent.proposal_metadata import proposal_metadata_for_change_type
 from backend.services.agent.tool_args import (
     ListAccountsArgs,
@@ -27,7 +28,6 @@ from backend.services.agent.tool_args import (
     ListProposalsArgs,
     ListTagsArgs,
     SendIntermediateUpdateArgs,
-    normalize_loose_text,
 )
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 from backend.services.groups import build_group_summary, group_tree_options

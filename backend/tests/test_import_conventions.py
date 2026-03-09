@@ -31,6 +31,8 @@ REMOVED_FACADE_PATHS = {
     BACKEND_DIR / "schemas.py",
     BACKEND_DIR / "enums.py",
 }
+REMOVED_AGENT_TOOL_ARGS_MODULE = BACKEND_DIR / "services" / "agent" / "tool_args.py"
+AGENT_TOOL_ARGS_PACKAGE = BACKEND_DIR / "services" / "agent" / "tool_args"
 
 
 def _assert_marker_module(path: Path) -> None:
@@ -105,3 +107,8 @@ def test_repo_modules_do_not_import_domain_facade_god_modules() -> None:
 def test_legacy_domain_facades_are_removed() -> None:
     remaining = [path.relative_to(REPO_ROOT) for path in REMOVED_FACADE_PATHS if path.exists()]
     assert not remaining, "Legacy facade modules should stay deleted:\n" + "\n".join(str(path) for path in remaining)
+
+
+def test_agent_tool_args_are_grouped_in_a_package() -> None:
+    assert not REMOVED_AGENT_TOOL_ARGS_MODULE.exists(), "tool_args should stay split into a package"
+    assert AGENT_TOOL_ARGS_PACKAGE.is_dir(), "tool_args package should exist"
