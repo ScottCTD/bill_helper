@@ -145,7 +145,7 @@ def is_pdf_attachment(attachment: AgentMessageAttachment) -> bool:
     return Path(attachment.file_path).suffix.lower() == ".pdf"
 
 
-def _normalize_pdf_text_lines(text: str) -> str:
+def normalize_pdf_text_lines(text: str) -> str:
     normalized_lines = []
     for line in text.splitlines():
         normalized_lines.append(" ".join(line.split()))
@@ -158,7 +158,7 @@ def extract_pdf_text(file_path: str) -> str | None:
         return None
     try:
         with pymupdf.open(path) as document:
-            page_texts = [_normalize_pdf_text_lines(page.get_text("text", sort=True)) for page in document]
+            page_texts = [normalize_pdf_text_lines(page.get_text("text", sort=True)) for page in document]
     except PDF_EXTRACTION_EXCEPTIONS as exc:
         _record_pdf_failure(
             scope="attachments.extract_pdf_text",
@@ -203,7 +203,7 @@ def extract_pdf_text_with_tesseract(file_path: str) -> str | None:
                         text=True,
                         timeout=PDF_OCR_SUBPROCESS_TIMEOUT_SECONDS,
                     )
-                    page_texts.append(_normalize_pdf_text_lines(result.stdout))
+                    page_texts.append(normalize_pdf_text_lines(result.stdout))
     except PDF_OCR_EXCEPTIONS as exc:
         _record_pdf_failure(
             scope="attachments.extract_pdf_text_with_tesseract",
