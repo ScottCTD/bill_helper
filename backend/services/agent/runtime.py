@@ -27,7 +27,10 @@ from backend.services.agent.model_client import (
     LiteLLMModelClient,
     validate_litellm_environment,
 )
-from backend.services.agent.protocol_helpers import canonicalize_tool_call
+from backend.services.agent.protocol_helpers import (
+    canonicalize_tool_call,
+    tool_call_decode_error_result,
+)
 from backend.services.agent.runtime_state import (
     PreparedToolCall,
     apply_usage_totals_to_run as _apply_usage_totals_to_run,
@@ -415,8 +418,17 @@ class _RuntimeRunLoopAdapterBase(AgentRunLoopAdapter[PreparedToolCall]):
         prepared_tool_call: PreparedToolCall,
         llm_messages: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
+        decode_error_result = (
+            tool_call_decode_error_result(
+                tool_name=prepared_tool_call.tool_name,
+                raw_arguments=prepared_tool_call.raw_arguments,
+                decode_error=prepared_tool_call.decode_error,
+            )
+            if prepared_tool_call.decode_error is not None
+            else None
+        )
         if prepared_tool_call.tool_name == INTERMEDIATE_UPDATE_TOOL_NAME:
-            result = execute_tool(
+            result = decode_error_result or execute_tool(
                 prepared_tool_call.tool_name,
                 prepared_tool_call.arguments,
                 self.tool_context,
@@ -451,7 +463,7 @@ class _RuntimeRunLoopAdapterBase(AgentRunLoopAdapter[PreparedToolCall]):
         self.db.commit()
         payloads = self._event_payloads([started_row])
 
-        result = execute_tool(
+        result = decode_error_result or execute_tool(
             prepared_tool_call.tool_name,
             prepared_tool_call.arguments,
             self.tool_context,

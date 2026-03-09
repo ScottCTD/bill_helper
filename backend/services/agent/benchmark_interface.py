@@ -15,6 +15,7 @@ from backend.services.agent.protocol_helpers import (
     canonicalize_tool_call,
     decode_tool_call,
     extract_usage_dict,
+    tool_call_decode_error_result,
 )
 from backend.services.agent.run_orchestrator import (
     AgentRunLoopAdapter,
@@ -75,6 +76,8 @@ class _PreparedToolCall:
     tool_call: dict[str, Any]
     tool_name: str
     arguments: dict[str, Any]
+    raw_arguments: str | None = None
+    decode_error: str | None = None
 
 
 @dataclass(slots=True)
@@ -311,12 +314,14 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
         )
         prepared_calls: list[_PreparedToolCall] = []
         for tool_call in sanitized_tool_calls:
-            tool_name, arguments = decode_tool_call(tool_call)
+            decoded = decode_tool_call(tool_call)
             prepared_calls.append(
                 _PreparedToolCall(
                     tool_call=tool_call,
-                    tool_name=tool_name,
-                    arguments=arguments,
+                    tool_name=decoded.tool_name,
+                    arguments=decoded.arguments,
+                    raw_arguments=decoded.raw_arguments,
+                    decode_error=decoded.decode_error,
                 )
             )
         return prepared_calls, []
@@ -328,10 +333,18 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
         prepared_tool_call: _PreparedToolCall,
         llm_messages: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        result = execute_tool(
-            prepared_tool_call.tool_name,
-            prepared_tool_call.arguments,
-            self._tool_context,
+        result = (
+            tool_call_decode_error_result(
+                tool_name=prepared_tool_call.tool_name,
+                raw_arguments=prepared_tool_call.raw_arguments,
+                decode_error=prepared_tool_call.decode_error,
+            )
+            if prepared_tool_call.decode_error is not None
+            else execute_tool(
+                prepared_tool_call.tool_name,
+                prepared_tool_call.arguments,
+                self._tool_context,
+            )
         )
         llm_messages.append(
             {
@@ -341,7 +354,10 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
                 "content": result.output_text,
             }
         )
-        if prepared_tool_call.tool_name in PROPOSAL_TOOL_NAMES:
+        if (
+            prepared_tool_call.decode_error is None
+            and prepared_tool_call.tool_name in PROPOSAL_TOOL_NAMES
+        ):
             self._state.proposal_inputs.append(
                 {
                     "tool_name": prepared_tool_call.tool_name,

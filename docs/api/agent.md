@@ -171,6 +171,7 @@ Returned payload includes:
 - `reply_surface` (effective surface used to format `terminal_assistant_reply`)
 - `terminal_assistant_reply` (latest terminal assistant reply formatted for `reply_surface`; defaults to the run's persisted surface)
 - full tool calls (`has_full_payload=true`)
+- malformed tool-call JSON is reported as a tool-call error; the persisted `output_json.details` includes the decode error plus the raw argument string that failed
 - change items (legacy unsupported persisted change rows are omitted)
 - usage counters
 - derived pricing fields, where `input_cost_usd` is the full prompt-side cost after cache-aware pricing, `output_cost_usd` remains the completion-side cost, and `total_cost_usd` is their sum

@@ -129,6 +129,7 @@ Endpoints:
 - streamed tool lifecycle `run_event` payloads include a compact top-level `tool_call` snapshot so clients can render the tool name immediately without fetching full payloads
 - clients may hydrate a streamed `rename_thread` tool call immediately and update the visible thread title before the final assistant message arrives
 - `send_intermediate_update` is persisted as a `reasoning_update` event, not as a fake tool call
+- malformed tool-call JSON now persists an explicit tool-call error with raw argument text and decode metadata instead of being silently rewritten to an empty argument object
 - attachment-bearing user turns reach the model as ordered content parts: attachment text, then attachment images, then the typed user prompt
 - PDFs use PyMuPDF first and then local Tesseract OCR only when native text extraction fails
 - interruption marks runs as `failed` and injects interruption context into the next turn
