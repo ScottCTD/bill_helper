@@ -46,7 +46,7 @@ Important read models:
 
 - `backend/services/accounts.py`
 - `backend/services/entries.py`
-  - owns typed entry create/update command workflows, entity/user/group resolution, and soft-delete cleanup
+  - owns typed entry create/update command workflows built around `EntityRef`/`UserRef` service refs, entity/user/group resolution, and soft-delete cleanup
 - `backend/services/entities.py`
 - `backend/services/users.py`
 - `backend/services/groups.py`
@@ -105,6 +105,7 @@ Router behavior:
 
 - account, entry, and group handlers use shared principal-scoped helpers from `backend/services/access_scope.py`
 - `backend/routers/entries.py` stays at HTTP parsing/translation while `backend/services/entries.py` owns entry create/update orchestration
+- `backend/routers/entries.py` translates flat HTTP payload pairs (`from_entity_id` + `from_entity`, `owner_user_id` + `owner`, etc.) into typed service refs before calling `backend/services/entries.py`
 - `backend/routers/tags.py`, `taxonomies.py`, `users.py`, and `dashboard.py` delegate read/write orchestration to their service modules instead of assembling persistence queries inline
 - non-admin principals are restricted to their own owned resources; admin principal retains cross-user visibility and mutation
 - `groups.py` exposes first-class group CRUD, membership mutation, and derived group graphs

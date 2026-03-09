@@ -85,7 +85,7 @@
 ### Backend Services (`/backend/services`)
 
 - `accounts.py`: account create/update/delete workflows for shared account/entity roots.
-- `entries.py`: typed entry create/update workflows, tag handling, and entry soft-delete helper.
+- `entries.py`: typed entry create/update workflows, typed entity/user refs, tag handling, and entry soft-delete helper.
 - `tags.py`: tag CRUD helpers, taxonomy cleanup, and random default color generation.
 - `entities.py`: entity normalization, account-backed guards, and preserve-label delete helpers.
 - `users.py`: user normalization, lookup, and current-user helpers.
