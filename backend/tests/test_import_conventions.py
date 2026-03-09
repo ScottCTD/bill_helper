@@ -43,6 +43,14 @@ REMOVED_AGENT_REVIEW_MODULE = BACKEND_DIR / "services" / "agent" / "review.py"
 AGENT_REVIEWS_PACKAGE = BACKEND_DIR / "services" / "agent" / "reviews"
 REMOVED_AGENT_READ_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "tool_handlers_read.py"
 AGENT_READ_TOOLS_PACKAGE = BACKEND_DIR / "services" / "agent" / "read_tools"
+AGENT_ROUTER_PATH = BACKEND_DIR / "routers" / "agent.py"
+AGENT_ROUTER_SPLIT_MODULES = (
+    BACKEND_DIR / "routers" / "agent_support.py",
+    BACKEND_DIR / "routers" / "agent_threads.py",
+    BACKEND_DIR / "routers" / "agent_runs.py",
+    BACKEND_DIR / "routers" / "agent_reviews.py",
+    BACKEND_DIR / "routers" / "agent_attachments.py",
+)
 
 
 def _assert_marker_module(path: Path) -> None:
@@ -164,6 +172,15 @@ def test_agent_read_tools_are_grouped_in_a_package() -> None:
     assert AGENT_READ_TOOLS_PACKAGE.is_dir(), "read_tools package should exist"
     for name in ("catalog.py", "common.py", "entries.py", "groups.py", "progress.py", "proposals.py"):
         assert (AGENT_READ_TOOLS_PACKAGE / name).exists(), f"missing read tool module: {name}"
+
+
+def test_agent_router_is_split_by_http_boundary() -> None:
+    for path in AGENT_ROUTER_SPLIT_MODULES:
+        assert path.exists(), f"missing split router module: {path.name}"
+
+    module = ast.parse(AGENT_ROUTER_PATH.read_text(encoding="utf-8"), filename=str(AGENT_ROUTER_PATH))
+    function_names = {node.name for node in module.body if isinstance(node, ast.FunctionDef)}
+    assert not function_names, "backend/routers/agent.py should stay an include-only aggregator"
 
 
 def test_schema_modules_do_not_import_service_modules() -> None:
