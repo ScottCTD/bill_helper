@@ -24,10 +24,8 @@ from backend.models_agent import (
 )
 from backend.services.agent.protocol_helpers import decode_tool_call
 from backend.services.agent.serializers import stream_run_event_to_payload
-from backend.services.agent.tools import (
-    INTERMEDIATE_UPDATE_TOOL_NAME,
-    ToolExecutionResult,
-)
+from backend.services.agent.tool_args import INTERMEDIATE_UPDATE_TOOL_NAME
+from backend.services.agent.tool_types import ToolExecutionResult
 
 
 @dataclass(slots=True)

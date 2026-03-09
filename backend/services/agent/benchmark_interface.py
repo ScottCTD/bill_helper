@@ -8,13 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.enums_agent import AgentMessageRole, AgentRunStatus
 from backend.models_agent import AgentMessage, AgentMessageAttachment, AgentRun, AgentThread
-from backend.services.agent.execution import (
-    build_messages_for_thread,
-    build_tool_context,
-    complete_model_once,
-    execute_tool_call,
-    resolve_execution_settings,
-)
+from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.model_client import AgentModelError
 from backend.services.agent.protocol_helpers import (
     USAGE_FIELDS,
@@ -29,6 +23,10 @@ from backend.services.agent.run_orchestrator import (
     RunLoopOutcome,
     run_agent_loop,
 )
+from backend.services.agent.runtime import call_model
+from backend.services.agent.tool_runtime import execute_tool
+from backend.services.agent.tool_types import ToolContext
+from backend.services.runtime_settings import resolve_runtime_settings
 
 PROPOSAL_TOOL_NAMES = {
     "propose_create_tag",
@@ -233,7 +231,7 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
         self._user_message_id = user_message_id
         self._max_steps = max_steps
         self._state = state
-        self._tool_context = build_tool_context(db, run_id=run.id)
+        self._tool_context = ToolContext(db=db, run_id=run.id)
         self._latest_usage_totals: dict[str, int | None] = {}
         self._trace_step: BenchmarkTraceStep | None = None
         self._step_started_at = 0.0
@@ -247,9 +245,9 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
         return self._max_steps
 
     def build_initial_messages(self) -> list[dict[str, Any]]:
-        return build_messages_for_thread(
+        return build_llm_messages(
             self._db,
-            thread_id=self._thread_id,
+            self._thread_id,
             current_user_message_id=self._user_message_id,
         )
 
@@ -272,7 +270,7 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
     ) -> ModelStepGenerator:
         self._step_started_at = time.monotonic()
         messages_snapshot = _redact_image_content(llm_messages)
-        assistant_msg = complete_model_once(self._db, messages=llm_messages)
+        assistant_msg = call_model(llm_messages, self._db)
         step_usage = extract_usage_dict(assistant_msg, fields=USAGE_FIELDS)
         tool_calls = assistant_msg.get("tool_calls") or []
         assistant_content = assistant_msg.get("content") or ""
@@ -322,7 +320,7 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
         prepared_tool_call: _PreparedToolCall,
         llm_messages: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        result = execute_tool_call(
+        result = execute_tool(
             prepared_tool_call.tool_name,
             prepared_tool_call.arguments,
             self._tool_context,
@@ -412,7 +410,7 @@ def run_benchmark_case(
     text: str,
     attachments: list[BenchmarkAttachmentInput],
 ) -> BenchmarkCaseExecution:
-    settings = resolve_execution_settings(db)
+    settings = resolve_runtime_settings(db)
     thread, user_message, run = _create_benchmark_run(
         db,
         text=text,

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
@@ -17,19 +16,12 @@ from backend.services.agent.attachments import store_attachment_bytes
 from backend.services.agent.context_tokens import count_context_tokens
 from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.runtime import (
-    call_model,
-    call_model_stream,
     ensure_agent_available,
     run_existing_agent_run,
     start_agent_run,
 )
-from backend.services.agent.tools import (
-    ToolContext,
-    ToolExecutionResult,
-    build_openai_tool_schemas,
-    execute_tool,
-)
-from backend.services.runtime_settings import ResolvedRuntimeSettings, resolve_runtime_settings
+from backend.services.agent.tool_runtime import build_openai_tool_schemas
+from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.runtime_settings_normalization import normalize_text_or_none
 
 
@@ -184,54 +176,3 @@ def run_agent_in_background(
         run_existing_agent_run(db, run_id)
     finally:
         db.close()
-
-
-def build_messages_for_thread(
-    db: Session,
-    *,
-    thread_id: str,
-    current_user_message_id: str | None,
-    model_name: str | None = None,
-    surface: str = "app",
-) -> list[dict[str, Any]]:
-    """Stable entrypoint for benchmark/test harness message assembly."""
-    return build_llm_messages(
-        db,
-        thread_id,
-        current_user_message_id=current_user_message_id,
-        model_name=model_name,
-        surface=surface,
-    )
-
-
-def complete_model_once(
-    db: Session,
-    *,
-    messages: list[dict[str, Any]],
-) -> dict[str, Any]:
-    """Stable entrypoint for one non-stream model completion."""
-    return call_model(messages, db)
-
-
-def complete_model_stream(
-    db: Session,
-    *,
-    messages: list[dict[str, Any]],
-) -> Iterator[dict[str, Any]]:
-    """Stable entrypoint for streaming model completion."""
-    return call_model_stream(messages, db)
-
-
-def build_tool_context(db: Session, *, run_id: str) -> ToolContext:
-    """Stable helper for constructing tool execution context."""
-    return ToolContext(db=db, run_id=run_id)
-
-
-def execute_tool_call(name: str, arguments: dict[str, Any], context: ToolContext) -> ToolExecutionResult:
-    """Stable entrypoint for invoking one tool call."""
-    return execute_tool(name, arguments, context)
-
-
-def resolve_execution_settings(db: Session) -> ResolvedRuntimeSettings:
-    """Stable settings accessor for execution consumers."""
-    return resolve_runtime_settings(db)
