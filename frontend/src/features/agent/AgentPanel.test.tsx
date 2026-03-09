@@ -261,7 +261,8 @@ describe("AgentPanel", () => {
       "Each file starts a fresh thread using only the prompt typed here. Current thread history is not included."
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Start Bulk" }));
+    expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await screen.findByText("Attach at least one file to start Bulk mode.")).toBeInTheDocument();
     expect(api.sendAgentMessage).not.toHaveBeenCalled();
@@ -292,7 +293,7 @@ describe("AgentPanel", () => {
     await userEvent.upload(fileInput, [buildPdfFile("statement-january.pdf"), buildPdfFile("statement-february.pdf")]);
     await userEvent.click(screen.getByRole("switch", { name: "Bulk mode" }));
     await userEvent.type(screen.getByRole("textbox"), "Review this statement");
-    await userEvent.click(screen.getByRole("button", { name: "Start Bulk" }));
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => expect(api.createAgentThread).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(api.sendAgentMessage).toHaveBeenCalledTimes(2));
@@ -370,7 +371,7 @@ describe("AgentPanel", () => {
       Array.from({ length: 6 }, (_, index) => buildPdfFile(`statement-${index + 1}.pdf`))
     );
     await userEvent.click(screen.getByRole("switch", { name: "Bulk mode" }));
-    await userEvent.click(screen.getByRole("button", { name: "Start Bulk" }));
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => expect(api.sendAgentMessage).toHaveBeenCalledTimes(4));
     expect(maxActiveSends).toBe(4);
@@ -447,7 +448,7 @@ describe("AgentPanel", () => {
       Array.from({ length: 4 }, (_, index) => buildPdfFile(`statement-${index + 1}.pdf`))
     );
     await userEvent.click(screen.getByRole("switch", { name: "Bulk mode" }));
-    await userEvent.click(screen.getByRole("button", { name: "Start Bulk" }));
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => expect(api.sendAgentMessage).toHaveBeenCalledTimes(2));
     expect(maxActiveSends).toBe(2);
@@ -499,7 +500,7 @@ describe("AgentPanel", () => {
     await userEvent.click(screen.getByRole("switch", { name: "Bulk mode" }));
     const composer = screen.getByRole("textbox");
     await userEvent.type(composer, "Use this shared prompt");
-    await userEvent.click(screen.getByRole("button", { name: "Start Bulk" }));
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await screen.findByText("Started 1 thread. Failed 1.")).toBeInTheDocument();
     expect(screen.getByText("Files: statement-fail.pdf provider unavailable")).toBeInTheDocument();
@@ -622,7 +623,7 @@ describe("AgentPanel", () => {
     expect(screen.getByRole("option", { name: "Loading models…" })).toBeInTheDocument();
   });
 
-  it("updates the header model label immediately when the composer model picker changes", async () => {
+  it("keeps the Bill Assistant title stable when the composer model picker changes", async () => {
     vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
     vi.mocked(api.getRuntimeSettings).mockResolvedValue(
       buildRuntimeSettings({
@@ -640,11 +641,12 @@ describe("AgentPanel", () => {
 
     const modelPicker = await screen.findByRole("combobox", { name: "Agent model" });
     await waitFor(() => expect(modelPicker).toHaveValue("openai/gpt-4.1-mini"));
-    expect(await screen.findByRole("heading", { name: "Agent (openai/gpt-4.1-mini)" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Bill Assistant" })).toBeInTheDocument();
 
     await userEvent.selectOptions(modelPicker, "gpt-test");
 
-    expect(screen.getByRole("heading", { name: "Agent (gpt-test)" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Bill Assistant" })).toBeInTheDocument();
+    expect(modelPicker).toHaveValue("gpt-test");
   });
 
   it("uses the selected composer model for the next streamed send", async () => {
@@ -708,7 +710,7 @@ describe("AgentPanel", () => {
     await userEvent.click(screen.getByRole("switch", { name: "Bulk mode" }));
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Agent model" }), "openai/gpt-4.1-mini");
     await userEvent.type(screen.getByRole("textbox"), "Review this statement");
-    await userEvent.click(screen.getByRole("button", { name: "Start Bulk" }));
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => expect(api.sendAgentMessage).toHaveBeenCalledTimes(1));
     expect(api.sendAgentMessage).toHaveBeenCalledWith(

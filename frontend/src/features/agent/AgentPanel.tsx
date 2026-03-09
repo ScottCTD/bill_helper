@@ -618,21 +618,6 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
     setIsStreamHealthy(false);
   }, [pendingAssistantMessage, resetOptimisticRunState, selectedThreadId, threadQuery.data?.messages]);
 
-  const persistedActiveModelName = useMemo(() => {
-    const runs = threadQuery.data?.runs ?? [];
-    const latest = runs[runs.length - 1];
-    const runModelName = latest?.model_name?.trim();
-    if (runModelName) {
-      return runModelName;
-    }
-    const configuredModelName = threadQuery.data?.configured_model_name?.trim();
-    return configuredModelName || "unknown model";
-  }, [threadQuery.data?.runs, threadQuery.data?.configured_model_name]);
-  const activeModelName =
-    composerModelOverride && availableComposerModels.includes(composerModelOverride)
-      ? composerModelOverride
-      : persistedActiveModelName;
-
   const threadUsageTotals = useMemo(() => {
     return buildThreadUsageTotals(threadQuery.data);
   }, [threadQuery.data]);
@@ -1196,7 +1181,7 @@ export function AgentPanel({ isOpen, onClose }: AgentPanelProps) {
       <aside className="agent-panel agent-panel-page" aria-label="Agent panel">
         <header className="agent-panel-header">
           <div className="agent-panel-header-top">
-            <h2>{`Agent (${activeModelName})`}</h2>
+            <h2>Bill Assistant</h2>
             <div className="agent-panel-header-actions">
               <Button
                 type="button"

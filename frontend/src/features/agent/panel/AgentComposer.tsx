@@ -77,7 +77,7 @@ export function AgentComposer(props: AgentComposerProps) {
     onStopRun
   } = props;
   const showStopButton = !isBulkMode && isRunInFlight;
-  const submitLabel = isBulkMode ? (isBulkLaunching ? "Starting..." : "Start Bulk") : isSendingMessage ? "Sending..." : "Send";
+  const submitLabel = isBulkLaunching ? "Starting..." : isSendingMessage ? "Sending..." : "Send";
   const composerPlaceholder = isBulkMode
     ? "Enter one shared prompt. Each attached file will start its own fresh thread."
     : "Ask a question or ask the agent to propose entries/tags/entities...";

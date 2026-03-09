@@ -5,6 +5,7 @@
 - `frontend/src/features/agent/AgentPanel.tsx`
 - used as the primary AI page via `frontend/src/pages/HomePage.tsx`
 - stateful coordination stays in `AgentPanel`, while rendering and derivation are split into feature-owned modules
+- page header uses the static title `Bill Assistant`; model selection stays in the composer dropdown instead of the title row
 
 Supporting modules include:
 
