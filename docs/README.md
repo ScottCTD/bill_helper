@@ -38,6 +38,7 @@ Use the docs in layers:
 - `completed_tasks/*.md`: archived implementation tasks, retrospectives, and fix logs.
 - `completed_tasks/2026-03-09_entry_entity_label_repair_and_agent_selector_fix.md`: archived fix log for entry entity-label repair, agent selector hardening, and local data cleanup.
 - `completed_tasks/2026-03-05_clean_architecture_fix_log.md`: archived desloppify and refactor fix log.
+- `completed_tasks/2026-03-09_desloppify_fix_log.md`: archived March 9 desloppify cleanup log.
 - `completed_tasks/2026-03-07_agent_thread_rename_ui_fix_log.md`: archived debug log for the agent thread inline-rename UI polish fixes.
 
 Active tasks and completed task archives are not source-of-truth for current behavior. Promote stable conclusions back into the canonical docs above.
