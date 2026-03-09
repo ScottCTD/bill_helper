@@ -14,8 +14,10 @@ from backend.services.agent.change_contracts import (
     UpdateEntryPayload as ProposeUpdateEntryArgs,
 )
 from backend.services.agent.entry_references import (
+    entry_ambiguity_details,
     entry_id_ambiguity_details,
     entry_public_id,
+    entry_to_public_record,
     entry_selector_from_entry,
     entry_selector_to_json,
     find_entries_by_public_id_prefix,
@@ -28,7 +30,7 @@ from backend.services.agent.proposals.common import (
     proposal_result,
     resolve_proposal_by_id,
 )
-from backend.services.agent.tool_handlers_read import entry_ambiguity_details, entry_to_public_record, error_result
+from backend.services.agent.tool_results import error_result
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
 from backend.services.entities import find_entity_by_name
 from backend.services.runtime_settings import resolve_runtime_settings

@@ -5,7 +5,7 @@ from backend.services.agent.threads import (
     rename_thread_for_run,
 )
 from backend.services.agent.tool_args import RenameThreadArgs
-from backend.services.agent.tool_handlers_read import error_result
+from backend.services.agent.tool_results import error_result
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 from backend.validation.agent_threads import AgentThreadTitleError
 

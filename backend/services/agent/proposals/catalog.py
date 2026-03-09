@@ -22,7 +22,8 @@ from backend.services.agent.proposals.common import (
     has_pending_create_entity_root_proposal,
     proposal_result,
 )
-from backend.services.agent.tool_handlers_read import entry_to_public_record, error_result
+from backend.services.agent.entry_references import entry_to_public_record
+from backend.services.agent.tool_results import error_result
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
 from backend.services.entities import ACCOUNT_CATEGORY_DETAIL, find_entity_by_name, is_account_entity
 from backend.services.taxonomy import get_single_term_name_map

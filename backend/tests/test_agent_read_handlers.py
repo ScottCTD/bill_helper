@@ -4,8 +4,9 @@ from sqlalchemy import func, select
 
 from backend.database import get_session_maker
 from backend.models_finance import User
+from backend.services.agent.read_tools.catalog import list_accounts
+from backend.services.agent.read_tools.groups import list_groups
 from backend.services.agent.tool_args import ListAccountsArgs, ListGroupsArgs
-from backend.services.agent.tool_handlers_read import list_accounts, list_groups
 from backend.services.agent.tool_types import ToolContext
 
 
