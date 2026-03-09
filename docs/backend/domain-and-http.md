@@ -88,6 +88,8 @@ Important read models:
   - shared thread-title validation contract used by schemas, tool args, and thread services
 - `backend/validation/finance_names.py`
   - shared name/category/tag normalization used by finance services, routers, and agent contracts
+- `backend/validation/contract_fields.py`
+  - shared normalized field types and non-empty patch base used by finance commands, agent change contracts, and tool-input models
 
 Current account/entity helpers:
 

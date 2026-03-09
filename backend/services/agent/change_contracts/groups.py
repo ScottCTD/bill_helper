@@ -11,7 +11,7 @@ from backend.services.agent.change_contracts.common import (
     normalize_optional_reference_id,
 )
 from backend.services.agent.change_contracts.entries import EntryReferencePayload
-from backend.services.agent.payload_normalization import normalize_required_text
+from backend.validation.contract_fields import NonEmptyPatchModel, OptionalRequiredText, RequiredLooseText
 
 
 def normalize_group_member_payload(value: Any) -> Any:
@@ -82,30 +82,12 @@ def parse_group_member_target_payload(value: Any) -> GroupMemberTargetPayload:
 
 
 class CreateGroupPayload(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
+    name: RequiredLooseText = Field(min_length=1, max_length=255)
     group_type: GroupType
 
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str) -> str:
-        return normalize_required_text(value)
 
-
-class UpdateGroupPatchPayload(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return normalize_required_text(value)
-
-    @model_validator(mode="after")
-    def ensure_any_field_set(self) -> UpdateGroupPatchPayload:
-        if not self.model_fields_set:
-            raise ValueError("patch must include at least one field")
-        return self
+class UpdateGroupPatchPayload(NonEmptyPatchModel):
+    name: OptionalRequiredText = Field(default=None, min_length=1, max_length=255)
 
 
 class UpdateGroupPayload(BaseModel):

@@ -7,12 +7,15 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.enums_agent import AgentChangeStatus
 from backend.enums_finance import GroupType
-from backend.services.agent.payload_normalization import (
-    normalize_loose_text,
-    normalize_optional_category,
-    normalize_required_text,
+from backend.services.agent.payload_normalization import normalize_loose_text, normalize_required_text
+from backend.validation.contract_fields import (
+    NormalizedTagList,
+    OptionalCategory,
+    OptionalCurrencyCode,
+    OptionalLooseText,
+    QueryEntityName,
+    QueryTagName,
 )
-from backend.validation.finance_names import normalize_entity_name, normalize_tag_name
 
 
 _DATE_DESC = "ISO date YYYY-MM-DD, e.g. '2026-03-02'"
@@ -28,27 +31,17 @@ class ListEntriesArgs(BaseModel):
         ),
     )
     end_date: DateValue | None = Field(default=None, description=_DATE_DESC)
-    source: str | None = None
-    name: str | None = None
-    from_entity: str | None = None
-    to_entity: str | None = None
-    tags: list[str] = Field(default_factory=list)
+    source: OptionalLooseText = None
+    name: OptionalLooseText = None
+    from_entity: OptionalLooseText = None
+    to_entity: OptionalLooseText = None
+    tags: NormalizedTagList = Field(default_factory=list)
     kind: str | None = Field(default=None, pattern="^(EXPENSE|INCOME|TRANSFER)$")
     limit: int = Field(
         default=10,
         ge=1,
         description="Max entries to return. No upper bound; be cautious with very large values.",
     )
-
-    @field_validator("source", "name", "from_entity", "to_entity")
-    @classmethod
-    def normalize_query_text(cls, value: str | None) -> str | None:
-        return normalize_loose_text(value)
-
-    @field_validator("tags")
-    @classmethod
-    def normalize_tags(cls, value: list[str]) -> list[str]:
-        return sorted({normalize_tag_name(tag) for tag in value if tag.strip()})
 
     @model_validator(mode="after")
     def validate_date_window(self) -> ListEntriesArgs:
@@ -58,69 +51,34 @@ class ListEntriesArgs(BaseModel):
 
 
 class ListTagsArgs(BaseModel):
-    name: str | None = None
-    type: str | None = None
+    name: QueryTagName = None
+    type: OptionalCategory = None
     limit: int = Field(
         default=10,
         ge=1,
         description="Max tags to return. No upper bound; be cautious with very large values.",
     )
 
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str | None) -> str | None:
-        normalized = normalize_loose_text(value)
-        return normalize_tag_name(normalized) if normalized is not None else None
-
-    @field_validator("type")
-    @classmethod
-    def normalize_type(cls, value: str | None) -> str | None:
-        return normalize_optional_category(value)
-
 
 class ListEntitiesArgs(BaseModel):
-    name: str | None = None
-    category: str | None = None
+    name: QueryEntityName = None
+    category: OptionalCategory = None
     limit: int = Field(
         default=10,
         ge=1,
         description="Max entities to return. No upper bound; be cautious with very large values.",
     )
 
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str | None) -> str | None:
-        normalized = normalize_loose_text(value)
-        return normalize_entity_name(normalized) if normalized is not None else None
-
-    @field_validator("category")
-    @classmethod
-    def normalize_category(cls, value: str | None) -> str | None:
-        return normalize_optional_category(value)
-
 
 class ListAccountsArgs(BaseModel):
-    name: str | None = None
-    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
+    name: QueryEntityName = None
+    currency_code: OptionalCurrencyCode = Field(default=None, min_length=3, max_length=3)
     is_active: bool | None = None
     limit: int = Field(
         default=10,
         ge=1,
         description="Max accounts to return. No upper bound; be cautious with very large values.",
     )
-
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str | None) -> str | None:
-        normalized = normalize_loose_text(value)
-        return normalize_entity_name(normalized) if normalized is not None else None
-
-    @field_validator("currency_code")
-    @classmethod
-    def normalize_currency_code(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return normalize_required_text(value).upper()
 
 
 class ListGroupsArgs(BaseModel):

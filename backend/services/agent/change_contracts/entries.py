@@ -11,8 +11,13 @@ from backend.services.agent.change_contracts.common import (
     normalize_optional_proposal_id,
     normalize_optional_reference_id,
 )
-from backend.services.agent.payload_normalization import normalize_required_text
-from backend.validation.finance_names import normalize_tag_name
+from backend.validation.contract_fields import (
+    NonEmptyPatchModel,
+    NormalizedTagList,
+    OptionalCurrencyCode,
+    OptionalEntityName,
+    RequiredEntityName,
+)
 
 
 def normalize_entry_reference_payload(value: Any) -> Any:
@@ -28,82 +33,33 @@ def normalize_entry_reference_payload(value: Any) -> Any:
 class CreateEntryPayload(BaseModel):
     kind: EntryKind
     date: DateValue
-    name: str = Field(min_length=1, max_length=255)
+    name: RequiredEntityName = Field(min_length=1, max_length=255)
     amount_minor: int = Field(gt=0)
-    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
-    from_entity: str = Field(min_length=1, max_length=255)
-    to_entity: str = Field(min_length=1, max_length=255)
-    tags: list[str] = Field(default_factory=list)
+    currency_code: OptionalCurrencyCode = Field(default=None, min_length=3, max_length=3)
+    from_entity: RequiredEntityName = Field(min_length=1, max_length=255)
+    to_entity: RequiredEntityName = Field(min_length=1, max_length=255)
+    tags: NormalizedTagList = Field(default_factory=list)
     markdown_notes: str | None = None
-
-    @field_validator("name", "from_entity", "to_entity")
-    @classmethod
-    def normalize_required_fields(cls, value: str) -> str:
-        return normalize_required_text(value)
-
-    @field_validator("currency_code")
-    @classmethod
-    def normalize_currency(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return value.strip().upper()
-
-    @field_validator("tags")
-    @classmethod
-    def normalize_tags(cls, value: list[str]) -> list[str]:
-        return sorted({normalize_tag_name(tag) for tag in value if tag.strip()})
 
 
 class EntrySelectorPayload(BaseModel):
     date: DateValue
     amount_minor: int = Field(gt=0)
-    from_entity: str = Field(min_length=1, max_length=255)
-    to_entity: str = Field(min_length=1, max_length=255)
-    name: str = Field(min_length=1, max_length=255)
-
-    @field_validator("from_entity", "to_entity", "name")
-    @classmethod
-    def normalize_selector_text(cls, value: str) -> str:
-        return normalize_required_text(value)
+    from_entity: RequiredEntityName = Field(min_length=1, max_length=255)
+    to_entity: RequiredEntityName = Field(min_length=1, max_length=255)
+    name: RequiredEntityName = Field(min_length=1, max_length=255)
 
 
-class UpdateEntryPatchPayload(BaseModel):
+class UpdateEntryPatchPayload(NonEmptyPatchModel):
     kind: EntryKind | None = None
     date: DateValue | None = None
-    name: str | None = Field(default=None, min_length=1, max_length=255)
+    name: OptionalEntityName = Field(default=None, min_length=1, max_length=255)
     amount_minor: int | None = Field(default=None, gt=0)
-    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
-    from_entity: str | None = Field(default=None, min_length=1, max_length=255)
-    to_entity: str | None = Field(default=None, min_length=1, max_length=255)
-    tags: list[str] | None = None
+    currency_code: OptionalCurrencyCode = Field(default=None, min_length=3, max_length=3)
+    from_entity: OptionalEntityName = Field(default=None, min_length=1, max_length=255)
+    to_entity: OptionalEntityName = Field(default=None, min_length=1, max_length=255)
+    tags: NormalizedTagList | None = None
     markdown_notes: str | None = None
-
-    @field_validator("name", "from_entity", "to_entity")
-    @classmethod
-    def normalize_optional_text_fields(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return normalize_required_text(value)
-
-    @field_validator("currency_code")
-    @classmethod
-    def normalize_currency(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return value.strip().upper()
-
-    @field_validator("tags")
-    @classmethod
-    def normalize_tags(cls, value: list[str] | None) -> list[str] | None:
-        if value is None:
-            return None
-        return sorted({normalize_tag_name(tag) for tag in value if tag.strip()})
-
-    @model_validator(mode="after")
-    def ensure_any_field_set(self) -> UpdateEntryPatchPayload:
-        if not self.model_fields_set:
-            raise ValueError("patch must include at least one field")
-        return self
 
 
 class UpdateEntryPayload(BaseModel):
