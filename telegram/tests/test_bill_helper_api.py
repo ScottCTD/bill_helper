@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 
 from backend.schemas_finance import RuntimeSettingsUpdate
-from telegram.bill_helper_api import AttachmentUpload, BillHelperApiClient
+from telegram.bill_helper_api import AttachmentUpload, BillHelperApiClient, BillHelperApiError
 
 
 def test_thread_endpoints_and_settings_use_existing_backend_routes():
@@ -294,3 +295,13 @@ def test_send_thread_message_without_files_keeps_form_fields_in_multipart_body()
     assert "hello" in body_text
     assert 'name="surface"' in body_text
     assert "telegram" in body_text
+
+
+def test_json_endpoints_fail_closed_on_empty_success_body():
+    client = BillHelperApiClient(
+        base_url="http://localhost:8000/api/v1",
+        transport=httpx.MockTransport(lambda _request: httpx.Response(200, content=b"")),
+    )
+
+    with pytest.raises(BillHelperApiError, match="empty JSON response"):
+        client.get_settings()
