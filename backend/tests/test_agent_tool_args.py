@@ -10,14 +10,13 @@ def test_propose_update_group_membership_args_normalize_stringified_refs() -> No
         {
             "action": "add",
             "group_ref": '{"group_id": " ABCD1234 "}',
-            "entry_ref": '{"entry_id": " efgh5678 "}',
+            "target": '{"target_type": "entry", "entry_ref": {"entry_id": " efgh5678 "}}',
             "member_role": "CHILD",
         }
     )
 
     assert parsed.group_ref.group_id == "abcd1234"
-    assert parsed.entry_ref is not None
-    assert parsed.entry_ref.entry_id == "efgh5678"
+    assert parsed.target.entry_ref.entry_id == "efgh5678"
     assert parsed.member_role is not None
     assert parsed.member_role.value == "CHILD"
 
@@ -28,6 +27,6 @@ def test_propose_update_group_membership_args_reject_pending_refs_for_remove() -
             {
                 "action": "remove",
                 "group_ref": {"create_group_proposal_id": "proposal-1234"},
-                "entry_ref": {"entry_id": "entry-1234"},
+                "target": {"target_type": "entry", "entry_ref": {"entry_id": "entry-1234"}},
             }
         )

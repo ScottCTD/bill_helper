@@ -11,9 +11,11 @@ from backend.models_agent import AgentChangeItem, AgentReviewAction, AgentRun
 from backend.services.agent.change_apply import apply_change_item_payload
 from backend.services.agent.change_contracts import (
     ChangePayloadModel,
+    ChildGroupMemberTargetPayload,
     CreateAccountPayload,
     CreateEntityPayload,
     CreateEntryPayload,
+    EntryGroupMemberTargetPayload,
     CreateGroupMemberPayload,
     UpdateEntryPayload,
     parse_change_payload,
@@ -225,11 +227,11 @@ def _validate_entry_dependencies_ready_for_approval(
 
 def _group_dependency_proposal_ids(payload: CreateGroupMemberPayload) -> list[str]:
     dependency_ids: list[str] = []
-    references = (
-        payload.group_ref.create_group_proposal_id,
-        payload.entry_ref.create_entry_proposal_id if payload.entry_ref is not None else None,
-        payload.child_group_ref.create_group_proposal_id if payload.child_group_ref is not None else None,
-    )
+    references = [payload.group_ref.create_group_proposal_id]
+    if isinstance(payload.target, EntryGroupMemberTargetPayload):
+        references.append(payload.target.entry_ref.create_entry_proposal_id)
+    elif isinstance(payload.target, ChildGroupMemberTargetPayload):
+        references.append(payload.target.group_ref.create_group_proposal_id)
     for proposal_id in references:
         if proposal_id:
             dependency_ids.append(proposal_id)

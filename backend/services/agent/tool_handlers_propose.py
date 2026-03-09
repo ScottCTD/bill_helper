@@ -12,6 +12,7 @@ from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
 from backend.models_finance import Account, AccountSnapshot, Entry, EntryGroup, EntryGroupMember, Tag
 from backend.models_agent import AgentChangeItem, AgentRun
 from backend.services.agent.change_contracts import (
+    ChildGroupMemberTargetPayload,
     CreateAccountPayload as ProposeCreateAccountArgs,
     CreateEntityPayload as ProposeCreateEntityArgs,
     CreateEntryPayload as ProposeCreateEntryArgs,
@@ -24,8 +25,10 @@ from backend.services.agent.change_contracts import (
     DeleteGroupMemberPayload,
     DeleteGroupPayload as ProposeDeleteGroupArgs,
     DeleteTagPayload as ProposeDeleteTagArgs,
+    EntryGroupMemberTargetPayload,
     EntryReferencePayload,
     EntrySelectorPayload,
+    GroupMemberTargetPayload,
     GroupReferencePayload,
     UpdateAccountPatchPayload as AccountPatchArgs,
     UpdateAccountPayload as ProposeUpdateAccountArgs,
@@ -34,7 +37,9 @@ from backend.services.agent.change_contracts import (
     UpdateEntryPayload as ProposeUpdateEntryArgs,
     UpdateGroupPayload as ProposeUpdateGroupArgs,
     UpdateTagPayload as ProposeUpdateTagArgs,
+    normalize_group_member_payload,
     parse_change_payload as parse_change_payload_model,
+    parse_group_member_target_payload,
     validate_patch_map_paths,
 )
 from backend.services.agent.entry_references import (
@@ -578,6 +583,32 @@ def _canonical_entry_ref_payload(
     return {"create_entry_proposal_id": proposal.id}, None, proposal
 
 
+def _canonical_group_member_target_payload(
+    context: ToolContext,
+    *,
+    target: GroupMemberTargetPayload,
+    expected_statuses: set[AgentChangeStatus] | None = None,
+) -> tuple[dict[str, Any], Entry | EntryGroup | None, AgentChangeItem | None] | ToolExecutionResult:
+    if isinstance(target, EntryGroupMemberTargetPayload):
+        resolved_entry_ref = _canonical_entry_ref_payload(
+            context,
+            entry_ref=target.entry_ref,
+            expected_statuses=expected_statuses,
+        )
+        if isinstance(resolved_entry_ref, ToolExecutionResult):
+            return resolved_entry_ref
+        return {"target_type": "entry", "entry_ref": resolved_entry_ref[0]}, resolved_entry_ref[1], resolved_entry_ref[2]
+
+    resolved_group_ref = _canonical_group_ref_payload(
+        context,
+        group_ref=target.group_ref,
+        expected_statuses=expected_statuses,
+    )
+    if isinstance(resolved_group_ref, ToolExecutionResult):
+        return resolved_group_ref
+    return {"target_type": "child_group", "group_ref": resolved_group_ref[0]}, resolved_group_ref[1], resolved_group_ref[2]
+
+
 def _resolved_group_type_from_ref(
     context: ToolContext,
     group_ref: GroupReferencePayload,
@@ -602,22 +633,21 @@ def _resolved_group_type_from_ref(
     return group_type, _group_preview_from_proposal(proposal), None, proposal
 
 
-def _resolved_member_ref_preview(
+def _resolved_group_member_target_preview(
     context: ToolContext,
     *,
-    entry_ref: EntryReferencePayload | None,
-    child_group_ref: GroupReferencePayload | None,
+    target: GroupMemberTargetPayload,
     enforce_add_membership_rules: bool = True,
 ) -> tuple[dict[str, Any], EntryKind | None] | ToolExecutionResult:
-    if entry_ref is not None:
-        if entry_ref.entry_id is not None:
-            matches = find_entries_by_public_id_prefix(context.db, entry_ref.entry_id)
+    if isinstance(target, EntryGroupMemberTargetPayload):
+        if target.entry_ref.entry_id is not None:
+            matches = find_entries_by_public_id_prefix(context.db, target.entry_ref.entry_id)
             if not matches:
-                return error_result("no entry matched entry_id", details={"entry_id": entry_ref.entry_id})
+                return error_result("no entry matched entry_id", details={"entry_id": target.entry_ref.entry_id})
             if len(matches) > 1:
                 return error_result(
                     "ambiguous entry_id matched multiple entries; retry with one of the candidate ids",
-                    details=entry_id_ambiguity_details(matches, entry_id=entry_ref.entry_id),
+                    details=entry_id_ambiguity_details(matches, entry_id=target.entry_ref.entry_id),
                 )
             entry = matches[0]
             if enforce_add_membership_rules and entry.group_membership is not None:
@@ -626,10 +656,9 @@ def _resolved_member_ref_preview(
             preview["source"] = "entry"
             return preview, entry.kind
 
-        assert entry_ref.create_entry_proposal_id is not None
         proposal = _resolve_entry_proposal_reference_or_error(
             context,
-            proposal_id=entry_ref.create_entry_proposal_id,
+            proposal_id=target.entry_ref.create_entry_proposal_id or "",
             expected_statuses={AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED, AgentChangeStatus.APPLIED},
         )
         if isinstance(proposal, ToolExecutionResult):
@@ -639,9 +668,8 @@ def _resolved_member_ref_preview(
         entry_kind = EntryKind(str(raw_kind)) if isinstance(raw_kind, str) else None
         return preview, entry_kind
 
-    assert child_group_ref is not None
-    if child_group_ref.group_id is not None:
-        group = _match_existing_group_or_error(context, group_id=child_group_ref.group_id)
+    if target.group_ref.group_id is not None:
+        group = _match_existing_group_or_error(context, group_id=target.group_ref.group_id)
         if isinstance(group, ToolExecutionResult):
             return group
         if enforce_add_membership_rules and group.parent_membership is not None:
@@ -655,10 +683,9 @@ def _resolved_member_ref_preview(
         preview["descendant_kinds"] = sorted({entry.kind.value for entry in descendant_entries})
         return preview, descendant_entries[0].kind if len({entry.kind for entry in descendant_entries}) == 1 and descendant_entries else None
 
-    assert child_group_ref.create_group_proposal_id is not None
     proposal = _resolve_group_proposal_reference_or_error(
         context,
-        proposal_id=child_group_ref.create_group_proposal_id,
+        proposal_id=target.group_ref.create_group_proposal_id or "",
         expected_statuses={AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED, AgentChangeStatus.APPLIED},
     )
     if isinstance(proposal, ToolExecutionResult):
@@ -680,13 +707,27 @@ def _entry_ref_signature(entry_ref: EntryReferencePayload) -> tuple[str, str]:
     return ("proposal", entry_ref.create_entry_proposal_id)
 
 
+def _group_member_target_signature(target: GroupMemberTargetPayload) -> tuple[str, tuple[str, str]]:
+    if isinstance(target, EntryGroupMemberTargetPayload):
+        return ("entry", _entry_ref_signature(target.entry_ref))
+    return ("child_group", _group_ref_signature(target.group_ref))
+
+
 def _group_member_signature(payload: dict[str, Any]) -> tuple[tuple[str, str], str, tuple[str, str]]:
-    group_ref = GroupReferencePayload.model_validate(payload.get("group_ref"))
-    if isinstance(payload.get("entry_ref"), dict):
-        entry_ref = EntryReferencePayload.model_validate(payload["entry_ref"])
-        return (_group_ref_signature(group_ref), "entry", _entry_ref_signature(entry_ref))
-    child_group_ref = GroupReferencePayload.model_validate(payload.get("child_group_ref"))
-    return (_group_ref_signature(group_ref), "group", _group_ref_signature(child_group_ref))
+    normalized_payload = normalize_group_member_payload(payload)
+    group_ref = GroupReferencePayload.model_validate(normalized_payload.get("group_ref"))
+    target = parse_group_member_target_payload(normalized_payload.get("target"))
+    target_kind, target_signature = _group_member_target_signature(target)
+    return (_group_ref_signature(group_ref), target_kind, target_signature)
+
+
+def _payload_group_member_target_type(payload: dict[str, Any]) -> str | None:
+    normalized_payload = normalize_group_member_payload(payload)
+    target = normalized_payload.get("target")
+    if not isinstance(target, dict):
+        return None
+    target_type = target.get("target_type")
+    return target_type if isinstance(target_type, str) else None
 
 
 def _pending_group_membership_conflict(
@@ -844,8 +885,7 @@ def _validate_group_member_add_rules(
     context: ToolContext,
     *,
     group_ref: GroupReferencePayload,
-    entry_ref: EntryReferencePayload | None,
-    child_group_ref: GroupReferencePayload | None,
+    target: GroupMemberTargetPayload,
     member_role: GroupMemberRole | None,
 ) -> tuple[dict[str, Any], dict[str, Any]] | ToolExecutionResult:
     group_resolution = _resolved_group_type_from_ref(context, group_ref)
@@ -855,19 +895,18 @@ def _validate_group_member_add_rules(
     canonical_parent_ref = GroupReferencePayload.model_validate(
         {"group_id": existing_group.id} if existing_group is not None else {"create_group_proposal_id": _group_proposal.id}
     )
-    member_resolution = _resolved_member_ref_preview(
+    member_resolution = _resolved_group_member_target_preview(
         context,
-        entry_ref=entry_ref,
-        child_group_ref=child_group_ref,
+        target=target,
     )
     if isinstance(member_resolution, ToolExecutionResult):
         return member_resolution
     member_preview, target_kind = member_resolution
 
-    if child_group_ref is not None:
+    if isinstance(target, ChildGroupMemberTargetPayload):
         canonical_child_ref_resolution = _canonical_group_ref_payload(
             context,
-            group_ref=child_group_ref,
+            group_ref=target.group_ref,
             expected_statuses={AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED, AgentChangeStatus.APPLIED},
         )
         if isinstance(canonical_child_ref_resolution, ToolExecutionResult):
@@ -895,7 +934,11 @@ def _validate_group_member_add_rules(
     elif member_role is not None:
         return error_result("member_role is only valid when the parent group type is SPLIT")
 
-    if existing_group is not None and child_group_ref is not None and existing_group.parent_membership is not None:
+    if (
+        existing_group is not None
+        and isinstance(target, ChildGroupMemberTargetPayload)
+        and existing_group.parent_membership is not None
+    ):
         return error_result("nested groups cannot contain child groups")
 
     if parent_group_type == GroupType.RECURRING and target_kind is not None:
@@ -906,7 +949,7 @@ def _validate_group_member_add_rules(
             if item.change_type == AgentChangeType.CREATE_GROUP_MEMBER
             and isinstance(item.payload_json.get("group_ref"), dict)
             and _group_ref_signature(GroupReferencePayload.model_validate(item.payload_json["group_ref"])) == _group_ref_signature(canonical_parent_ref)
-            and isinstance(item.payload_json.get("entry_ref"), dict)
+            and _payload_group_member_target_type(item.payload_json) == "entry"
             and isinstance(item.payload_json.get("member_preview"), dict)
             and isinstance(item.payload_json["member_preview"].get("kind"), str)
         }
@@ -921,17 +964,15 @@ def _validate_group_member_remove_rules(
     context: ToolContext,
     *,
     group_ref: GroupReferencePayload,
-    entry_ref: EntryReferencePayload | None,
-    child_group_ref: GroupReferencePayload | None,
-) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any] | None, dict[str, Any], dict[str, Any]] | ToolExecutionResult:
+    target: GroupMemberTargetPayload,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]] | ToolExecutionResult:
     group = _match_existing_group_or_error(context, group_id=group_ref.group_id or "")
     if isinstance(group, ToolExecutionResult):
         return group
 
-    member_resolution = _resolved_member_ref_preview(
+    member_resolution = _resolved_group_member_target_preview(
         context,
-        entry_ref=entry_ref,
-        child_group_ref=child_group_ref,
+        target=target,
         enforce_add_membership_rules=False,
     )
     if isinstance(member_resolution, ToolExecutionResult):
@@ -939,23 +980,21 @@ def _validate_group_member_remove_rules(
     member_preview, _target_kind = member_resolution
 
     canonical_group_ref: dict[str, Any] = {"group_id": group.id}
-    canonical_entry_ref: dict[str, Any] | None = None
-    canonical_child_group_ref: dict[str, Any] | None = None
+    canonical_target: dict[str, Any]
     target_entry_id: str | None = None
     target_child_group_id: str | None = None
 
-    if entry_ref is not None:
-        entry = _match_existing_entry_or_error(context, entry_id=entry_ref.entry_id or "")
+    if isinstance(target, EntryGroupMemberTargetPayload):
+        entry = _match_existing_entry_or_error(context, entry_id=target.entry_ref.entry_id or "")
         if isinstance(entry, ToolExecutionResult):
             return entry
-        canonical_entry_ref = {"entry_id": entry.id}
+        canonical_target = {"target_type": "entry", "entry_ref": {"entry_id": entry.id}}
         target_entry_id = entry.id
     else:
-        assert child_group_ref is not None
-        child_group = _match_existing_group_or_error(context, group_id=child_group_ref.group_id or "")
+        child_group = _match_existing_group_or_error(context, group_id=target.group_ref.group_id or "")
         if isinstance(child_group, ToolExecutionResult):
             return child_group
-        canonical_child_group_ref = {"group_id": child_group.id}
+        canonical_target = {"target_type": "child_group", "group_ref": {"group_id": child_group.id}}
         target_child_group_id = child_group.id
 
     membership_exists = any(
@@ -973,7 +1012,78 @@ def _validate_group_member_remove_rules(
             details={"group_id": group.id, "member": member_preview},
         )
 
-    return canonical_group_ref, canonical_entry_ref, canonical_child_group_ref, _group_preview_from_existing(group), member_preview
+    return canonical_group_ref, canonical_target, _group_preview_from_existing(group), member_preview
+
+
+def _build_add_group_membership_payload(
+    context: ToolContext,
+    *,
+    group_ref: GroupReferencePayload,
+    target: GroupMemberTargetPayload,
+    member_role: GroupMemberRole | None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]] | ToolExecutionResult:
+    if isinstance(target, ChildGroupMemberTargetPayload) and _group_ref_signature(group_ref) == _group_ref_signature(target.group_ref):
+        return error_result("a group cannot contain itself")
+
+    previews = _validate_group_member_add_rules(
+        context,
+        group_ref=group_ref,
+        target=target,
+        member_role=member_role,
+    )
+    if isinstance(previews, ToolExecutionResult):
+        return previews
+    group_preview, member_preview = previews
+
+    canonical_group_ref = _canonical_group_ref_payload(
+        context,
+        group_ref=group_ref,
+        expected_statuses={AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED, AgentChangeStatus.APPLIED},
+    )
+    if isinstance(canonical_group_ref, ToolExecutionResult):
+        return canonical_group_ref
+
+    canonical_target = _canonical_group_member_target_payload(
+        context,
+        target=target,
+        expected_statuses={AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED, AgentChangeStatus.APPLIED},
+    )
+    if isinstance(canonical_target, ToolExecutionResult):
+        return canonical_target
+
+    payload = {
+        "action": "add",
+        "group_ref": canonical_group_ref[0],
+        "target": canonical_target[0],
+        "member_role": member_role.value if member_role is not None else None,
+        "group_preview": group_preview,
+        "member_preview": member_preview,
+    }
+    return payload, group_preview, member_preview
+
+
+def _build_remove_group_membership_payload(
+    context: ToolContext,
+    *,
+    group_ref: GroupReferencePayload,
+    target: GroupMemberTargetPayload,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]] | ToolExecutionResult:
+    removal = _validate_group_member_remove_rules(
+        context,
+        group_ref=group_ref,
+        target=target,
+    )
+    if isinstance(removal, ToolExecutionResult):
+        return removal
+    canonical_group_ref, canonical_target, group_preview, member_preview = removal
+    payload = {
+        "action": "remove",
+        "group_ref": canonical_group_ref,
+        "target": canonical_target,
+        "group_preview": group_preview,
+        "member_preview": member_preview,
+    }
+    return payload, group_preview, member_preview
 
 
 def proposal_payload_from_create_entry_args(context: ToolContext, args: ProposeCreateEntryArgs) -> dict[str, Any]:
@@ -1185,52 +1295,15 @@ def normalize_payload_for_change_type(
             payload=payload,
             model_type=CreateGroupMemberPayload,
         )
-        previews = _validate_group_member_add_rules(
+        normalized = _build_add_group_membership_payload(
             context,
             group_ref=parsed.group_ref,
-            entry_ref=parsed.entry_ref,
-            child_group_ref=parsed.child_group_ref,
+            target=parsed.target,
             member_role=parsed.member_role,
         )
-        if isinstance(previews, ToolExecutionResult):
-            raise ValueError(previews.output_json.get("summary", "invalid group membership"))
-        group_preview, member_preview = previews
-        canonical_group_ref = _canonical_group_ref_payload(
-            context,
-            group_ref=parsed.group_ref,
-            expected_statuses={AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED, AgentChangeStatus.APPLIED},
-        )
-        if isinstance(canonical_group_ref, ToolExecutionResult):
-            raise ValueError(canonical_group_ref.output_json.get("summary", "group not found"))
-        canonical_entry_ref = None
-        canonical_child_group_ref = None
-        if parsed.entry_ref is not None:
-            resolved_entry_ref = _canonical_entry_ref_payload(
-                context,
-                entry_ref=parsed.entry_ref,
-                expected_statuses={AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED, AgentChangeStatus.APPLIED},
-            )
-            if isinstance(resolved_entry_ref, ToolExecutionResult):
-                raise ValueError(resolved_entry_ref.output_json.get("summary", "member not found"))
-            canonical_entry_ref = resolved_entry_ref[0]
-        if parsed.child_group_ref is not None:
-            resolved_child_group_ref = _canonical_group_ref_payload(
-                context,
-                group_ref=parsed.child_group_ref,
-                expected_statuses={AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED, AgentChangeStatus.APPLIED},
-            )
-            if isinstance(resolved_child_group_ref, ToolExecutionResult):
-                raise ValueError(resolved_child_group_ref.output_json.get("summary", "member not found"))
-            canonical_child_group_ref = resolved_child_group_ref[0]
-        normalized_payload = {
-            "action": "add",
-            "group_ref": canonical_group_ref[0],
-            "entry_ref": canonical_entry_ref,
-            "child_group_ref": canonical_child_group_ref,
-            "member_role": parsed.member_role.value if parsed.member_role is not None else None,
-        }
-        normalized_payload["group_preview"] = group_preview
-        normalized_payload["member_preview"] = member_preview
+        if isinstance(normalized, ToolExecutionResult):
+            raise ValueError(normalized.output_json.get("summary", "invalid group membership"))
+        normalized_payload, _group_preview, _member_preview = normalized
         return normalized_payload
     if change_type == AgentChangeType.DELETE_GROUP_MEMBER:
         parsed = parse_change_payload(
@@ -1238,23 +1311,14 @@ def normalize_payload_for_change_type(
             payload=payload,
             model_type=DeleteGroupMemberPayload,
         )
-        removal = _validate_group_member_remove_rules(
+        normalized = _build_remove_group_membership_payload(
             context,
             group_ref=parsed.group_ref,
-            entry_ref=parsed.entry_ref,
-            child_group_ref=parsed.child_group_ref,
+            target=parsed.target,
         )
-        if isinstance(removal, ToolExecutionResult):
-            raise ValueError(removal.output_json.get("summary", "invalid group membership"))
-        canonical_group_ref, canonical_entry_ref, canonical_child_group_ref, group_preview, member_preview = removal
-        normalized_payload = {
-            "action": "remove",
-            "group_ref": canonical_group_ref,
-            "entry_ref": canonical_entry_ref,
-            "child_group_ref": canonical_child_group_ref,
-        }
-        normalized_payload["group_preview"] = group_preview
-        normalized_payload["member_preview"] = member_preview
+        if isinstance(normalized, ToolExecutionResult):
+            raise ValueError(normalized.output_json.get("summary", "invalid group membership"))
+        normalized_payload, _group_preview, _member_preview = normalized
         return normalized_payload
     raise ValueError(f"unsupported proposal change type: {change_type.value}")
 
@@ -1664,44 +1728,15 @@ def propose_update_group_membership(
     args: ProposeUpdateGroupMembershipArgs,
 ) -> ToolExecutionResult:
     if args.action == "add":
-        if args.child_group_ref is not None and _group_ref_signature(args.group_ref) == _group_ref_signature(args.child_group_ref):
-            return error_result("a group cannot contain itself")
-
-        canonical_group_ref = _canonical_group_ref_payload(
+        normalized = _build_add_group_membership_payload(
             context,
             group_ref=args.group_ref,
-            expected_statuses={AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED, AgentChangeStatus.APPLIED},
+            target=args.target,
+            member_role=args.member_role,
         )
-        if isinstance(canonical_group_ref, ToolExecutionResult):
-            return canonical_group_ref
-        canonical_entry_ref = None
-        canonical_child_group_ref = None
-        if args.entry_ref is not None:
-            resolved_entry_ref = _canonical_entry_ref_payload(
-                context,
-                entry_ref=args.entry_ref,
-                expected_statuses={AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED, AgentChangeStatus.APPLIED},
-            )
-            if isinstance(resolved_entry_ref, ToolExecutionResult):
-                return resolved_entry_ref
-            canonical_entry_ref = resolved_entry_ref[0]
-        if args.child_group_ref is not None:
-            resolved_child_group_ref = _canonical_group_ref_payload(
-                context,
-                group_ref=args.child_group_ref,
-                expected_statuses={AgentChangeStatus.PENDING_REVIEW, AgentChangeStatus.APPROVED, AgentChangeStatus.APPLIED},
-            )
-            if isinstance(resolved_child_group_ref, ToolExecutionResult):
-                return resolved_child_group_ref
-            canonical_child_group_ref = resolved_child_group_ref[0]
-
-        payload = {
-            "action": "add",
-            "group_ref": canonical_group_ref[0],
-            "entry_ref": canonical_entry_ref,
-            "child_group_ref": canonical_child_group_ref,
-            "member_role": args.member_role.value if args.member_role is not None else None,
-        }
+        if isinstance(normalized, ToolExecutionResult):
+            return normalized
+        payload, group_preview, member_preview = normalized
         conflict = _pending_group_membership_conflict(
             context,
             change_type=AgentChangeType.CREATE_GROUP_MEMBER,
@@ -1710,18 +1745,6 @@ def propose_update_group_membership(
         if conflict is not None:
             return conflict
 
-        previews = _validate_group_member_add_rules(
-            context,
-            group_ref=args.group_ref,
-            entry_ref=args.entry_ref,
-            child_group_ref=args.child_group_ref,
-            member_role=args.member_role,
-        )
-        if isinstance(previews, ToolExecutionResult):
-            return previews
-        group_preview, member_preview = previews
-        payload["group_preview"] = group_preview
-        payload["member_preview"] = member_preview
         item = create_change_item(
             context,
             change_type=AgentChangeType.CREATE_GROUP_MEMBER,
@@ -1736,22 +1759,14 @@ def propose_update_group_membership(
         }
         return proposal_result("proposed group membership add", preview=preview, item=item)
 
-    removal = _validate_group_member_remove_rules(
+    normalized = _build_remove_group_membership_payload(
         context,
         group_ref=args.group_ref,
-        entry_ref=args.entry_ref,
-        child_group_ref=args.child_group_ref,
+        target=args.target,
     )
-    if isinstance(removal, ToolExecutionResult):
-        return removal
-    canonical_group_ref, canonical_entry_ref, canonical_child_group_ref, group_preview, member_preview = removal
-
-    payload = {
-        "action": "remove",
-        "group_ref": canonical_group_ref,
-        "entry_ref": canonical_entry_ref,
-        "child_group_ref": canonical_child_group_ref,
-    }
+    if isinstance(normalized, ToolExecutionResult):
+        return normalized
+    payload, group_preview, member_preview = normalized
     conflict = _pending_group_membership_conflict(
         context,
         change_type=AgentChangeType.DELETE_GROUP_MEMBER,
@@ -1760,8 +1775,6 @@ def propose_update_group_membership(
     if conflict is not None:
         return conflict
 
-    payload["group_preview"] = group_preview
-    payload["member_preview"] = member_preview
     item = create_change_item(
         context,
         change_type=AgentChangeType.DELETE_GROUP_MEMBER,

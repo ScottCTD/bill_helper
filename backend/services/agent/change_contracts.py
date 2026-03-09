@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import date as DateValue
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, TypeAdapter, field_validator, model_validator
 
 from backend.enums_agent import AgentChangeType
 from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
@@ -65,13 +65,26 @@ def _is_complete_entry_selector_payload(value: Any) -> bool:
     return all(normalize_loose_text(value.get(field)) is not None for field in ("from_entity", "to_entity", "name"))
 
 
-def normalize_group_member_reference_payload(value: Any) -> Any:
+def normalize_group_member_payload(value: Any) -> Any:
     if not isinstance(value, dict):
         return value
     normalized = dict(value)
     normalized["group_ref"] = normalize_object_json_string(normalized.get("group_ref"))
-    normalized["entry_ref"] = normalize_object_json_string(normalized.get("entry_ref"))
-    normalized["child_group_ref"] = normalize_object_json_string(normalized.get("child_group_ref"))
+    target = normalize_object_json_string(normalized.get("target"))
+    if not isinstance(target, dict):
+        legacy_entry_ref = normalize_object_json_string(normalized.get("entry_ref"))
+        legacy_child_group_ref = normalize_object_json_string(normalized.get("child_group_ref"))
+        if legacy_entry_ref is not None and legacy_child_group_ref is None:
+            target = {"target_type": "entry", "entry_ref": legacy_entry_ref}
+        elif legacy_child_group_ref is not None and legacy_entry_ref is None:
+            target = {"target_type": "child_group", "group_ref": legacy_child_group_ref}
+    if isinstance(target, dict):
+        normalized_target = dict(target)
+        normalized_target["entry_ref"] = normalize_object_json_string(normalized_target.get("entry_ref"))
+        normalized_target["group_ref"] = normalize_object_json_string(normalized_target.get("group_ref"))
+        normalized["target"] = normalized_target
+    normalized.pop("entry_ref", None)
+    normalized.pop("child_group_ref", None)
     return normalized
 
 
@@ -464,6 +477,28 @@ class EntryReferencePayload(BaseModel):
         return self
 
 
+class EntryGroupMemberTargetPayload(BaseModel):
+    target_type: Literal["entry"] = "entry"
+    entry_ref: EntryReferencePayload
+
+
+class ChildGroupMemberTargetPayload(BaseModel):
+    target_type: Literal["child_group"] = "child_group"
+    group_ref: GroupReferencePayload
+
+
+type GroupMemberTargetPayload = Annotated[
+    EntryGroupMemberTargetPayload | ChildGroupMemberTargetPayload,
+    Field(discriminator="target_type"),
+]
+
+GROUP_MEMBER_TARGET_ADAPTER = TypeAdapter(GroupMemberTargetPayload)
+
+
+def parse_group_member_target_payload(value: Any) -> GroupMemberTargetPayload:
+    return GROUP_MEMBER_TARGET_ADAPTER.validate_python(value)
+
+
 class CreateGroupPayload(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     group_type: GroupType
@@ -528,42 +563,38 @@ class DeleteGroupPayload(BaseModel):
 class CreateGroupMemberPayload(BaseModel):
     action: Literal["add"] = "add"
     group_ref: GroupReferencePayload
-    entry_ref: EntryReferencePayload | None = None
-    child_group_ref: GroupReferencePayload | None = None
+    target: GroupMemberTargetPayload
     member_role: GroupMemberRole | None = None
 
     @model_validator(mode="before")
     @classmethod
     def normalize_nested_object_args(cls, value: Any) -> Any:
-        return normalize_group_member_reference_payload(value)
-
-    @model_validator(mode="after")
-    def ensure_target_present(self) -> CreateGroupMemberPayload:
-        if (self.entry_ref is None) == (self.child_group_ref is None):
-            raise ValueError("exactly one of entry_ref or child_group_ref is required")
-        return self
+        return normalize_group_member_payload(value)
 
 
 class DeleteGroupMemberPayload(BaseModel):
     action: Literal["remove"] = "remove"
     group_ref: GroupReferencePayload
-    entry_ref: EntryReferencePayload | None = None
-    child_group_ref: GroupReferencePayload | None = None
+    target: GroupMemberTargetPayload
 
     @model_validator(mode="before")
     @classmethod
     def normalize_nested_object_args(cls, value: Any) -> Any:
-        return normalize_group_member_reference_payload(value)
+        return normalize_group_member_payload(value)
 
     @model_validator(mode="after")
     def ensure_existing_target_present(self) -> DeleteGroupMemberPayload:
-        if (self.entry_ref is None) == (self.child_group_ref is None):
-            raise ValueError("exactly one of entry_ref or child_group_ref is required")
         if self.group_ref.create_group_proposal_id is not None:
             raise ValueError("remove action only supports existing group_id references")
-        if self.entry_ref is not None and self.entry_ref.create_entry_proposal_id is not None:
+        if (
+            isinstance(self.target, EntryGroupMemberTargetPayload)
+            and self.target.entry_ref.create_entry_proposal_id is not None
+        ):
             raise ValueError("remove action only supports existing entry_id references")
-        if self.child_group_ref is not None and self.child_group_ref.create_group_proposal_id is not None:
+        if (
+            isinstance(self.target, ChildGroupMemberTargetPayload)
+            and self.target.group_ref.create_group_proposal_id is not None
+        ):
             raise ValueError("remove action only supports existing child group_id references")
         return self
 
@@ -672,8 +703,8 @@ PROPOSAL_MUTABLE_ROOTS: dict[AgentChangeType, set[str]] = {
     AgentChangeType.CREATE_GROUP: {"name", "group_type"},
     AgentChangeType.UPDATE_GROUP: {"group_id", "patch"},
     AgentChangeType.DELETE_GROUP: {"group_id"},
-    AgentChangeType.CREATE_GROUP_MEMBER: {"action", "group_ref", "entry_ref", "child_group_ref", "member_role"},
-    AgentChangeType.DELETE_GROUP_MEMBER: {"action", "group_ref", "entry_ref", "child_group_ref"},
+    AgentChangeType.CREATE_GROUP_MEMBER: {"action", "group_ref", "target", "member_role"},
+    AgentChangeType.DELETE_GROUP_MEMBER: {"action", "group_ref", "target"},
 }
 
 

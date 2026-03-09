@@ -10,6 +10,7 @@ from backend.enums_agent import AgentChangeType
 from backend.models_agent import AgentChangeItem
 from backend.models_finance import Entry, EntryGroup, EntryGroupMember, Tag
 from backend.services.agent.change_contracts import (
+    ChildGroupMemberTargetPayload,
     CreateAccountPayload,
     CreateGroupMemberPayload,
     CreateGroupPayload,
@@ -23,9 +24,9 @@ from backend.services.agent.change_contracts import (
     DeleteEntityPayload,
     DeleteTagPayload,
     ChangePayloadModel,
+    EntryGroupMemberTargetPayload,
     EntryReferencePayload,
     EntrySelectorPayload,
-    GroupReferencePayload,
     UpdateAccountPayload,
     UpdateGroupPayload,
     UpdateEntryPayload,
@@ -161,6 +162,17 @@ def _resolve_applied_entry_id(db: Session, reference: EntryReferencePayload) -> 
     if item.applied_resource_type != "entry" or item.applied_resource_id is None:
         raise ValueError("Referenced entry proposal has not been applied yet")
     return item.applied_resource_id
+
+
+def _resolve_applied_group_member_target_ids(
+    db: Session,
+    *,
+    target: EntryGroupMemberTargetPayload | ChildGroupMemberTargetPayload,
+    current_user_id: str,
+) -> tuple[str | None, str | None]:
+    if isinstance(target, EntryGroupMemberTargetPayload):
+        return _resolve_applied_entry_id(db, target.entry_ref), None
+    return None, _resolve_applied_group_id(db, target.group_ref, current_user_id=current_user_id)
 
 
 def _find_scoped_group_by_id(db: Session, *, group_id: str, current_user_id: str) -> EntryGroup:
@@ -440,11 +452,16 @@ def apply_create_group_member(db: Session, payload: CreateGroupMemberPayload) ->
 
     entry = None
     child_group = None
-    if payload.entry_ref is not None:
-        entry_id = _resolve_applied_entry_id(db, payload.entry_ref)
+    target_entry_id, target_child_group_id = _resolve_applied_group_member_target_ids(
+        db,
+        target=payload.target,
+        current_user_id=current_user.id,
+    )
+    if target_entry_id is not None:
+        entry_id = target_entry_id
         entry = _find_unique_entry_by_id(db, entry_id)
-    if payload.child_group_ref is not None:
-        child_group_id = _resolve_applied_group_id(db, payload.child_group_ref, current_user_id=current_user.id)
+    if target_child_group_id is not None:
+        child_group_id = target_child_group_id
         child_group = _find_scoped_group_by_id(db, group_id=child_group_id, current_user_id=current_user.id)
 
     membership = add_group_member(
@@ -467,11 +484,10 @@ def apply_delete_group_member(db: Session, payload: DeleteGroupMemberPayload) ->
         current_user_id=current_user.id,
     )
 
-    target_entry_id = _resolve_applied_entry_id(db, payload.entry_ref) if payload.entry_ref is not None else None
-    target_child_group_id = (
-        _resolve_applied_group_id(db, payload.child_group_ref, current_user_id=current_user.id)
-        if payload.child_group_ref is not None
-        else None
+    target_entry_id, target_child_group_id = _resolve_applied_group_member_target_ids(
+        db,
+        target=payload.target,
+        current_user_id=current_user.id,
     )
     membership = next(
         (

@@ -1202,7 +1202,7 @@ def test_group_tool_descriptions_define_group_lookup_and_membership_dependencies
     assert "group_id alias" in list_description
     assert "detail mode" in list_description
     assert "pending create_group proposal" in membership_description
-    assert "pending create_entry proposal" in membership_description
+    assert "target.entry_ref may reference an existing entry_id" in membership_description
     assert "member_role is required for SPLIT-group adds" in membership_description
 
 
@@ -4922,7 +4922,10 @@ def test_group_membership_approval_blocks_pending_and_rejected_dependencies(clie
                             {
                                 "action": "add",
                                 "group_ref": {"create_group_proposal_id": group_item["id"]},
-                                "entry_ref": {"create_entry_proposal_id": entry_item["id"]},
+                                "target": {
+                                    "target_type": "entry",
+                                    "entry_ref": {"create_entry_proposal_id": entry_item["id"]},
+                                },
                             }
                         ),
                     },
@@ -5032,7 +5035,10 @@ def test_group_membership_apply_resolves_pending_group_and_entry_references(clie
                             {
                                 "action": "add",
                                 "group_ref": {"create_group_proposal_id": group_item["id"]},
-                                "entry_ref": {"create_entry_proposal_id": entry_item["id"]},
+                                "target": {
+                                    "target_type": "entry",
+                                    "entry_ref": {"create_entry_proposal_id": entry_item["id"]},
+                                },
                             }
                         ),
                     },
@@ -5140,7 +5146,10 @@ def test_group_membership_canonicalizes_short_pending_proposal_refs(client, monk
                             {
                                 "action": "add",
                                 "group_ref": {"create_group_proposal_id": group_item["id"][:8]},
-                                "entry_ref": {"create_entry_proposal_id": entry_item["id"][:8]},
+                                "target": {
+                                    "target_type": "entry",
+                                    "entry_ref": {"create_entry_proposal_id": entry_item["id"][:8]},
+                                },
                             }
                         ),
                     },
@@ -5152,7 +5161,7 @@ def test_group_membership_canonicalizes_short_pending_proposal_refs(client, monk
     membership_run = send_message(client, thread["id"], "Attach the pending entry to the pending group")
     membership_item = membership_run["change_items"][0]
     assert membership_item["payload_json"]["group_ref"]["create_group_proposal_id"] == group_item["id"]
-    assert membership_item["payload_json"]["entry_ref"]["create_entry_proposal_id"] == entry_item["id"]
+    assert membership_item["payload_json"]["target"]["entry_ref"]["create_entry_proposal_id"] == entry_item["id"]
 
     pending_approve = client.post(f"/api/v1/agent/change-items/{membership_item['id']}/approve", json={})
     assert pending_approve.status_code == 422
@@ -5190,7 +5199,10 @@ def test_group_membership_apply_resolves_existing_short_ids(client, monkeypatch)
                             {
                                 "action": "add",
                                 "group_ref": {"group_id": group["id"][:8]},
-                                "entry_ref": {"entry_id": entry["id"][:8]},
+                                "target": {
+                                    "target_type": "entry",
+                                    "entry_ref": {"entry_id": entry["id"][:8]},
+                                },
                             }
                         ),
                     },
@@ -5242,7 +5254,10 @@ def test_group_membership_remove_apply_resolves_existing_short_ids(client, monke
                             {
                                 "action": "remove",
                                 "group_ref": {"group_id": group["id"][:8]},
-                                "entry_ref": {"entry_id": entry["id"][:8]},
+                                "target": {
+                                    "target_type": "entry",
+                                    "entry_ref": {"entry_id": entry["id"][:8]},
+                                },
                             }
                         ),
                     },
@@ -5289,7 +5304,10 @@ def test_group_membership_duplicate_detection_uses_canonical_existing_refs(clien
                             {
                                 "action": "add",
                                 "group_ref": {"group_id": group["id"][:8]},
-                                "entry_ref": {"entry_id": entry["id"][:8]},
+                                "target": {
+                                    "target_type": "entry",
+                                    "entry_ref": {"entry_id": entry["id"][:8]},
+                                },
                             }
                         ),
                     },
@@ -5301,7 +5319,7 @@ def test_group_membership_duplicate_detection_uses_canonical_existing_refs(clien
     first_run = send_message(client, thread["id"], "Attach the entry to the recurring group")
     first_item = first_run["change_items"][0]
     assert first_item["payload_json"]["group_ref"]["group_id"] == group["id"]
-    assert first_item["payload_json"]["entry_ref"]["entry_id"] == entry["id"]
+    assert first_item["payload_json"]["target"]["entry_ref"]["entry_id"] == entry["id"]
 
     def propose_full_membership_model(messages):
         if messages[-1]["role"] == "tool":
@@ -5319,7 +5337,10 @@ def test_group_membership_duplicate_detection_uses_canonical_existing_refs(clien
                             {
                                 "action": "add",
                                 "group_ref": {"group_id": group["id"]},
-                                "entry_ref": {"entry_id": entry["id"]},
+                                "target": {
+                                    "target_type": "entry",
+                                    "entry_ref": {"entry_id": entry["id"]},
+                                },
                             }
                         ),
                     },
@@ -5358,7 +5379,10 @@ def test_update_pending_group_membership_rejects_conflicting_alias_variant(clien
                             {
                                 "action": "add",
                                 "group_ref": {"group_id": group["id"][:8]},
-                                "entry_ref": {"entry_id": first_entry["id"][:8]},
+                                "target": {
+                                    "target_type": "entry",
+                                    "entry_ref": {"entry_id": first_entry["id"][:8]},
+                                },
                             }
                         ),
                     },
@@ -5386,7 +5410,10 @@ def test_update_pending_group_membership_rejects_conflicting_alias_variant(clien
                             {
                                 "action": "add",
                                 "group_ref": {"group_id": group["id"]},
-                                "entry_ref": {"entry_id": second_entry["id"]},
+                                "target": {
+                                    "target_type": "entry",
+                                    "entry_ref": {"entry_id": second_entry["id"]},
+                                },
                             }
                         ),
                     },
@@ -5414,7 +5441,7 @@ def test_update_pending_group_membership_rejects_conflicting_alias_variant(clien
                             {
                                 "proposal_id": second_item["id"][:8],
                                 "patch_map": {
-                                    "entry_ref.entry_id": first_entry["id"][:8],
+                                    "target.entry_ref.entry_id": first_entry["id"][:8],
                                 },
                             }
                         ),

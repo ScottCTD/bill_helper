@@ -8,9 +8,9 @@ from backend.enums_finance import GroupMemberRole
 from backend.services.agent.change_contracts import (
     CreateGroupMemberPayload,
     DeleteGroupMemberPayload,
-    EntryReferencePayload,
+    GroupMemberTargetPayload,
     GroupReferencePayload,
-    normalize_group_member_reference_payload,
+    normalize_group_member_payload,
 )
 from backend.services.agent.payload_normalization import normalize_required_text
 
@@ -50,14 +50,13 @@ class RemovePendingProposalArgs(BaseModel):
 class ProposeUpdateGroupMembershipArgs(BaseModel):
     action: Literal["add", "remove"]
     group_ref: GroupReferencePayload
-    entry_ref: EntryReferencePayload | None = None
-    child_group_ref: GroupReferencePayload | None = None
+    target: GroupMemberTargetPayload
     member_role: GroupMemberRole | None = None
 
     @model_validator(mode="before")
     @classmethod
     def normalize_nested_object_args(cls, value: object) -> object:
-        return normalize_group_member_reference_payload(value)
+        return normalize_group_member_payload(value)
 
     @model_validator(mode="after")
     def validate_targets(self) -> ProposeUpdateGroupMembershipArgs:
