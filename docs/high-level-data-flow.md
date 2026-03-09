@@ -176,7 +176,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 - Operational commands:
   - `uv run alembic upgrade head`
   - `uv run bill-helper-api`
-  - `uv run --extra dev pytest`
+  - `uv run pytest`
   - `uv run python scripts/check_docs_sync.py`
 - Relevant environment variables:
   - `BILL_HELPER_DATABASE_URL`

@@ -59,8 +59,8 @@ Affected modules today:
 
 ## Verification Expectations For The Future Refactor
 
-- `uv run --extra dev python -m py_compile ...` on touched Python modules
-- `OPENROUTER_API_KEY=test uv run --extra dev pytest backend/tests telegram/tests -q`
+- `uv run python -m py_compile ...` on touched Python modules
+- `OPENROUTER_API_KEY=test uv run pytest backend/tests telegram/tests -q`
 - `uv run python scripts/check_docs_sync.py`
 
 ## Exit Criteria

@@ -10,10 +10,12 @@
 
 ```bash
 cd /path/to/bill_helper
-uv sync --extra dev
+uv sync
 cd /path/to/bill_helper/frontend
 npm install
 ```
+
+This repository keeps local-only Python tooling in uv's default `dev` dependency group, so everyday setup and `uv run ...` commands do not need a `dev` extra flag.
 
 ## Version Control Hygiene
 
@@ -79,7 +81,7 @@ BILL_HELPER_DATA_DIR=./.data
 ```bash
 git worktree add ../bill_helper-feature feature-branch
 cd ../bill_helper-feature
-uv sync --extra dev
+uv sync
 # Shared secrets from ~/.config/bill-helper/.env are already available.
 # Optionally create a local .env for worktree-specific overrides.
 ```
@@ -294,32 +296,34 @@ The webhook app listens on port `8081`, serves `GET /healthz`, validates `X-Tele
 
 ## Verification Commands
 
+`uv run` includes the default `dev` dependency group in this repository, so test and tooling commands below do not need `--extra dev`.
+
 Backend tests:
 
 ```bash
 cd /path/to/bill_helper
-uv run --extra dev pytest
+uv run pytest
 ```
 
 Telegram transport compile check:
 
 ```bash
 cd /path/to/bill_helper
-uv run --extra dev python -m py_compile telegram/__init__.py telegram/bill_helper_api.py telegram/commands.py telegram/config.py telegram/files.py telegram/formatting.py telegram/message_handler.py telegram/polling.py telegram/ptb.py telegram/state.py telegram/webhook.py
+uv run python -m py_compile telegram/__init__.py telegram/bill_helper_api.py telegram/commands.py telegram/config.py telegram/files.py telegram/formatting.py telegram/message_handler.py telegram/polling.py telegram/ptb.py telegram/state.py telegram/webhook.py
 ```
 
 Backend + Telegram transport tests:
 
 ```bash
 cd /path/to/bill_helper
-OPENROUTER_API_KEY=test uv run --extra dev pytest backend/tests telegram/tests -q
+OPENROUTER_API_KEY=test uv run pytest backend/tests telegram/tests -q
 ```
 
 Backend performance guard tests:
 
 ```bash
 cd /path/to/bill_helper
-uv run --extra dev pytest backend/tests/test_agent_performance.py
+uv run pytest backend/tests/test_agent_performance.py
 ```
 
 Frontend build:
@@ -461,20 +465,20 @@ Skill file:
 Current behavior:
 
 - For explicit desloppify cleanup requests, agents should load and apply `desloppify-maintenance`.
-- The skill makes `uv run desloppify ...` the default entrypoint, keeps the tool queue as the source of truth, and requires recording durable fix batches in dated fix-log docs under `docs/exec-plans/completed/`.
+- The skill makes `uv run desloppify ...` the default entrypoint, keeps the tool queue as the source of truth, and requires recording durable fix batches in dated fix-log docs under `docs/completed_tasks/`.
 - It is not the default for ordinary feature work that does not use the desloppify workflow.
 
 Operational impact:
 
 - Before scanning, review generated/runtime/vendor/build directories and exclude only obvious non-source paths directly; questionable exclude candidates must be surfaced to the user first.
 - Typical commands are `uv run desloppify scan --path .`, `uv run desloppify next`, the printed `uv run desloppify resolve ...` command for each completed item, and periodic `uv run desloppify plan` / `scan` refreshes when the queue shifts.
-- Behavior, schema, or tooling fixes that come out of the queue must still pass the repository verification gates, including `OPENROUTER_API_KEY=test uv run --extra dev pytest backend/tests -q` and `uv run python scripts/check_docs_sync.py`.
+- Behavior, schema, or tooling fixes that come out of the queue must still pass the repository verification gates, including `OPENROUTER_API_KEY=test uv run pytest backend/tests -q` and `uv run python scripts/check_docs_sync.py`.
 
 Affected files/modules:
 
 - `/path/to/bill_helper/AGENTS.md`
 - `/path/to/bill_helper/skills/desloppify-maintenance/SKILL.md`
-- `/path/to/bill_helper/docs/exec-plans/completed/2026-03-05_clean_architecture_fix_log.md`
+- `/path/to/bill_helper/docs/completed_tasks/2026-03-05_clean_architecture_fix_log.md`
 
 Constraints:
 
@@ -540,13 +544,13 @@ Use the layered doc system:
 - `AGENTS.md` for short agent instructions and doc pointers.
 - `docs/*.md` for stable index docs and cross-cutting reference docs.
 - `docs/backend/*.md`, `docs/frontend/*.md`, and `docs/api/*.md` for focused subsystem reference docs.
-- `docs/exec-plans/active/*.md` for active implementation plans and temporary caveats.
-- `docs/exec-plans/completed/*.md` for archived plans and retrospectives.
+- `tasks/*.md` for active implementation plans and temporary caveats.
+- `docs/completed_tasks/*.md` for archived plans and retrospectives.
 
-Any behavior, schema, API, tooling, or UI change must update the relevant stable docs in the canonical docs tree. Use execution plans for work tracking, not as the final source of truth.
+Any behavior, schema, API, tooling, or UI change must update the relevant stable docs in the canonical docs tree. Use task docs for work tracking, not as the final source of truth.
 
 Recommended before merging:
 
-1. `uv run --extra dev pytest`
+1. `uv run pytest`
 2. `npm run build` (from `frontend/`)
 3. `uv run python scripts/check_docs_sync.py`

@@ -1,6 +1,6 @@
 # Entry Groups v2
 
-Status: implemented and verified locally on 2026-03-07. This plan remains in `active/` pending user confirmation on whether to archive it under `completed/`.
+Status: implemented and verified locally on 2026-03-07. This task doc is archived under `docs/completed_tasks/`.
 
 ## Implemented Scope
 
@@ -79,4 +79,4 @@ Entry detail no longer exposes:
 
 ## Follow-Up Decision
 
-- If the user wants, move this file to `docs/exec-plans/completed/` now that the implementation is in place and verified.
+- Archived at `docs/completed_tasks/2026-03-07_entry_groups.md` after implementation and verification.

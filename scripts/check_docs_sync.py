@@ -5,9 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS_DIR = ROOT / "docs"
-EXEC_PLANS_DIR = DOCS_DIR / "exec-plans"
-ACTIVE_EXEC_PLANS_DIR = EXEC_PLANS_DIR / "active"
-COMPLETED_EXEC_PLANS_DIR = EXEC_PLANS_DIR / "completed"
+TASKS_DIR = ROOT / "tasks"
+COMPLETED_TASKS_DIR = DOCS_DIR / "completed_tasks"
 
 
 def read_text(path: Path) -> str:
@@ -33,15 +32,15 @@ def assert_exists(paths: list[Path], errors: list[str]) -> None:
             errors.append(f"Missing required documentation file: {path.relative_to(ROOT)}")
 
 
-def assert_exec_plan_layout(errors: list[str]) -> None:
+def assert_task_layout(errors: list[str]) -> None:
     required_dirs = [
-        EXEC_PLANS_DIR,
-        ACTIVE_EXEC_PLANS_DIR,
-        COMPLETED_EXEC_PLANS_DIR,
+        TASKS_DIR,
+        COMPLETED_TASKS_DIR,
     ]
     assert_exists(required_dirs, errors)
 
     legacy_dirs = [
+        DOCS_DIR / "exec-plans",
         DOCS_DIR / "todo",
         DOCS_DIR / "completed",
     ]
@@ -85,7 +84,7 @@ def assert_no_stale_terms(errors: list[str]) -> None:
     scan_paths.extend(
         path
         for path in DOCS_DIR.rglob("*.md")
-        if "exec-plans" not in path.parts and "adr" not in path.parts
+        if "completed_tasks" not in path.parts and "adr" not in path.parts
     )
     for path in scan_paths:
         contents = read_text(path)
@@ -98,8 +97,10 @@ def assert_no_stale_terms(errors: list[str]) -> None:
 
 def assert_no_legacy_plan_refs(errors: list[str]) -> None:
     legacy_terms = [
-        "docs/todo",
-        "docs/completed",
+        "docs/exec-plans/",
+        "docs/todo/",
+        "docs/completed/",
+        "`exec-plans/`",
         "`todo/`",
         "`completed/`",
     ]
@@ -112,8 +113,9 @@ def assert_no_legacy_plan_refs(errors: list[str]) -> None:
     scan_paths.extend(
         path
         for path in DOCS_DIR.rglob("*.md")
-        if "exec-plans" not in path.parts
+        if "completed_tasks" not in path.parts
     )
+    scan_paths.extend(TASKS_DIR.glob("*.md"))
     for path in scan_paths:
         contents = read_text(path)
         for term in legacy_terms:
@@ -127,11 +129,12 @@ def assert_docs_index_links(errors: list[str]) -> None:
     index_path = DOCS_DIR / "README.md"
     index_contents = read_text(index_path)
     required_mentions = [
+        "../tasks/",
         "documentation-system.md",
         "backend/README.md",
         "frontend/README.md",
         "api/README.md",
-        "exec-plans/README.md",
+        "completed_tasks/README.md",
         "feature-entry-lifecycle.md",
         "feature-dashboard-analytics.md",
         "adr/README.md",
@@ -183,13 +186,13 @@ def main() -> int:
         DOCS_DIR / "backend" / "README.md",
         DOCS_DIR / "frontend" / "README.md",
         DOCS_DIR / "api" / "README.md",
-        DOCS_DIR / "exec-plans" / "README.md",
+        DOCS_DIR / "completed_tasks" / "README.md",
         DOCS_DIR / "feature-entry-lifecycle.md",
         DOCS_DIR / "feature-dashboard-analytics.md",
         DOCS_DIR / "adr" / "README.md",
     ]
     assert_exists(required_paths, errors)
-    assert_exec_plan_layout(errors)
+    assert_task_layout(errors)
 
     latest_migration = get_latest_migration_filename()
     assert_latest_migration_referenced(latest_migration, errors)

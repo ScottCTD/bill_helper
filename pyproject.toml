@@ -7,7 +7,6 @@ requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.14.1",
     "boto3>=1.42.63",
-    "desloppify[full]>=0.9.1",
     "fastapi>=0.115.8",
     "httpx>=0.28.1",
     "ipywidgets>=8.1.8",
@@ -24,11 +23,6 @@ dependencies = [
     "uvicorn[standard]>=0.34.0",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.3.4",
-]
-
 [project.scripts]
 bill-helper-api = "backend.main:main"
 
@@ -39,8 +33,17 @@ build-backend = "hatchling.build"
 [tool.uv]
 package = true
 
+[tool.uv.sources]
+desloppify = { path = "../desloppify", editable = true }
+
 [tool.hatch.build.targets.wheel]
 packages = ["backend", "telegram"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
+
+[dependency-groups]
+dev = [
+    "desloppify[full]",
+    "pytest>=8.3.4",
+]

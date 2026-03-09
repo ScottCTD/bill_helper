@@ -211,11 +211,12 @@
   - `backend.md`, `frontend.md`, `api.md`: subsystem index docs.
   - `/backend`, `/frontend`, `/api`: focused subsystem topic docs.
   - `documentation-system.md`: source-of-truth matrix + anti-drift workflow.
-  - `/exec-plans`: active and completed implementation plans.
+  - `/completed_tasks`: archived task docs, retrospectives, and fix logs.
   - `feature-entry-lifecycle.md`: entry-domain flow map.
   - `feature-dashboard-analytics.md`: dashboard flow map.
   - `feature-account-reconciliation.md`: account workspace + snapshot/reconciliation flow map.
   - `/adr`: architecture decision records.
+- `/tasks`: active implementation plans, temporary caveats, and migration checklists.
 - `/skills/notion-grade-ui/SKILL.md`: project-local frontend UI quality skill for calm, tokenized, primitives-first design implementation.
 - `/skills/desloppify-maintenance/SKILL.md`: project-local desloppify workflow skill for exclude review, queue-driven fix loops, and standards-log updates during cleanup campaigns.
 - `/scripts/seed_defaults.py`: reset local DB and seed default tags, entity categories, and accounts; optional user-memory copy now has explicit error policy (`best_effort` default, optional `fail_fast`) and shared DB factory usage.

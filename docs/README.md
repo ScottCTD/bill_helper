@@ -9,7 +9,7 @@ Use the docs in layers:
 3. `docs/repository-structure.md` for the filesystem map.
 4. `docs/backend.md`, `docs/frontend.md`, `docs/api.md`, and `docs/data-model.md` for subsystem entry points.
 5. `docs/backend/`, `docs/frontend/`, and `docs/api/` for focused subsystem docs.
-6. `docs/exec-plans/` for active implementation plans and archived retrospectives.
+6. `../tasks/` for active implementation tracking and `completed_tasks/` for archived task history.
 
 ## Stable Reference Docs
 
@@ -30,16 +30,16 @@ Use the docs in layers:
 - `agent-billing-assistant.md`: billing assistant prompt/tool design notes.
 - `adr/README.md`: ADR index and process.
 
-## Execution Plans
+## Task Tracking And Archive
 
-- `exec-plans/README.md`: how to use active and completed plan docs.
-- `exec-plans/active/*.md`: active proposals, migration notes, and temporary caveats.
-- `exec-plans/active/2026-03-09_agent_surface_followup.md`: deferred cleanup plan for agent surface policy and ownership boundaries.
-- `exec-plans/completed/*.md`: archived implementation plans and retrospectives.
-- `exec-plans/completed/2026-03-05_clean_architecture_fix_log.md`: archived desloppify and refactor fix log.
-- `exec-plans/completed/2026-03-07_agent_thread_rename_ui_fix_log.md`: archived debug log for the agent thread inline-rename UI polish fixes.
+- `../tasks/*.md`: active proposals, migration notes, and temporary caveats.
+- `../tasks/2026-03-09_agent_surface_followup.md`: deferred cleanup task for agent surface policy and ownership boundaries.
+- `completed_tasks/README.md`: archive conventions for completed task docs.
+- `completed_tasks/*.md`: archived implementation tasks, retrospectives, and fix logs.
+- `completed_tasks/2026-03-05_clean_architecture_fix_log.md`: archived desloppify and refactor fix log.
+- `completed_tasks/2026-03-07_agent_thread_rename_ui_fix_log.md`: archived debug log for the agent thread inline-rename UI polish fixes.
 
-Execution plans are not source-of-truth for current behavior. Promote stable conclusions back into the canonical docs above.
+Active tasks and completed task archives are not source-of-truth for current behavior. Promote stable conclusions back into the canonical docs above.
 
 ## Local Pointer Docs
 
@@ -51,4 +51,4 @@ These package-local READMEs stay close to the code and should point back to cano
 
 ## Naming Rule
 
-Execution-plan files must use a date prefix: `YYYY-MM-DD_slug.md`.
+Task files must use a date prefix: `YYYY-MM-DD_slug.md`.

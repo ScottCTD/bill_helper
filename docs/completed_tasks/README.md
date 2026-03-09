@@ -1,0 +1,20 @@
+# Completed Tasks Archive
+
+This directory stores archived task docs after active work in `/tasks/*.md` is finished.
+
+## Layout
+
+- `../tasks/*.md`: active implementation tasks, migration notes, and temporary caveats.
+- `*.md`: completed tasks, retrospectives, and archived fix logs kept for historical context.
+
+## Rules
+
+- Name files `YYYY-MM-DD_slug.md`.
+- Keep each task doc focused on one change or refactor.
+- When work lands, update the canonical docs in the stable `docs/` tree.
+- Do not leave stable behavior documented only in a task doc or archive entry.
+
+## Recent Archived Tasks
+
+- `2026-03-08_telegram_bot_todo.md`: archived Telegram integration implementation task.
+- `2026-03-05_clean_architecture_fix_log.md`: archived desloppify and architecture fix log.

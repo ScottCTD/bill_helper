@@ -53,9 +53,11 @@ The goal is an all-in-one place to view and analyze personal finances — a cent
 ```bash
 git clone https://github.com/ScottCTD/bill_helper.git
 cd bill_helper
-uv sync --extra dev
+uv sync
 cd frontend && npm install && cd ..
 ```
+
+The repository uses uv's default `dev` dependency group for local-only tooling, so plain `uv sync` is enough for the normal development environment.
 
 ### 2. Configure environment
 
@@ -187,10 +189,12 @@ Extended docs live in [`docs/`](docs/):
 - [Data Model](docs/data-model.md)
 - [Development Guide](docs/development.md)
 - [Documentation System](docs/documentation-system.md)
-- [Execution Plans](docs/exec-plans/README.md)
+- [Completed Tasks Archive](docs/completed_tasks/README.md)
 - [Agent Billing Assistant](docs/agent-billing-assistant.md)
 
 Package-local `backend/README.md` and `frontend/README.md` are intentionally thin navigation docs that point back to these canonical references.
+
+Active implementation task docs live at the repository root under `tasks/`.
 
 ## License
 

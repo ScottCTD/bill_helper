@@ -2,7 +2,7 @@
 
 This file archives the durable fix batches that were previously tracked alongside the clean-architecture rules. The live standards now live in `AGENTS.md`.
 
-When recording future desloppify or architecture-fix work, create a new dated fix-log doc under `docs/exec-plans/completed/` instead of appending policy text here.
+When recording future desloppify or architecture-fix work, create a new dated fix-log doc under `docs/completed_tasks/` instead of appending policy text here.
 
 ## Archived Fix Log
 

@@ -37,12 +37,12 @@ These rules apply to any coding agent working in this repository.
 - Keep monkeypatch points on public or otherwise stable callsites.
 - For architectural refactors, run targeted tests plus the full backend suite.
 - Use this refactor playbook: capture the finding and root cause, move ownership to the correct layer, keep compatibility seams only when they are still needed, update docs in the same work item, and rerun the verification gates.
-- For explicit desloppify campaigns, record durable fix batches in a dated fix-log doc under `docs/exec-plans/completed/`.
+- For explicit desloppify campaigns, record durable fix batches in a dated fix-log doc under `docs/completed_tasks/`.
 
 ### Architecture Verification Gates
 
-- `uv run --extra dev python -m py_compile ...` on touched Python modules
-- `OPENROUTER_API_KEY=test uv run --extra dev pytest backend/tests -q`
+- `uv run python -m py_compile ...` on touched Python modules
+- `OPENROUTER_API_KEY=test uv run pytest backend/tests -q`
 - `uv run python scripts/check_docs_sync.py`
 
 ## Documentation
@@ -53,8 +53,8 @@ These rules apply to any coding agent working in this repository.
 - `docs/README.md`: canonical index into the human-facing docs tree.
 - `docs/*.md`: stable index docs and cross-cutting reference docs.
 - `docs/backend/*.md`, `docs/frontend/*.md`, and `docs/api/*.md`: focused subsystem source-of-truth docs.
-- `docs/exec-plans/active/*.md`: active implementation plans, temporary caveats, and migration checklists.
-- `docs/exec-plans/completed/*.md`: completed plans and retrospectives kept for history.
+- `tasks/*.md`: active implementation plans, temporary caveats, and migration checklists.
+- `docs/completed_tasks/*.md`: completed plans and retrospectives kept for history.
 - `backend/README.md` and `frontend/README.md`: thin local pointer docs, not subsystem source-of-truth.
 - Add nested `AGENTS.md` files only when a subtree has genuinely different editing rules. Do not use nested agent files as architecture docs.
 
@@ -73,7 +73,7 @@ These rules apply to any coding agent working in this repository.
 - Document current behavior, not planned behavior.
 - Include affected files or modules, operational impact, and constraints where relevant.
 - Stable docs explain how the system works now.
-- Temporary implementation notes belong in `docs/exec-plans/`, not in stable reference pages.
+- Temporary implementation notes belong in `tasks/`, not in stable reference pages.
 
 ### Required Verification
 
@@ -85,9 +85,9 @@ uv run python scripts/check_docs_sync.py
 
 If it fails, fix the docs before finishing.
 
-### Feature Requests from Active Exec Plans
+### Feature Requests from Active Tasks
 
-When the user requests a feature from `docs/exec-plans/active`, ask whether to move that plan to `docs/exec-plans/completed` after implementation.
+When the user requests a feature from `tasks/*.md`, ask whether to move that task doc to `docs/completed_tasks/` after implementation.
 
 ## Before Committing
 

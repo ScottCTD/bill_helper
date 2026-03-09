@@ -29,6 +29,6 @@ This file is intentionally thin. Canonical backend documentation lives in `../do
 ## Verify
 
 ```bash
-uv run --extra dev pytest
+uv run pytest
 uv run python scripts/check_docs_sync.py
 ```
