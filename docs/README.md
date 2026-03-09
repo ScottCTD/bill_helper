@@ -34,6 +34,7 @@ Use the docs in layers:
 
 - `exec-plans/README.md`: how to use active and completed plan docs.
 - `exec-plans/active/*.md`: active proposals, migration notes, and temporary caveats.
+- `exec-plans/active/2026-03-09_agent_surface_followup.md`: deferred cleanup plan for agent surface policy and ownership boundaries.
 - `exec-plans/completed/*.md`: archived implementation plans and retrospectives.
 - `exec-plans/completed/2026-03-05_clean_architecture_fix_log.md`: archived desloppify and refactor fix log.
 - `exec-plans/completed/2026-03-07_agent_thread_rename_ui_fix_log.md`: archived debug log for the agent thread inline-rename UI polish fixes.
