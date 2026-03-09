@@ -178,9 +178,18 @@ class BillHelperApiClient:
     def _read_json_response(self, response: httpx.Response, *, expected_status: int) -> Any:
         if response.status_code != expected_status:
             raise BillHelperApiError(status_code=response.status_code, message=self._extract_error_message(response))
-        if not response.content:
-            return None
-        return response.json()
+        if not response.content or not response.content.strip():
+            raise BillHelperApiError(
+                status_code=response.status_code,
+                message="Bill Helper API returned an empty JSON response.",
+            )
+        try:
+            return response.json()
+        except json.JSONDecodeError as exc:
+            raise BillHelperApiError(
+                status_code=response.status_code,
+                message="Bill Helper API returned invalid JSON.",
+            ) from exc
 
     def _extract_error_message(self, response: httpx.Response) -> str:
         if response.content:
