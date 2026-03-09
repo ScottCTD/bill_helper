@@ -13,7 +13,7 @@ from telegram.config import TelegramSettings, get_settings
 from telegram.ptb import Application, Update as PtbUpdate
 
 LOGGER = logging.getLogger(__name__)
-TELEGRAM_SECRET_HEADER = "X-Telegram-Bot-Api-Secret-Token"
+TELEGRAM_WEBHOOK_HEADER_NAME = "X-Telegram-Bot-Api-Secret-Token"
 WEBHOOK_PATH = "/telegram/webhook"
 
 type UpdateLoader = Callable[[Mapping[str, object], object], PtbUpdate]
@@ -59,7 +59,7 @@ def create_app(
     @app.post(WEBHOOK_PATH)
     async def receive_update(
         update_payload: dict[str, object],
-        secret_token: str | None = Header(default=None, alias=TELEGRAM_SECRET_HEADER),
+        secret_token: str | None = Header(default=None, alias=TELEGRAM_WEBHOOK_HEADER_NAME),
     ) -> dict[str, bool]:
         if not _validate_webhook_secret(resolved_settings.webhook_secret, secret_token):
             raise HTTPException(

@@ -41,7 +41,7 @@ ENV_VALIDATION_EXCEPTIONS = (
     TypeError,
     ValueError,
 )
-_BEDROCK_BEARER_TOKEN_ENV = "AWS_BEARER_TOKEN_BEDROCK"
+_BEDROCK_AUTH_ENV_NAME = "AWS_BEARER_TOKEN_BEDROCK"
 
 
 def _normalize_secret(value: Any) -> str | None:
@@ -363,10 +363,10 @@ def validate_litellm_environment(*, model_name: str) -> tuple[bool, list[str], s
     else:
         missing_keys = []
     if provider_name == "bedrock":
-        if _normalize_secret(os.environ.get(_BEDROCK_BEARER_TOKEN_ENV)) is not None:
+        if _normalize_secret(os.environ.get(_BEDROCK_AUTH_ENV_NAME)) is not None:
             return True, [], normalized_model
-        if _BEDROCK_BEARER_TOKEN_ENV not in missing_keys:
-            missing_keys.append(_BEDROCK_BEARER_TOKEN_ENV)
+        if _BEDROCK_AUTH_ENV_NAME not in missing_keys:
+            missing_keys.append(_BEDROCK_AUTH_ENV_NAME)
     return bool(keys_in_environment), missing_keys, normalized_model
 
 
