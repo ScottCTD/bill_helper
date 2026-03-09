@@ -80,6 +80,8 @@ Important read models:
 - `backend/services/taxonomy.py`
 - `backend/services/runtime_settings.py`
   - resolves effective runtime settings from DB overrides plus env defaults
+- `backend/contracts_settings.py`
+  - shared runtime settings write/update contract used by both schemas and service patch models
 - `backend/services/agent/proposals/`
   - proposal-family support split into shared helpers plus catalog, entries, groups, group-membership, normalization, and pending-admin modules
 - `backend/validation/runtime_settings.py`

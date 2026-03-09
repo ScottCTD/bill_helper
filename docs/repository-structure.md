@@ -61,6 +61,7 @@
 - `models_finance.py`: ledger/account/entity/tag/taxonomy/entry ORM models.
 - `models_agent.py`: agent thread/run/tool-call/change/review ORM models.
 - `models_settings.py`: runtime settings ORM model and table mapping.
+- `contracts_settings.py`: shared runtime-settings write contract used by both schema and service layers.
 - `models_shared.py`: shared model defaults (`utc_now`, `uuid_str`) used by both model domains.
 - `schemas_finance.py`: ledger/dashboard request/response schemas.
 - `schemas_agent.py`: agent thread/message/run/review request/response schemas.

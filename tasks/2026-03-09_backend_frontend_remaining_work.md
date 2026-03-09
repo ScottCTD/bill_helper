@@ -57,14 +57,12 @@ Recommended direction:
 
 The next backend cleanup after the agent contract split should reduce duplicated contract shapes and schema/service drift:
 
-- `review::.::holistic::ai_generated_debt::duplicate_runtime_settings_update_models::1af2d886`
 - `review::.::holistic::cross_module_architecture::service_schema_entanglement::...` follow-up items now showing as read-side/API-shape drift in the new review set
 - `review::.::holistic::api_surface_coherence::group_membership_target_overload::10d4e80e`
 - `review::.::holistic::api_surface_coherence::sibling_resource_services_mix_command_model_apis_with_primitive_heavy_mutation_signatures::9119f48e`
 
 Recommended direction:
 
-- use one field registry or shared spec for runtime settings write/read shapes
 - continue moving services onto service-local command/result types
 - reduce group membership “entry vs child group” exclusivity into clearer target contracts
 - standardize mutation APIs so sibling services are not half command-model, half primitive-heavy
