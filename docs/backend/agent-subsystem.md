@@ -26,8 +26,10 @@
   - read tools and `send_intermediate_update`, using lookup-only principal scope instead of provisioning users as a read side effect
 - `backend/services/agent/tool_handlers_threads.py`
   - `rename_thread` handler for short thread-topic updates
+- `backend/services/agent/proposals/`
+  - proposal-family package: `common.py` for shared proposal/thread helpers, `catalog.py` for tag/entity/account proposals, and `entries.py` for entry proposal normalization plus handlers
 - `backend/services/agent/tool_handlers_propose.py`
-  - proposal CRUD tools and pending-proposal edit or remove tools
+  - thin proposal coordinator for group/group-membership flows plus pending-proposal edit or remove tools
 - `backend/services/agent/entry_references.py`
   - shared entry lookup helpers for `entry_id` aliases, selector fallback, and public entry snapshots
 - `backend/services/agent/group_references.py`

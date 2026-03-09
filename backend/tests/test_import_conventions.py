@@ -63,6 +63,7 @@ def _defined_class_names(path: Path) -> set[str]:
 def test_service_package_init_modules_are_marker_only() -> None:
     _assert_marker_module(BACKEND_DIR / "services" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "__init__.py")
+    _assert_marker_module(BACKEND_DIR / "services" / "agent" / "proposals" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "validation" / "__init__.py")
 
 
