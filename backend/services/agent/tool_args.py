@@ -8,6 +8,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from backend.enums_agent import AgentChangeStatus
 from backend.enums_finance import GroupMemberRole, GroupType
 from backend.services.agent.threads import THREAD_TITLE_MAX_LENGTH, validate_thread_title
+from backend.services.agent.payload_normalization import (
+    normalize_loose_text,
+    normalize_optional_category,
+    normalize_required_text,
+)
 from backend.services.runtime_settings_normalization import (
     normalize_user_memory_items_or_none,
     validate_user_memory_size,
@@ -39,28 +44,10 @@ from backend.services.agent.change_contracts import (
     UpdateTagPayload as ProposeUpdateTagArgs,
 )
 from backend.services.entries import normalize_tag_name
-from backend.services.entities import normalize_entity_category, normalize_entity_name
+from backend.services.entities import normalize_entity_name
 
 
 INTERMEDIATE_UPDATE_TOOL_NAME = "send_intermediate_update"
-
-
-def normalize_loose_text(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = " ".join(value.split()).strip()
-    return normalized or None
-
-
-def normalize_required_text(value: str) -> str:
-    normalized = normalize_loose_text(value)
-    if normalized is None:
-        raise ValueError("value cannot be empty")
-    return normalized
-
-
-def normalize_optional_category(value: str | None) -> str | None:
-    return normalize_entity_category(value)
 
 
 class EmptyArgs(BaseModel):

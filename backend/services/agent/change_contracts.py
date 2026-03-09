@@ -8,26 +8,13 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.enums_agent import AgentChangeType
 from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
+from backend.services.agent.payload_normalization import (
+    normalize_loose_text,
+    normalize_optional_category,
+    normalize_required_text,
+)
 from backend.services.entries import normalize_tag_name
-from backend.services.entities import normalize_entity_category, normalize_entity_name
-
-
-def normalize_loose_text(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = " ".join(value.split()).strip()
-    return normalized or None
-
-
-def normalize_required_text(value: str) -> str:
-    normalized = normalize_loose_text(value)
-    if normalized is None:
-        raise ValueError("value cannot be empty")
-    return normalized
-
-
-def normalize_optional_category(value: str | None) -> str | None:
-    return normalize_entity_category(value)
+from backend.services.entities import normalize_entity_name
 
 
 def normalize_object_json_string(value: Any) -> Any:
