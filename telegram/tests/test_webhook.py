@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from telegram.config import TelegramSettings
-from telegram.webhook import TELEGRAM_SECRET_HEADER, WEBHOOK_PATH, create_app
+from telegram.webhook import TELEGRAM_WEBHOOK_HEADER_NAME, WEBHOOK_PATH, create_app
 
 
 class FakeApplication:
@@ -42,7 +42,7 @@ def test_webhook_validates_secret_and_dispatches_update(tmp_path):
     with TestClient(app) as client:
         response = client.post(
             WEBHOOK_PATH,
-            headers={TELEGRAM_SECRET_HEADER: "secret-token"},
+            headers={TELEGRAM_WEBHOOK_HEADER_NAME: "secret-token"},
             json={
                 "update_id": 55,
                 "message": {"message_id": 3, "chat": {"id": 7, "type": "private"}, "text": "/help"},
@@ -79,7 +79,7 @@ def test_webhook_rejects_missing_or_invalid_secret(tmp_path):
 
     with TestClient(app) as client:
         missing = client.post(WEBHOOK_PATH, json=payload)
-        invalid = client.post(WEBHOOK_PATH, headers={TELEGRAM_SECRET_HEADER: "wrong"}, json=payload)
+        invalid = client.post(WEBHOOK_PATH, headers={TELEGRAM_WEBHOOK_HEADER_NAME: "wrong"}, json=payload)
 
     assert missing.status_code == 401
     assert invalid.status_code == 401
