@@ -117,7 +117,7 @@
   - `runtime_state.py`: run-event/tool-call persistence helpers used by runtime coordinator.
   - `entry_references.py`: shared entry-id alias, selector lookup, and public entry snapshot helpers.
   - `group_references.py`: shared group-id alias lookup plus public group summary/detail formatting for group tools and review payloads.
-  - `proposals/`: proposal-family helpers split into `common.py`, `catalog.py`, `entries.py`, `groups.py`, `group_memberships.py`, `normalization.py`, and `pending.py`.
+  - `proposals/`: proposal-family helpers split into `common.py`, `catalog.py`, `entries.py`, `groups.py`, `group_memberships.py`, family-owned normalization modules plus a small `normalization.py` registry, and `pending.py`.
   - `proposal_metadata.py`: canonical proposal domain/action/tool-name mapping shared by list/history/review surfaces.
   - `benchmark_interface.py`: stable benchmark execution contract returning normalized predictions/trace data.
   - `change_contracts/`: proposal payload contracts split into `catalog.py`, `entries.py`, `groups.py`, shared normalization in `common.py`, and registry/patch helpers in `__init__.py` + `patches.py`.
