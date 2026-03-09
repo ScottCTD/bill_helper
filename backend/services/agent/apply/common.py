@@ -9,12 +9,11 @@ from sqlalchemy.orm import Session
 from backend.enums_agent import AgentChangeType
 from backend.models_agent import AgentChangeItem
 from backend.models_finance import Entry, EntryGroup
-from backend.services.agent.change_contracts import (
-    ChangePayloadModel,
+from backend.services.agent.change_contracts import ChangePayloadModel
+from backend.services.agent.change_contracts.entries import EntryReferencePayload, EntrySelectorPayload
+from backend.services.agent.change_contracts.groups import (
     ChildGroupMemberTargetPayload,
     EntryGroupMemberTargetPayload,
-    EntryReferencePayload,
-    EntrySelectorPayload,
     GroupReferencePayload,
 )
 from backend.services.agent.entry_references import (

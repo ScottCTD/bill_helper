@@ -7,16 +7,13 @@ from sqlalchemy.orm import Session
 
 from backend.enums_agent import AgentChangeStatus, AgentChangeType
 from backend.models_agent import AgentChangeItem, AgentRun
-from backend.services.agent.change_contracts import (
-    ChangePayloadModel,
+from backend.services.agent.change_contracts import ChangePayloadModel, parse_change_payload
+from backend.services.agent.change_contracts.catalog import CreateAccountPayload, CreateEntityPayload
+from backend.services.agent.change_contracts.entries import CreateEntryPayload, UpdateEntryPayload
+from backend.services.agent.change_contracts.groups import (
     ChildGroupMemberTargetPayload,
-    CreateAccountPayload,
-    CreateEntityPayload,
-    CreateEntryPayload,
     CreateGroupMemberPayload,
     EntryGroupMemberTargetPayload,
-    UpdateEntryPayload,
-    parse_change_payload,
 )
 from backend.services.agent.reviews.common import get_change_item_or_none, thread_id_for_change_item
 from backend.services.entities import find_entity_by_name

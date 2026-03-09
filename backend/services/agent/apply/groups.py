@@ -10,7 +10,7 @@ from backend.services.agent.apply.common import (
     resolve_applied_group_member_target_ids,
     resolve_current_user,
 )
-from backend.services.agent.change_contracts import (
+from backend.services.agent.change_contracts.groups import (
     CreateGroupMemberPayload,
     CreateGroupPayload,
     DeleteGroupMemberPayload,

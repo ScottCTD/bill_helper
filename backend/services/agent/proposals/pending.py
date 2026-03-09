@@ -5,7 +5,7 @@ from copy import deepcopy
 from pydantic import ValidationError
 
 from backend.enums_agent import AgentChangeStatus, AgentChangeType
-from backend.services.agent.change_contracts import validate_patch_map_paths
+from backend.services.agent.change_contracts.patches import validate_patch_map_paths
 from backend.services.agent.proposal_patching import apply_patch_map_to_payload
 from backend.services.agent.proposals.common import proposal_short_id, resolve_pending_proposal_by_id
 from backend.services.agent.proposals.group_memberships import pending_group_membership_conflict

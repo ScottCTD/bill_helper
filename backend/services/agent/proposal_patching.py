@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from backend.services.agent.change_contracts import parse_patch_path
+from backend.services.agent.change_contracts.patches import parse_patch_path
 
 
 def _set_nested_value(target: dict[str, Any], path_parts: list[str], value: Any) -> None:
@@ -25,4 +25,3 @@ def apply_patch_map_to_payload(payload: dict[str, Any], patch_map: dict[str, Any
         parts = parse_patch_path(path)
         _set_nested_value(updated, parts, value)
     return updated
-

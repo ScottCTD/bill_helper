@@ -43,6 +43,8 @@ REMOVED_AGENT_REVIEW_MODULE = BACKEND_DIR / "services" / "agent" / "review.py"
 AGENT_REVIEWS_PACKAGE = BACKEND_DIR / "services" / "agent" / "reviews"
 REMOVED_AGENT_READ_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "tool_handlers_read.py"
 AGENT_READ_TOOLS_PACKAGE = BACKEND_DIR / "services" / "agent" / "read_tools"
+REMOVED_AGENT_CHANGE_CONTRACTS_MODULE = BACKEND_DIR / "services" / "agent" / "change_contracts.py"
+AGENT_CHANGE_CONTRACTS_PACKAGE = BACKEND_DIR / "services" / "agent" / "change_contracts"
 AGENT_ROUTER_PATH = BACKEND_DIR / "routers" / "agent.py"
 AGENT_ROUTER_SPLIT_MODULES = (
     BACKEND_DIR / "routers" / "agent_support.py",
@@ -172,6 +174,13 @@ def test_agent_read_tools_are_grouped_in_a_package() -> None:
     assert AGENT_READ_TOOLS_PACKAGE.is_dir(), "read_tools package should exist"
     for name in ("catalog.py", "common.py", "entries.py", "groups.py", "progress.py", "proposals.py"):
         assert (AGENT_READ_TOOLS_PACKAGE / name).exists(), f"missing read tool module: {name}"
+
+
+def test_agent_change_contracts_are_grouped_by_domain() -> None:
+    assert not REMOVED_AGENT_CHANGE_CONTRACTS_MODULE.exists(), "change_contracts should stay split into a package"
+    assert AGENT_CHANGE_CONTRACTS_PACKAGE.is_dir(), "change_contracts package should exist"
+    for name in ("__init__.py", "catalog.py", "common.py", "entries.py", "groups.py", "patches.py"):
+        assert (AGENT_CHANGE_CONTRACTS_PACKAGE / name).exists(), f"missing change-contract module: {name}"
 
 
 def test_agent_router_is_split_by_http_boundary() -> None:

@@ -120,7 +120,7 @@
   - `proposals/`: proposal-family helpers split into `common.py`, `catalog.py`, `entries.py`, `groups.py`, `group_memberships.py`, `normalization.py`, and `pending.py`.
   - `proposal_metadata.py`: canonical proposal domain/action/tool-name mapping shared by list/history/review surfaces.
   - `benchmark_interface.py`: stable benchmark execution contract returning normalized predictions/trace data.
-  - `change_contracts.py`: shared payload contract validation/normalization for proposal + apply paths.
+  - `change_contracts/`: proposal payload contracts split into `catalog.py`, `entries.py`, `groups.py`, shared normalization in `common.py`, and registry/patch helpers in `__init__.py` + `patches.py`.
 
 ### Backend Tests (`/backend/tests`)
 

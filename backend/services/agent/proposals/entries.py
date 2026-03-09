@@ -5,7 +5,7 @@ from typing import Any
 from backend.enums_agent import AgentChangeStatus, AgentChangeType
 from backend.models_agent import AgentChangeItem
 from backend.models_finance import Entry
-from backend.services.agent.change_contracts import (
+from backend.services.agent.change_contracts.entries import (
     CreateEntryPayload as ProposeCreateEntryArgs,
     DeleteEntryPayload as ProposeDeleteEntryArgs,
     EntryReferencePayload,
