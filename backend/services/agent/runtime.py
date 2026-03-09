@@ -59,6 +59,7 @@ from backend.services.agent.tool_runtime import build_openai_tool_schemas, execu
 from backend.services.agent.tool_types import ToolContext, ToolExecutionStatus
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.runtime_settings_normalization import normalize_text_or_none
+from backend.services.users import find_user_by_name
 
 
 EMPTY_PENDING_REVIEW_FOOTER_PATTERN = re.compile(
@@ -337,7 +338,13 @@ class _RuntimeRunLoopAdapterBase(AgentRunLoopAdapter[PreparedToolCall]):
         self.run = run
         self.settings = resolve_runtime_settings(db)
         self._max_steps = max(self.settings.agent_max_steps, 1)
-        self.tool_context = ToolContext(db=db, run_id=run.id)
+        principal_user = find_user_by_name(db, self.settings.current_user_name)
+        self.tool_context = ToolContext(
+            db=db,
+            run_id=run.id,
+            principal_name=self.settings.current_user_name,
+            principal_user_id=principal_user.id if principal_user is not None else None,
+        )
 
     @property
     def max_steps(self) -> int:

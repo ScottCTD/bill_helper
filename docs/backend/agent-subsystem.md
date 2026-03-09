@@ -23,7 +23,7 @@
 - `backend/services/agent/tool_args/`
   - focused tool-input package: `read.py` for read filters, `shared.py` for progress/common args, `threads.py` for thread rename args, `memory.py` for add-only memory args, and `proposal_admin.py` for pending-proposal/group-membership tool inputs
 - `backend/services/agent/tool_handlers_read.py`
-  - read tools and `send_intermediate_update`
+  - read tools and `send_intermediate_update`, using lookup-only principal scope instead of provisioning users as a read side effect
 - `backend/services/agent/tool_handlers_threads.py`
   - `rename_thread` handler for short thread-topic updates
 - `backend/services/agent/tool_handlers_propose.py`
@@ -37,7 +37,7 @@
 - `backend/services/agent/proposal_patching.py`
   - patch-map helpers for pending proposal edits
 - `backend/services/agent/tool_runtime.py`
-  - tool registry, schema composition, and execution policy
+  - tool registry, schema composition, and execution policy; runtime adapters pass a resolved principal snapshot through `ToolContext`
 - `backend/services/agent/threads.py`
   - thread-title normalization plus rename persistence helpers shared by the router and tool handler
 - `backend/services/agent/tools.py`

@@ -26,3 +26,5 @@ class ToolExecutionResult:
 class ToolContext:
     db: Session
     run_id: str
+    principal_name: str | None = None
+    principal_user_id: str | None = None

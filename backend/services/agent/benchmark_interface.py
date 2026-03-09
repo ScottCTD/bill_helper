@@ -27,6 +27,7 @@ from backend.services.agent.runtime import call_model
 from backend.services.agent.tool_runtime import execute_tool
 from backend.services.agent.tool_types import ToolContext
 from backend.services.runtime_settings import resolve_runtime_settings
+from backend.services.users import find_user_by_name
 
 PROPOSAL_TOOL_NAMES = {
     "propose_create_tag",
@@ -231,7 +232,14 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
         self._user_message_id = user_message_id
         self._max_steps = max_steps
         self._state = state
-        self._tool_context = ToolContext(db=db, run_id=run.id)
+        settings = resolve_runtime_settings(db)
+        principal_user = find_user_by_name(db, settings.current_user_name)
+        self._tool_context = ToolContext(
+            db=db,
+            run_id=run.id,
+            principal_name=settings.current_user_name,
+            principal_user_id=principal_user.id if principal_user is not None else None,
+        )
         self._latest_usage_totals: dict[str, int | None] = {}
         self._trace_step: BenchmarkTraceStep | None = None
         self._step_started_at = 0.0
