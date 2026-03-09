@@ -32,6 +32,8 @@ class PreparedToolCall:
     tool_call: dict[str, Any]
     tool_name: str
     arguments: dict[str, Any]
+    raw_arguments: str | None = None
+    decode_error: str | None = None
     persisted_row: AgentToolCall | None = None
 
 
@@ -123,13 +125,15 @@ def queue_tool_call_record(
     run: AgentRun,
     tool_call: dict[str, Any],
 ) -> PreparedToolCall:
-    decoded_name, arguments = decode_tool_call(tool_call)
-    tool_name = decoded_name or "(unknown)"
+    decoded = decode_tool_call(tool_call)
+    tool_name = decoded.tool_name or "(unknown)"
     if tool_name == INTERMEDIATE_UPDATE_TOOL_NAME:
         return PreparedToolCall(
             tool_call=tool_call,
             tool_name=tool_name,
-            arguments=arguments,
+            arguments=decoded.arguments,
+            raw_arguments=decoded.raw_arguments,
+            decode_error=decoded.decode_error,
             persisted_row=None,
         )
 
@@ -137,7 +141,7 @@ def queue_tool_call_record(
         run_id=run.id,
         llm_tool_call_id=str(tool_call.get("id") or "") or None,
         tool_name=tool_name,
-        input_json=arguments,
+        input_json=decoded.arguments,
         output_json={},
         output_text="",
         status=AgentToolCallStatus.QUEUED,
@@ -147,7 +151,9 @@ def queue_tool_call_record(
     return PreparedToolCall(
         tool_call=tool_call,
         tool_name=tool_name,
-        arguments=arguments,
+        arguments=decoded.arguments,
+        raw_arguments=decoded.raw_arguments,
+        decode_error=decoded.decode_error,
         persisted_row=tool_row,
     )
 

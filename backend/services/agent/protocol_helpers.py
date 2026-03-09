@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 from collections.abc import Mapping
 from typing import Any
+
+from backend.services.agent.tool_types import ToolExecutionResult, ToolExecutionStatus
 
 
 USAGE_FIELDS = (
@@ -11,6 +14,21 @@ USAGE_FIELDS = (
     "cache_read_tokens",
     "cache_write_tokens",
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedToolArguments:
+    arguments: dict[str, Any]
+    raw_arguments: str | None = None
+    decode_error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DecodedToolCall:
+    tool_name: str
+    arguments: dict[str, Any]
+    raw_arguments: str | None = None
+    decode_error: str | None = None
 
 
 def _coerce_argument_mapping(value: Any) -> dict[str, Any] | None:
@@ -39,46 +57,107 @@ def _strip_code_fences(raw_arguments: str) -> str:
     return "\n".join(lines[1:-1]).strip()
 
 
-def parse_tool_arguments(raw_arguments: Any) -> dict[str, Any]:
+def _raw_argument_text(raw_arguments: Any) -> str:
+    if isinstance(raw_arguments, str):
+        return raw_arguments
+    try:
+        return json.dumps(raw_arguments, separators=(",", ":"))
+    except (TypeError, ValueError):
+        return repr(raw_arguments)
+
+
+def parse_tool_arguments(raw_arguments: Any) -> ParsedToolArguments:
     if isinstance(raw_arguments, str):
         candidate = _strip_code_fences(raw_arguments)
         for _ in range(3):
             try:
                 parsed = json.loads(candidate)
             except (TypeError, ValueError):
-                return {}
+                return ParsedToolArguments(
+                    arguments={},
+                    raw_arguments=raw_arguments,
+                    decode_error="arguments are not valid JSON",
+                )
             coerced = _coerce_argument_mapping(parsed)
             if coerced is not None:
-                return coerced
+                return ParsedToolArguments(arguments=coerced, raw_arguments=raw_arguments)
             if isinstance(parsed, str):
                 candidate = _strip_code_fences(parsed)
                 continue
-            return {}
-        return {}
+            return ParsedToolArguments(
+                arguments={},
+                raw_arguments=raw_arguments,
+                decode_error="arguments must decode to a JSON object",
+            )
+        return ParsedToolArguments(
+            arguments={},
+            raw_arguments=raw_arguments,
+            decode_error="arguments exceeded nested JSON string decode limit",
+        )
 
     coerced = _coerce_argument_mapping(raw_arguments)
-    return coerced if coerced is not None else {}
+    if coerced is not None:
+        return ParsedToolArguments(arguments=coerced)
+    return ParsedToolArguments(
+        arguments={},
+        raw_arguments=_raw_argument_text(raw_arguments),
+        decode_error="arguments must be an object or JSON object string",
+    )
 
 
-def decode_tool_call(tool_call: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def decode_tool_call(tool_call: dict[str, Any]) -> DecodedToolCall:
     function = tool_call.get("function") or {}
     tool_name = str(function.get("name") or "")
-    arguments = parse_tool_arguments(function.get("arguments") or "{}")
-    return tool_name, arguments
+    parsed = parse_tool_arguments(
+        "{}" if function.get("arguments") is None else function.get("arguments")
+    )
+    return DecodedToolCall(
+        tool_name=tool_name,
+        arguments=parsed.arguments,
+        raw_arguments=parsed.raw_arguments,
+        decode_error=parsed.decode_error,
+    )
 
 
 def canonicalize_tool_call(tool_call: dict[str, Any]) -> dict[str, Any]:
-    function = tool_call.get("function") or {}
-    tool_name = str(function.get("name") or "")
-    arguments = parse_tool_arguments(function.get("arguments") or "{}")
+    decoded = decode_tool_call(tool_call)
+    serialized_arguments = (
+        decoded.raw_arguments
+        if decoded.decode_error is not None and decoded.raw_arguments is not None
+        else json.dumps(decoded.arguments, separators=(",", ":"))
+    )
     return {
         "id": tool_call.get("id"),
         "type": str(tool_call.get("type") or "function"),
         "function": {
-            "name": tool_name,
-            "arguments": json.dumps(arguments, separators=(",", ":")),
+            "name": decoded.tool_name,
+            "arguments": serialized_arguments,
         },
     }
+
+
+def tool_call_decode_error_result(
+    *,
+    tool_name: str,
+    raw_arguments: str | None,
+    decode_error: str,
+) -> ToolExecutionResult:
+    details: dict[str, Any] = {
+        "tool_name": tool_name,
+        "decode_error": decode_error,
+    }
+    if raw_arguments is not None:
+        details["raw_arguments"] = raw_arguments
+    summary = "tool argument decode failed"
+    return ToolExecutionResult(
+        output_text=f"ERROR\nsummary: {summary}\ndetails: {details}",
+        output_json={
+            "status": "ERROR",
+            "summary": summary,
+            "details": details,
+        },
+        status=ToolExecutionStatus.ERROR,
+    )
 
 
 def coerce_usage_int(value: Any) -> int | None:

@@ -1273,6 +1273,40 @@ def test_run_persists_tool_calls(client, monkeypatch):
     assert len(payload["tool_calls"]) == 1
 
 
+def test_run_records_tool_argument_decode_failures(client, monkeypatch):
+    calls = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_list_tags",
+                    "type": "function",
+                    "function": {"name": "list_tags", "arguments": "{"},
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": "I could not decode the first tool call arguments.",
+        },
+    ]
+    patch_model(monkeypatch, lambda _messages: calls.pop(0))
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "List current tags.")
+
+    assert run["status"] == "completed"
+    assert len(run["tool_calls"]) == 1
+    tool_call = run["tool_calls"][0]
+    assert tool_call["tool_name"] == "list_tags"
+    assert tool_call["status"] == "error"
+    assert tool_call["input_json"] == {}
+    assert tool_call["output_json"]["summary"] == "tool argument decode failed"
+    assert tool_call["output_json"]["details"]["decode_error"] == "arguments are not valid JSON"
+    assert tool_call["output_json"]["details"]["raw_arguments"] == "{"
+
+
 def test_thread_detail_compacts_tool_call_payloads(client, monkeypatch):
     calls = [
         {
@@ -2302,7 +2336,8 @@ def test_malformed_tool_arguments_do_not_crash_followup_model_step(client, monke
     assert run["change_items"] == []
     assert len(run["tool_calls"]) == 1
     assert run["tool_calls"][0]["output_json"]["status"] == "ERROR"
-    assert run["tool_calls"][0]["output_json"]["summary"] == "invalid tool arguments"
+    assert run["tool_calls"][0]["output_json"]["summary"] == "tool argument decode failed"
+    assert run["tool_calls"][0]["output_json"]["details"]["decode_error"] == "arguments are not valid JSON"
 
 
 def test_update_entry_can_target_entry_id_from_list_entries(client, monkeypatch):
