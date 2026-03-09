@@ -1,0 +1,260 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
+from threading import Thread
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, status, UploadFile
+from fastapi.responses import StreamingResponse
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, load_only, selectinload
+
+from backend.database import get_db
+from backend.enums_agent import AgentChangeStatus, AgentRunStatus, SUPPORTED_AGENT_CHANGE_TYPES
+from backend.models_agent import (
+    AgentChangeItem,
+    AgentMessage,
+    AgentRun,
+    AgentThread,
+    AgentToolCall,
+)
+from backend.routers.agent_support import (
+    AGENT_ROUTER_KWARGS,
+    AgentSurface,
+    agent_upload_root,
+    create_user_message_run_or_503,
+    open_background_session,
+    sse_event,
+)
+from backend.schemas_agent import (
+    AgentRunRead,
+    AgentThreadCreate,
+    AgentThreadDetailRead,
+    AgentThreadRead,
+    AgentThreadSummaryRead,
+    AgentThreadUpdate,
+)
+from backend.services.agent.attachments import (
+    delete_attachment_directories,
+    thread_attachment_directories,
+)
+from backend.services.agent.execution import (
+    current_context_tokens_for_thread,
+    run_agent_in_background,
+)
+from backend.services.agent.runtime import run_existing_agent_run_stream
+from backend.services.agent.serializers import (
+    message_to_schema,
+    run_to_schema,
+    thread_summary_to_schema,
+    thread_to_schema,
+)
+from backend.services.agent.threads import AgentThreadNotFoundError, rename_thread_by_id
+from backend.services.runtime_settings import resolve_runtime_settings
+
+router = APIRouter(**AGENT_ROUTER_KWARGS)
+
+
+def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:
+    threads = list(db.scalars(select(AgentThread).order_by(AgentThread.updated_at.desc())))
+    running_thread_ids = set(
+        db.scalars(
+            select(AgentRun.thread_id)
+            .where(AgentRun.status == AgentRunStatus.RUNNING)
+            .distinct()
+        )
+    )
+    summaries: list[AgentThreadSummaryRead] = []
+    for thread in threads:
+        last_message = db.scalar(
+            select(AgentMessage.content_markdown)
+            .where(AgentMessage.thread_id == thread.id)
+            .order_by(AgentMessage.created_at.desc())
+            .limit(1)
+        )
+        pending_change_count = int(
+            db.scalar(
+                select(func.count(AgentChangeItem.id))
+                .join(AgentRun, AgentRun.id == AgentChangeItem.run_id)
+                .where(
+                    AgentRun.thread_id == thread.id,
+                    AgentChangeItem.status == AgentChangeStatus.PENDING_REVIEW,
+                    AgentChangeItem.change_type.in_(SUPPORTED_AGENT_CHANGE_TYPES),
+                )
+            )
+            or 0
+        )
+        summaries.append(
+            thread_summary_to_schema(
+                thread,
+                last_message_preview=(last_message[:120] if last_message else None),
+                pending_change_count=pending_change_count,
+                has_running_run=thread.id in running_thread_ids,
+            )
+        )
+    return summaries
+
+
+@router.get("/threads", response_model=list[AgentThreadSummaryRead])
+def list_threads(db: Session = Depends(get_db)) -> list[AgentThreadSummaryRead]:
+    return _thread_summary_rows(db)
+
+
+@router.post("/threads", response_model=AgentThreadRead, status_code=status.HTTP_201_CREATED)
+def create_thread(payload: AgentThreadCreate | None = None, db: Session = Depends(get_db)) -> AgentThreadRead:
+    thread = AgentThread(title=payload.title if payload else None)
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+    return thread_to_schema(thread)
+
+
+@router.delete("/threads/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_thread(thread_id: str, db: Session = Depends(get_db)) -> None:
+    thread = db.scalar(
+        select(AgentThread)
+        .where(AgentThread.id == thread_id)
+        .options(
+            selectinload(AgentThread.runs),
+            selectinload(AgentThread.messages).selectinload(AgentMessage.attachments),
+        )
+    )
+    if thread is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+
+    if any(run.status == AgentRunStatus.RUNNING for run in thread.runs):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a thread while an agent run is still running.",
+        )
+
+    attachment_directories = thread_attachment_directories(thread, upload_root=agent_upload_root())
+    db.delete(thread)
+    db.commit()
+    delete_attachment_directories(attachment_directories)
+
+
+@router.patch("/threads/{thread_id}", response_model=AgentThreadRead)
+def update_thread(
+    thread_id: str,
+    payload: AgentThreadUpdate,
+    db: Session = Depends(get_db),
+) -> AgentThreadRead:
+    try:
+        result = rename_thread_by_id(db, thread_id=thread_id, title=payload.title)
+    except AgentThreadNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return thread_to_schema(result.thread)
+
+
+@router.get("/threads/{thread_id}", response_model=AgentThreadDetailRead)
+def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThreadDetailRead:
+    thread = db.scalar(
+        select(AgentThread)
+        .where(AgentThread.id == thread_id)
+        .options(
+            selectinload(AgentThread.messages).selectinload(AgentMessage.attachments),
+            selectinload(AgentThread.runs).selectinload(AgentRun.events),
+            selectinload(AgentThread.runs).selectinload(AgentRun.assistant_message),
+            selectinload(AgentThread.runs)
+            .selectinload(AgentRun.tool_calls)
+            .options(
+                load_only(
+                    AgentToolCall.id,
+                    AgentToolCall.run_id,
+                    AgentToolCall.llm_tool_call_id,
+                    AgentToolCall.tool_name,
+                    AgentToolCall.status,
+                    AgentToolCall.created_at,
+                    AgentToolCall.started_at,
+                    AgentToolCall.completed_at,
+                )
+            ),
+            selectinload(AgentThread.runs)
+            .selectinload(AgentRun.change_items)
+            .selectinload(AgentChangeItem.review_actions),
+        )
+    )
+    if thread is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+    settings = resolve_runtime_settings(db)
+    return AgentThreadDetailRead(
+        thread=thread_to_schema(thread),
+        messages=[message_to_schema(message, api_prefix=settings.api_prefix) for message in thread.messages],
+        runs=[run_to_schema(run, include_tool_payload=False) for run in thread.runs],
+        configured_model_name=settings.agent_model,
+        current_context_tokens=current_context_tokens_for_thread(
+            db,
+            thread=thread,
+            model_name=settings.agent_model,
+        ),
+    )
+
+
+@router.post("/threads/{thread_id}/messages", response_model=AgentRunRead)
+async def send_thread_message(
+    thread_id: str,
+    content: str = Form(default=""),
+    model_name: str | None = Form(default=None),
+    surface: AgentSurface = Form(default="app"),
+    files: list[UploadFile] = File(default_factory=list),
+    db: Session = Depends(get_db),
+) -> AgentRunRead:
+    run = await create_user_message_run_or_503(
+        thread_id=thread_id,
+        content=content,
+        files=files,
+        surface=surface,
+        db=db,
+        model_name=model_name,
+    )
+    Thread(
+        target=run_agent_in_background,
+        kwargs={"run_id": run.id, "session_factory": open_background_session},
+        daemon=True,
+    ).start()
+    return run_to_schema(run)
+
+
+@router.post("/threads/{thread_id}/messages/stream")
+async def send_thread_message_stream(
+    thread_id: str,
+    content: str = Form(default=""),
+    model_name: str | None = Form(default=None),
+    surface: AgentSurface = Form(default="app"),
+    files: list[UploadFile] = File(default_factory=list),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    run = await create_user_message_run_or_503(
+        thread_id=thread_id,
+        content=content,
+        files=files,
+        surface=surface,
+        db=db,
+        model_name=model_name,
+    )
+
+    def stream_events() -> Iterator[str]:
+        stream_finished = False
+        try:
+            for event in run_existing_agent_run_stream(db, run.id):
+                event_type = str(event.get("type") or "event")
+                payload = dict(event)
+                yield sse_event(event_type, payload)
+            stream_finished = True
+        finally:
+            if not stream_finished:
+                Thread(
+                    target=run_agent_in_background,
+                    kwargs={"run_id": run.id, "session_factory": open_background_session},
+                    daemon=True,
+                ).start()
+
+    return StreamingResponse(
+        stream_events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

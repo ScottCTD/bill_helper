@@ -15,7 +15,7 @@ This file is the backend index. Use it to find the focused backend docs under `d
 - Routers own HTTP translation and principal-boundary enforcement.
 - `backend/auth/*` owns request-principal normalization plus FastAPI auth dependencies.
 - Services own domain policy, principal-scoped queries, and orchestration.
-- The agent subsystem lives under `backend/services/agent/*` with `backend/routers/agent.py` as the transport layer.
+- The agent subsystem lives under `backend/services/agent/*` with `backend/routers/agent.py` as a thin transport aggregator over the split `agent_threads.py`, `agent_runs.py`, `agent_reviews.py`, and `agent_attachments.py` modules.
 - Shared persistence and runtime configuration are centralized in `backend/database.py` and `backend/services/runtime_settings.py`.
 
 ## Current Migration Head

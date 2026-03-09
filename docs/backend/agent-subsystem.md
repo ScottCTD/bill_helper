@@ -88,6 +88,17 @@
 ## Agent Router
 
 - `backend/routers/agent.py`
+  - thin aggregator that includes the split HTTP modules below
+- `backend/routers/agent_threads.py`
+  - thread list/detail plus message-send and stream endpoints
+- `backend/routers/agent_runs.py`
+  - run detail, tool-call detail, and interrupt endpoints
+- `backend/routers/agent_reviews.py`
+  - approve/reject/reopen HTTP translation for review actions
+- `backend/routers/agent_attachments.py`
+  - attachment file download endpoint
+- `backend/routers/agent_support.py`
+  - shared router config, SSE formatting, upload-root helpers, and message-create HTTP error translation
 - delegates message validation and run lifecycle policy to `backend/services/agent/execution.py`
 - accepts an optional `surface` form field on message-send routes and persists it onto the created run for background continuation
 - delegates attachment storage and cleanup to `backend/services/agent/attachments.py`
