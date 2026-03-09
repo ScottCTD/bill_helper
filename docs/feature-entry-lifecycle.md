@@ -66,7 +66,7 @@ This doc is the fast path for understanding how entries are created, edited, gro
    - `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`
    - `frontend/src/features/agent/review/drafts.ts`
 4. Apply handler:
-   - `backend/services/agent/review.py`
+   - `backend/services/agent/reviews/workflow.py`
    - `backend/services/agent/apply/`
 5. Apply handler resolves target by selector for update/delete:
    - `date + amount_minor + from_entity + to_entity + name`
