@@ -3400,6 +3400,60 @@ def test_update_account_approval_accepts_payload_override(client, monkeypatch):
     )
 
 
+def test_update_account_approval_can_clear_markdown_body(client, monkeypatch):
+    create_account_response = client.post(
+        "/api/v1/accounts",
+        json={
+            "name": "Travel Card",
+            "currency_code": "USD",
+            "is_active": True,
+            "markdown_body": "Trip notes",
+        },
+    )
+    create_account_response.raise_for_status()
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Account update proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_update_account",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_account",
+                        "arguments": json.dumps(
+                            {
+                                "name": "Travel Card",
+                                "patch": {
+                                    "markdown_body": None,
+                                },
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Clear the notes on my travel card")
+    item_id = run["change_items"][0]["id"]
+
+    approve_response = client.post(f"/api/v1/agent/change-items/{item_id}/approve", json={})
+    approve_response.raise_for_status()
+
+    accounts = client.get("/api/v1/accounts").json()
+    assert any(
+        account["name"] == "Travel Card"
+        and account["currency_code"] == "USD"
+        and account["markdown_body"] is None
+        for account in accounts
+    )
+
+
 def test_reject_flow(client, monkeypatch):
     def fake_model(messages):
         if messages[-1]["role"] == "tool":

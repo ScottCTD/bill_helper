@@ -240,6 +240,27 @@ def test_account_routes_are_scoped_by_principal(client):
     assert reconciliation_response.status_code == 404
 
 
+def test_account_patch_can_clear_markdown_body(client):
+    create_response = client.post(
+        "/api/v1/accounts",
+        json={
+            "name": "Notes Account",
+            "currency_code": "CAD",
+            "is_active": True,
+            "markdown_body": "Temporary note",
+        },
+    )
+    create_response.raise_for_status()
+    account = create_response.json()
+
+    update_response = client.patch(
+        f"/api/v1/accounts/{account['id']}",
+        json={"markdown_body": None},
+    )
+    update_response.raise_for_status()
+    assert update_response.json()["markdown_body"] is None
+
+
 def test_dashboard_is_scoped_by_principal(client):
     create_account(client, name="Admin Account")
     admin_account = create_account(client, name="Admin Ledger")

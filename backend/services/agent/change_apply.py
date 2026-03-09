@@ -44,6 +44,7 @@ from backend.services.agent.group_references import (
 )
 from backend.schemas_finance import EntityCreate, EntityUpdate
 from backend.services.accounts import (
+    AccountPatch,
     create_account_root,
     delete_account_and_entity_root,
     find_account_by_name,
@@ -288,8 +289,8 @@ def apply_update_account(db: Session, payload: UpdateAccountPayload) -> AppliedR
     if account is None:
         raise ValueError("Account not found")
 
-    update_kwargs = payload.patch.model_dump(exclude_unset=True)
-    update_account_root(db, account=account, **update_kwargs)
+    patch = AccountPatch.model_validate(payload.patch.model_dump(exclude_unset=True))
+    update_account_root(db, account=account, patch=patch)
     return AppliedResource(resource_type="account", resource_id=account.id)
 
 

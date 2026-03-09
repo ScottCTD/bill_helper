@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import HTTPException, status
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
@@ -17,8 +20,37 @@ from backend.services.entities import (
     rename_entity_and_sync_entry_labels,
 )
 
+AccountPatchField = Literal["owner_user_id", "name", "markdown_body", "currency_code", "is_active"]
 
-_UNSET = object()
+
+class AccountPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    owner_user_id: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    markdown_body: str | None = None
+    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
+    is_active: bool | None = None
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = normalize_entity_name(value)
+        if not normalized:
+            raise ValueError("Account name cannot be empty")
+        return normalized
+
+    @field_validator("currency_code")
+    @classmethod
+    def normalize_currency_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip().upper()
+
+    def includes(self, field: AccountPatchField) -> bool:
+        return field in self.model_fields_set
 
 
 def validate_account_owner_user_id(
@@ -101,19 +133,12 @@ def update_account_root(
     db: Session,
     *,
     account: Account,
-    name: str | None | object = _UNSET,
-    owner_user_id: str | None | object = _UNSET,
-    markdown_body: str | None | object = _UNSET,
-    currency_code: str | None | object = _UNSET,
-    is_active: bool | None | object = _UNSET,
+    patch: AccountPatch,
 ) -> Account:
-    if name is not _UNSET and name is not None:
+    if patch.includes("name") and patch.name is not None:
         if account.entity is None:
             raise ValueError("Account entity not found")
-        target_name = normalize_entity_name(name)
-        if not target_name:
-            raise ValueError("Account name cannot be empty")
-        existing_entity = find_entity_by_name(db, target_name)
+        existing_entity = find_entity_by_name(db, patch.name)
         assert_unique_name(
             existing_id=existing_entity.id if existing_entity is not None else None,
             current_id=account.id,
@@ -122,21 +147,20 @@ def update_account_root(
         rename_entity_and_sync_entry_labels(
             db,
             entity=account.entity,
-            raw_name=target_name,
+            raw_name=patch.name,
         )
 
-    if owner_user_id is not _UNSET:
-        next_owner_user_id = owner_user_id if isinstance(owner_user_id, str) else None
+    if patch.includes("owner_user_id"):
         account.owner_user_id = validate_account_owner_user_id(
             db,
-            owner_user_id=next_owner_user_id,
+            owner_user_id=patch.owner_user_id,
         )
-    if markdown_body is not _UNSET:
-        account.markdown_body = markdown_body if isinstance(markdown_body, str) or markdown_body is None else account.markdown_body
-    if currency_code is not _UNSET and currency_code is not None:
-        account.currency_code = currency_code.upper()
-    if is_active is not _UNSET and isinstance(is_active, bool):
-        account.is_active = is_active
+    if patch.includes("markdown_body"):
+        account.markdown_body = patch.markdown_body
+    if patch.includes("currency_code") and patch.currency_code is not None:
+        account.currency_code = patch.currency_code
+    if patch.includes("is_active") and patch.is_active is not None:
+        account.is_active = patch.is_active
 
     db.add(account)
     db.flush()
@@ -178,23 +202,19 @@ def update_account_from_payload(
     principal: RequestPrincipal,
 ) -> Account:
     update_data = payload.model_dump(exclude_unset=True)
-    owner_user_id: str | None | object = _UNSET
     if "owner_user_id" in update_data:
-        owner_user_id = resolve_owner_user_id(
+        update_data["owner_user_id"] = resolve_owner_user_id(
             db,
             owner_user_id=update_data["owner_user_id"],
             principal=principal,
         )
 
     try:
+        patch = AccountPatch.model_validate(update_data)
         return update_account_root(
             db,
             account=account,
-            name=update_data.get("name", _UNSET),
-            owner_user_id=owner_user_id,
-            markdown_body=update_data.get("markdown_body", _UNSET),
-            currency_code=update_data.get("currency_code", _UNSET),
-            is_active=update_data.get("is_active", _UNSET),
+            patch=patch,
         )
     except ValueError as exc:
         detail = str(exc)
