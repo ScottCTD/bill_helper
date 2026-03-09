@@ -22,12 +22,12 @@ from pathlib import Path
 from typing import Any
 
 from backend.database import build_engine_for_url, build_session_maker
-from backend.schemas_settings import RuntimeSettingsUpdate
 from backend.services.agent.benchmark_interface import (
     BenchmarkAttachmentInput,
     BenchmarkCaseExecution,
     run_benchmark_case,
 )
+from backend.services.runtime_settings_contracts import RuntimeSettingsPatch
 from benchmark.io_utils import atomic_write_json
 from benchmark.paths import CASES_DIR, REPO_ROOT, RESULTS_DIR, SNAPSHOTS_DIR
 from backend.services.runtime_settings import update_runtime_settings_override
@@ -204,7 +204,7 @@ def _run_case_execution(
 ) -> BenchmarkCaseExecution:
     update_runtime_settings_override(
         db,
-        RuntimeSettingsUpdate(agent_model=model_name),
+        RuntimeSettingsPatch(agent_model=model_name),
     )
     db.commit()
     return run_benchmark_case(

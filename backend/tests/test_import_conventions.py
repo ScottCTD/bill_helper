@@ -176,3 +176,25 @@ def test_runtime_settings_contracts_are_split_from_finance_modules() -> None:
         "Runtime settings schemas should stay outside backend/schemas_finance.py:\n"
         + "\n".join(sorted(leaked_classes))
     )
+
+
+def test_runtime_settings_service_does_not_import_api_schemas() -> None:
+    service_path = BACKEND_DIR / "services" / "runtime_settings.py"
+    module = ast.parse(service_path.read_text(encoding="utf-8"), filename=str(service_path))
+    violations: list[str] = []
+    for node in ast.walk(module):
+        if isinstance(node, ast.ImportFrom) and node.module == "backend.schemas_settings":
+            violations.append(f"{service_path.relative_to(REPO_ROOT)}:{node.lineno} imports from backend.schemas_settings")
+            continue
+        if not isinstance(node, ast.Import):
+            continue
+        for alias in node.names:
+            if alias.name != "backend.schemas_settings":
+                continue
+            violations.append(
+                f"{service_path.relative_to(REPO_ROOT)}:{node.lineno} imports backend.schemas_settings"
+            )
+    assert not violations, (
+        "runtime_settings service should expose service-local contracts and leave HTTP schemas in the router:\n"
+        + "\n".join(violations)
+    )
