@@ -5,7 +5,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from backend.auth import RequestPrincipal, get_current_principal
+from backend.auth import RequestPrincipal, get_or_create_current_principal
 from backend.database import get_db
 from backend.schemas_finance import DashboardRead
 from backend.services.finance import (
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 def get_dashboard(
     month: str = Query(default_factory=lambda: date.today().strftime("%Y-%m"), pattern=r"^\d{4}-\d{2}$"),
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> DashboardRead:
     try:
         month_window(month)

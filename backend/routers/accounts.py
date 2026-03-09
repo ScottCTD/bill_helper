@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.auth import RequestPrincipal, get_current_principal
+from backend.auth import RequestPrincipal, get_or_create_current_principal
 from backend.database import get_db
 from backend.models_finance import Account, AccountSnapshot, Entity
 from backend.schemas_finance import (
@@ -36,7 +36,7 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 def create_account(
     payload: AccountCreate,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> AccountRead:
     try:
         account = create_account_from_payload(
@@ -55,7 +55,7 @@ def create_account(
 @router.get("", response_model=list[AccountRead])
 def list_accounts(
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> list[AccountRead]:
     accounts = list(
         db.scalars(
@@ -74,7 +74,7 @@ def update_account(
     account_id: str,
     payload: AccountUpdate,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> AccountRead:
     account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
     try:
@@ -96,7 +96,7 @@ def update_account(
 def delete_account(
     account_id: str,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> None:
     account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
     delete_account_and_entity_root(db, account=account)
@@ -108,7 +108,7 @@ def create_snapshot(
     account_id: str,
     payload: SnapshotCreate,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> SnapshotRead:
     account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
 
@@ -128,7 +128,7 @@ def create_snapshot(
 def list_snapshots(
     account_id: str,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> list[SnapshotRead]:
     get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
 
@@ -147,7 +147,7 @@ def account_reconciliation(
     account_id: str,
     as_of: date | None = None,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> ReconciliationRead:
     account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
 
