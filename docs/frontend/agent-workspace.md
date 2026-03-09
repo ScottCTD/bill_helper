@@ -4,11 +4,14 @@
 
 - `frontend/src/features/agent/AgentPanel.tsx`
 - used as the primary AI page via `frontend/src/pages/HomePage.tsx`
-- stateful coordination stays in `AgentPanel`, while rendering and derivation are split into feature-owned modules
+- acts as a render shell that wires the header, timeline, composer, thread rail, review modal, and preview dialog together
+- stateful coordination now lives in `frontend/src/features/agent/panel/useAgentPanelController.ts`, while pure panel helpers live in `frontend/src/features/agent/panel/helpers.ts`
 - page header uses the static title `Bill Assistant`; model selection stays in the composer dropdown instead of the title row
 
 Supporting modules include:
 
+- `frontend/src/features/agent/panel/useAgentPanelController.ts`
+- `frontend/src/features/agent/panel/helpers.ts`
 - `frontend/src/features/agent/AgentRunBlock.tsx`
 - `frontend/src/features/agent/activity.ts`
 - `frontend/src/features/agent/panel/AgentThreadList.tsx`

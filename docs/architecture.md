@@ -110,8 +110,8 @@ Agent state:
 - message send + approve/reject mutations
 - optimistic user/assistant message placeholders while runs are in-flight
 - panel-level UI split:
-  - coordinator: `frontend/src/features/agent/AgentPanel.tsx`
-  - presentation modules: `frontend/src/features/agent/panel/*`
+  - render shell: `frontend/src/features/agent/AgentPanel.tsx`
+  - controller/presentation modules: `frontend/src/features/agent/panel/*`
   - run rendering/derivation: `frontend/src/features/agent/AgentRunBlock.tsx`, `frontend/src/features/agent/activity.ts`
   - feature-owned location keeps agent UI beside its tests/review/timeline helpers instead of under generic shared components
 
