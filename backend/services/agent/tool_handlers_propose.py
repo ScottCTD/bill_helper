@@ -42,7 +42,7 @@ from backend.services.agent.entry_references import (
     entry_public_id,
     entry_selector_from_entry,
     entry_selector_to_json,
-    find_entries_by_id,
+    find_entries_by_public_id_prefix,
     find_entries_by_selector,
 )
 from backend.services.agent.group_references import (
@@ -156,11 +156,160 @@ def _find_entries_for_reference(
     entry_id: str | None,
     selector: EntrySelectorPayload | None,
 ) -> list[Entry]:
-    if entry_id is not None:
-        return find_entries_by_id(context.db, entry_id)
-    if selector is None:  # pragma: no cover - validated by Pydantic
-        return []
-    return find_entries_by_selector(context.db, selector)
+    id_matches = (
+        find_entries_by_public_id_prefix(context.db, entry_id)
+        if entry_id is not None
+        else None
+    )
+    selector_matches = (
+        find_entries_by_selector(context.db, selector)
+        if selector is not None
+        else None
+    )
+    if id_matches is None:
+        return selector_matches or []
+    if selector_matches is None:
+        return id_matches
+    if {entry.id for entry in id_matches} != {entry.id for entry in selector_matches}:
+        raise ValueError(
+            "entry_id and selector must identify the same entry candidates"
+        )
+    return id_matches
+
+
+def _match_single_entry_reference_or_error(
+    context: ToolContext,
+    *,
+    entry_id: str | None,
+    selector: EntrySelectorPayload | None,
+) -> Entry | ToolExecutionResult:
+    try:
+        matches = _find_entries_for_reference(
+            context,
+            entry_id=entry_id,
+            selector=selector,
+        )
+    except ValueError as exc:
+        return error_result(
+            "conflicting entry reference",
+            details={
+                **_reference_details(entry_id=entry_id, selector=selector),
+                "reason": str(exc),
+            },
+        )
+    if not matches:
+        return error_result(
+            "no entry matched reference",
+            details=_reference_details(entry_id=entry_id, selector=selector),
+        )
+    if len(matches) > 1:
+        details = _reference_details(entry_id=entry_id, selector=selector)
+        if entry_id is not None:
+            details.update(entry_id_ambiguity_details(matches, entry_id=entry_id))
+            return error_result(
+                "ambiguous entry_id matched multiple entries; retry with one of the candidate ids",
+                details=details,
+            )
+        return error_result(
+            "ambiguous selector matched multiple entries; ask the user to clarify",
+            details={
+                **details,
+                **entry_ambiguity_details(matches),
+            },
+        )
+    return matches[0]
+
+
+def _raise_if_entry_reference_error(result: Entry | ToolExecutionResult) -> Entry:
+    if isinstance(result, ToolExecutionResult):
+        raise ValueError(str(result.output_json.get("summary", "invalid entry reference")))
+    return result
+
+
+def _normalized_entry_reference_payload(
+    context: ToolContext,
+    *,
+    entry_id: str | None,
+    selector: EntrySelectorPayload | None,
+) -> dict[str, Any]:
+    matched_entry = _raise_if_entry_reference_error(
+        _match_single_entry_reference_or_error(
+            context,
+            entry_id=entry_id,
+            selector=selector,
+        )
+    )
+    return {
+        "entry_id": matched_entry.id,
+        "selector": entry_selector_from_entry(matched_entry),
+        "target": entry_to_public_record(matched_entry),
+    }
+
+
+def _match_existing_entry_or_error(
+    context: ToolContext,
+    *,
+    entry_id: str,
+) -> Entry | ToolExecutionResult:
+    matches = find_entries_by_public_id_prefix(context.db, entry_id)
+    if not matches:
+        return error_result("no entry matched entry_id", details={"entry_id": entry_id})
+    if len(matches) > 1:
+        return error_result(
+            "ambiguous entry_id matched multiple entries; retry with one of the candidate ids",
+            details=entry_id_ambiguity_details(matches, entry_id=entry_id),
+        )
+    return matches[0]
+
+
+def _resolve_group_proposal_reference_or_error(
+    context: ToolContext,
+    *,
+    proposal_id: str,
+    expected_statuses: set[AgentChangeStatus] | None = None,
+) -> AgentChangeItem | ToolExecutionResult:
+    try:
+        item = resolve_proposal_by_id(context, proposal_id, detail_label="thread proposals")
+    except ValueError as exc:
+        return error_result("invalid proposal id", details=str(exc))
+    if item is None:
+        return error_result("proposal not found", details={"proposal_id": proposal_id})
+    if item.change_type != AgentChangeType.CREATE_GROUP:
+        return error_result(
+            "proposal_id does not reference a create_group proposal",
+            details={"proposal_id": proposal_id, "change_type": item.change_type.value},
+        )
+    if expected_statuses is not None and item.status not in expected_statuses:
+        return error_result(
+            "group proposal is not in a usable status",
+            details={"proposal_id": item.id, "status": item.status.value},
+        )
+    return item
+
+
+def _resolve_entry_proposal_reference_or_error(
+    context: ToolContext,
+    *,
+    proposal_id: str,
+    expected_statuses: set[AgentChangeStatus] | None = None,
+) -> AgentChangeItem | ToolExecutionResult:
+    try:
+        item = resolve_proposal_by_id(context, proposal_id, detail_label="thread proposals")
+    except ValueError as exc:
+        return error_result("invalid proposal id", details=str(exc))
+    if item is None:
+        return error_result("proposal not found", details={"proposal_id": proposal_id})
+    if item.change_type != AgentChangeType.CREATE_ENTRY:
+        return error_result(
+            "proposal_id does not reference a create_entry proposal",
+            details={"proposal_id": proposal_id, "change_type": item.change_type.value},
+        )
+    if expected_statuses is not None and item.status not in expected_statuses:
+        return error_result(
+            "entry proposal is not in a usable status",
+            details={"proposal_id": item.id, "status": item.status.value},
+        )
+    return item
 
 
 def pending_proposals_for_thread(context: ToolContext) -> list[AgentChangeItem]:
@@ -383,72 +532,6 @@ def _match_existing_group_or_error(
     return matches[0]
 
 
-def _match_existing_entry_or_error(
-    context: ToolContext,
-    *,
-    entry_id: str,
-) -> Entry | ToolExecutionResult:
-    matches = find_entries_by_id(context.db, entry_id)
-    if not matches:
-        return error_result("no entry matched entry_id", details={"entry_id": entry_id})
-    if len(matches) > 1:
-        return error_result(
-            "ambiguous entry_id matched multiple entries; retry with one of the candidate ids",
-            details=entry_id_ambiguity_details(matches, entry_id=entry_id),
-        )
-    return matches[0]
-
-
-def _resolve_group_proposal_reference_or_error(
-    context: ToolContext,
-    *,
-    proposal_id: str,
-    expected_statuses: set[AgentChangeStatus] | None = None,
-) -> AgentChangeItem | ToolExecutionResult:
-    try:
-        item = resolve_proposal_by_id(context, proposal_id, detail_label="thread proposals")
-    except ValueError as exc:
-        return error_result("invalid proposal id", details=str(exc))
-    if item is None:
-        return error_result("proposal not found", details={"proposal_id": proposal_id})
-    if item.change_type != AgentChangeType.CREATE_GROUP:
-        return error_result(
-            "proposal_id does not reference a create_group proposal",
-            details={"proposal_id": proposal_id, "change_type": item.change_type.value},
-        )
-    if expected_statuses is not None and item.status not in expected_statuses:
-        return error_result(
-            "group proposal is not in a usable status",
-            details={"proposal_id": item.id, "status": item.status.value},
-        )
-    return item
-
-
-def _resolve_entry_proposal_reference_or_error(
-    context: ToolContext,
-    *,
-    proposal_id: str,
-    expected_statuses: set[AgentChangeStatus] | None = None,
-) -> AgentChangeItem | ToolExecutionResult:
-    try:
-        item = resolve_proposal_by_id(context, proposal_id, detail_label="thread proposals")
-    except ValueError as exc:
-        return error_result("invalid proposal id", details=str(exc))
-    if item is None:
-        return error_result("proposal not found", details={"proposal_id": proposal_id})
-    if item.change_type != AgentChangeType.CREATE_ENTRY:
-        return error_result(
-            "proposal_id does not reference a create_entry proposal",
-            details={"proposal_id": proposal_id, "change_type": item.change_type.value},
-        )
-    if expected_statuses is not None and item.status not in expected_statuses:
-        return error_result(
-            "entry proposal is not in a usable status",
-            details={"proposal_id": item.id, "status": item.status.value},
-        )
-    return item
-
-
 def _canonical_group_ref_payload(
     context: ToolContext,
     *,
@@ -528,7 +611,7 @@ def _resolved_member_ref_preview(
 ) -> tuple[dict[str, Any], EntryKind | None] | ToolExecutionResult:
     if entry_ref is not None:
         if entry_ref.entry_id is not None:
-            matches = find_entries_by_id(context.db, entry_ref.entry_id)
+            matches = find_entries_by_public_id_prefix(context.db, entry_ref.entry_id)
             if not matches:
                 return error_result("no entry matched entry_id", details={"entry_id": entry_ref.entry_id})
             if len(matches) > 1:
@@ -1031,29 +1114,35 @@ def normalize_payload_for_change_type(
     if change_type == AgentChangeType.UPDATE_ENTRY:
         parsed = parse_change_payload(
             change_type=change_type,
-            payload={"selector": payload.get("selector"), "patch": payload.get("patch")},
+            payload={
+                "entry_id": payload.get("entry_id"),
+                "selector": payload.get("selector"),
+                "patch": payload.get("patch"),
+            },
             model_type=ProposeUpdateEntryArgs,
         )
         validate_update_entry_entity_patch(context, parsed.patch)
-        normalized_payload = {
-            "selector": entry_selector_to_json(parsed.selector),
-            "patch": normalize_update_entry_patch_for_payload(parsed.patch),
-        }
-        if isinstance(payload.get("target"), dict):
-            normalized_payload["target"] = payload["target"]
+        normalized_payload = _normalized_entry_reference_payload(
+            context,
+            entry_id=parsed.entry_id,
+            selector=parsed.selector,
+        )
+        normalized_payload["patch"] = normalize_update_entry_patch_for_payload(parsed.patch)
         return normalized_payload
     if change_type == AgentChangeType.DELETE_ENTRY:
         parsed = parse_change_payload(
             change_type=change_type,
-            payload={"selector": payload.get("selector")},
+            payload={
+                "entry_id": payload.get("entry_id"),
+                "selector": payload.get("selector"),
+            },
             model_type=ProposeDeleteEntryArgs,
         )
-        normalized_payload = {
-            "selector": entry_selector_to_json(parsed.selector),
-        }
-        if isinstance(payload.get("target"), dict):
-            normalized_payload["target"] = payload["target"]
-        return normalized_payload
+        return _normalized_entry_reference_payload(
+            context,
+            entry_id=parsed.entry_id,
+            selector=parsed.selector,
+        )
     if change_type == AgentChangeType.CREATE_GROUP:
         parsed = parse_change_payload(
             change_type=change_type,
@@ -1688,31 +1777,13 @@ def propose_update_group_membership(
 
 
 def propose_update_entry(context: ToolContext, args: ProposeUpdateEntryArgs) -> ToolExecutionResult:
-    matches = _find_entries_for_reference(
+    matched_entry = _match_single_entry_reference_or_error(
         context,
         entry_id=args.entry_id,
         selector=args.selector,
     )
-    if not matches:
-        return error_result(
-            "no entry matched reference",
-            details=_reference_details(entry_id=args.entry_id, selector=args.selector),
-        )
-    if len(matches) > 1:
-        details = _reference_details(entry_id=args.entry_id, selector=args.selector)
-        if args.entry_id is not None:
-            details.update(entry_id_ambiguity_details(matches, entry_id=args.entry_id))
-            return error_result(
-                "ambiguous entry_id matched multiple entries; retry with one of the candidate ids",
-                details=details,
-            )
-        return error_result(
-            "ambiguous selector matched multiple entries; ask the user to clarify",
-            details={
-                **details,
-                **entry_ambiguity_details(matches),
-            },
-        )
+    if isinstance(matched_entry, ToolExecutionResult):
+        return matched_entry
 
     try:
         validate_update_entry_entity_patch(context, args.patch)
@@ -1723,7 +1794,6 @@ def propose_update_entry(context: ToolContext, args: ProposeUpdateEntryArgs) -> 
     if "date" in patch and patch["date"] is not None:
         patch["date"] = patch["date"].isoformat()
 
-    matched_entry = matches[0]
     payload = {
         "entry_id": matched_entry.id,
         "selector": entry_selector_from_entry(matched_entry),
@@ -1745,33 +1815,13 @@ def propose_update_entry(context: ToolContext, args: ProposeUpdateEntryArgs) -> 
 
 
 def propose_delete_entry(context: ToolContext, args: ProposeDeleteEntryArgs) -> ToolExecutionResult:
-    matches = _find_entries_for_reference(
+    matched_entry = _match_single_entry_reference_or_error(
         context,
         entry_id=args.entry_id,
         selector=args.selector,
     )
-    if not matches:
-        return error_result(
-            "no entry matched reference",
-            details=_reference_details(entry_id=args.entry_id, selector=args.selector),
-        )
-    if len(matches) > 1:
-        details = _reference_details(entry_id=args.entry_id, selector=args.selector)
-        if args.entry_id is not None:
-            details.update(entry_id_ambiguity_details(matches, entry_id=args.entry_id))
-            return error_result(
-                "ambiguous entry_id matched multiple entries; retry with one of the candidate ids",
-                details=details,
-            )
-        return error_result(
-            "ambiguous selector matched multiple entries; ask the user to clarify",
-            details={
-                **details,
-                **entry_ambiguity_details(matches),
-            },
-        )
-
-    matched_entry = matches[0]
+    if isinstance(matched_entry, ToolExecutionResult):
+        return matched_entry
     payload = {
         "entry_id": matched_entry.id,
         "selector": entry_selector_from_entry(matched_entry),

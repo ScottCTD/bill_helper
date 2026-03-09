@@ -34,7 +34,7 @@ from backend.services.agent.change_contracts import (
 )
 from backend.services.agent.entry_references import (
     entry_public_summary,
-    find_entries_by_id,
+    find_entries_by_exact_id,
     find_entries_by_selector,
 )
 from backend.services.agent.group_references import (
@@ -101,7 +101,7 @@ def _find_unique_entry_by_selector(db: Session, selector_payload: EntrySelectorP
 
 
 def _find_unique_entry_by_id(db: Session, entry_id: str) -> Entry:
-    matches = find_entries_by_id(db, entry_id)
+    matches = find_entries_by_exact_id(db, entry_id)
     if not matches:
         raise ValueError("Entry id did not match any entry")
     if len(matches) > 1:
@@ -128,7 +128,7 @@ def _resolve_existing_group_id(db: Session, *, group_id: str, current_user_id: s
 
 
 def _resolve_existing_entry_id(db: Session, *, entry_id: str) -> str:
-    matches = find_entries_by_id(db, entry_id)
+    matches = find_entries_by_exact_id(db, entry_id)
     if not matches:
         raise ValueError("Entry id did not match any entry")
     if len(matches) > 1:

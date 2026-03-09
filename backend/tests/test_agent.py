@@ -4078,6 +4078,80 @@ def test_update_entry_selector_ambiguity_is_reported_to_agent(client, monkeypatc
     assert "ambiguous selector" in tool_output["summary"]
 
 
+def test_update_entry_rejects_conflicting_entry_id_and_selector(client, monkeypatch):
+    first_response = client.post(
+        "/api/v1/entries",
+        json={
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-12",
+            "name": "Coffee Shop",
+            "amount_minor": 700,
+            "currency_code": "CAD",
+            "from_entity": "Main Checking",
+            "to_entity": "Coffee Shop",
+            "tags": ["food"],
+        },
+    )
+    first_response.raise_for_status()
+    first_entry_id = first_response.json()["id"]
+
+    second_response = client.post(
+        "/api/v1/entries",
+        json={
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-13",
+            "name": "Lunch Spot",
+            "amount_minor": 1800,
+            "currency_code": "CAD",
+            "from_entity": "Main Checking",
+            "to_entity": "Lunch Spot",
+            "tags": ["food"],
+        },
+    )
+    second_response.raise_for_status()
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "That reference was conflicting."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_update_entry_conflict",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_entry",
+                        "arguments": json.dumps(
+                            {
+                                "entry_id": first_entry_id[:8],
+                                "selector": {
+                                    "date": "2026-01-13",
+                                    "amount_minor": 1800,
+                                    "from_entity": "Main Checking",
+                                    "to_entity": "Lunch Spot",
+                                    "name": "Lunch Spot",
+                                },
+                                "patch": {"name": "Lunch Spot Updated"},
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Update that entry")
+
+    assert run["status"] == "completed"
+    assert run["change_items"] == []
+    assert len(run["tool_calls"]) == 1
+    tool_output = run["tool_calls"][0]["output_json"]
+    assert tool_output["status"] == "ERROR"
+    assert tool_output["summary"] == "conflicting entry reference"
+
+
 def test_update_entry_accepts_stringified_selector_and_patch(client, monkeypatch):
     create_response = client.post(
         "/api/v1/entries",
