@@ -125,8 +125,10 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `backend/services/agent/review.py`
   - `backend/services/agent/change_apply.py`
 - Models/contracts:
-  - `backend/models.py`
-  - `backend/schemas.py`
+  - `backend/models_finance.py`
+  - `backend/models_agent.py`
+  - `backend/schemas_finance.py`
+  - `backend/schemas_agent.py`
 - Frontend access/render paths:
   - `frontend/src/lib/api.ts`
   - `frontend/src/lib/queryInvalidation.ts`

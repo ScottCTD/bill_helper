@@ -56,14 +56,11 @@
 - `__main__.py`: package-local launcher (`python -m backend`).
 - `db_meta.py`: side-effect-free SQLAlchemy metadata root (`Base`).
 - `database.py`: explicit SQLAlchemy engine/session factories plus cached runtime accessors/dependencies.
-- `enums.py`: compatibility facade for domain enum modules (application code imports `enums_finance.py` / `enums_agent.py` directly).
 - `enums_finance.py`: ledger enums (`EntryKind`, `GroupType`, `GroupMemberRole`, plus legacy migration-only `LinkType`).
 - `enums_agent.py`: agent run/review/message enums.
-- `models.py`: compatibility facade for ORM contract modules (application code imports `models_finance.py` / `models_agent.py` directly).
 - `models_finance.py`: ledger/account/entity/tag/taxonomy/entry ORM models.
 - `models_agent.py`: agent thread/run/tool-call/change/review ORM models.
 - `models_shared.py`: shared model defaults (`utc_now`, `uuid_str`) used by both model domains.
-- `schemas.py`: compatibility facade for API schema modules (application code imports `schemas_finance.py` / `schemas_agent.py` directly).
 - `schemas_finance.py`: ledger/dashboard/settings request/response schemas.
 - `schemas_agent.py`: agent thread/message/run/review request/response schemas.
 - `main.py`: FastAPI app creation, routing, CORS, health check.
@@ -88,7 +85,7 @@
 ### Backend Services (`/backend/services`)
 
 - `accounts.py`: account create/update/delete workflows for shared account/entity roots.
-- `entries.py`: tag handling and entry soft-delete helper.
+- `entries.py`: typed entry create/update workflows, tag handling, and entry soft-delete helper.
 - `tags.py`: tag CRUD helpers, taxonomy cleanup, and random default color generation.
 - `entities.py`: entity normalization, account-backed guards, and preserve-label delete helpers.
 - `users.py`: user normalization, lookup, and current-user helpers.

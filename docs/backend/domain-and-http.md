@@ -1,8 +1,6 @@
 # Backend Domain And HTTP
 
-## Domain Models (`backend/models.py`)
-
-`backend/models.py` is a compatibility facade over split domain modules:
+## Domain Models
 
 - `backend/models_finance.py`: ledger, account, entity, tag, taxonomy, and entry models
 - `backend/models_agent.py`: thread, run, tool-call, change-item, and review models
@@ -32,9 +30,7 @@ Agent models:
 - `AgentChangeItem`
 - `AgentReviewAction`
 
-## Schemas (`backend/schemas.py`)
-
-`backend/schemas.py` is a compatibility facade over:
+## Schemas
 
 - `backend/schemas_finance.py`: accounts, entries, groups, dashboard, and settings contracts
 - `backend/schemas_agent.py`: thread, message, run, change-item, and review contracts
@@ -88,7 +84,7 @@ Service conventions:
 - shared CRUD validation lives in `crud_policy.py`
 - shared owner/admin policy lives in `access_scope.py`
 - package `__init__.py` files stay marker-only and should not become barrel re-export modules
-- application code should import direct domain modules (`*_finance`, `*_agent`) instead of growing dependence on compatibility facades
+- application code and tests should import direct domain modules (`*_finance`, `*_agent`) instead of rebuilding aggregate facades
 
 ## Routers
 
