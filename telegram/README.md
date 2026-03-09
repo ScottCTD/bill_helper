@@ -20,10 +20,29 @@ This package contains the Bill Helper Telegram private-chat transport. It keeps 
 
 ## Local development
 
-1. Start the backend API the bot should talk to.
-2. Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and backend access config.
-3. For polling, run `uv run python -m telegram.polling`.
-4. For webhook mode, also set `TELEGRAM_WEBHOOK_SECRET`, then run `uv run python -m telegram.webhook`.
+### Configure a bot and start polling
+
+1. Create a bot with `@BotFather` in Telegram and copy the bot token.
+2. Find your numeric Telegram user ID (for example via `@userinfobot`).
+3. Add config in either repo-local `.env` or shared `~/.config/bill-helper/.env`:
+   - `TELEGRAM_BOT_TOKEN=<bot-token-from-botfather>`
+   - `TELEGRAM_ALLOWED_USER_IDS=<your-telegram-user-id>`
+   - one model-provider credential for the backend agent, such as `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`
+   - optional: `TELEGRAM_BACKEND_BASE_URL=http://localhost:8000/api/v1` when using a non-default backend URL
+4. Start the backend API the bot should talk to:
+   - `uv run alembic upgrade head`
+   - `uv run bill-helper-api`
+5. In a second terminal, start polling:
+   - `uv run python -m telegram.polling`
+6. Open a private chat with the bot and smoke-test with `/start`, `/help`, `/status`, or a normal text message.
+
+Notes:
+
+- `TELEGRAM_ALLOWED_USER_IDS` accepts either comma-separated integers or a JSON array.
+- The bot is private-chat only and denies all users until the allow-list is configured.
+- If the backend is running at the default local URL, `TELEGRAM_BACKEND_BASE_URL` can be omitted.
+
+For webhook mode, also set `TELEGRAM_WEBHOOK_SECRET`, then run `uv run python -m telegram.webhook`.
 
 The webhook module serves `GET /healthz` and accepts Telegram updates at `POST /telegram/webhook` on port `8081` when run via `python -m telegram.webhook`.
 
