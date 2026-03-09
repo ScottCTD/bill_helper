@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from backend.models_finance import Entry
 from backend.services.agent.entry_references import entry_ambiguity_details, entry_to_public_record
 from backend.services.agent.read_tools.common import format_entry_record, string_match_rank
-from backend.services.agent.tool_args import ListEntriesArgs
+from backend.services.agent.tool_args.read import ListEntriesArgs
 from backend.services.agent.tool_results import format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 from backend.validation.finance_names import normalize_tag_name

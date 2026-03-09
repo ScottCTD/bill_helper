@@ -28,21 +28,25 @@ from backend.services.agent.change_contracts.groups import (
     DeleteGroupPayload as ProposeDeleteGroupArgs,
     UpdateGroupPayload as ProposeUpdateGroupArgs,
 )
-from backend.services.agent.tool_args import (
-    AddUserMemoryArgs,
-    INTERMEDIATE_UPDATE_TOOL_NAME,
+from backend.services.agent.tool_args.memory import AddUserMemoryArgs
+from backend.services.agent.tool_args.proposal_admin import (
+    ProposeUpdateGroupMembershipArgs,
+    RemovePendingProposalArgs,
+    UpdatePendingProposalArgs,
+)
+from backend.services.agent.tool_args.read import (
     ListAccountsArgs,
     ListEntitiesArgs,
     ListEntriesArgs,
     ListGroupsArgs,
     ListProposalsArgs,
     ListTagsArgs,
-    ProposeUpdateGroupMembershipArgs,
-    RenameThreadArgs,
-    RemovePendingProposalArgs,
-    SendIntermediateUpdateArgs,
-    UpdatePendingProposalArgs,
 )
+from backend.services.agent.tool_args.shared import (
+    INTERMEDIATE_UPDATE_TOOL_NAME,
+    SendIntermediateUpdateArgs,
+)
+from backend.services.agent.tool_args.threads import RenameThreadArgs
 from backend.services.agent.tool_handlers_memory import add_user_memory
 from backend.services.agent.tool_handlers_threads import rename_thread
 from backend.services.agent.read_tools.catalog import (

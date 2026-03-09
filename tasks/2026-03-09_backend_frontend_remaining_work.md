@@ -43,16 +43,14 @@ Desloppify snapshot after forced rescan and forced batch review rerun:
 
 ### 1. Agent contract decomposition
 
-The next major backend batch should reduce the remaining proposal/runtime cleanup after the contract split and shared thread-proposal query cleanup:
+The next major backend batch should reduce the remaining proposal/runtime cleanup after the contract split, shared thread-proposal query cleanup, and direct tool-arg ownership cleanup:
 
-- `review::.::holistic::abstraction_fitness::internal_tool_args_barrel::a034bd44`
 - `review::.::holistic::abstraction_fitness::proposal_normalization_switchboard::48c8c386`
 - `review::.::holistic::api_surface_coherence::tool_result_status_shape_drift::a7d7b0fc`
 - `review::.::holistic::authorization_consistency::agent_entry_scope_bypass::328518a7`
 
 Recommended direction:
 
-- stop routing internal callers through `backend/services/agent/tool_args/__init__.py`
 - separate pending-review normalization from proposal creation logic
 - unify tool result status around one canonical contract
 - apply owner scoping in agent entry lookup/apply helpers the same way normal entry routes do
@@ -140,7 +138,7 @@ Recommended direction:
 
 ## Suggested Next Batch Order
 
-1. Remove internal `tool_args` barrel usage and reduce pending-review normalization switchboards.
+1. Reduce pending-review normalization switchboards.
 2. Unify router `PolicyViolation` translation and typed error mapping across CRUD routers.
 3. Split `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`.
 4. Split `frontend/src/features/agent/panel/useAgentPanelController.ts`.

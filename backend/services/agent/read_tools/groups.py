@@ -18,7 +18,7 @@ from backend.services.agent.read_tools.common import (
     string_match_rank,
     tool_principal_scope,
 )
-from backend.services.agent.tool_args import ListGroupsArgs
+from backend.services.agent.tool_args.read import ListGroupsArgs
 from backend.services.agent.tool_results import error_result, format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 from backend.services.groups import build_group_summary, group_tree_options

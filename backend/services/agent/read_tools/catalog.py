@@ -14,7 +14,7 @@ from backend.services.agent.read_tools.common import (
     string_match_rank,
     tool_principal_scope,
 )
-from backend.services.agent.tool_args import ListAccountsArgs, ListEntitiesArgs, ListTagsArgs
+from backend.services.agent.tool_args.read import ListAccountsArgs, ListEntitiesArgs, ListTagsArgs
 from backend.services.agent.tool_results import format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 from backend.services.taxonomy import get_single_term_name_map

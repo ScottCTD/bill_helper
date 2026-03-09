@@ -148,6 +148,37 @@ def test_agent_tool_args_are_grouped_in_a_package() -> None:
     assert AGENT_TOOL_ARGS_PACKAGE.is_dir(), "tool_args package should exist"
 
 
+def test_production_modules_do_not_import_tool_args_barrel() -> None:
+    violations: list[str] = []
+    tool_args_package_init = AGENT_TOOL_ARGS_PACKAGE / "__init__.py"
+
+    for path in BACKEND_DIR.rglob("*.py"):
+        if "tests" in path.parts or path == tool_args_package_init:
+            continue
+        module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(module):
+            if isinstance(node, ast.ImportFrom):
+                if node.module != "backend.services.agent.tool_args":
+                    continue
+                relpath = path.relative_to(REPO_ROOT)
+                violations.append(
+                    f"{relpath}:{node.lineno} imports from 'backend.services.agent.tool_args' "
+                    "(import the owning tool_args submodule directly)"
+                )
+                continue
+            if not isinstance(node, ast.Import):
+                continue
+            for alias in node.names:
+                if alias.name != "backend.services.agent.tool_args":
+                    continue
+                relpath = path.relative_to(REPO_ROOT)
+                violations.append(
+                    f"{relpath}:{node.lineno} imports 'backend.services.agent.tool_args' "
+                    "(import the owning tool_args submodule directly)"
+                )
+    assert not violations, "Production modules must not depend on the tool_args barrel:\n" + "\n".join(violations)
+
+
 def test_agent_proposals_are_grouped_in_a_package() -> None:
     assert not REMOVED_AGENT_PROPOSE_HANDLER_MODULE.exists(), "proposal handlers should stay split into the proposals package"
     assert AGENT_PROPOSALS_PACKAGE.is_dir(), "proposals package should exist"
