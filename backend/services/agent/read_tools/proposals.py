@@ -3,13 +3,13 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-
 from backend.enums_agent import AgentChangeType
-from backend.models_agent import AgentChangeItem, AgentReviewAction, AgentRun
+from backend.models_agent import AgentChangeItem, AgentReviewAction
 from backend.services.agent.proposal_metadata import proposal_metadata_for_change_type
-from backend.services.agent.proposals.common import proposal_short_id
+from backend.services.agent.proposals.common import (
+    proposal_short_id,
+    proposals_for_thread as thread_proposals_for_thread,
+)
 from backend.services.agent.tool_args import ListProposalsArgs
 from backend.services.agent.tool_results import error_result, format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
@@ -152,23 +152,12 @@ def format_proposal_record(record: dict[str, Any], *, detailed: bool) -> str:
     return line
 
 
-def proposals_for_thread(context: ToolContext) -> list[AgentChangeItem]:
-    thread_id = context.db.scalar(select(AgentRun.thread_id).where(AgentRun.id == context.run_id))
-    if thread_id is None:
-        return []
-    return list(
-        context.db.scalars(
-            select(AgentChangeItem)
-            .join(AgentRun, AgentRun.id == AgentChangeItem.run_id)
-            .where(AgentRun.thread_id == thread_id)
-            .options(selectinload(AgentChangeItem.review_actions))
-            .order_by(AgentChangeItem.created_at.desc(), AgentChangeItem.updated_at.desc())
-        )
-    )
-
-
 def list_proposals(context: ToolContext, args: ListProposalsArgs) -> ToolExecutionResult:
-    filtered_items = proposals_for_thread(context)
+    filtered_items = thread_proposals_for_thread(
+        context,
+        include_review_actions=True,
+        newest_first=True,
+    )
     if args.proposal_type is not None:
         filtered_items = [
             item for item in filtered_items if proposal_change_parts(item.change_type)[1] == args.proposal_type

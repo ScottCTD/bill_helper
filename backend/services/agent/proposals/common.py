@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from backend.enums_agent import AgentChangeStatus, AgentChangeType
 from backend.models_agent import AgentChangeItem, AgentRun
@@ -69,6 +70,8 @@ def proposals_for_thread(
     context: ToolContext,
     *,
     statuses: set[AgentChangeStatus] | None = None,
+    include_review_actions: bool = False,
+    newest_first: bool = False,
 ) -> list[AgentChangeItem]:
     thread_id = context.db.scalar(select(AgentRun.thread_id).where(AgentRun.id == context.run_id))
     if thread_id is None:
@@ -76,12 +79,20 @@ def proposals_for_thread(
     conditions = [AgentRun.thread_id == thread_id]
     if statuses is not None:
         conditions.append(AgentChangeItem.status.in_(sorted(statuses, key=lambda value: value.value)))
+    statement = (
+        select(AgentChangeItem)
+        .join(AgentRun, AgentRun.id == AgentChangeItem.run_id)
+        .where(*conditions)
+    )
+    if include_review_actions:
+        statement = statement.options(selectinload(AgentChangeItem.review_actions))
+    if newest_first:
+        statement = statement.order_by(AgentChangeItem.created_at.desc(), AgentChangeItem.updated_at.desc())
+    else:
+        statement = statement.order_by(AgentChangeItem.created_at.asc())
     return list(
         context.db.scalars(
-            select(AgentChangeItem)
-            .join(AgentRun, AgentRun.id == AgentChangeItem.run_id)
-            .where(*conditions)
-            .order_by(AgentChangeItem.created_at.asc())
+            statement
         )
     )
 
