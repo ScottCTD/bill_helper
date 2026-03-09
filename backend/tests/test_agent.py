@@ -2379,6 +2379,101 @@ def test_update_entry_can_target_entry_id_from_list_entries(client, monkeypatch)
     assert entry_response.json()["name"] == "Morning Coffee Updated"
 
 
+def test_approve_update_entry_drops_invalid_selector_when_entry_id_present(client, monkeypatch):
+    from backend.database import SessionLocal
+    from backend.models_agent import AgentChangeItem
+    from backend.models_finance import Entry
+
+    from_entity = create_entity(client, "Debit Source Counterparty", category="merchant")
+    to_entity = create_entity(client, "Saving Target Counterparty", category="merchant")
+    create_response = client.post(
+        "/api/v1/entries",
+        json={
+            "kind": "TRANSFER",
+            "occurred_at": "2026-02-14",
+            "name": "Repair transfer",
+            "amount_minor": 180000,
+            "currency_code": "CAD",
+            "from_entity_id": from_entity["id"],
+            "from_entity": None,
+            "to_entity_id": to_entity["id"],
+            "to_entity": None,
+            "tags": [],
+        },
+    )
+    create_response.raise_for_status()
+    entry_id = create_response.json()["id"]
+
+    with SessionLocal() as db:
+        entry = db.get(Entry, entry_id)
+        assert entry is not None
+        entry.from_entity = None
+        entry.to_entity = None
+        db.add(entry)
+        db.commit()
+
+    def fake_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Repair proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_repair_transfer_entities",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_entry",
+                        "arguments": json.dumps(
+                            {
+                                "entry_id": entry_id,
+                                "patch": {
+                                    "from_entity": "Debit Source Counterparty",
+                                    "to_entity": "Saving Target Counterparty",
+                                },
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, fake_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Repair that transfer entry")
+    item_id = run["change_items"][0]["id"]
+
+    with SessionLocal() as db:
+        item = db.get(AgentChangeItem, item_id)
+        assert item is not None
+        payload = dict(item.payload_json)
+        payload["selector"] = {
+            "date": "2026-02-14",
+            "amount_minor": 180000,
+            "from_entity": None,
+            "to_entity": None,
+            "name": "Repair transfer",
+        }
+        item.payload_json = payload
+        db.add(item)
+        db.commit()
+
+    approve_response = client.post(f"/api/v1/agent/change-items/{item_id}/approve", json={})
+    approve_response.raise_for_status()
+    approved = approve_response.json()
+
+    assert approved["status"] == "APPLIED"
+    assert approved["payload_json"]["entry_id"] == entry_id
+
+    entry_response = client.get(f"/api/v1/entries/{entry_id}")
+    entry_response.raise_for_status()
+    entry_payload = entry_response.json()
+    assert entry_payload["from_entity_id"] == from_entity["id"]
+    assert entry_payload["to_entity_id"] == to_entity["id"]
+    assert entry_payload["from_entity"] == "Debit Source Counterparty"
+    assert entry_payload["to_entity"] == "Saving Target Counterparty"
+
+
 def test_list_entries_source_matches_name_and_counterparties(client, monkeypatch):
     create_account(client, name="Scotiabank Credit")
     create_entity(client, "OpenAI", "merchant")

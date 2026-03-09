@@ -26,8 +26,8 @@ def entry_to_public_record(entry: Entry, *, full_id: bool = False) -> dict[str, 
         "name": entry.name,
         "amount_minor": entry.amount_minor,
         "currency_code": entry.currency_code,
-        "from_entity": entry.from_entity,
-        "to_entity": entry.to_entity,
+        "from_entity": _effective_entry_entity_name(entry, side="from"),
+        "to_entity": _effective_entry_entity_name(entry, side="to"),
         "tags": tag_names,
         "markdown_notes": entry.markdown_body,
     }
@@ -37,10 +37,22 @@ def entry_selector_from_entry(entry: Entry) -> dict[str, Any]:
     return {
         "date": entry.occurred_at.isoformat(),
         "amount_minor": entry.amount_minor,
-        "from_entity": entry.from_entity,
-        "to_entity": entry.to_entity,
+        "from_entity": _effective_entry_entity_name(entry, side="from"),
+        "to_entity": _effective_entry_entity_name(entry, side="to"),
         "name": entry.name,
     }
+
+
+def _effective_entry_entity_name(entry: Entry, *, side: str) -> str | None:
+    if side == "from":
+        if entry.from_entity:
+            return entry.from_entity
+        return entry.from_entity_ref.name if entry.from_entity_ref is not None else None
+    if side == "to":
+        if entry.to_entity:
+            return entry.to_entity
+        return entry.to_entity_ref.name if entry.to_entity_ref is not None else None
+    raise ValueError(f"Unsupported entry entity side: {side}")
 
 
 def entry_selector_to_json(selector: EntrySelectorPayload) -> dict[str, Any]:

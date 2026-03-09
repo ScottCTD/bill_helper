@@ -306,18 +306,17 @@ def update_entry(
     if "currency_code" in update_data and update_data["currency_code"] is not None:
         update_data["currency_code"] = update_data["currency_code"].upper()
 
-    for field_name in ("from", "to"):
-        id_field = f"{field_name}_entity_id"
-        name_field = field_name
-        if id_field in update_data or name_field in update_data:
+    for entity_field, field_name in (("from_entity", "from"), ("to_entity", "to")):
+        id_field = f"{entity_field}_id"
+        if id_field in update_data or entity_field in update_data:
             resolved_id, resolved_name = _resolve_entity_value(
                 db,
                 entity_id=update_data.pop(id_field, None),
-                entity_name=update_data.pop(name_field, None),
+                entity_name=update_data.pop(entity_field, None),
                 field_name=field_name,
             )
             update_data[id_field] = resolved_id
-            update_data[name_field] = resolved_name
+            update_data[entity_field] = resolved_name
 
     if "owner_user_id" in update_data or "owner" in update_data:
         resolved_id, resolved_name = _resolve_user_value(

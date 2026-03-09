@@ -172,6 +172,57 @@ def test_entry_create_update_and_clear_direct_group_membership(client):
     assert cleared["group_path"] == []
 
 
+def test_update_entry_resolves_entity_labels_from_ids(client):
+    account_id = create_account(client)
+    debit_entity = create_entity(client, "Main Debit Counterparty", category="merchant")
+    saving_entity = create_entity(client, "Main Saving Counterparty", category="merchant")
+
+    create_response = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": account_id,
+            "kind": "TRANSFER",
+            "occurred_at": "2026-02-14",
+            "name": "Transfer to savings",
+            "amount_minor": 180000,
+            "currency_code": "USD",
+            "from_entity_id": debit_entity["id"],
+            "from_entity": None,
+            "to_entity_id": saving_entity["id"],
+            "to_entity": None,
+            "tags": [],
+        },
+    )
+    create_response.raise_for_status()
+    entry = create_response.json()
+
+    assert entry["from_entity"] == "Main Debit Counterparty"
+    assert entry["to_entity"] == "Main Saving Counterparty"
+
+    update_response = client.patch(
+        f"/api/v1/entries/{entry['id']}",
+        json={
+            "from_entity_id": debit_entity["id"],
+            "from_entity": None,
+            "to_entity_id": saving_entity["id"],
+            "to_entity": None,
+        },
+    )
+    update_response.raise_for_status()
+    updated = update_response.json()
+
+    assert updated["from_entity_id"] == debit_entity["id"]
+    assert updated["to_entity_id"] == saving_entity["id"]
+    assert updated["from_entity"] == "Main Debit Counterparty"
+    assert updated["to_entity"] == "Main Saving Counterparty"
+
+    detail_response = client.get(f"/api/v1/entries/{entry['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    assert detail["from_entity"] == "Main Debit Counterparty"
+    assert detail["to_entity"] == "Main Saving Counterparty"
+
+
 def test_entry_group_assignment_validates_split_role_requirements(client):
     account_id = create_account(client)
     split_group = create_group(client, "Split Dinner", "SPLIT")
