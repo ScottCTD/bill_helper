@@ -66,7 +66,7 @@
 - `schemas_agent.py`: agent thread/message/run/review request/response schemas.
 - `schemas_settings.py`: runtime settings request/response schemas.
 - `auth/`: request-principal contracts, explicit dev-session header parsing, and FastAPI auth dependencies.
-- `validation/`: neutral validation/normalization helpers shared by schemas, services, and tool-input models.
+- `validation/`: neutral validation/normalization helpers plus shared contract field types used by schemas, services, and tool-input models.
 - `main.py`: FastAPI app creation, routing, CORS, health check.
 - `README.md`: thin backend-local navigation doc that points to canonical docs.
 
