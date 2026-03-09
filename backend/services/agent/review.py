@@ -22,7 +22,8 @@ from backend.services.agent.change_contracts import (
 )
 from backend.services.agent.tool_handlers_propose import normalize_payload_for_change_type
 from backend.services.agent.tool_types import ToolContext
-from backend.services.entities import find_entity_by_name, normalize_entity_name
+from backend.services.entities import find_entity_by_name
+from backend.validation.finance_names import normalize_entity_name
 
 
 def utc_now() -> datetime:

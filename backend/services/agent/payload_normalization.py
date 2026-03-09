@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.services.entities import normalize_entity_category
+from backend.validation.finance_names import normalize_entity_category
 
 
 def normalize_loose_text(value: str | None) -> str | None:

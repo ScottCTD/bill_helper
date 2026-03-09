@@ -23,11 +23,12 @@ from backend.services.access_scope import (
     get_account_for_principal_or_404,
 )
 from backend.services.accounts import (
-    create_account_from_payload,
+    create_account as create_account_service,
     delete_account_and_entity_root,
-    update_account_from_payload,
+    update_account as update_account_service,
 )
 from backend.services.crud_policy import PolicyViolation, translate_policy_violation
+from backend.services.finance_contracts import AccountCreateCommand, AccountPatch
 from backend.services.finance import build_reconciliation
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
@@ -40,9 +41,9 @@ def create_account(
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> AccountRead:
     try:
-        account = create_account_from_payload(
+        account = create_account_service(
             db,
-            payload=payload,
+            command=AccountCreateCommand.model_validate(payload.model_dump()),
             principal=principal,
         )
     except PolicyViolation as exc:
@@ -79,10 +80,10 @@ def update_account(
 ) -> AccountRead:
     account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
     try:
-        update_account_from_payload(
+        update_account_service(
             db,
             account=account,
-            payload=payload,
+            patch=AccountPatch.model_validate(payload.model_dump(exclude_unset=True)),
             principal=principal,
         )
     except PolicyViolation as exc:

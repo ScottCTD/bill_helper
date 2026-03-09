@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.models_finance import Entry
 from backend.services.agent.change_contracts import EntrySelectorPayload
-from backend.services.entries import normalize_tag_name
+from backend.validation.finance_names import normalize_tag_name
 
 ENTRY_PUBLIC_ID_LENGTH = 8
 

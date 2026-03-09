@@ -34,8 +34,8 @@ from backend.services.groups import build_group_summary, group_tree_options
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.agent.user_context import normalize_account_markdown_for_context
 from backend.services.users import find_user_by_name
-from backend.services.entries import normalize_tag_name
 from backend.services.taxonomy import get_single_term_name_map
+from backend.validation.finance_names import normalize_tag_name
 
 
 def format_lines(lines: list[str]) -> str:

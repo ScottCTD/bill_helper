@@ -6,17 +6,18 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from backend.models_finance import Account, Entity, Entry
-from backend.schemas_finance import EntityCreate, EntityUpdate
 from backend.services.crud_policy import (
     PolicyViolation,
     assert_unique_name,
     normalize_required_name,
 )
+from backend.services.finance_contracts import EntityCreateCommand, EntityPatch
 from backend.services.taxonomy_constants import (
     ENTITY_CATEGORY_SUBJECT_TYPE,
     ENTITY_CATEGORY_TAXONOMY_KEY,
 )
 from backend.services.taxonomy import assign_single_term_by_name, get_single_term_name
+from backend.validation.finance_names import normalize_entity_category, normalize_entity_name
 
 
 ACCOUNT_CATEGORY_DETAIL = "Account category is reserved for Accounts. Use /accounts instead."
@@ -30,18 +31,6 @@ class EntityUsageRow:
     to_count: int
     account_count: int
     entry_count: int
-
-
-def normalize_entity_name(name: str) -> str:
-    return " ".join(name.split()).strip()
-
-
-def normalize_entity_category(category: str | None) -> str | None:
-    if category is None:
-        return None
-    normalized = " ".join(category.split()).strip().lower()
-    return normalized or None
-
 
 def ensure_entity_category_is_not_account(category: str | None) -> None:
     if normalize_entity_category(category) == "account":
@@ -181,13 +170,13 @@ def list_entities_with_usage(db: Session) -> list[EntityUsageRow]:
     ]
 
 
-def create_entity_from_payload(db: Session, *, payload: EntityCreate) -> Entity:
+def create_entity(db: Session, *, command: EntityCreateCommand) -> Entity:
     normalized_name = normalize_required_name(
-        payload.name,
+        command.name,
         normalizer=normalize_entity_name,
         empty_detail="Entity name cannot be empty",
     )
-    ensure_entity_category_is_not_account(payload.category)
+    ensure_entity_category_is_not_account(command.category)
     existing = find_entity_by_name(db, normalized_name)
     assert_unique_name(
         existing_id=existing.id if existing is not None else None,
@@ -197,8 +186,8 @@ def create_entity_from_payload(db: Session, *, payload: EntityCreate) -> Entity:
     entity = Entity(name=normalized_name, category=None)
     db.add(entity)
     db.flush()
-    if payload.category is not None:
-        set_entity_category(db, entity, payload.category)
+    if command.category is not None:
+        set_entity_category(db, entity, command.category)
     return entity
 
 
@@ -235,24 +224,23 @@ def rename_entity_and_sync_entry_labels(
     return entity
 
 
-def update_entity_from_payload(
+def update_entity(
     db: Session,
     *,
     entity: Entity,
-    payload: EntityUpdate,
+    patch: EntityPatch,
 ) -> Entity:
     ensure_entity_is_not_account_backed(entity)
-    update_data = payload.model_dump(exclude_unset=True)
-    if "name" in update_data:
+    if "name" in patch.model_fields_set and patch.name is not None:
         rename_entity_and_sync_entry_labels(
             db,
             entity=entity,
-            raw_name=update_data["name"],
+            raw_name=patch.name,
         )
 
-    if "category" in update_data:
-        ensure_entity_category_is_not_account(update_data["category"])
-        set_entity_category(db, entity, update_data["category"])
+    if "category" in patch.model_fields_set:
+        ensure_entity_category_is_not_account(patch.category)
+        set_entity_category(db, entity, patch.category)
 
     db.add(entity)
     db.flush()

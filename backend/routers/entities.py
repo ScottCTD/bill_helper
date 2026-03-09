@@ -15,12 +15,13 @@ from backend.services.crud_policy import (
     translate_policy_violation,
 )
 from backend.services.entities import (
-    create_entity_from_payload,
+    create_entity as create_entity_service,
     delete_entity_and_preserve_labels,
     list_entities_with_usage,
     read_entity_category,
-    update_entity_from_payload,
+    update_entity as update_entity_service,
 )
+from backend.services.finance_contracts import EntityCreateCommand, EntityPatch
 from backend.services.taxonomy import get_single_term_name_map
 
 router = APIRouter(prefix="/entities", tags=["entities"])
@@ -86,7 +87,10 @@ def create_entity(
     _: RequestPrincipal = Depends(require_admin_principal),
 ) -> EntityRead:
     try:
-        entity = create_entity_from_payload(db, payload=payload)
+        entity = create_entity_service(
+            db,
+            command=EntityCreateCommand.model_validate(payload.model_dump()),
+        )
     except PolicyViolation as exc:
         raise translate_policy_violation(exc) from exc
     category = read_entity_category(db, entity)
@@ -125,10 +129,10 @@ def update_entity(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found")
 
     try:
-        update_entity_from_payload(
+        update_entity_service(
             db,
             entity=entity,
-            payload=payload,
+            patch=EntityPatch.model_validate(payload.model_dump(exclude_unset=True)),
         )
     except PolicyViolation as exc:
         raise translate_policy_violation(exc) from exc

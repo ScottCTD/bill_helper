@@ -43,9 +43,7 @@ from backend.services.agent.group_references import (
     group_owner_condition,
     group_public_summary,
 )
-from backend.schemas_finance import EntityCreate, EntityUpdate
 from backend.services.accounts import (
-    AccountPatch,
     create_account_root,
     delete_account_and_entity_root,
     find_account_by_name,
@@ -54,11 +52,19 @@ from backend.services.accounts import (
 from backend.services.crud_policy import PolicyViolation
 from backend.services.entries import set_entry_tags, soft_delete_entry
 from backend.services.entities import (
-    create_entity_from_payload,
+    create_entity,
     delete_entity_and_preserve_labels,
     ensure_entity_by_name,
     find_entity_by_name,
-    update_entity_from_payload,
+    update_entity,
+)
+from backend.services.finance_contracts import (
+    AccountCreateCommand,
+    AccountPatch,
+    EntityCreateCommand,
+    EntityPatch,
+    TagCreateCommand,
+    TagPatch,
 )
 from backend.services.tags import delete_tag
 from backend.services.runtime_settings import resolve_runtime_settings
@@ -71,14 +77,7 @@ from backend.services.groups import (
     remove_group_member,
     rename_group,
 )
-from backend.services.tags import resolve_tag_color
-from backend.services.taxonomy_constants import (
-    ENTITY_CATEGORY_SUBJECT_TYPE,
-    ENTITY_CATEGORY_TAXONOMY_KEY,
-    TAG_TYPE_SUBJECT_TYPE,
-    TAG_TYPE_TAXONOMY_KEY,
-)
-from backend.services.taxonomy import assign_single_term_by_name
+from backend.services.tags import create_tag, update_tag
 from backend.services.users import ensure_current_user
 
 
@@ -195,16 +194,13 @@ def apply_create_tag(db: Session, payload: CreateTagPayload) -> AppliedResource:
     if existing is not None:
         return AppliedResource(resource_type="tag", resource_id=str(existing.id))
 
-    tag = Tag(name=payload.name, color=resolve_tag_color(None))
-    db.add(tag)
-    db.flush()
-    assign_single_term_by_name(
-        db,
-        taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
-        subject_type=TAG_TYPE_SUBJECT_TYPE,
-        subject_id=tag.id,
-        term_name=payload.type,
-    )
+    try:
+        tag = create_tag(
+            db,
+            command=TagCreateCommand(name=payload.name, color=None, description=None, type=payload.type),
+        )
+    except PolicyViolation as exc:
+        raise ValueError(exc.detail) from exc
     return AppliedResource(resource_type="tag", resource_id=str(tag.id))
 
 
@@ -213,23 +209,14 @@ def apply_update_tag(db: Session, payload: UpdateTagPayload) -> AppliedResource:
     if tag is None:
         raise ValueError("Tag not found")
 
-    if "name" in payload.patch.model_fields_set and payload.patch.name is not None:
-        existing = db.scalar(select(Tag).where(Tag.name == payload.patch.name))
-        if existing is not None and existing.id != tag.id:
-            raise ValueError("Tag already exists")
-        tag.name = payload.patch.name
-
-    if "type" in payload.patch.model_fields_set:
-        assign_single_term_by_name(
+    try:
+        update_tag(
             db,
-            taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
-            subject_type=TAG_TYPE_SUBJECT_TYPE,
-            subject_id=tag.id,
-            term_name=payload.patch.type,
+            tag=tag,
+            patch=TagPatch.model_validate(payload.patch.model_dump(exclude_unset=True)),
         )
-
-    db.add(tag)
-    db.flush()
+    except PolicyViolation as exc:
+        raise ValueError(exc.detail) from exc
     return AppliedResource(resource_type="tag", resource_id=str(tag.id))
 
 
@@ -245,9 +232,9 @@ def apply_delete_tag(db: Session, payload: DeleteTagPayload) -> AppliedResource:
 
 def apply_create_entity(db: Session, payload: CreateEntityPayload) -> AppliedResource:
     try:
-        entity = create_entity_from_payload(
+        entity = create_entity(
             db,
-            payload=EntityCreate(name=payload.name, category=payload.category),
+            command=EntityCreateCommand(name=payload.name, category=payload.category),
         )
     except PolicyViolation as exc:
         raise ValueError(exc.detail) from exc
@@ -259,10 +246,10 @@ def apply_update_entity(db: Session, payload: UpdateEntityPayload) -> AppliedRes
     if entity is None:
         raise ValueError("Entity not found")
     try:
-        update_entity_from_payload(
+        update_entity(
             db,
             entity=entity,
-            payload=EntityUpdate.model_validate(payload.patch.model_dump(exclude_unset=True)),
+            patch=EntityPatch.model_validate(payload.patch.model_dump(exclude_unset=True)),
         )
     except PolicyViolation as exc:
         raise ValueError(exc.detail) from exc
@@ -285,14 +272,21 @@ def apply_delete_entity(db: Session, payload: DeleteEntityPayload) -> AppliedRes
 def apply_create_account(db: Session, payload: CreateAccountPayload) -> AppliedResource:
     settings = resolve_runtime_settings(db)
     owner_user = ensure_current_user(db, settings.current_user_name)
+    command = AccountCreateCommand(
+        name=payload.name,
+        owner_user_id=owner_user.id,
+        markdown_body=payload.markdown_body,
+        currency_code=payload.currency_code,
+        is_active=payload.is_active,
+    )
     try:
         account = create_account_root(
             db,
-            name=payload.name,
-            owner_user_id=owner_user.id,
-            markdown_body=payload.markdown_body,
-            currency_code=payload.currency_code,
-            is_active=payload.is_active,
+            name=command.name,
+            owner_user_id=command.owner_user_id,
+            markdown_body=command.markdown_body,
+            currency_code=command.currency_code,
+            is_active=command.is_active,
         )
     except PolicyViolation as exc:
         raise ValueError(exc.detail) from exc
