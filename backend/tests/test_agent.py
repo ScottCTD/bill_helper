@@ -404,16 +404,16 @@ def test_default_agent_model_is_bedrock_claude_sonnet_4_6():
 def test_model_supports_vision_has_manual_override_for_openrouter_qwen_qwen3_5_27b(monkeypatch):
     from backend.services.agent import message_history
 
-    monkeypatch.setattr(message_history.litellm, "supports_vision", lambda _model: False)
+    monkeypatch.setattr(message_history.attachment_content.litellm, "supports_vision", lambda _model: False)
 
-    assert message_history._model_supports_vision("openrouter/qwen/qwen3.5-27b") is True
-    assert message_history._model_supports_vision("qwen/qwen3.5-27b") is True
+    assert message_history.attachment_content.model_supports_vision("openrouter/qwen/qwen3.5-27b") is True
+    assert message_history.attachment_content.model_supports_vision("qwen/qwen3.5-27b") is True
 
 
 def test_pdf_line_normalization_collapses_internal_whitespace_and_trims_edges():
-    from backend.services.agent.message_history import _normalize_pdf_text_lines
+    from backend.services.agent.attachment_content import normalize_pdf_text_lines
 
-    normalized = _normalize_pdf_text_lines("  Invoice   total\tCAD  123.45  \n\n  Line   2  ")
+    normalized = normalize_pdf_text_lines("  Invoice   total\tCAD  123.45  \n\n  Line   2  ")
     assert normalized == "Invoice total CAD 123.45\n\nLine 2"
 
 
@@ -433,7 +433,7 @@ def test_pdf_attachment_includes_pymupdf_text_without_pdf_page_images_when_visio
 
     captured_messages: list[list[dict]] = []
 
-    monkeypatch.setattr(message_history, "_model_supports_vision", lambda _model: False)
+    monkeypatch.setattr(message_history.attachment_content, "model_supports_vision", lambda *_args, **_kwargs: False)
 
     def capture_model(messages):
         captured_messages.append(messages)
@@ -475,7 +475,7 @@ def test_pdf_attachment_adds_page_images_when_vision_is_enabled(client, monkeypa
 
     captured_messages: list[list[dict]] = []
 
-    monkeypatch.setattr(message_history, "_model_supports_vision", lambda _model: True)
+    monkeypatch.setattr(message_history.attachment_content, "model_supports_vision", lambda *_args, **_kwargs: True)
 
     def capture_model(messages):
         captured_messages.append(messages)
@@ -522,12 +522,14 @@ def test_pdf_attachment_uses_tesseract_ocr_when_pymupdf_text_is_empty(client, mo
 
     captured_messages: list[list[dict]] = []
 
-    monkeypatch.setattr(message_history, "_model_supports_vision", lambda _model: False)
-    monkeypatch.setattr(message_history, "_extract_pdf_text", lambda _file_path: None)
+    monkeypatch.setattr(message_history.attachment_content, "model_supports_vision", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(
-        message_history,
-        "_extract_pdf_text_with_tesseract",
-        lambda _file_path: "OCR recovered statement total CAD 123.45",
+        message_history.attachment_content,
+        "extract_pdf_text_for_model",
+        lambda _file_path: (
+            "OCR recovered statement total CAD 123.45",
+            "parsed with Tesseract OCR; expect imperfect text",
+        ),
     )
 
     def capture_model(messages):
@@ -563,7 +565,7 @@ def test_attachment_parts_stay_before_user_prompt_for_mixed_uploads(client, monk
 
     captured_messages: list[list[dict]] = []
 
-    monkeypatch.setattr(message_history, "_model_supports_vision", lambda _model: True)
+    monkeypatch.setattr(message_history.attachment_content, "model_supports_vision", lambda *_args, **_kwargs: True)
 
     def capture_model(messages):
         captured_messages.append(messages)

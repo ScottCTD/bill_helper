@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-import litellm
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -16,14 +15,7 @@ from backend.models_agent import (
     AgentRun,
     AgentToolCall,
 )
-from backend.services.agent.attachment_content import (
-    AttachmentAssemblyOptions,
-    assemble_attachment_parts,
-    extract_pdf_text as _extract_pdf_text_impl,
-    extract_pdf_text_with_tesseract as _extract_pdf_text_with_tesseract_impl,
-    model_supports_vision,
-    pdf_page_image_data_urls as _pdf_page_image_data_urls,
-)
+from backend.services.agent import attachment_content
 from backend.services.agent.user_context import (
     build_current_user_context as _build_current_user_context,
 )
@@ -31,39 +23,6 @@ from backend.services.agent.prompts import SystemPromptContext, system_prompt
 from backend.services.agent.proposal_metadata import proposal_metadata_for_change_type
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.taxonomy import list_term_name_description_pairs
-
-
-def _model_supports_vision(model_name: str) -> bool:
-    return model_supports_vision(
-        model_name,
-        supports_vision=litellm.supports_vision,
-    )
-
-
-def _extract_pdf_text(file_path: str) -> str | None:
-    return _extract_pdf_text_impl(file_path)
-
-
-def _extract_pdf_text_with_tesseract(file_path: str) -> str | None:
-    return _extract_pdf_text_with_tesseract_impl(file_path)
-
-
-def _normalize_pdf_text_lines(text: str) -> str:
-    normalized_lines = []
-    for line in text.splitlines():
-        normalized_lines.append(" ".join(line.split()))
-    return "\n".join(normalized_lines).strip()
-
-
-def _extract_pdf_text_for_model(file_path: str) -> tuple[str | None, str | None]:
-    native_text = _extract_pdf_text(file_path)
-    if native_text:
-        return native_text, "parsed with PyMuPDF text extraction"
-    ocr_text = _extract_pdf_text_with_tesseract(file_path)
-    if ocr_text:
-        return ocr_text, "parsed with Tesseract OCR; expect imperfect text"
-    return None, None
-
 
 def _compose_user_feedback_text(
     message: AgentMessage,
@@ -107,12 +66,12 @@ def build_user_content(
     if not message.attachments:
         return content_text
 
-    parts = assemble_attachment_parts(
+    parts = attachment_content.assemble_attachment_parts(
         message.attachments,
-        options=AttachmentAssemblyOptions(
+        options=attachment_content.AttachmentAssemblyOptions(
             include_pdf_page_images=include_pdf_page_images,
-            pdf_text_extractor=_extract_pdf_text_for_model,
-            pdf_page_image_renderer=_pdf_page_image_data_urls,
+            pdf_text_extractor=attachment_content.extract_pdf_text_for_model,
+            pdf_page_image_renderer=attachment_content.pdf_page_image_data_urls,
         ),
     )
 
@@ -372,7 +331,7 @@ def build_llm_messages(
     surface: str = "app",
 ) -> list[dict[str, Any]]:
     settings = resolve_runtime_settings(db)
-    include_pdf_page_images = _model_supports_vision(model_name or settings.agent_model)
+    include_pdf_page_images = attachment_content.model_supports_vision(model_name or settings.agent_model)
 
     history = list(
         db.scalars(
