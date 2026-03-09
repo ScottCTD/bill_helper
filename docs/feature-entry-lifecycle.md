@@ -20,14 +20,18 @@ This doc is the fast path for understanding how entries are created, edited, gro
 1. UI submit from `frontend/src/components/EntryEditorModal.tsx`.
 2. Optional direct-group assignment is chosen in the same modal. `SPLIT` targets also require a split role.
 3. Request via `frontend/src/lib/api.ts` (`createEntry` or `updateEntry`).
-4. Router logic in `backend/routers/entries.py`.
-5. Tag/entity/user normalization in services:
-   - `backend/services/entries.py`
+4. HTTP boundary in `backend/routers/entries.py` parses request models and maps service policy failures to HTTP responses.
+5. Typed entry workflow orchestration in `backend/services/entries.py`:
+   - entry create/update commands
+   - principal-scoped account/user/group loading
+   - tag/entity/user normalization
+   - direct-group membership assignment and validation
+6. Supporting service helpers:
    - `backend/services/entities.py`
    - `backend/services/users.py`
    - `backend/services/groups.py` for direct-group membership assignment/validation
-6. Serialization in `backend/services/serializers.py`.
-7. Query invalidation in `frontend/src/lib/queryInvalidation.ts`.
+7. Serialization in `backend/services/serializers.py`.
+8. Query invalidation in `frontend/src/lib/queryInvalidation.ts`.
 
 ## Group Flow
 
@@ -71,6 +75,7 @@ This doc is the fast path for understanding how entries are created, edited, gro
 ## Tests
 
 - `backend/tests/test_entries.py`
+- `backend/tests/test_entries_service.py`
 - `backend/tests/test_agent.py` (approval/apply entry path)
 - `backend/tests/test_migrations_core.py`
 
