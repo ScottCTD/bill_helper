@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.enums_finance import GroupMemberRole
-from backend.services.agent.change_contracts import (
+from backend.services.agent.change_contracts.groups import (
     CreateGroupMemberPayload,
     DeleteGroupMemberPayload,
     GroupMemberTargetPayload,

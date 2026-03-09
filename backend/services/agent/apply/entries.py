@@ -9,7 +9,7 @@ from backend.services.agent.apply.common import (
     find_unique_entry_by_selector,
     resolve_current_user,
 )
-from backend.services.agent.change_contracts import (
+from backend.services.agent.change_contracts.entries import (
     CreateEntryPayload,
     DeleteEntryPayload,
     UpdateEntryPayload,

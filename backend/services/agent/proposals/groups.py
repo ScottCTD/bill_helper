@@ -6,7 +6,7 @@ from backend.enums_agent import AgentChangeStatus, AgentChangeType
 from backend.enums_finance import GroupType
 from backend.models_agent import AgentChangeItem
 from backend.models_finance import Entry, EntryGroup, EntryGroupMember
-from backend.services.agent.change_contracts import (
+from backend.services.agent.change_contracts.groups import (
     CreateGroupPayload as ProposeCreateGroupArgs,
     DeleteGroupPayload as ProposeDeleteGroupArgs,
     GroupReferencePayload,

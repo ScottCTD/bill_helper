@@ -7,22 +7,26 @@ from typing import Any, Callable
 from pydantic import BaseModel, ValidationError
 from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
-from backend.services.agent.change_contracts import (
+from backend.services.agent.change_contracts.catalog import (
     CreateAccountPayload as ProposeCreateAccountArgs,
     CreateEntityPayload as ProposeCreateEntityArgs,
-    CreateEntryPayload as ProposeCreateEntryArgs,
-    CreateGroupPayload as ProposeCreateGroupArgs,
     CreateTagPayload as ProposeCreateTagArgs,
     DeleteAccountPayload as ProposeDeleteAccountArgs,
     DeleteEntityPayload as ProposeDeleteEntityArgs,
-    DeleteEntryPayload as ProposeDeleteEntryArgs,
-    DeleteGroupPayload as ProposeDeleteGroupArgs,
     DeleteTagPayload as ProposeDeleteTagArgs,
     UpdateAccountPayload as ProposeUpdateAccountArgs,
     UpdateEntityPayload as ProposeUpdateEntityArgs,
-    UpdateEntryPayload as ProposeUpdateEntryArgs,
-    UpdateGroupPayload as ProposeUpdateGroupArgs,
     UpdateTagPayload as ProposeUpdateTagArgs,
+)
+from backend.services.agent.change_contracts.entries import (
+    CreateEntryPayload as ProposeCreateEntryArgs,
+    DeleteEntryPayload as ProposeDeleteEntryArgs,
+    UpdateEntryPayload as ProposeUpdateEntryArgs,
+)
+from backend.services.agent.change_contracts.groups import (
+    CreateGroupPayload as ProposeCreateGroupArgs,
+    DeleteGroupPayload as ProposeDeleteGroupArgs,
+    UpdateGroupPayload as ProposeUpdateGroupArgs,
 )
 from backend.services.agent.tool_args import (
     AddUserMemoryArgs,

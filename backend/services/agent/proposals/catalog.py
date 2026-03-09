@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from backend.enums_agent import AgentChangeType
 from backend.models_finance import Account, AccountSnapshot, Entry, Tag
 from backend.services.accounts import find_account_by_name
-from backend.services.agent.change_contracts import (
+from backend.services.agent.change_contracts.catalog import (
     CreateAccountPayload as ProposeCreateAccountArgs,
     CreateEntityPayload as ProposeCreateEntityArgs,
     CreateTagPayload as ProposeCreateTagArgs,

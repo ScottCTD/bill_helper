@@ -5,25 +5,29 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from backend.enums_agent import AgentChangeType
-from backend.services.agent.change_contracts import (
+from backend.services.agent.change_contracts import parse_change_payload as parse_change_payload_model
+from backend.services.agent.change_contracts.catalog import (
     CreateAccountPayload as ProposeCreateAccountArgs,
     CreateEntityPayload as ProposeCreateEntityArgs,
-    CreateEntryPayload as ProposeCreateEntryArgs,
-    CreateGroupMemberPayload,
-    CreateGroupPayload as ProposeCreateGroupArgs,
     CreateTagPayload as ProposeCreateTagArgs,
     DeleteAccountPayload as ProposeDeleteAccountArgs,
     DeleteEntityPayload as ProposeDeleteEntityArgs,
-    DeleteEntryPayload as ProposeDeleteEntryArgs,
-    DeleteGroupMemberPayload,
-    DeleteGroupPayload as ProposeDeleteGroupArgs,
     DeleteTagPayload as ProposeDeleteTagArgs,
     UpdateAccountPayload as ProposeUpdateAccountArgs,
     UpdateEntityPayload as ProposeUpdateEntityArgs,
-    UpdateEntryPayload as ProposeUpdateEntryArgs,
-    UpdateGroupPayload as ProposeUpdateGroupArgs,
     UpdateTagPayload as ProposeUpdateTagArgs,
-    parse_change_payload as parse_change_payload_model,
+)
+from backend.services.agent.change_contracts.entries import (
+    CreateEntryPayload as ProposeCreateEntryArgs,
+    DeleteEntryPayload as ProposeDeleteEntryArgs,
+    UpdateEntryPayload as ProposeUpdateEntryArgs,
+)
+from backend.services.agent.change_contracts.groups import (
+    CreateGroupMemberPayload,
+    CreateGroupPayload as ProposeCreateGroupArgs,
+    DeleteGroupMemberPayload,
+    DeleteGroupPayload as ProposeDeleteGroupArgs,
+    UpdateGroupPayload as ProposeUpdateGroupArgs,
 )
 from backend.services.agent.group_references import group_detail_public_record
 from backend.services.agent.proposals.entries import (

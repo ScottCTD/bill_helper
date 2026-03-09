@@ -43,9 +43,8 @@ Desloppify snapshot after forced rescan and forced batch review rerun:
 
 ### 1. Agent contract decomposition
 
-The next major backend batch should reduce the agent contract hub and proposal-normalization sprawl:
+The next major backend batch should reduce the remaining proposal/runtime cleanup after the contract split:
 
-- `review::.::holistic::abstraction_fitness::agent_change_contract_hub::68c21c77`
 - `review::.::holistic::abstraction_fitness::duplicated_thread_proposal_query::a1c88103`
 - `review::.::holistic::abstraction_fitness::internal_tool_args_barrel::a034bd44`
 - `review::.::holistic::abstraction_fitness::proposal_normalization_switchboard::48c8c386`
@@ -54,7 +53,6 @@ The next major backend batch should reduce the agent contract hub and proposal-n
 
 Recommended direction:
 
-- split `backend/services/agent/change_contracts.py` into payload families instead of one cross-layer hub
 - remove duplicate `proposals_for_thread(...)` ownership by promoting one canonical query helper
 - stop routing internal callers through `backend/services/agent/tool_args/__init__.py`
 - separate pending-review normalization from proposal creation logic
@@ -144,8 +142,8 @@ Recommended direction:
 
 ## Suggested Next Batch Order
 
-1. Split `backend/services/agent/change_contracts.py` and normalize proposal query ownership.
-2. Remove internal `tool_args` barrel usage and reduce pending-review normalization switchboards.
+1. Normalize proposal query ownership and remove internal `tool_args` barrel usage.
+2. Reduce pending-review normalization switchboards.
 3. Unify router `PolicyViolation` translation and typed error mapping across CRUD routers.
 4. Split `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`.
 5. Split `frontend/src/features/agent/panel/useAgentPanelController.ts`.

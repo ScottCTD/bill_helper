@@ -11,7 +11,7 @@ from backend.services.accounts import (
     update_account_root,
 )
 from backend.services.agent.apply.common import AppliedResource, resolve_current_user
-from backend.services.agent.change_contracts import (
+from backend.services.agent.change_contracts.catalog import (
     CreateAccountPayload,
     CreateEntityPayload,
     CreateTagPayload,

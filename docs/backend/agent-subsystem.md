@@ -44,8 +44,8 @@
   - thread-title normalization plus rename persistence helpers shared by the router and tool handler
 - `backend/services/agent/tools.py`
   - thin composition facade for runtime interfaces
-- `backend/services/agent/change_contracts.py`
-  - shared proposal/apply payload normalization
+- `backend/services/agent/change_contracts/`
+  - proposal/apply payload contracts split by catalog, entry, and group domains, with shared normalization and patch helpers
 - `backend/services/agent/execution.py`
   - message intake, run start, background continuation, and execution facade for non-runtime callers
 - `backend/services/agent/attachments.py`

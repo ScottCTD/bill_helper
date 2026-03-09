@@ -3,10 +3,8 @@ from __future__ import annotations
 import pytest
 
 from backend.enums_agent import AgentChangeType
-from backend.services.agent.change_contracts import (
-    validate_change_payload,
-    validate_patch_map_paths,
-)
+from backend.services.agent.change_contracts import validate_change_payload
+from backend.services.agent.change_contracts.patches import validate_patch_map_paths
 
 
 def test_validate_change_payload_normalizes_create_entry_contract() -> None:
