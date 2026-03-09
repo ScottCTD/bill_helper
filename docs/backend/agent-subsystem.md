@@ -134,7 +134,7 @@ Endpoints:
 - interruption marks runs as `failed` and injects interruption context into the next turn
 - pending proposals can be updated or removed in later turns while still `PENDING_REVIEW`
 - reviewed proposal context now includes reviewer override values when `payload_override` changed the approved payload, so later turns can see concrete edited values instead of only changed field names
-- run snapshots expose `terminal_assistant_reply`, which formats the latest terminal assistant message for the run surface (or an explicit read override)
+- run snapshots expose persisted `surface`, explicit `reply_surface`, and `terminal_assistant_reply`, so read-time formatting overrides do not masquerade as the stored run surface
 
 ## Review And Apply Behavior
 

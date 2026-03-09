@@ -216,6 +216,7 @@ def run_to_schema(
         status=run.status,
         model_name=run.model_name,
         surface=run.surface,
+        reply_surface=reply_surface,
         context_tokens=run.context_tokens,
         input_tokens=run.input_tokens,
         output_tokens=run.output_tokens,

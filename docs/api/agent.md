@@ -166,7 +166,8 @@ Returned payload includes:
 
 - lifecycle metadata
 - `surface` (persisted execution surface for the run)
-- `terminal_assistant_reply` (latest terminal assistant reply formatted for the requested surface; defaults to the run's persisted surface)
+- `reply_surface` (effective surface used to format `terminal_assistant_reply`)
+- `terminal_assistant_reply` (latest terminal assistant reply formatted for `reply_surface`; defaults to the run's persisted surface)
 - full tool calls (`has_full_payload=true`)
 - change items (legacy unsupported persisted change rows are omitted)
 - usage counters

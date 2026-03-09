@@ -139,6 +139,7 @@ class AgentRunRead(BaseModel):
     status: AgentRunStatus
     model_name: str
     surface: str = "app"
+    reply_surface: str = "app"
     context_tokens: int | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
