@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TypedDict
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -12,12 +12,40 @@ from backend.services.entries import normalize_tag_name
 ENTRY_PUBLIC_ID_LENGTH = 8
 
 
+class EntryPublicRecord(TypedDict):
+    entry_id: str
+    date: str
+    kind: str
+    name: str
+    amount_minor: int
+    currency_code: str
+    from_entity: str | None
+    to_entity: str | None
+    tags: list[str]
+    markdown_notes: str | None
+
+
+class EntrySelectorRecord(TypedDict):
+    date: str
+    amount_minor: int
+    from_entity: str | None
+    to_entity: str | None
+    name: str
+
+
+class EntryIdAmbiguityDetails(TypedDict):
+    entry_id: str
+    candidate_count: int
+    candidate_entry_ids: list[str]
+    candidates: list[EntryPublicRecord]
+
+
 def entry_public_id(entry_id: str, *, full: bool = False) -> str:
     normalized = str(entry_id)
     return normalized if full else normalized[:ENTRY_PUBLIC_ID_LENGTH]
 
 
-def entry_to_public_record(entry: Entry, *, full_id: bool = False) -> dict[str, Any]:
+def entry_to_public_record(entry: Entry, *, full_id: bool = False) -> EntryPublicRecord:
     tag_names = sorted(normalize_tag_name(tag.name) for tag in entry.tags)
     return {
         "entry_id": entry_public_id(entry.id, full=full_id),
@@ -33,7 +61,7 @@ def entry_to_public_record(entry: Entry, *, full_id: bool = False) -> dict[str, 
     }
 
 
-def entry_selector_from_entry(entry: Entry) -> dict[str, Any]:
+def entry_selector_from_entry(entry: Entry) -> EntrySelectorRecord:
     return {
         "date": entry.occurred_at.isoformat(),
         "amount_minor": entry.amount_minor,
@@ -55,7 +83,7 @@ def _effective_entry_entity_name(entry: Entry, *, side: str) -> str | None:
     raise ValueError(f"Unsupported entry entity side: {side}")
 
 
-def entry_selector_to_json(selector: EntrySelectorPayload) -> dict[str, Any]:
+def entry_selector_to_json(selector: EntrySelectorPayload) -> EntrySelectorRecord:
     return {
         "date": selector.date.isoformat(),
         "amount_minor": selector.amount_minor,
@@ -115,7 +143,7 @@ def find_entries_by_id(db: Session, entry_id: str) -> list[Entry]:
     )
 
 
-def entry_id_ambiguity_details(entries: list[Entry], *, entry_id: str) -> dict[str, Any]:
+def entry_id_ambiguity_details(entries: list[Entry], *, entry_id: str) -> EntryIdAmbiguityDetails:
     return {
         "entry_id": entry_id,
         "candidate_count": len(entries),

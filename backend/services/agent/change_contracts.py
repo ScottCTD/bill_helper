@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date as DateValue
 from typing import Any, Literal
 
@@ -603,11 +604,61 @@ CHANGE_PAYLOAD_MODELS: dict[AgentChangeType, type[BaseModel]] = {
 }
 
 
+type ChangePayloadModel = (
+    CreateTagPayload
+    | UpdateTagPayload
+    | DeleteTagPayload
+    | CreateEntityPayload
+    | UpdateEntityPayload
+    | DeleteEntityPayload
+    | CreateAccountPayload
+    | UpdateAccountPayload
+    | DeleteAccountPayload
+    | CreateEntryPayload
+    | UpdateEntryPayload
+    | DeleteEntryPayload
+    | CreateGroupPayload
+    | UpdateGroupPayload
+    | DeleteGroupPayload
+    | CreateGroupMemberPayload
+    | DeleteGroupMemberPayload
+)
+
+
 def validate_change_payload(change_type: AgentChangeType, payload: dict[str, Any]) -> BaseModel:
     model_type = CHANGE_PAYLOAD_MODELS.get(change_type)
     if model_type is None:  # pragma: no cover - enum guard
         raise ValueError(f"unsupported proposal change type: {change_type.value}")
     return model_type.model_validate(payload)
+
+
+def parse_change_payload(
+    change_type: AgentChangeType,
+    payload: Mapping[str, Any],
+) -> ChangePayloadModel:
+    parsed = validate_change_payload(change_type, dict(payload))
+    if not isinstance(
+        parsed,
+        CreateTagPayload
+        | UpdateTagPayload
+        | DeleteTagPayload
+        | CreateEntityPayload
+        | UpdateEntityPayload
+        | DeleteEntityPayload
+        | CreateAccountPayload
+        | UpdateAccountPayload
+        | DeleteAccountPayload
+        | CreateEntryPayload
+        | UpdateEntryPayload
+        | DeleteEntryPayload
+        | CreateGroupPayload
+        | UpdateGroupPayload
+        | DeleteGroupPayload
+        | CreateGroupMemberPayload
+        | DeleteGroupMemberPayload,
+    ):  # pragma: no cover - enum/model map guard
+        raise ValueError(f"unsupported proposal change type: {change_type.value}")
+    return parsed
 
 
 PROPOSAL_MUTABLE_ROOTS: dict[AgentChangeType, set[str]] = {

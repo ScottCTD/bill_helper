@@ -9,6 +9,15 @@ from sqlalchemy.orm import Session, selectinload
 from backend.enums_agent import AgentChangeStatus, AgentChangeType, AgentReviewActionType
 from backend.models_agent import AgentChangeItem, AgentReviewAction, AgentRun
 from backend.services.agent.change_apply import apply_change_item_payload
+from backend.services.agent.change_contracts import (
+    ChangePayloadModel,
+    CreateAccountPayload,
+    CreateEntityPayload,
+    CreateEntryPayload,
+    CreateGroupMemberPayload,
+    UpdateEntryPayload,
+    parse_change_payload,
+)
 from backend.services.agent.tool_handlers_propose import normalize_payload_for_change_type
 from backend.services.agent.tool_types import ToolContext
 from backend.services.entities import find_entity_by_name, normalize_entity_name
@@ -121,17 +130,17 @@ def _normalized_entity_reference(value: Any) -> str | None:
 
 
 def _entry_entity_labels_for_payload(
-    *,
-    change_type: AgentChangeType,
-    payload: dict[str, Any],
+    payload: CreateEntryPayload | UpdateEntryPayload,
 ) -> dict[str, str]:
-    raw_refs: list[Any] = []
-    if change_type == AgentChangeType.CREATE_ENTRY:
-        raw_refs = [payload.get("from_entity"), payload.get("to_entity")]
-    elif change_type == AgentChangeType.UPDATE_ENTRY:
-        patch = payload.get("patch")
-        if isinstance(patch, dict):
-            raw_refs = [patch.get("from_entity"), patch.get("to_entity")]
+    raw_refs: list[str | None]
+    if isinstance(payload, CreateEntryPayload):
+        raw_refs = [payload.from_entity, payload.to_entity]
+    else:
+        raw_refs = []
+        if "from_entity" in payload.patch.model_fields_set:
+            raw_refs.append(payload.patch.from_entity)
+        if "to_entity" in payload.patch.model_fields_set:
+            raw_refs.append(payload.patch.to_entity)
 
     labels: dict[str, str] = {}
     for raw_ref in raw_refs:
@@ -155,8 +164,10 @@ def _pending_create_entity_root_names(
             AgentChangeType.CREATE_ACCOUNT,
         }:
             continue
-        raw_name = item.payload_json.get("name")
-        normalized = _normalized_entity_reference(raw_name)
+        parsed = parse_change_payload(item.change_type, item.payload_json)
+        if not isinstance(parsed, CreateEntityPayload | CreateAccountPayload):
+            continue
+        normalized = _normalized_entity_reference(parsed.name)
         if normalized is not None:
             names.add(normalized)
     return names
@@ -166,12 +177,14 @@ def _validate_entry_dependencies_ready_for_approval(
     db: Session,
     *,
     item: AgentChangeItem,
-    payload: dict[str, Any],
+    payload: ChangePayloadModel,
 ) -> None:
     if item.change_type not in {AgentChangeType.CREATE_ENTRY, AgentChangeType.UPDATE_ENTRY}:
         return
+    if not isinstance(payload, CreateEntryPayload | UpdateEntryPayload):
+        raise ValueError(f"Unexpected payload model for change type {item.change_type.value}")
 
-    entity_labels = _entry_entity_labels_for_payload(change_type=item.change_type, payload=payload)
+    entity_labels = _entry_entity_labels_for_payload(payload)
     if not entity_labels:
         return
 
@@ -210,16 +223,16 @@ def _validate_entry_dependencies_ready_for_approval(
         )
 
 
-def _group_dependency_proposal_ids(payload: dict[str, Any]) -> list[str]:
+def _group_dependency_proposal_ids(payload: CreateGroupMemberPayload) -> list[str]:
     dependency_ids: list[str] = []
-    for key in ("group_ref", "entry_ref", "child_group_ref"):
-        value = payload.get(key)
-        if not isinstance(value, dict):
-            continue
-        for proposal_key in ("create_group_proposal_id", "create_entry_proposal_id"):
-            raw = value.get(proposal_key)
-            if isinstance(raw, str) and raw:
-                dependency_ids.append(raw)
+    references = (
+        payload.group_ref.create_group_proposal_id,
+        payload.entry_ref.create_entry_proposal_id if payload.entry_ref is not None else None,
+        payload.child_group_ref.create_group_proposal_id if payload.child_group_ref is not None else None,
+    )
+    for proposal_id in references:
+        if proposal_id:
+            dependency_ids.append(proposal_id)
     return dependency_ids
 
 
@@ -227,10 +240,12 @@ def _validate_group_dependencies_ready_for_approval(
     db: Session,
     *,
     item: AgentChangeItem,
-    payload: dict[str, Any],
+    payload: ChangePayloadModel,
 ) -> None:
     if item.change_type != AgentChangeType.CREATE_GROUP_MEMBER:
         return
+    if not isinstance(payload, CreateGroupMemberPayload):
+        raise ValueError(f"Unexpected payload model for change type {item.change_type.value}")
 
     dependency_ids = _group_dependency_proposal_ids(payload)
     if not dependency_ids:
@@ -295,15 +310,17 @@ def _normalized_payload_override(
     *,
     item: AgentChangeItem,
     payload_override: dict[str, Any] | None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], ChangePayloadModel]:
     _validate_payload_override_supported(item, payload_override)
     if payload_override is None:
-        return item.payload_json
-    return normalize_payload_for_change_type(
-        ToolContext(db=db, run_id=item.run_id),
-        change_type=item.change_type,
-        payload=payload_override,
-    )
+        payload_json = item.payload_json
+    else:
+        payload_json = normalize_payload_for_change_type(
+            ToolContext(db=db, run_id=item.run_id),
+            change_type=item.change_type,
+            payload=payload_override,
+        )
+    return payload_json, parse_change_payload(item.change_type, payload_json)
 
 
 def approve_change_item(
@@ -320,7 +337,7 @@ def approve_change_item(
     if item.status == AgentChangeStatus.APPLIED:
         raise ValueError("Applied items cannot be approved again")
 
-    payload = _normalized_payload_override(db, item=item, payload_override=payload_override)
+    payload_json, payload = _normalized_payload_override(db, item=item, payload_override=payload_override)
     override_note = None
     if payload_override is not None:
         diff_summary = _summarize_payload_override_diff(item.payload_json, payload_override)
@@ -338,7 +355,7 @@ def approve_change_item(
     )
     db.add(approval_action)
     if payload_override is not None:
-        item.payload_json = payload
+        item.payload_json = payload_json
     item.status = AgentChangeStatus.APPROVED
     item.review_note = combined_note
 
@@ -384,7 +401,7 @@ def reject_change_item(
     if item.status == AgentChangeStatus.APPLIED:
         raise ValueError("Applied items cannot be changed back to rejected")
 
-    payload = _normalized_payload_override(db, item=item, payload_override=payload_override)
+    payload_json, _ = _normalized_payload_override(db, item=item, payload_override=payload_override)
     override_note = None
     if payload_override is not None:
         diff_summary = _summarize_payload_override_diff(item.payload_json, payload_override)
@@ -398,7 +415,7 @@ def reject_change_item(
         actor=actor,
         note=combined_note,
     )
-    item.payload_json = payload
+    item.payload_json = payload_json
     item.status = AgentChangeStatus.REJECTED
     item.review_note = combined_note
     item.updated_at = utc_now()
@@ -424,14 +441,14 @@ def reopen_change_item(
     if item.status == AgentChangeStatus.APPLIED:
         raise ValueError("Applied items cannot be reopened")
 
-    payload = _normalized_payload_override(db, item=item, payload_override=payload_override)
+    payload_json, _ = _normalized_payload_override(db, item=item, payload_override=payload_override)
     override_note = None
     if payload_override is not None:
         diff_summary = _summarize_payload_override_diff(item.payload_json, payload_override)
         if diff_summary:
             override_note = f"payload_override: {diff_summary}"
     combined_note = _combine_notes(note, override_note)
-    item.payload_json = payload
+    item.payload_json = payload_json
     item.status = AgentChangeStatus.PENDING_REVIEW
     item.review_note = combined_note
     item.updated_at = utc_now()

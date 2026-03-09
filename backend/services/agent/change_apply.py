@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, TypeVar
+from typing import Callable
 
-from pydantic import BaseModel, ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -23,6 +22,7 @@ from backend.services.agent.change_contracts import (
     DeleteEntryPayload,
     DeleteEntityPayload,
     DeleteTagPayload,
+    ChangePayloadModel,
     EntryReferencePayload,
     EntrySelectorPayload,
     GroupReferencePayload,
@@ -31,7 +31,6 @@ from backend.services.agent.change_contracts import (
     UpdateEntryPayload,
     UpdateEntityPayload,
     UpdateTagPayload,
-    validate_change_payload,
 )
 from backend.services.agent.entry_references import (
     entry_public_summary,
@@ -87,25 +86,7 @@ class AppliedResource:
     resource_id: str
 
 
-ChangeApplyHandler = Callable[[Session, dict[str, Any]], AppliedResource]
-
-
-TChangePayload = TypeVar("TChangePayload", bound=BaseModel)
-
-
-def _parse_payload(
-    payload: dict[str, Any],
-    *,
-    change_type: AgentChangeType,
-    model_type: type[TChangePayload],
-) -> TChangePayload:
-    try:
-        parsed = validate_change_payload(change_type, payload)
-    except ValidationError as exc:
-        raise ValueError(str(exc)) from exc
-    if not isinstance(parsed, model_type):  # pragma: no cover - enum/model map guard
-        raise ValueError(f"Unexpected payload model for change type {change_type.value}")
-    return parsed
+ChangeApplyHandler = Callable[[Session, ChangePayloadModel], AppliedResource]
 
 
 def _find_unique_entry_by_selector(db: Session, selector_payload: EntrySelectorPayload) -> Entry:
@@ -196,14 +177,12 @@ def _find_scoped_group_by_id(db: Session, *, group_id: str, current_user_id: str
     return group
 
 
-def apply_create_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.CREATE_TAG, model_type=CreateTagPayload)
-
-    existing = db.scalar(select(Tag).where(Tag.name == parsed.name))
+def apply_create_tag(db: Session, payload: CreateTagPayload) -> AppliedResource:
+    existing = db.scalar(select(Tag).where(Tag.name == payload.name))
     if existing is not None:
         return AppliedResource(resource_type="tag", resource_id=str(existing.id))
 
-    tag = Tag(name=parsed.name, color=resolve_tag_color(None))
+    tag = Tag(name=payload.name, color=resolve_tag_color(None))
     db.add(tag)
     db.flush()
     assign_single_term_by_name(
@@ -211,31 +190,29 @@ def apply_create_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
         taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
         subject_type=TAG_TYPE_SUBJECT_TYPE,
         subject_id=tag.id,
-        term_name=parsed.type,
+        term_name=payload.type,
     )
     return AppliedResource(resource_type="tag", resource_id=str(tag.id))
 
 
-def apply_update_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.UPDATE_TAG, model_type=UpdateTagPayload)
-
-    tag = db.scalar(select(Tag).where(Tag.name == parsed.name))
+def apply_update_tag(db: Session, payload: UpdateTagPayload) -> AppliedResource:
+    tag = db.scalar(select(Tag).where(Tag.name == payload.name))
     if tag is None:
         raise ValueError("Tag not found")
 
-    if "name" in parsed.patch.model_fields_set and parsed.patch.name is not None:
-        existing = db.scalar(select(Tag).where(Tag.name == parsed.patch.name))
+    if "name" in payload.patch.model_fields_set and payload.patch.name is not None:
+        existing = db.scalar(select(Tag).where(Tag.name == payload.patch.name))
         if existing is not None and existing.id != tag.id:
             raise ValueError("Tag already exists")
-        tag.name = parsed.patch.name
+        tag.name = payload.patch.name
 
-    if "type" in parsed.patch.model_fields_set:
+    if "type" in payload.patch.model_fields_set:
         assign_single_term_by_name(
             db,
             taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
             subject_type=TAG_TYPE_SUBJECT_TYPE,
             subject_id=tag.id,
-            term_name=parsed.patch.type,
+            term_name=payload.patch.type,
         )
 
     db.add(tag)
@@ -243,10 +220,8 @@ def apply_update_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
     return AppliedResource(resource_type="tag", resource_id=str(tag.id))
 
 
-def apply_delete_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.DELETE_TAG, model_type=DeleteTagPayload)
-
-    tag = db.scalar(select(Tag).where(Tag.name == parsed.name))
+def apply_delete_tag(db: Session, payload: DeleteTagPayload) -> AppliedResource:
+    tag = db.scalar(select(Tag).where(Tag.name == payload.name))
     if tag is None:
         raise ValueError("Tag not found")
 
@@ -255,40 +230,34 @@ def apply_delete_tag(db: Session, payload: dict[str, Any]) -> AppliedResource:
     return AppliedResource(resource_type="tag", resource_id=resource_id)
 
 
-def apply_create_entity(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.CREATE_ENTITY, model_type=CreateEntityPayload)
-
+def apply_create_entity(db: Session, payload: CreateEntityPayload) -> AppliedResource:
     try:
         entity = create_entity_from_payload(
             db,
-            payload=EntityCreate(name=parsed.name, category=parsed.category),
+            payload=EntityCreate(name=payload.name, category=payload.category),
         )
     except PolicyViolation as exc:
         raise ValueError(exc.detail) from exc
     return AppliedResource(resource_type="entity", resource_id=entity.id)
 
 
-def apply_update_entity(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.UPDATE_ENTITY, model_type=UpdateEntityPayload)
-
-    entity = find_entity_by_name(db, parsed.name)
+def apply_update_entity(db: Session, payload: UpdateEntityPayload) -> AppliedResource:
+    entity = find_entity_by_name(db, payload.name)
     if entity is None:
         raise ValueError("Entity not found")
     try:
         update_entity_from_payload(
             db,
             entity=entity,
-            payload=EntityUpdate.model_validate(parsed.patch.model_dump(exclude_unset=True)),
+            payload=EntityUpdate.model_validate(payload.patch.model_dump(exclude_unset=True)),
         )
     except PolicyViolation as exc:
         raise ValueError(exc.detail) from exc
     return AppliedResource(resource_type="entity", resource_id=entity.id)
 
 
-def apply_delete_entity(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.DELETE_ENTITY, model_type=DeleteEntityPayload)
-
-    entity = find_entity_by_name(db, parsed.name)
+def apply_delete_entity(db: Session, payload: DeleteEntityPayload) -> AppliedResource:
+    entity = find_entity_by_name(db, payload.name)
     if entity is None:
         raise ValueError("Entity not found")
 
@@ -300,38 +269,32 @@ def apply_delete_entity(db: Session, payload: dict[str, Any]) -> AppliedResource
     return AppliedResource(resource_type="entity", resource_id=resource_id)
 
 
-def apply_create_account(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.CREATE_ACCOUNT, model_type=CreateAccountPayload)
-
+def apply_create_account(db: Session, payload: CreateAccountPayload) -> AppliedResource:
     settings = resolve_runtime_settings(db)
     owner_user = ensure_current_user(db, settings.current_user_name)
     account = create_account_root(
         db,
-        name=parsed.name,
+        name=payload.name,
         owner_user_id=owner_user.id,
-        markdown_body=parsed.markdown_body,
-        currency_code=parsed.currency_code,
-        is_active=parsed.is_active,
+        markdown_body=payload.markdown_body,
+        currency_code=payload.currency_code,
+        is_active=payload.is_active,
     )
     return AppliedResource(resource_type="account", resource_id=account.id)
 
 
-def apply_update_account(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.UPDATE_ACCOUNT, model_type=UpdateAccountPayload)
-
-    account = find_account_by_name(db, parsed.name)
+def apply_update_account(db: Session, payload: UpdateAccountPayload) -> AppliedResource:
+    account = find_account_by_name(db, payload.name)
     if account is None:
         raise ValueError("Account not found")
 
-    update_kwargs = parsed.patch.model_dump(exclude_unset=True)
+    update_kwargs = payload.patch.model_dump(exclude_unset=True)
     update_account_root(db, account=account, **update_kwargs)
     return AppliedResource(resource_type="account", resource_id=account.id)
 
 
-def apply_delete_account(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.DELETE_ACCOUNT, model_type=DeleteAccountPayload)
-
-    account = find_account_by_name(db, parsed.name)
+def apply_delete_account(db: Session, payload: DeleteAccountPayload) -> AppliedResource:
+    account = find_account_by_name(db, payload.name)
     if account is None:
         raise ValueError("Account not found")
 
@@ -340,23 +303,21 @@ def apply_delete_account(db: Session, payload: dict[str, Any]) -> AppliedResourc
     return AppliedResource(resource_type="account", resource_id=resource_id)
 
 
-def apply_create_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.CREATE_ENTRY, model_type=CreateEntryPayload)
-
+def apply_create_entry(db: Session, payload: CreateEntryPayload) -> AppliedResource:
     settings = resolve_runtime_settings(db)
-    currency_code = (parsed.currency_code or settings.default_currency_code).strip().upper()
+    currency_code = (payload.currency_code or settings.default_currency_code).strip().upper()
 
-    from_entity = ensure_entity_by_name(db, parsed.from_entity)
-    to_entity = ensure_entity_by_name(db, parsed.to_entity)
+    from_entity = ensure_entity_by_name(db, payload.from_entity)
+    to_entity = ensure_entity_by_name(db, payload.to_entity)
 
     owner_user = ensure_current_user(db, settings.current_user_name)
 
     entry = Entry(
         account_id=None,
-        kind=parsed.kind,
-        occurred_at=parsed.date,
-        name=parsed.name,
-        amount_minor=parsed.amount_minor,
+        kind=payload.kind,
+        occurred_at=payload.date,
+        name=payload.name,
+        amount_minor=payload.amount_minor,
         currency_code=currency_code,
         from_entity_id=from_entity.id,
         to_entity_id=to_entity.id,
@@ -364,71 +325,67 @@ def apply_create_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
         from_entity=from_entity.name,
         to_entity=to_entity.name,
         owner=owner_user.name,
-        markdown_body=parsed.markdown_notes,
+        markdown_body=payload.markdown_notes,
     )
     db.add(entry)
-    set_entry_tags(db, entry, parsed.tags)
+    set_entry_tags(db, entry, payload.tags)
     db.flush()
     return AppliedResource(resource_type="entry", resource_id=entry.id)
 
 
-def apply_update_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.UPDATE_ENTRY, model_type=UpdateEntryPayload)
-
-    if parsed.entry_id is not None:
-        entry = _find_unique_entry_by_id(db, parsed.entry_id)
-    elif parsed.selector is not None:
-        entry = _find_unique_entry_by_selector(db, parsed.selector)
+def apply_update_entry(db: Session, payload: UpdateEntryPayload) -> AppliedResource:
+    if payload.entry_id is not None:
+        entry = _find_unique_entry_by_id(db, payload.entry_id)
+    elif payload.selector is not None:
+        entry = _find_unique_entry_by_selector(db, payload.selector)
     else:  # pragma: no cover - validated by Pydantic
         raise ValueError("Entry reference is required")
 
-    if "kind" in parsed.patch.model_fields_set and parsed.patch.kind is not None:
-        entry.kind = parsed.patch.kind
-    if "date" in parsed.patch.model_fields_set and parsed.patch.date is not None:
-        entry.occurred_at = parsed.patch.date
-    if "name" in parsed.patch.model_fields_set and parsed.patch.name is not None:
-        entry.name = parsed.patch.name
-    if "amount_minor" in parsed.patch.model_fields_set and parsed.patch.amount_minor is not None:
-        entry.amount_minor = parsed.patch.amount_minor
-    if "currency_code" in parsed.patch.model_fields_set and parsed.patch.currency_code is not None:
-        entry.currency_code = parsed.patch.currency_code
+    if "kind" in payload.patch.model_fields_set and payload.patch.kind is not None:
+        entry.kind = payload.patch.kind
+    if "date" in payload.patch.model_fields_set and payload.patch.date is not None:
+        entry.occurred_at = payload.patch.date
+    if "name" in payload.patch.model_fields_set and payload.patch.name is not None:
+        entry.name = payload.patch.name
+    if "amount_minor" in payload.patch.model_fields_set and payload.patch.amount_minor is not None:
+        entry.amount_minor = payload.patch.amount_minor
+    if "currency_code" in payload.patch.model_fields_set and payload.patch.currency_code is not None:
+        entry.currency_code = payload.patch.currency_code
 
-    if "from_entity" in parsed.patch.model_fields_set:
-        if parsed.patch.from_entity is None:
+    if "from_entity" in payload.patch.model_fields_set:
+        if payload.patch.from_entity is None:
             entry.from_entity_id = None
             entry.from_entity = None
         else:
-            from_entity = ensure_entity_by_name(db, parsed.patch.from_entity)
+            from_entity = ensure_entity_by_name(db, payload.patch.from_entity)
             entry.from_entity_id = from_entity.id
             entry.from_entity = from_entity.name
 
-    if "to_entity" in parsed.patch.model_fields_set:
-        if parsed.patch.to_entity is None:
+    if "to_entity" in payload.patch.model_fields_set:
+        if payload.patch.to_entity is None:
             entry.to_entity_id = None
             entry.to_entity = None
         else:
-            to_entity = ensure_entity_by_name(db, parsed.patch.to_entity)
+            to_entity = ensure_entity_by_name(db, payload.patch.to_entity)
             entry.to_entity_id = to_entity.id
             entry.to_entity = to_entity.name
 
-    if "markdown_notes" in parsed.patch.model_fields_set:
-        entry.markdown_body = parsed.patch.markdown_notes
+    if "markdown_notes" in payload.patch.model_fields_set:
+        entry.markdown_body = payload.patch.markdown_notes
 
-    if "tags" in parsed.patch.model_fields_set:
-        set_entry_tags(db, entry, parsed.patch.tags or [])
+    if "tags" in payload.patch.model_fields_set:
+        set_entry_tags(db, entry, payload.patch.tags or [])
 
     db.add(entry)
     db.flush()
     return AppliedResource(resource_type="entry", resource_id=entry.id)
 
 
-def apply_delete_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.DELETE_ENTRY, model_type=DeleteEntryPayload)
-
-    if parsed.entry_id is not None:
-        entry = _find_unique_entry_by_id(db, parsed.entry_id)
-    elif parsed.selector is not None:
-        entry = _find_unique_entry_by_selector(db, parsed.selector)
+def apply_delete_entry(db: Session, payload: DeleteEntryPayload) -> AppliedResource:
+    if payload.entry_id is not None:
+        entry = _find_unique_entry_by_id(db, payload.entry_id)
+    elif payload.selector is not None:
+        entry = _find_unique_entry_by_selector(db, payload.selector)
     else:  # pragma: no cover - validated by Pydantic
         raise ValueError("Entry reference is required")
     soft_delete_entry(db, entry)
@@ -436,63 +393,51 @@ def apply_delete_entry(db: Session, payload: dict[str, Any]) -> AppliedResource:
     return AppliedResource(resource_type="entry", resource_id=entry.id)
 
 
-def apply_create_group(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.CREATE_GROUP, model_type=CreateGroupPayload)
-
+def apply_create_group(db: Session, payload: CreateGroupPayload) -> AppliedResource:
     settings = resolve_runtime_settings(db)
     owner_user = ensure_current_user(db, settings.current_user_name)
     group = create_group(
         db,
-        name=parsed.name,
-        group_type=parsed.group_type,
+        name=payload.name,
+        group_type=payload.group_type,
         owner_user_id=owner_user.id,
     )
     db.flush()
     return AppliedResource(resource_type="group", resource_id=group.id)
 
 
-def apply_update_group(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.UPDATE_GROUP, model_type=UpdateGroupPayload)
-
+def apply_update_group(db: Session, payload: UpdateGroupPayload) -> AppliedResource:
     settings = resolve_runtime_settings(db)
     current_user = ensure_current_user(db, settings.current_user_name)
-    group = _find_scoped_group_by_id(db, group_id=parsed.group_id, current_user_id=current_user.id)
-    updated = rename_group(db, group=group, name=parsed.patch.name or group.name)
+    group = _find_scoped_group_by_id(db, group_id=payload.group_id, current_user_id=current_user.id)
+    updated = rename_group(db, group=group, name=payload.patch.name or group.name)
     db.flush()
     return AppliedResource(resource_type="group", resource_id=updated.id)
 
 
-def apply_delete_group(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(payload, change_type=AgentChangeType.DELETE_GROUP, model_type=DeleteGroupPayload)
-
+def apply_delete_group(db: Session, payload: DeleteGroupPayload) -> AppliedResource:
     settings = resolve_runtime_settings(db)
     current_user = ensure_current_user(db, settings.current_user_name)
-    group = _find_scoped_group_by_id(db, group_id=parsed.group_id, current_user_id=current_user.id)
+    group = _find_scoped_group_by_id(db, group_id=payload.group_id, current_user_id=current_user.id)
     resource_id = group.id
     delete_group(db, group=group)
     db.flush()
     return AppliedResource(resource_type="group", resource_id=resource_id)
 
 
-def apply_create_group_member(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(
-        payload,
-        change_type=AgentChangeType.CREATE_GROUP_MEMBER,
-        model_type=CreateGroupMemberPayload,
-    )
-
+def apply_create_group_member(db: Session, payload: CreateGroupMemberPayload) -> AppliedResource:
     settings = resolve_runtime_settings(db)
     current_user = ensure_current_user(db, settings.current_user_name)
-    group_id = _resolve_applied_group_id(db, parsed.group_ref, current_user_id=current_user.id)
+    group_id = _resolve_applied_group_id(db, payload.group_ref, current_user_id=current_user.id)
     group = _find_scoped_group_by_id(db, group_id=group_id, current_user_id=current_user.id)
 
     entry = None
     child_group = None
-    if parsed.entry_ref is not None:
-        entry_id = _resolve_applied_entry_id(db, parsed.entry_ref)
+    if payload.entry_ref is not None:
+        entry_id = _resolve_applied_entry_id(db, payload.entry_ref)
         entry = _find_unique_entry_by_id(db, entry_id)
-    if parsed.child_group_ref is not None:
-        child_group_id = _resolve_applied_group_id(db, parsed.child_group_ref, current_user_id=current_user.id)
+    if payload.child_group_ref is not None:
+        child_group_id = _resolve_applied_group_id(db, payload.child_group_ref, current_user_id=current_user.id)
         child_group = _find_scoped_group_by_id(db, group_id=child_group_id, current_user_id=current_user.id)
 
     membership = add_group_member(
@@ -500,31 +445,25 @@ def apply_create_group_member(db: Session, payload: dict[str, Any]) -> AppliedRe
         group=group,
         entry=entry,
         child_group=child_group,
-        member_role=parsed.member_role,
+        member_role=payload.member_role,
     )
     db.flush()
     return AppliedResource(resource_type="group_membership", resource_id=membership.id)
 
 
-def apply_delete_group_member(db: Session, payload: dict[str, Any]) -> AppliedResource:
-    parsed = _parse_payload(
-        payload,
-        change_type=AgentChangeType.DELETE_GROUP_MEMBER,
-        model_type=DeleteGroupMemberPayload,
-    )
-
+def apply_delete_group_member(db: Session, payload: DeleteGroupMemberPayload) -> AppliedResource:
     settings = resolve_runtime_settings(db)
     current_user = ensure_current_user(db, settings.current_user_name)
     group = _find_scoped_group_by_id(
         db,
-        group_id=parsed.group_ref.group_id or "",
+        group_id=payload.group_ref.group_id or "",
         current_user_id=current_user.id,
     )
 
-    target_entry_id = _resolve_applied_entry_id(db, parsed.entry_ref) if parsed.entry_ref is not None else None
+    target_entry_id = _resolve_applied_entry_id(db, payload.entry_ref) if payload.entry_ref is not None else None
     target_child_group_id = (
-        _resolve_applied_group_id(db, parsed.child_group_ref, current_user_id=current_user.id)
-        if parsed.child_group_ref is not None
+        _resolve_applied_group_id(db, payload.child_group_ref, current_user_id=current_user.id)
+        if payload.child_group_ref is not None
         else None
     )
     membership = next(
@@ -565,7 +504,12 @@ APPLY_CHANGE_HANDLERS: dict[AgentChangeType, ChangeApplyHandler] = {
 }
 
 
-def apply_change_item_payload(db: Session, *, change_type: AgentChangeType, payload: dict[str, Any]) -> AppliedResource:
+def apply_change_item_payload(
+    db: Session,
+    *,
+    change_type: AgentChangeType,
+    payload: ChangePayloadModel,
+) -> AppliedResource:
     handler = APPLY_CHANGE_HANDLERS.get(change_type)
     if handler is None:  # pragma: no cover - enum guard
         raise ValueError(f"Unsupported change type: {change_type}")

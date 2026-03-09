@@ -1,16 +1,66 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import NotRequired, TypedDict
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from backend.models_finance import EntryGroup
-from backend.schemas_finance import GroupGraphRead, GroupSummaryRead
+from backend.schemas_finance import GroupEdge, GroupGraphRead, GroupNode, GroupSummaryRead
 from backend.services.agent.entry_references import entry_public_id
 from backend.services.groups import build_group_graph, build_group_summary, group_tree_options
 
 GROUP_PUBLIC_ID_LENGTH = 8
+
+
+class GroupSummaryPublicRecord(TypedDict):
+    group_id: str
+    name: str
+    group_type: str
+    parent_group_id: str | None
+    direct_member_count: int
+    direct_entry_count: int
+    direct_child_group_count: int
+    descendant_entry_count: int
+    first_occurred_at: str | None
+    last_occurred_at: str | None
+
+
+class GroupMemberDateRangeRecord(TypedDict):
+    first_occurred_at: str | None
+    last_occurred_at: str | None
+
+
+class GroupMemberPublicRecord(TypedDict):
+    member_type: str
+    name: str
+    member_role: NotRequired[object]
+    entry_id: NotRequired[str]
+    occurred_at: NotRequired[object]
+    kind: NotRequired[object]
+    amount_minor: NotRequired[object]
+    group_id: NotRequired[str]
+    group_type: NotRequired[object]
+    descendant_entry_count: NotRequired[object]
+    date_range: NotRequired[GroupMemberDateRangeRecord]
+
+
+class GroupRelationshipRecord(TypedDict):
+    relation: object
+    source: NotRequired[GroupMemberPublicRecord]
+    target: NotRequired[GroupMemberPublicRecord]
+
+
+class GroupDetailPublicRecord(GroupSummaryPublicRecord):
+    direct_members: list[GroupMemberPublicRecord]
+    derived_relationships: list[GroupRelationshipRecord]
+
+
+class GroupIdAmbiguityDetails(TypedDict):
+    group_id: str
+    candidate_count: int
+    candidate_group_ids: list[str]
+    candidates: list[GroupSummaryPublicRecord]
 
 
 def group_public_id(group_id: str, *, full: bool = False) -> str:
@@ -22,7 +72,7 @@ def group_owner_condition(user_id: str):
     return or_(EntryGroup.owner_user_id == user_id, EntryGroup.owner_user_id.is_(None))
 
 
-def group_summary_to_public_record(summary: GroupSummaryRead, *, full_id: bool = False) -> dict[str, Any]:
+def group_summary_to_public_record(summary: GroupSummaryRead, *, full_id: bool = False) -> GroupSummaryPublicRecord:
     return {
         "group_id": group_public_id(summary.id, full=full_id),
         "name": summary.name,
@@ -39,43 +89,41 @@ def group_summary_to_public_record(summary: GroupSummaryRead, *, full_id: bool =
     }
 
 
-def _node_to_public_record(node: dict[str, Any] | Any) -> dict[str, Any]:
-    as_dict = node if isinstance(node, dict) else node.model_dump(mode="json")
-    node_type = as_dict.get("node_type")
+def _node_to_public_record(node: GroupNode) -> GroupMemberPublicRecord:
+    node_type = node.node_type
     record = {
         "member_type": str(node_type).lower() if isinstance(node_type, str) else "unknown",
-        "name": as_dict.get("name"),
+        "name": node.name,
     }
-    if as_dict.get("member_role") is not None:
-        record["member_role"] = as_dict.get("member_role")
+    if node.member_role is not None:
+        record["member_role"] = node.member_role
     if node_type == "ENTRY":
-        record["entry_id"] = entry_public_id(str(as_dict.get("subject_id") or ""))
-        if as_dict.get("occurred_at") is not None:
-            record["occurred_at"] = as_dict.get("occurred_at")
-        if as_dict.get("kind") is not None:
-            record["kind"] = as_dict.get("kind")
-        if as_dict.get("amount_minor") is not None:
-            record["amount_minor"] = as_dict.get("amount_minor")
+        record["entry_id"] = entry_public_id(node.subject_id)
+        if node.occurred_at is not None:
+            record["occurred_at"] = node.occurred_at
+        if node.kind is not None:
+            record["kind"] = node.kind
+        if node.amount_minor is not None:
+            record["amount_minor"] = node.amount_minor
     elif node_type == "GROUP":
-        record["group_id"] = group_public_id(str(as_dict.get("subject_id") or ""))
-        if as_dict.get("group_type") is not None:
-            record["group_type"] = as_dict.get("group_type")
-        if as_dict.get("descendant_entry_count") is not None:
-            record["descendant_entry_count"] = as_dict.get("descendant_entry_count")
-        if as_dict.get("first_occurred_at") is not None or as_dict.get("last_occurred_at") is not None:
+        record["group_id"] = group_public_id(node.subject_id)
+        if node.group_type is not None:
+            record["group_type"] = node.group_type
+        if node.descendant_entry_count is not None:
+            record["descendant_entry_count"] = node.descendant_entry_count
+        if node.first_occurred_at is not None or node.last_occurred_at is not None:
             record["date_range"] = {
-                "first_occurred_at": as_dict.get("first_occurred_at"),
-                "last_occurred_at": as_dict.get("last_occurred_at"),
+                "first_occurred_at": node.first_occurred_at.isoformat() if node.first_occurred_at is not None else None,
+                "last_occurred_at": node.last_occurred_at.isoformat() if node.last_occurred_at is not None else None,
             }
     return record
 
 
-def _relationship_record(edge: dict[str, Any] | Any, node_by_graph_id: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    as_dict = edge if isinstance(edge, dict) else edge.model_dump(mode="json")
-    source_node = node_by_graph_id.get(str(as_dict.get("source_graph_id") or ""))
-    target_node = node_by_graph_id.get(str(as_dict.get("target_graph_id") or ""))
-    relationship: dict[str, Any] = {
-        "relation": as_dict.get("group_type"),
+def _relationship_record(edge: GroupEdge, node_by_graph_id: dict[str, GroupNode]) -> GroupRelationshipRecord:
+    source_node = node_by_graph_id.get(edge.source_graph_id)
+    target_node = node_by_graph_id.get(edge.target_graph_id)
+    relationship: GroupRelationshipRecord = {
+        "relation": edge.group_type,
     }
     if source_node is not None:
         relationship["source"] = _node_to_public_record(source_node)
@@ -84,20 +132,14 @@ def _relationship_record(edge: dict[str, Any] | Any, node_by_graph_id: dict[str,
     return relationship
 
 
-def group_graph_to_public_record(graph: GroupGraphRead, *, full_id: bool = False) -> dict[str, Any]:
-    graph_payload = graph.model_dump(mode="json")
-    nodes = graph_payload.get("nodes", [])
-    node_by_graph_id = {
-        str(node.get("graph_id") or ""): node
-        for node in nodes
-        if isinstance(node, dict)
-    }
+def group_graph_to_public_record(graph: GroupGraphRead, *, full_id: bool = False) -> GroupDetailPublicRecord:
+    node_by_graph_id = {node.graph_id: node for node in graph.nodes}
     return {
         **group_summary_to_public_record(graph, full_id=full_id),
-        "direct_members": [_node_to_public_record(node) for node in nodes],
+        "direct_members": [_node_to_public_record(node) for node in graph.nodes],
         "derived_relationships": [
             _relationship_record(edge, node_by_graph_id)
-            for edge in graph_payload.get("edges", [])
+            for edge in graph.edges
         ],
     }
 
@@ -134,7 +176,7 @@ def find_groups_by_id(db: Session, *, group_id: str, owner_user_id: str) -> list
     )
 
 
-def group_id_ambiguity_details(groups: list[EntryGroup], *, group_id: str) -> dict[str, Any]:
+def group_id_ambiguity_details(groups: list[EntryGroup], *, group_id: str) -> GroupIdAmbiguityDetails:
     return {
         "group_id": group_id,
         "candidate_count": len(groups),
@@ -154,5 +196,5 @@ def group_public_summary(group: EntryGroup) -> str:
     )
 
 
-def group_detail_public_record(group: EntryGroup, *, full_id: bool = False) -> dict[str, Any]:
+def group_detail_public_record(group: EntryGroup, *, full_id: bool = False) -> GroupDetailPublicRecord:
     return group_graph_to_public_record(build_group_graph(group), full_id=full_id)
