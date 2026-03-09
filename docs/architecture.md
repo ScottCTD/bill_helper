@@ -16,7 +16,7 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 - `frontend`: UI pages, agent panel, API calls, cache orchestration
 - `backend/routers`: HTTP endpoint layer
 - `backend/services`: domain logic and agent runtime/review logic
-- `backend/models`: SQLAlchemy ORM tables
+- `backend/models_finance.py` + `backend/models_agent.py`: SQLAlchemy ORM tables
 - `alembic`: schema migrations
 
 ## Core Decisions
@@ -34,8 +34,8 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 
 - routers: request validation + status mapping
 - services: normalization, calculations, group validation/graph derivation, agent orchestration
-- models: persistence structure and relationships
-- schemas: API contracts
+- models: persistence structure and relationships in `models_finance.py` and `models_agent.py`
+- schemas: API contracts in `schemas_finance.py` and `schemas_agent.py`
 - app bootstrap: explicit `create_app()` factory (uvicorn factory mode), avoiding import-time initialization side effects
 
 ## Agent Architecture

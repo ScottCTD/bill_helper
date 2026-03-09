@@ -142,10 +142,8 @@ backend/                  # FastAPI application
   database.py             # Engine/session factories and request DB dependency
   routers/                # API route handlers
   services/agent/         # Agent runtime, tools, prompts, model client
-  models.py               # ORM compatibility facade
   models_finance.py       # Ledger/account/taxonomy ORM models
   models_agent.py         # Agent run/review ORM models
-  schemas.py              # API schema compatibility facade
   schemas_finance.py      # Ledger/dashboard/settings request/response schemas
   schemas_agent.py        # Agent thread/run/review request/response schemas
 frontend/                 # React + Vite application

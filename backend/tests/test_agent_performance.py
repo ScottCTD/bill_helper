@@ -4,8 +4,8 @@ import time
 from statistics import median
 
 from backend.database import SessionLocal
-from backend.enums import AgentMessageRole, AgentRunEventType, AgentRunStatus, AgentToolCallStatus
-from backend.models import AgentMessage, AgentRun, AgentRunEvent, AgentThread, AgentToolCall
+from backend.enums_agent import AgentMessageRole, AgentRunEventType, AgentRunStatus, AgentToolCallStatus
+from backend.models_agent import AgentMessage, AgentRun, AgentRunEvent, AgentThread, AgentToolCall
 
 
 def _seed_tool_heavy_thread(

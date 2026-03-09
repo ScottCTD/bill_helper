@@ -26,7 +26,7 @@ BANNED_DOMAIN_FACADES = {
     "backend.schemas",
     "backend.enums",
 }
-ALLOWED_FACADE_IMPORT_PATHS = {
+REMOVED_FACADE_PATHS = {
     BACKEND_DIR / "models.py",
     BACKEND_DIR / "schemas.py",
     BACKEND_DIR / "enums.py",
@@ -76,8 +76,6 @@ def test_repo_modules_do_not_import_domain_facade_god_modules() -> None:
         if not root.exists():
             continue
         for path in root.rglob("*.py"):
-            if path in ALLOWED_FACADE_IMPORT_PATHS:
-                continue
             if "tests" in path.parts:
                 continue
             module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -102,3 +100,8 @@ def test_repo_modules_do_not_import_domain_facade_god_modules() -> None:
                         "(use *_finance/*_agent domain modules)"
                     )
     assert not violations, "Import explicit domain modules instead of facades:\n" + "\n".join(violations)
+
+
+def test_legacy_domain_facades_are_removed() -> None:
+    remaining = [path.relative_to(REPO_ROOT) for path in REMOVED_FACADE_PATHS if path.exists()]
+    assert not remaining, "Legacy facade modules should stay deleted:\n" + "\n".join(str(path) for path in remaining)

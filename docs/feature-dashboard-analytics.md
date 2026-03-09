@@ -36,7 +36,7 @@ Classification logic lives in `backend/services/finance.py`.
    - `weekday_spending`
    - `largest_expenses`
    - `projection`
-3. Router returns `DashboardRead` from `backend/schemas.py`.
+3. Router returns `DashboardRead` from `backend/schemas_finance.py`.
 
 ## Frontend Mapping
 

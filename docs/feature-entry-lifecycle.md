@@ -10,7 +10,7 @@ This doc is the fast path for understanding how entries are created, edited, gro
 
 ## Contract Summary
 
-- Entry domain fields are defined in `backend/models.py` and `backend/schemas.py`.
+- Entry domain fields are defined in `backend/models_finance.py` and `backend/schemas_finance.py`.
 - Entry-level `status` is removed from the current model/API.
 - Review status exists only on `agent_change_items`.
 - Entry read models expose group context through `direct_group` and `group_path`.

@@ -48,7 +48,7 @@ The as-of date defaults to the server's current day when the query parameter is 
 - `backend/services/agent/message_history.py`: current-user account context assembly for agent system prompt (includes account notes).
 - `backend/services/accounts.py`: shared account/entity-root create, update, and delete behavior.
 - `backend/services/finance.py`: ledger aggregation + latest-snapshot lookup.
-- `backend/schemas.py`: `Account*`, `Snapshot*`, and `ReconciliationRead` contracts.
+- `backend/schemas_finance.py`: `Account*`, `Snapshot*`, and `ReconciliationRead` contracts.
 
 ## Frontend Modules
 
