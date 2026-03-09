@@ -56,6 +56,10 @@ def test_thread_endpoints_and_settings_use_existing_backend_routes():
                     "default_currency_code": "CAD",
                     "dashboard_currency_code": "CAD",
                     "agent_model": "openrouter/qwen/qwen3.5-27b",
+                    "available_agent_models": [
+                        "openrouter/qwen/qwen3.5-27b",
+                        "openai/gpt-4.1-mini",
+                    ],
                     "agent_max_steps": 100,
                     "agent_bulk_max_concurrent_threads": 4,
                     "agent_retry_max_attempts": 3,
@@ -66,7 +70,10 @@ def test_thread_endpoints_and_settings_use_existing_backend_routes():
                     "agent_max_images_per_message": 4,
                     "agent_base_url": None,
                     "agent_api_key_configured": False,
-                    "overrides": {"agent_api_key_configured": False},
+                    "overrides": {
+                        "available_agent_models": None,
+                        "agent_api_key_configured": False,
+                    },
                 },
             ),
             httpx.Response(
@@ -77,6 +84,10 @@ def test_thread_endpoints_and_settings_use_existing_backend_routes():
                     "default_currency_code": "CAD",
                     "dashboard_currency_code": "CAD",
                     "agent_model": "openai/gpt-4.1",
+                    "available_agent_models": [
+                        "openai/gpt-4.1",
+                        "openrouter/qwen/qwen3.5-27b",
+                    ],
                     "agent_max_steps": 100,
                     "agent_bulk_max_concurrent_threads": 4,
                     "agent_retry_max_attempts": 3,
@@ -87,7 +98,11 @@ def test_thread_endpoints_and_settings_use_existing_backend_routes():
                     "agent_max_images_per_message": 4,
                     "agent_base_url": None,
                     "agent_api_key_configured": False,
-                    "overrides": {"agent_model": "openai/gpt-4.1", "agent_api_key_configured": False},
+                    "overrides": {
+                        "agent_model": "openai/gpt-4.1",
+                        "available_agent_models": None,
+                        "agent_api_key_configured": False,
+                    },
                 },
             ),
             httpx.Response(
