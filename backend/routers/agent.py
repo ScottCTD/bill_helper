@@ -48,7 +48,7 @@ from backend.services.agent.execution import (
     run_agent_in_background,
 )
 from backend.services.agent.threads import AgentThreadNotFoundError, rename_thread_by_id
-from backend.services.agent.review import approve_change_item, reject_change_item, reopen_change_item
+from backend.services.agent.reviews.workflow import approve_change_item, reject_change_item, reopen_change_item
 from backend.services.agent.runtime import (
     AgentRuntimeUnavailable,
     interrupt_agent_run,

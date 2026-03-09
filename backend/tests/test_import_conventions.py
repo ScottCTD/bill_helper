@@ -39,6 +39,8 @@ REMOVED_AGENT_PROPOSE_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "too
 AGENT_PROPOSALS_PACKAGE = BACKEND_DIR / "services" / "agent" / "proposals"
 REMOVED_AGENT_CHANGE_APPLY_MODULE = BACKEND_DIR / "services" / "agent" / "change_apply.py"
 AGENT_APPLY_PACKAGE = BACKEND_DIR / "services" / "agent" / "apply"
+REMOVED_AGENT_REVIEW_MODULE = BACKEND_DIR / "services" / "agent" / "review.py"
+AGENT_REVIEWS_PACKAGE = BACKEND_DIR / "services" / "agent" / "reviews"
 
 
 def _assert_marker_module(path: Path) -> None:
@@ -69,6 +71,7 @@ def test_service_package_init_modules_are_marker_only() -> None:
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "apply" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "proposals" / "__init__.py")
+    _assert_marker_module(BACKEND_DIR / "services" / "agent" / "reviews" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "validation" / "__init__.py")
 
 
@@ -144,6 +147,13 @@ def test_agent_apply_handlers_are_grouped_in_a_package() -> None:
     assert AGENT_APPLY_PACKAGE.is_dir(), "apply package should exist"
     for name in ("catalog.py", "common.py", "dispatch.py", "entries.py", "groups.py"):
         assert (AGENT_APPLY_PACKAGE / name).exists(), f"missing apply module: {name}"
+
+
+def test_agent_review_workflow_is_grouped_in_a_package() -> None:
+    assert not REMOVED_AGENT_REVIEW_MODULE.exists(), "review workflow should stay split into the reviews package"
+    assert AGENT_REVIEWS_PACKAGE.is_dir(), "reviews package should exist"
+    for name in ("common.py", "dependencies.py", "overrides.py", "workflow.py"):
+        assert (AGENT_REVIEWS_PACKAGE / name).exists(), f"missing review module: {name}"
 
 
 def test_schema_modules_do_not_import_service_modules() -> None:

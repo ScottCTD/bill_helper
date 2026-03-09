@@ -56,8 +56,8 @@
   - run-event, tool-call, and terminal-state persistence helpers
 - `backend/services/agent/benchmark_interface.py`
   - benchmark-facing `run_benchmark_case` contract
-- `backend/services/agent/review.py`
-  - approve, reject, reopen, and apply state transitions
+- `backend/services/agent/reviews/`
+  - review-workflow package: `common.py` for change-item record helpers, `dependencies.py` for approval blockers, `overrides.py` for payload-override normalization, and `workflow.py` for approve/reject/reopen state transitions
 - `backend/services/agent/apply/`
   - apply-family package: `common.py` for lookup and applied-reference helpers, `catalog.py` for tag/entity/account mutations, `entries.py` for entry mutations, `groups.py` for group and membership mutations, and `dispatch.py` for change-type routing
 - `backend/services/agent/serializers.py`
@@ -139,7 +139,7 @@ Endpoints:
 
 ## Review And Apply Behavior
 
-- `backend/services/agent/review.py` accepts reviewer `payload_override` for create/update entry, tag, entity, and group proposals across approve, reject, and reopen actions while leaving `APPLIED` items immutable
+- `backend/services/agent/reviews/` accepts reviewer `payload_override` for create/update entry, tag, entity, and group proposals across approve, reject, and reopen actions while leaving `APPLIED` items immutable
 - invalid reviewer overrides fail during payload normalization and leave the proposal unchanged instead of marking it `APPLY_FAILED`
 - group-member approvals that reference pending `create_group` / `create_entry` proposals are blocked until those dependencies are applied; rejected or failed dependencies leave the member proposal unapprovable until edited or removed
 - apply-time group-member resolution canonicalizes existing short `group_id` and `entry_id` aliases to full ids before scoped lookup and membership matching, so approval semantics match proposal-time alias handling

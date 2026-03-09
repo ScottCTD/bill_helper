@@ -397,7 +397,7 @@ Backend agent modules:
 - `backend/services/agent/proposal_patching.py`
 - `backend/services/agent/tool_runtime.py`
 - `backend/services/agent/tools.py` (thin facade)
-- `backend/services/agent/review.py`
+- `backend/services/agent/reviews/`
 - `backend/services/agent/serializers.py`
 
 Architecture quality baseline:
