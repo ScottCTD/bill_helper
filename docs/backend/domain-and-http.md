@@ -19,6 +19,7 @@ Ledger model note:
 - `Account` is an entity-root subtype after migration `0024_entity_root_accounts`
 - `accounts.id == entities.id`; the old `accounts.entity_id` link no longer exists
 - account semantics come from subtype membership in `accounts`, not from `entities.category = 'account'`
+- `User.is_admin` is the persisted role gate for admin-only routes and cross-user visibility
 
 Agent models:
 
@@ -29,6 +30,13 @@ Agent models:
 - `AgentToolCall`
 - `AgentChangeItem`
 - `AgentReviewAction`
+
+## Auth Boundary
+
+- `backend/auth/contracts.py`: request-principal contract plus header-name constant
+- `backend/auth/dev_session.py`: development-session principal normalization and bootstrap-admin-name rules
+- `backend/auth/dependencies.py`: FastAPI dependencies that require `X-Bill-Helper-Principal`, materialize the backing user row, and enforce admin-only access
+- `backend/services/principals.py`: resolves request principals from the explicit header-backed session and persisted user role
 
 ## Schemas
 
@@ -104,10 +112,11 @@ Core routers:
 Router behavior:
 
 - account, entry, and group handlers use shared principal-scoped helpers from `backend/services/access_scope.py`
+- protected routes fail with `401` when `X-Bill-Helper-Principal` is absent; no backend fallback principal is injected anymore
 - `backend/routers/entries.py` stays at HTTP parsing/translation while `backend/services/entries.py` owns entry create/update orchestration
 - `backend/routers/entries.py` translates flat HTTP payload pairs (`from_entity_id` + `from_entity`, `owner_user_id` + `owner`, etc.) into typed service refs before calling `backend/services/entries.py`
 - `backend/routers/tags.py`, `taxonomies.py`, `users.py`, and `dashboard.py` delegate read/write orchestration to their service modules instead of assembling persistence queries inline
-- non-admin principals are restricted to their own owned resources; admin principal retains cross-user visibility and mutation
+- non-admin principals are restricted to their own owned resources; admin access is checked from `RequestPrincipal.is_admin`, not by matching the user name string
 - `groups.py` exposes first-class group CRUD, membership mutation, and derived group graphs
 - `dashboard.py` is principal-scoped by visible accounts and entries
 - `accounts.py` includes principal-scoped delete in addition to create, update, snapshots, and reconciliation

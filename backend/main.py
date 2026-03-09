@@ -4,7 +4,7 @@ import uvicorn
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.auth import get_or_create_current_principal
+from backend.auth.dependencies import get_or_create_current_principal
 from backend.config import get_settings
 from backend.routers import currencies, dashboard, entities, entries, groups, settings, tags, taxonomies, users
 from backend.routers.agent import router as agent_router

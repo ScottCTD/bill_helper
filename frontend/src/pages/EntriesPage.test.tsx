@@ -117,7 +117,7 @@ function mockEntriesPageData(entry: Entry) {
   vi.mocked(listEntities).mockResolvedValue([
     { id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }
   ]);
-  vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true }]);
+  vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true }]);
   vi.mocked(listTags).mockResolvedValue(entry.tags.map((tag) => ({ ...tag })));
   vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
   vi.mocked(createEntry).mockResolvedValue(entry);

@@ -139,13 +139,15 @@ LiteLLM resolves provider credentials from standard environment variables based 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VITE_API_BASE_URL` | `http://localhost:8000/api/v1` | Backend API base URL for Vite dev server |
+| `VITE_DEV_PRINCIPAL_NAME` | _(none)_ | Optional frontend bootstrap principal used to prefill the local principal session |
 
 ### Notes
 
 - Backend boots normally when provider credentials are missing
+- Protected backend routes require an explicit `X-Bill-Helper-Principal` header; the frontend now owns that through a local principal session and can prefill it from `VITE_DEV_PRINCIPAL_NAME`
 - Agent message execution endpoints return `503` when the configured model's provider credentials are missing
 - `GET /settings` reports `agent_api_key_configured=true` when either an explicit override key exists or LiteLLM can resolve provider credentials for the selected model; `agent_base_url` reflects only explicit overrides
-- Runtime settings from the database (`/api/v1/settings`) override env defaults for: current user name, default currency, dashboard currency, agent model, ordered available agent models, agent max steps, Bulk mode concurrency, and retry parameters
+- Runtime settings from the database (`/api/v1/settings`) override env defaults for: default currency, dashboard currency, agent model, ordered available agent models, agent max steps, Bulk mode concurrency, and retry parameters
 
 ## Database Setup
 

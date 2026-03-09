@@ -108,6 +108,8 @@ This starts both backend and frontend, applies pending migrations, and opens:
 
 Press `Ctrl+C` to stop both services.
 
+On first frontend load, the app now requires an explicit local principal session for protected API calls. Set `VITE_DEV_PRINCIPAL_NAME` to prefill that session, or enter a principal name in the browser when prompted.
+
 For local Telegram bot polling/webhook development, see [docs/development.md](docs/development.md). For package-local Telegram module notes, see [telegram/README.md](telegram/README.md).
 
 ## How the Agent Works

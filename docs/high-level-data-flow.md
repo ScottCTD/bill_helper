@@ -182,7 +182,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `uv run python scripts/check_docs_sync.py`
 - Relevant environment variables:
   - `BILL_HELPER_DATABASE_URL`
-  - `BILL_HELPER_CURRENT_USER_NAME`
+  - `BILL_HELPER_CURRENT_USER_NAME` (background-agent default context; request auth comes from `X-Bill-Helper-Principal`)
   - `BILL_HELPER_DEFAULT_CURRENCY_CODE`
   - `BILL_HELPER_DASHBOARD_CURRENCY_CODE`
   - `BILL_HELPER_AGENT_MODEL`

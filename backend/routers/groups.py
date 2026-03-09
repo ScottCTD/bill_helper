@@ -5,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.auth import RequestPrincipal, get_or_create_current_principal
+from backend.auth.contracts import RequestPrincipal
+from backend.auth.dependencies import get_or_create_current_principal
 from backend.database import get_db
 from backend.models_finance import EntryGroup
 from backend.schemas_finance import (

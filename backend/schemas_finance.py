@@ -68,6 +68,7 @@ class EntityUpdate(BaseModel):
 class UserRead(BaseModel):
     id: str
     name: str
+    is_admin: bool = False
     is_current_user: bool = False
     account_count: int | None = None
     entry_count: int | None = None

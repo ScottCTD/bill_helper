@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
-from backend.auth import RequestPrincipal
+from backend.auth.contracts import RequestPrincipal
 from backend.models_finance import Account, Entity, Entry, User
 from backend.schemas_finance import AccountCreate, AccountUpdate
 from backend.services.access_scope import ensure_principal_can_assign_user

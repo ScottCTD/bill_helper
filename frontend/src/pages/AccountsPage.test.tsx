@@ -91,7 +91,7 @@ describe("AccountsPage", () => {
       }
     ]);
     vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
-    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true, account_count: 1, entry_count: 0 }]);
+    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true, account_count: 1, entry_count: 0 }]);
     vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
     vi.mocked(listSnapshots).mockResolvedValue([]);
     vi.mocked(getReconciliation).mockResolvedValue({
@@ -170,7 +170,7 @@ describe("AccountsPage", () => {
       }
     ]);
     vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
-    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true, account_count: 1, entry_count: 0 }]);
+    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true, account_count: 1, entry_count: 0 }]);
     vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
     vi.mocked(listSnapshots).mockResolvedValue([]);
     vi.mocked(getReconciliation).mockResolvedValue({
@@ -232,7 +232,7 @@ describe("AccountsPage", () => {
       }
     ]);
     vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
-    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true, account_count: 1, entry_count: 0 }]);
+    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true, account_count: 1, entry_count: 0 }]);
     vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
     vi.mocked(listSnapshots).mockResolvedValue([]);
     vi.mocked(getReconciliation).mockResolvedValue({
@@ -304,7 +304,7 @@ describe("AccountsPage", () => {
       }
     ]);
     vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
-    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true, account_count: 1, entry_count: 0 }]);
+    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true, account_count: 1, entry_count: 0 }]);
     vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
     vi.mocked(listSnapshots).mockResolvedValue([]);
     vi.mocked(getReconciliation).mockResolvedValue({

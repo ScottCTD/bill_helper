@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.auth import RequestPrincipal
+from backend.auth.contracts import RequestPrincipal
 from backend.enums_finance import EntryKind
 from backend.enums_finance import GroupMemberRole
 from backend.models_finance import Entity, Entry, EntryGroup, EntryGroupMember, Tag

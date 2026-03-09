@@ -5,7 +5,8 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from backend.auth import RequestPrincipal, get_or_create_current_principal
+from backend.auth.contracts import RequestPrincipal
+from backend.auth.dependencies import get_or_create_current_principal
 from backend.database import get_db
 from backend.schemas_finance import DashboardRead
 from backend.services.finance import (

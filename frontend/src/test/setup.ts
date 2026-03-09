@@ -1,5 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 
+import { PRINCIPAL_SESSION_STORAGE_KEY } from "../features/session/principalStorage";
+
 if (typeof document.elementsFromPoint !== "function") {
   Object.defineProperty(Document.prototype, "elementsFromPoint", {
     configurable: true,
@@ -19,3 +21,5 @@ if (typeof window.ResizeObserver !== "function") {
     value: ResizeObserver
   });
 }
+
+window.localStorage.setItem(PRINCIPAL_SESSION_STORAGE_KEY, "admin");

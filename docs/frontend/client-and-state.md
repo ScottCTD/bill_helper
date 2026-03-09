@@ -15,6 +15,7 @@ Current contract highlights:
 
 - `Account` no longer exposes `entity_id`
 - `Entity` includes `is_account`
+- `User` includes persisted `is_admin` and `is_current_user`
 - `Entry` and `EntryDetail` include `from_entity_missing` and `to_entity_missing`
 - runtime settings include both `agent_model` and ordered `available_agent_models`
 
@@ -24,6 +25,7 @@ Responsibilities:
 
 - generic `request<T>` helper
 - JSON and FormData request handling
+- injects `X-Bill-Helper-Principal` from the shared frontend principal session before every protected request
 - endpoint functions across all backend domains including `agent/*`
 - runtime settings client methods:
   - `getRuntimeSettings`
@@ -67,3 +69,14 @@ Responsibilities:
 - TanStack Query owns remote server state
 - feature-owned hooks under `frontend/src/features/*` own screen-level derived state and mutations
 - query keys and invalidation logic should be reused rather than recreated ad hoc in pages or components
+
+## Principal Session
+
+- `frontend/src/features/session/principalStorage.ts`
+  - localStorage-backed principal session state, shared header constant, and browser-change event
+- `frontend/src/features/session/PrincipalSessionProvider.tsx`
+  - app-wide principal session context for reading, updating, and clearing the active principal
+- `frontend/src/features/session/PrincipalSessionGate.tsx`
+  - startup gate that blocks protected workspace rendering until a principal session exists
+- `frontend/src/features/session/PrincipalSessionCard.tsx`
+  - sidebar control for switching or clearing the active principal without rebuilding request code per page

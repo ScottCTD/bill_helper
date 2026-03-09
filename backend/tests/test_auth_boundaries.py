@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from fastapi.routing import APIRoute
 
-from backend.auth import get_or_create_current_principal
+from backend.auth.contracts import PRINCIPAL_HEADER_NAME
+from backend.auth.dependencies import get_or_create_current_principal
 from backend.config import get_settings
 from backend.main import create_app
 
@@ -27,3 +28,10 @@ def test_all_api_routes_require_request_principal_dependency() -> None:
             missing.append(f"{methods} {route.path}")
 
     assert missing == []
+
+
+def test_protected_routes_require_explicit_principal_header(anonymous_client) -> None:
+    response = anonymous_client.get("/api/v1/settings")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == f"Missing {PRINCIPAL_HEADER_NAME} header."

@@ -17,6 +17,7 @@ from backend.config import get_settings  # noqa: E402
 
 get_settings.cache_clear()
 
+from backend.auth.contracts import PRINCIPAL_HEADER_NAME  # noqa: E402
 from backend.database import build_engine  # noqa: E402
 from backend.db_meta import Base  # noqa: E402
 from backend.main import create_app  # noqa: E402
@@ -51,5 +52,12 @@ def reset_db() -> None:
 
 @pytest.fixture()
 def client() -> TestClient:
+    with TestClient(app) as test_client:
+        test_client.headers[PRINCIPAL_HEADER_NAME] = "admin"
+        yield test_client
+
+
+@pytest.fixture()
+def anonymous_client() -> TestClient:
     with TestClient(app) as test_client:
         yield test_client

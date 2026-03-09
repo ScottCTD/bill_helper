@@ -90,7 +90,7 @@
 - accepts an optional `surface` form field on message-send routes and persists it onto the created run for background continuation
 - delegates attachment storage and cleanup to `backend/services/agent/attachments.py`
 - starts background runs with injected session factories from `get_session_maker()`
-- all agent endpoints require admin principal
+- all agent endpoints require an explicit request principal whose persisted user row is marked admin
 
 Endpoints:
 

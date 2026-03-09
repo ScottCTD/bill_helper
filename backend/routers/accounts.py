@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.auth import RequestPrincipal, get_or_create_current_principal
+from backend.auth.contracts import RequestPrincipal
+from backend.auth.dependencies import get_or_create_current_principal
 from backend.database import get_db
 from backend.models_finance import Account, AccountSnapshot, Entity
 from backend.schemas_finance import (
