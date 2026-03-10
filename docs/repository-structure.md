@@ -175,7 +175,7 @@
 #### Pages (`/frontend/src/pages`)
 
 - `DashboardPage.tsx`: tabbed interactive analytics dashboard (overview/daily/breakdowns/insights) backed by Recharts.
-- `SettingsPage.tsx`: responsive runtime settings workspace (general, persistent agent memory, agent runtime, reliability).
+- `SettingsPage.tsx`: thin runtime-settings page shell that composes the `features/settings` controller and section modules.
 - `EntriesPage.tsx`: list/filter/delete entries and open popup create/edit editor.
 - `EntryDetailPage.tsx`: show entry detail, direct-group context, direct-group graph, and popup editing.
 - `GroupsPage.tsx`: first-class group workspace with a table-first browser and detail modal for group editing.
@@ -203,6 +203,11 @@
   - `usePropertiesFilteredData.ts`: filtered list derivation by section search state.
   - `sections/*.tsx`: dedicated users/entities/tags/currencies/taxonomy section UI blocks.
   - `helpers.ts`, `types.ts`: filtering/taxonomy helpers and section contracts.
+- `settings/`
+  - `useSettingsPageModel.ts`: runtime-settings query/mutation orchestration, tab state, and form patch actions.
+  - `formState.ts`: runtime-settings form hydration, validation, and update-payload construction.
+  - `SettingsToolbar.tsx`, `SettingsGeneralSection.tsx`, `SettingsAgentSection.tsx`, `ResetSettingsDialog.tsx`: settings workspace UI sections and dialogs.
+  - `constants.ts`, `types.ts`: shared settings field ids, tab definitions, and form-state contracts.
 - `session/`
   - `principalStorage.ts`: localStorage-backed development principal session state plus shared header constant.
   - `PrincipalSessionProvider.tsx`: app-wide principal-session context.

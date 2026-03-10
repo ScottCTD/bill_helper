@@ -29,6 +29,7 @@
 - `frontend/src/features/accounts/*`
 - `frontend/src/features/properties/*`
 - `frontend/src/features/agent/*`
+- `frontend/src/features/settings/*`
 
 ## Styling (`frontend/src/styles.css`)
 
@@ -65,7 +66,7 @@ Includes:
   - `DELETE /groups/{group_id}/members/{membership_id}`
 - agent send depends on SSE parsing for `text_delta` and persisted `run_event`
 - query keys and invalidation logic are centralized and should be reused
-- page-level integration tests cover accounts and properties orchestration flows
+- page-level integration tests cover accounts, properties, and settings orchestration flows
 - taxonomy term changes invalidate taxonomy-term usage caches
 - install, test, and build commands remain:
   - `npm install`

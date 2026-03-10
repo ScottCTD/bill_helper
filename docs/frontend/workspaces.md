@@ -87,11 +87,15 @@
 
 ### `frontend/src/pages/SettingsPage.tsx`
 
+- thin route shell over `frontend/src/features/settings/*`
 - tabbed runtime settings workspace with `General` and `Agent` tabs, each rendering focused section cards
 - uses a compact sticky top toolbar as the first page element, including the `Settings` title, section tabs, save action, and reset-to-server-default from a dedicated `General` tab reset section
 - settings changes invalidate dependent query surfaces
+- query, mutation, and form orchestration live in `frontend/src/features/settings/useSettingsPageModel.ts`
+- reusable runtime-settings parsing and payload validation live in `frontend/src/features/settings/formState.ts`
 - `General` groups read-only identity context separately from ledger default currencies
 - `Agent` groups memory/models, provider overrides, run limits, bulk and attachment limits, and reliability into separate sections
+- section UI is split across `SettingsToolbar.tsx`, `SettingsGeneralSection.tsx`, `SettingsAgentSection.tsx`, and `ResetSettingsDialog.tsx`
 - `Agent memory` lives under the `Agent` tab, is edited as one item per line, persists as a list of strings, and is sent to every backend agent system prompt
 - `Default model` is edited separately from `Available models`; available models use one newline-separated identifier per line and preserve entered order
 - bulk concurrency is labeled around concurrent launches, while the per-message attachment limit explicitly calls out that Bulk mode still starts one fresh thread per attachment
