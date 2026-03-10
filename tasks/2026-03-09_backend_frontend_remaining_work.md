@@ -26,7 +26,7 @@ Verification:
 - Backend targeted compile/test batches passed for each refactor batch.
 - Full backend suite baseline after the refactors: `292 passed, 8 failed`.
 - The 8 backend failures are unchanged, pre-existing runtime-settings/default-model expectation failures around `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0`.
-- Frontend `AgentPanel.test.tsx` passes.
+- Frontend `AgentThreadReviewModal.test.tsx` and `AgentPanel.test.tsx` pass.
 - Frontend production build passes.
 - `uv run python scripts/check_docs_sync.py` passes.
 
@@ -79,20 +79,23 @@ Recommended direction:
 - replace message-text HTTP mapping with typed domain exceptions
 - re-check agent and catalog read endpoints for owner scoping and authorization consistency
 
-### 4. Frontend monolith follow-up
+### 4. Frontend follow-up after the shell/controller split
 
-`AgentPanel.tsx` is now thin, but the next frontend cleanup should target the remaining large review/editor modules:
+The thread review modal and panel controller split are now in place:
 
-- `frontend/src/features/agent/review/AgentThreadReviewModal.tsx` (`1609` lines)
-- `frontend/src/features/agent/panel/useAgentPanelController.ts` (`1151` lines)
+- `frontend/src/features/agent/review/AgentThreadReviewModal.tsx` is reduced to the modal/card shell
+- `frontend/src/features/agent/review/useAgentThreadReviewController.ts` owns review queries, draft maps, navigation, and review actions
+- `frontend/src/features/agent/review/ReviewEditors.tsx` owns TOC navigation plus the proposal editor surfaces
+- `frontend/src/features/agent/panel/useAgentComposerRuntime.ts` now owns the optimistic send/stream/composer runtime
+
+The next frontend cleanup should target the remaining domain-heavy helpers and page orchestration:
+
 - `frontend/src/features/agent/review/drafts.ts` (`829` lines)
 - `frontend/src/features/agent/review/diff.ts` (`732` lines)
 - `frontend/src/pages/SettingsPage.tsx` (`763` lines)
 
 Recommended direction:
 
-- split the review modal into navigation shell, card renderer, action bar, and editing hooks
-- split `useAgentPanelController.ts` further into stream state, thread workspace state, and send/review action hooks
 - carve `review/drafts.ts` into draft state reducers and patch-format helpers
 - separate diff rendering primitives from finance/agent field-specific presenters
 - move settings page orchestration into feature hooks, like the other page models in the repo
@@ -131,8 +134,8 @@ Recommended direction:
 
 1. Reduce pending-review normalization switchboards.
 2. Unify router `PolicyViolation` translation and typed error mapping across CRUD routers.
-3. Split `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`.
-4. Split `frontend/src/features/agent/panel/useAgentPanelController.ts`.
+3. Carve `frontend/src/features/agent/review/drafts.ts` into domain slices.
+4. Split `frontend/src/features/agent/review/diff.ts` by renderer/field-family concerns.
 5. Attack test-health items around the new service seams.
 
 ## Latest Major Commits From This Pass
@@ -141,3 +144,4 @@ Recommended direction:
 - `70e42b9` `Extract agent runtime loop adapters`
 - `7c5d72b` `Split agent router by endpoint family`
 - `b2b958e` `Refactor agent panel into controller and helpers`
+- pending current commit: split agent review modal and panel runtime ownership

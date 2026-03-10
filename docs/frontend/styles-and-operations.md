@@ -15,8 +15,13 @@
 - `agent/AgentRunBlock.tsx`
 - `agent/activity.ts`
 - `agent/review/AgentThreadReviewModal.tsx`
+- `agent/review/useAgentThreadReviewController.ts`
+- `agent/review/ReviewEditors.tsx`
+- `agent/review/modalHelpers.ts`
 - `agent/review/drafts.ts`
 - `agent/review/diff.ts`
+- `agent/panel/useAgentPanelController.ts`
+- `agent/panel/useAgentComposerRuntime.ts`
 - `components/ui/*` for shared primitives
 
 ## Feature Modules

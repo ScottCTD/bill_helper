@@ -1,71 +1,24 @@
-import {
-  type ChangeEvent,
-  type FormEvent,
-  type KeyboardEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   approveAgentChangeItem,
   createAgentThread,
   deleteAgentThread,
-  getAgentToolCall,
   getAgentThread,
   getRuntimeSettings,
   interruptAgentRun,
   listAgentThreads,
   reopenAgentChangeItem,
   renameAgentThread,
-  rejectAgentChangeItem,
-  sendAgentMessage,
-  streamAgentMessage
+  rejectAgentChangeItem
 } from "../../../lib/api";
 import { invalidateAgentThreadData, invalidateEntryReadModels } from "../../../lib/queryInvalidation";
 import { queryKeys } from "../../../lib/queryKeys";
-import type {
-  AgentChangeItem,
-  AgentRun,
-  AgentRunEvent,
-  AgentStreamEvent,
-  AgentThread,
-  AgentThreadDetail,
-  AgentThreadSummary,
-  AgentToolCall
-} from "../../../lib/types";
+import type { AgentChangeItem, AgentThreadDetail, AgentThreadSummary } from "../../../lib/types";
 import { useResizablePanel } from "../../../hooks/useResizablePanel";
-import { useNotifications } from "../../../components/ui/notification-center";
-import {
-  buildThreadUsageTotals,
-  mergeRunToolCalls,
-  runsByAssistantMessage,
-  runsWithoutAssistantMessage,
-  runsWithoutAssistantMessageByUserMessage,
-  sortRunsByCreatedAt
-} from "../activity";
-import {
-  BULK_MODE_HELP_TEXT,
-  buildThreadSummary,
-  deriveThreadTitleFromFilename,
-  extractRenameThreadTitle,
-  mapWithConcurrency,
-  resolveComposerModelName,
-  summarizeFilenames,
-  DEFAULT_BULK_LAUNCH_CONCURRENCY_LIMIT
-} from "./helpers";
-import { useStickToBottom } from "./useStickToBottom";
-import { useAgentDraftAttachments } from "./useAgentDraftAttachments";
-import {
-  COMPOSER_TEXTAREA_MAX_HEIGHT_PX,
-  detectDraftAttachmentKind,
-  type DraftAttachment,
-  type PendingAssistantMessage,
-  type PendingUserMessage
-} from "./types";
+import { buildThreadUsageTotals, runsByAssistantMessage, runsWithoutAssistantMessage, runsWithoutAssistantMessageByUserMessage } from "../activity";
+import { useAgentComposerRuntime } from "./useAgentComposerRuntime";
 
 interface UseAgentPanelControllerArgs {
   isOpen: boolean;
@@ -73,33 +26,14 @@ interface UseAgentPanelControllerArgs {
 
 export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs) {
   const queryClient = useQueryClient();
-  const { notify } = useNotifications();
   const [selectedThreadId, setSelectedThreadId] = useState<string>("");
-  const [draftMessage, setDraftMessage] = useState("");
-  const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [isBulkMode, setIsBulkMode] = useState(false);
-  const [isBulkLaunching, setIsBulkLaunching] = useState(false);
-  const [isStreamHealthy, setIsStreamHealthy] = useState(false);
-  const [activeStreamRunId, setActiveStreamRunId] = useState<string | null>(null);
-  const [streamedReasoningTextByRunId, setStreamedReasoningTextByRunId] = useState<Record<string, string>>({});
-  const [streamedTextByRunId, setStreamedTextByRunId] = useState<Record<string, string>>({});
-  const [optimisticRunEventsByRunId, setOptimisticRunEventsByRunId] = useState<Record<string, AgentRunEvent[]>>({});
-  const [optimisticToolCallsByRunId, setOptimisticToolCallsByRunId] = useState<Record<string, AgentToolCall[]>>({});
   const [optimisticThreadTitlesById, setOptimisticThreadTitlesById] = useState<Record<string, string>>({});
   const [optimisticRunningThreadIds, setOptimisticRunningThreadIds] = useState<string[]>([]);
-  const [hydratingToolCallIds, setHydratingToolCallIds] = useState<Set<string>>(new Set());
-  const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null);
-  const [pendingAssistantMessage, setPendingAssistantMessage] = useState<PendingAssistantMessage | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isThreadReviewOpen, setIsThreadReviewOpen] = useState(false);
-  const { containerRef: timelineScrollRef, isAtBottom, scrollToBottom, snapToBottom } = useStickToBottom<HTMLDivElement>();
-  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [composerModelOverride, setComposerModelOverride] = useState<string | null>(null);
-  const sendAbortControllerRef = useRef<AbortController | null>(null);
-  const threadRunsRef = useRef<AgentRun[]>([]);
-  const optimisticToolCallsRef = useRef<Record<string, AgentToolCall[]>>({});
-  const hydratingToolCallIdsRef = useRef<Set<string>>(new Set());
   const [isThreadPanelOpen, setIsThreadPanelOpen] = useState(true);
+  const [isBulkLaunching, setIsBulkLaunching] = useState(false);
+  const [isStreamHealthy, setIsStreamHealthy] = useState(false);
   const { panelWidth, handleMouseDown: handleResizeMouseDown } = useResizablePanel({
     storageKey: "agent-thread-panel-width",
     defaultWidth: 300,
@@ -108,47 +42,6 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     edge: "right"
   });
   const toggleThreadPanel = useCallback(() => setIsThreadPanelOpen((value) => !value), []);
-  const attachmentState = useAgentDraftAttachments({ setActionError });
-  const {
-    draftFiles,
-    setDraftFiles,
-    draftAttachmentPreviews,
-    selectedDraftAttachmentPreview,
-    previewAttachmentId,
-    setPreviewAttachmentId,
-    isComposerDragActive,
-    fileInputRef,
-    handlers: {
-      handleDraftFileSelection,
-      handleComposerPaste,
-      handleComposerDragEnter,
-      handleComposerDragOver,
-      handleComposerDragLeave,
-      handleComposerDrop,
-      removeDraftAttachment
-    }
-  } = attachmentState;
-
-  function autoSizeComposerTextarea(target?: HTMLTextAreaElement | null) {
-    const textarea = target ?? composerTextareaRef.current;
-    if (!textarea) {
-      return;
-    }
-    textarea.style.height = "auto";
-    const nextHeight = Math.min(textarea.scrollHeight, COMPOSER_TEXTAREA_MAX_HEIGHT_PX);
-    textarea.style.height = `${nextHeight}px`;
-    textarea.style.overflowY = textarea.scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT_PX ? "auto" : "hidden";
-  }
-
-  const resetOptimisticRunState = useCallback(() => {
-    setActiveStreamRunId(null);
-    setStreamedReasoningTextByRunId({});
-    setStreamedTextByRunId({});
-    setOptimisticRunEventsByRunId({});
-    setOptimisticToolCallsByRunId({});
-    setHydratingToolCallIds(new Set());
-    hydratingToolCallIdsRef.current.clear();
-  }, []);
 
   const threadsQuery = useQuery({
     queryKey: queryKeys.agent.threads,
@@ -166,7 +59,6 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     queryFn: getRuntimeSettings,
     enabled: isOpen
   });
-
   const threadQuery = useQuery({
     queryKey: queryKeys.agent.thread(selectedThreadId),
     queryFn: () => getAgentThread(selectedThreadId),
@@ -199,36 +91,6 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     }
   }, [isOpen, selectedThreadId, threadsQuery.data]);
 
-  const threadMessages = threadQuery.data?.messages;
-  const availableComposerModels = runtimeSettingsQuery.data?.available_agent_models ?? [];
-  const resolvedComposerModel = useMemo(
-    () => resolveComposerModelName(availableComposerModels, threadQuery.data, runtimeSettingsQuery.data),
-    [availableComposerModels, threadQuery.data, runtimeSettingsQuery.data]
-  );
-  const selectedComposerModel =
-    composerModelOverride && availableComposerModels.includes(composerModelOverride) ? composerModelOverride : resolvedComposerModel;
-  const bulkLaunchConcurrencyLimit =
-    runtimeSettingsQuery.data?.agent_bulk_max_concurrent_threads ?? DEFAULT_BULK_LAUNCH_CONCURRENCY_LIMIT;
-  const lastSnappedThreadRef = useRef("");
-
-  useEffect(() => {
-    setComposerModelOverride(null);
-  }, [selectedThreadId]);
-
-  useEffect(() => {
-    if (composerModelOverride && !availableComposerModels.includes(composerModelOverride)) {
-      setComposerModelOverride(null);
-    }
-  }, [availableComposerModels, composerModelOverride]);
-
-  useEffect(() => {
-    threadRunsRef.current = threadQuery.data?.runs ?? [];
-  }, [threadQuery.data?.runs]);
-
-  useEffect(() => {
-    optimisticToolCallsRef.current = optimisticToolCallsByRunId;
-  }, [optimisticToolCallsByRunId]);
-
   useEffect(() => {
     if (!threadsQuery.data) {
       return;
@@ -241,17 +103,13 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     );
   }, [threadsQuery.data]);
 
-  useEffect(() => {
-    if (!selectedThreadId || !threadMessages || lastSnappedThreadRef.current === selectedThreadId) {
-      return;
-    }
-    lastSnappedThreadRef.current = selectedThreadId;
-    requestAnimationFrame(() => snapToBottom());
-  }, [selectedThreadId, threadMessages, snapToBottom]);
+  const addOptimisticRunningThreadId = useCallback((threadId: string) => {
+    setOptimisticRunningThreadIds((current) => (current.includes(threadId) ? current : [...current, threadId]));
+  }, []);
 
-  useEffect(() => {
-    autoSizeComposerTextarea();
-  }, [draftMessage]);
+  const removeOptimisticRunningThreadId = useCallback((threadId: string) => {
+    setOptimisticRunningThreadIds((current) => current.filter((item) => item !== threadId));
+  }, []);
 
   const createThreadMutation = useMutation({
     mutationFn: createAgentThread,
@@ -260,14 +118,6 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
       setSelectedThreadId(thread.id);
     }
   });
-
-  const addOptimisticRunningThreadId = useCallback((threadId: string) => {
-    setOptimisticRunningThreadIds((current) => (current.includes(threadId) ? current : [...current, threadId]));
-  }, []);
-
-  const removeOptimisticRunningThreadId = useCallback((threadId: string) => {
-    setOptimisticRunningThreadIds((current) => current.filter((item) => item !== threadId));
-  }, []);
 
   const deleteThreadMutation = useMutation({
     mutationFn: deleteAgentThread,
@@ -280,10 +130,7 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
         currentSelectedThreadId === deletedThreadId ? (remainingThreads[0]?.id ?? "") : currentSelectedThreadId
       );
       setIsThreadReviewOpen(false);
-      setPendingUserMessage(null);
-      setPendingAssistantMessage(null);
       removeOptimisticRunningThreadId(deletedThreadId);
-      resetOptimisticRunState();
       setActionError(null);
       invalidateAgentThreadData(queryClient);
     }
@@ -322,6 +169,17 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     [queryClient]
   );
 
+  const clearOptimisticThreadTitle = useCallback((threadId: string) => {
+    setOptimisticThreadTitlesById((current) => {
+      if (!(threadId in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[threadId];
+      return next;
+    });
+  }, []);
+
   const upsertThreadSummary = useCallback(
     (thread: AgentThreadSummary) => {
       queryClient.setQueryData(queryKeys.agent.threads, (current: AgentThreadSummary[] | undefined) => {
@@ -336,11 +194,7 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     mutationFn: renameAgentThread,
     onSuccess: (thread) => {
       applyThreadTitleToCaches(thread.id, thread.title, thread.updated_at);
-      setOptimisticThreadTitlesById((current) => {
-        const next = { ...current };
-        delete next[thread.id];
-        return next;
-      });
+      clearOptimisticThreadTitle(thread.id);
       setActionError(null);
     }
   });
@@ -349,9 +203,6 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     mutationFn: interruptAgentRun,
     onSuccess: () => {
       invalidateAgentThreadData(queryClient, selectedThreadId || undefined);
-      setIsStreamHealthy(false);
-      resetOptimisticRunState();
-      setPendingAssistantMessage(null);
       setActionError(null);
     }
   });
@@ -396,50 +247,6 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     () => runsWithoutAssistantMessageByUserMessage(threadQuery.data),
     [threadQuery.data]
   );
-  const hasActiveRun = useMemo(
-    () => (threadQuery.data?.runs ?? []).some((run) => run.status === "running"),
-    [threadQuery.data?.runs]
-  );
-  const activeRunId = useMemo(() => {
-    const runs = sortRunsByCreatedAt(threadQuery.data?.runs ?? []);
-    for (let index = runs.length - 1; index >= 0; index -= 1) {
-      if (runs[index].status === "running") {
-        return runs[index].id;
-      }
-    }
-    return null;
-  }, [threadQuery.data?.runs]);
-  const isRunInFlight = isSendingMessage || hasActiveRun;
-  const shouldShowOptimisticAssistantBubble = Boolean(
-    pendingAssistantMessage &&
-      pendingAssistantMessage.threadId === selectedThreadId
-  );
-  const pendingRunAttachedToOptimisticMessage = useMemo(() => {
-    if (!pendingAssistantMessage || pendingAssistantMessage.threadId !== selectedThreadId) {
-      return null;
-    }
-    if (activeStreamRunId) {
-      return (threadQuery.data?.runs ?? []).find((run) => run.id === activeStreamRunId) ?? null;
-    }
-    const runningRun = [...pendingAssistantRuns].reverse().find((run) => run.status === "running");
-    return runningRun ?? null;
-  }, [activeStreamRunId, pendingAssistantMessage, pendingAssistantRuns, selectedThreadId, threadQuery.data?.runs]);
-  const activeStreamText = useMemo(
-    () => (activeStreamRunId ? streamedTextByRunId[activeStreamRunId] ?? "" : ""),
-    [activeStreamRunId, streamedTextByRunId]
-  );
-  const activeStreamReasoningText = useMemo(
-    () => (activeStreamRunId ? streamedReasoningTextByRunId[activeStreamRunId] ?? "" : ""),
-    [activeStreamRunId, streamedReasoningTextByRunId]
-  );
-  const activeOptimisticEvents = useMemo(
-    () => (activeStreamRunId ? optimisticRunEventsByRunId[activeStreamRunId] ?? [] : []),
-    [activeStreamRunId, optimisticRunEventsByRunId]
-  );
-  const activeOptimisticToolCalls = useMemo(
-    () => (activeStreamRunId ? optimisticToolCallsByRunId[activeStreamRunId] ?? [] : []),
-    [activeStreamRunId, optimisticToolCallsByRunId]
-  );
   const reviewProposalCount = useMemo(
     () => (threadQuery.data?.runs ?? []).reduce((total, run) => total + run.change_items.length, 0),
     [threadQuery.data?.runs]
@@ -452,91 +259,46 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
       ),
     [threadQuery.data?.runs]
   );
-
-  useEffect(() => {
-    if (!pendingUserMessage) {
-      return;
-    }
-    return () => {
-      pendingUserMessage.attachments.forEach((attachment) => {
-        URL.revokeObjectURL(attachment.url);
-      });
-    };
-  }, [pendingUserMessage]);
-
-  useEffect(() => {
-    if (!pendingUserMessage || pendingUserMessage.threadId !== selectedThreadId) {
-      return;
-    }
-    const latestPersistedUserMessage = [...(threadQuery.data?.messages ?? [])]
-      .reverse()
-      .find((message) => message.role === "user");
-    if (!latestPersistedUserMessage || latestPersistedUserMessage.id === pendingUserMessage.baselineLastUserMessageId) {
-      return;
-    }
-    setPendingUserMessage(null);
-  }, [pendingUserMessage, selectedThreadId, threadQuery.data?.messages]);
-
-  useEffect(() => {
-    if (!pendingAssistantMessage || pendingAssistantMessage.threadId !== selectedThreadId) {
-      return;
-    }
-    const latestPersistedAssistantMessage = [...(threadQuery.data?.messages ?? [])]
-      .reverse()
-      .find((message) => message.role === "assistant");
-    if (
-      !latestPersistedAssistantMessage ||
-      latestPersistedAssistantMessage.id === pendingAssistantMessage.baselineLastAssistantMessageId
-    ) {
-      return;
-    }
-    setPendingAssistantMessage(null);
-    resetOptimisticRunState();
-    setIsStreamHealthy(false);
-  }, [pendingAssistantMessage, resetOptimisticRunState, selectedThreadId, threadQuery.data?.messages]);
-
   const threadUsageTotals = useMemo(() => buildThreadUsageTotals(threadQuery.data), [threadQuery.data]);
 
-  useEffect(() => {
-    return () => {
-      if (sendAbortControllerRef.current) {
-        sendAbortControllerRef.current.abort();
-        sendAbortControllerRef.current = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    setIsThreadReviewOpen(false);
-    setPendingAssistantMessage(null);
-    resetOptimisticRunState();
-    setIsStreamHealthy(false);
-  }, [resetOptimisticRunState, selectedThreadId]);
-
-  useEffect(() => {
-    if (
-      !pendingAssistantMessage ||
-      pendingAssistantMessage.threadId !== selectedThreadId ||
-      isRunInFlight ||
-      pendingUserMessage
-    ) {
-      return;
+  async function ensureThreadId(): Promise<string> {
+    if (selectedThreadId) {
+      return selectedThreadId;
     }
-    setPendingAssistantMessage(null);
-    resetOptimisticRunState();
-    setIsStreamHealthy(false);
-  }, [isRunInFlight, pendingAssistantMessage, pendingUserMessage, resetOptimisticRunState, selectedThreadId]);
-
-  function handleComposerModelChange(event: ChangeEvent<HTMLSelectElement>) {
-    setComposerModelOverride(event.target.value);
+    const created = await createThreadMutation.mutateAsync({});
+    setSelectedThreadId(created.id);
+    return created.id;
   }
+
+  const runtime = useAgentComposerRuntime({
+    actionError,
+    addOptimisticRunningThreadId,
+    applyThreadTitleToCaches,
+    availableComposerModels: runtimeSettingsQuery.data?.available_agent_models ?? [],
+    clearOptimisticThreadTitle,
+    ensureThreadId,
+    async interruptRun(runId: string) {
+      await interruptRunMutation.mutateAsync(runId);
+    },
+    isBulkLaunching,
+    isInterruptPending: interruptRunMutation.isPending,
+    isMutating,
+    removeOptimisticRunningThreadId,
+    runtimeSettings: runtimeSettingsQuery.data,
+    selectedThreadId,
+    setActionError,
+    setIsBulkLaunching,
+    setIsStreamHealthy,
+    threadDetail: threadQuery.data,
+    upsertThreadSummary
+  });
 
   async function handleCreateThread() {
     setActionError(null);
     try {
       await createThreadMutation.mutateAsync({});
       requestAnimationFrame(() => {
-        composerTextareaRef.current?.focus();
+        runtime.composer.composerTextareaRef.current?.focus();
       });
     } catch (error) {
       setActionError((error as Error).message);
@@ -544,7 +306,7 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
   }
 
   async function handleDeleteThread(threadId: string) {
-    const thread = (threadsQuery.data ?? []).find((item) => item.id === threadId);
+    const thread = (displayedThreads ?? []).find((item) => item.id === threadId);
     const threadName = (thread?.title || "").trim() || "Untitled thread";
     if (!window.confirm(`Delete "${threadName}"?\n\nThis removes its full message and run history.`)) {
       return;
@@ -566,419 +328,6 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
       setActionError((error as Error).message);
       throw error;
     }
-  }
-
-  async function ensureThreadId(): Promise<string> {
-    if (selectedThreadId) {
-      return selectedThreadId;
-    }
-    const created = await createThreadMutation.mutateAsync({});
-    setSelectedThreadId(created.id);
-    return created.id;
-  }
-
-  const hydrateToolCallDetails = useCallback(
-    async (threadId: string, runId: string, toolCallId: string, force = false) => {
-      const persistedRun = threadRunsRef.current.find((run) => run.id === runId);
-      if (!force && persistedRun?.tool_calls.some((toolCall) => toolCall.id === toolCallId && toolCall.has_full_payload)) {
-        return;
-      }
-
-      const optimisticToolCalls = optimisticToolCallsRef.current[runId] ?? [];
-      if (!force && optimisticToolCalls.some((toolCall) => toolCall.id === toolCallId && toolCall.has_full_payload)) {
-        return;
-      }
-
-      if (hydratingToolCallIdsRef.current.has(toolCallId)) {
-        return;
-      }
-
-      hydratingToolCallIdsRef.current.add(toolCallId);
-      setHydratingToolCallIds((current) => {
-        const next = new Set(current);
-        next.add(toolCallId);
-        return next;
-      });
-      try {
-        const toolCall = await getAgentToolCall(toolCallId);
-        const renamedTitle = toolCall.tool_name === "rename_thread" ? extractRenameThreadTitle(toolCall) : null;
-        setOptimisticToolCallsByRunId((current) => {
-          const existing = current[runId] ?? [];
-          const nextToolCalls = mergeRunToolCalls(existing, [toolCall]);
-          if (
-            existing.length === nextToolCalls.length &&
-            existing.every((existingToolCall, index) => {
-              const nextToolCall = nextToolCalls[index];
-              return (
-                nextToolCall &&
-                existingToolCall.id === nextToolCall.id &&
-                existingToolCall.status === nextToolCall.status &&
-                existingToolCall.has_full_payload === nextToolCall.has_full_payload
-              );
-            })
-          ) {
-            return current;
-          }
-          return {
-            ...current,
-            [runId]: nextToolCalls
-          };
-        });
-        if (renamedTitle) {
-          applyThreadTitleToCaches(threadId, renamedTitle);
-        }
-      } catch {
-        // Ignore transient hydration errors; later expansions or final snapshots will retry/reconcile.
-      } finally {
-        hydratingToolCallIdsRef.current.delete(toolCallId);
-        setHydratingToolCallIds((current) => {
-          if (!current.has(toolCallId)) {
-            return current;
-          }
-          const next = new Set(current);
-          next.delete(toolCallId);
-          return next;
-        });
-      }
-    },
-    [applyThreadTitleToCaches]
-  );
-
-  const handleHydrateToolCall = useCallback(
-    (runId: string, toolCallId: string) => {
-      if (!selectedThreadId) {
-        return;
-      }
-      void hydrateToolCallDetails(selectedThreadId, runId, toolCallId);
-    },
-    [hydrateToolCallDetails, selectedThreadId]
-  );
-
-  function handleAgentStreamEvent(threadId: string, event: AgentStreamEvent) {
-    if (event.type === "run_event") {
-      setActiveStreamRunId((current) => current || event.run_id);
-      const toolCall = event.tool_call;
-      if (toolCall) {
-        setOptimisticToolCallsByRunId((current) => ({
-          ...current,
-          [event.run_id]: mergeRunToolCalls(current[event.run_id] ?? [], [toolCall])
-        }));
-        if (toolCall.tool_name === "rename_thread") {
-          if (event.event.event_type === "tool_call_started") {
-            void hydrateToolCallDetails(threadId, event.run_id, toolCall.id);
-          }
-          if (event.event.event_type === "tool_call_completed") {
-            void hydrateToolCallDetails(threadId, event.run_id, toolCall.id, true);
-          }
-          if (event.event.event_type === "tool_call_failed") {
-            invalidateAgentThreadData(queryClient, threadId);
-          }
-        }
-      }
-      setOptimisticRunEventsByRunId((current) => {
-        const existing = current[event.run_id] ?? [];
-        if (existing.some((item) => item.id === event.event.id)) {
-          return current;
-        }
-        return {
-          ...current,
-          [event.run_id]: [...existing, event.event]
-        };
-      });
-      if (event.event.event_type === "reasoning_update" && event.event.source === "assistant_content") {
-        setStreamedTextByRunId((current) => {
-          if (!current[event.run_id]) {
-            return current;
-          }
-          return {
-            ...current,
-            [event.run_id]: ""
-          };
-        });
-      }
-      if (event.event.event_type === "reasoning_update" && event.event.source === "model_reasoning") {
-        setStreamedReasoningTextByRunId((current) => {
-          if (!current[event.run_id]) {
-            return current;
-          }
-          return {
-            ...current,
-            [event.run_id]: ""
-          };
-        });
-      }
-      if (event.event.event_type === "run_failed" && event.event.message) {
-        setActionError(event.event.message);
-      }
-      return;
-    }
-    if (event.type === "reasoning_delta") {
-      setActiveStreamRunId((current) => current || event.run_id);
-      setStreamedReasoningTextByRunId((current) => ({
-        ...current,
-        [event.run_id]: `${current[event.run_id] ?? ""}${event.delta}`
-      }));
-      return;
-    }
-    if (event.type === "text_delta") {
-      setActiveStreamRunId((current) => current || event.run_id);
-      setStreamedTextByRunId((current) => ({
-        ...current,
-        [event.run_id]: `${current[event.run_id] ?? ""}${event.delta}`
-      }));
-    }
-  }
-
-  async function handleSubmitBulkMessages(content: string, attachments: DraftAttachment[]) {
-    if (attachments.length === 0) {
-      setActionError("Attach at least one file to start Bulk mode.");
-      return;
-    }
-
-    setActionError(null);
-    setIsBulkLaunching(true);
-    try {
-      const results = await mapWithConcurrency(attachments, bulkLaunchConcurrencyLimit, async (attachment) => {
-        let createdThread: AgentThread | null = null;
-        try {
-          createdThread = await createAgentThread({
-            title: deriveThreadTitleFromFilename(attachment.file.name)
-          });
-          upsertThreadSummary(buildThreadSummary(createdThread));
-          addOptimisticRunningThreadId(createdThread.id);
-          upsertThreadSummary(
-            buildThreadSummary(createdThread, {
-              last_message_preview: content || "User sent attachments.",
-              has_running_run: true
-            })
-          );
-          await sendAgentMessage({
-            threadId: createdThread.id,
-            content,
-            files: [attachment.file],
-            modelName: selectedComposerModel || undefined
-          });
-          return { attachmentId: attachment.id, fileName: attachment.file.name, failed: false as const, errorMessage: null };
-        } catch (error) {
-          if (createdThread) {
-            removeOptimisticRunningThreadId(createdThread.id);
-            try {
-              await deleteAgentThread(createdThread.id);
-              queryClient.setQueryData(queryKeys.agent.threads, (current: AgentThreadSummary[] | undefined) =>
-                (current ?? []).filter((thread) => thread.id !== createdThread?.id)
-              );
-              queryClient.removeQueries({ queryKey: queryKeys.agent.thread(createdThread.id), exact: true });
-            } catch {
-              upsertThreadSummary(
-                buildThreadSummary(createdThread, {
-                  last_message_preview: null,
-                  has_running_run: false
-                })
-              );
-            }
-          }
-          return {
-            attachmentId: attachment.id,
-            fileName: attachment.file.name,
-            failed: true as const,
-            errorMessage: (error as Error).message
-          };
-        }
-      });
-
-      const startedCount = results.filter((result) => !result.failed).length;
-      const failedResults = results.filter((result) => result.failed);
-      const failedAttachmentIdSet = new Set(failedResults.map((result) => result.attachmentId));
-      const uniqueErrorMessages = [...new Set(failedResults.map((result) => result.errorMessage).filter(Boolean))];
-      setDraftFiles((current) => current.filter((attachment) => failedAttachmentIdSet.has(attachment.id)));
-      setPreviewAttachmentId(null);
-      if (failedAttachmentIdSet.size === 0) {
-        setDraftMessage("");
-      }
-      setActionError(uniqueErrorMessages.length === 0 ? null : uniqueErrorMessages.join(" "));
-      if (failedResults.length === 0) {
-        notify({
-          title: `Started ${startedCount} thread${startedCount === 1 ? "" : "s"}.`,
-          tone: "success"
-        });
-      } else {
-        const descriptionParts = [`Files: ${summarizeFilenames(failedResults.map((result) => result.fileName))}`];
-        if (uniqueErrorMessages[0]) {
-          descriptionParts.push(uniqueErrorMessages[0]);
-        }
-        notify({
-          title: `Started ${startedCount} thread${startedCount === 1 ? "" : "s"}. Failed ${failedResults.length}.`,
-          description: descriptionParts.join(" "),
-          tone: "error",
-          durationMs: 5600
-        });
-      }
-      invalidateAgentThreadData(queryClient);
-    } finally {
-      setIsBulkLaunching(false);
-    }
-  }
-
-  async function handleSubmitSingleMessage(content: string, attachments: DraftAttachment[]) {
-    const sendingDraftFiles = [...attachments];
-    let threadId: string | null = null;
-    try {
-      threadId = await ensureThreadId();
-      const activeThreadId = threadId;
-      const sendAbortController = new AbortController();
-      sendAbortControllerRef.current = sendAbortController;
-      setIsSendingMessage(true);
-      addOptimisticRunningThreadId(activeThreadId);
-      setIsStreamHealthy(true);
-      resetOptimisticRunState();
-      invalidateAgentThreadData(queryClient, activeThreadId);
-      const baselineLastUserMessageId =
-        [...(threadQuery.data?.messages ?? [])]
-          .reverse()
-          .find((message) => message.role === "user")
-          ?.id ?? null;
-      const baselineLastAssistantMessageId =
-        [...(threadQuery.data?.messages ?? [])]
-          .reverse()
-          .find((message) => message.role === "assistant")
-          ?.id ?? null;
-      const optimisticMessage: PendingUserMessage = {
-        id: `pending-user-${Date.now()}`,
-        threadId: activeThreadId,
-        content,
-        createdAt: new Date().toISOString(),
-        baselineLastUserMessageId,
-        attachments: sendingDraftFiles.map((item, index) => ({
-          id: `${item.id}-${index}`,
-          name: item.file.name,
-          url: URL.createObjectURL(item.file),
-          mimeType: item.file.type || "",
-          kind: detectDraftAttachmentKind(item.file)
-        }))
-      };
-      setPendingUserMessage(optimisticMessage);
-      setPendingAssistantMessage({
-        id: `pending-assistant-${Date.now()}`,
-        threadId: activeThreadId,
-        createdAt: new Date().toISOString(),
-        baselineLastAssistantMessageId
-      });
-      setDraftMessage("");
-      setDraftFiles([]);
-      setPreviewAttachmentId(null);
-      snapToBottom();
-
-      await streamAgentMessage({
-        threadId: activeThreadId,
-        content,
-        files: sendingDraftFiles.map((item) => item.file),
-        modelName: selectedComposerModel || undefined,
-        signal: sendAbortController.signal,
-        onEvent: (streamEvent) => handleAgentStreamEvent(activeThreadId, streamEvent)
-      });
-      sendAbortControllerRef.current = null;
-      setIsStreamHealthy(false);
-      const detail = await getAgentThread(activeThreadId);
-      queryClient.setQueryData(queryKeys.agent.thread(activeThreadId), detail);
-      setOptimisticThreadTitlesById((current) => {
-        const next = { ...current };
-        delete next[activeThreadId];
-        return next;
-      });
-      invalidateAgentThreadData(queryClient, activeThreadId);
-      setPendingUserMessage((current) => (current && current.threadId === activeThreadId ? null : current));
-      setPendingAssistantMessage((current) => (current && current.threadId === activeThreadId ? null : current));
-      removeOptimisticRunningThreadId(activeThreadId);
-      resetOptimisticRunState();
-    } catch (error) {
-      sendAbortControllerRef.current = null;
-      setIsStreamHealthy(false);
-      if ((error as Error).name === "AbortError") {
-        setPendingUserMessage((current) => (current ? null : current));
-        setActionError(null);
-      } else {
-        setActionError((error as Error).message);
-      }
-    } finally {
-      if (threadId) {
-        removeOptimisticRunningThreadId(threadId);
-      }
-      setIsSendingMessage(false);
-    }
-  }
-
-  async function handleSubmitMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setActionError(null);
-    const content = draftMessage.trim();
-    if (isBulkMode) {
-      await handleSubmitBulkMessages(content, [...draftFiles]);
-      return;
-    }
-    if (!content && draftFiles.length === 0) {
-      setActionError("Enter a message or attach at least one file.");
-      return;
-    }
-    await handleSubmitSingleMessage(content, [...draftFiles]);
-  }
-
-  async function handleStopRun() {
-    setActionError(null);
-    setIsSendingMessage(false);
-    setIsStreamHealthy(false);
-    if (selectedThreadId) {
-      removeOptimisticRunningThreadId(selectedThreadId);
-    }
-    setPendingAssistantMessage(null);
-    resetOptimisticRunState();
-    if (sendAbortControllerRef.current) {
-      sendAbortControllerRef.current.abort();
-      sendAbortControllerRef.current = null;
-    }
-    let runIdToInterrupt = activeRunId || activeStreamRunId || null;
-    if (!runIdToInterrupt && selectedThreadId) {
-      try {
-        const detail = await getAgentThread(selectedThreadId);
-        const latestRunningRun = sortRunsByCreatedAt(detail.runs)
-          .reverse()
-          .find((run) => run.status === "running");
-        runIdToInterrupt = latestRunningRun?.id ?? null;
-      } catch {
-        runIdToInterrupt = null;
-      }
-    }
-    if (!runIdToInterrupt) {
-      return;
-    }
-    try {
-      await interruptRunMutation.mutateAsync(runIdToInterrupt);
-    } catch (error) {
-      setActionError((error as Error).message);
-    }
-  }
-
-  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== "Enter" || event.nativeEvent.isComposing) {
-      return;
-    }
-
-    const hasMultipleLines = event.currentTarget.value.includes("\n");
-    const hasSubmitModifier = event.metaKey || event.ctrlKey;
-    const shouldSubmit = hasSubmitModifier || (!hasMultipleLines && !event.shiftKey);
-    if (!shouldSubmit) {
-      return;
-    }
-
-    event.preventDefault();
-    if (isMutating || isBulkLaunching || (!isBulkMode && isRunInFlight)) {
-      return;
-    }
-    event.currentTarget.form?.requestSubmit();
-  }
-
-  function handleDraftMessageChange(event: ChangeEvent<HTMLTextAreaElement>) {
-    setDraftMessage(event.target.value);
-    autoSizeComposerTextarea(event.target);
   }
 
   async function handleApproveItem(payload: {
@@ -1030,122 +379,80 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     }
   }
 
-  function handleBulkModeChange(checked: boolean) {
-    setIsBulkMode(checked);
-    setActionError(null);
-  }
-
   return {
     header: {
-      selectedThreadId,
-      reviewProposalCount,
-      pendingReviewCount,
-      isMutating,
-      isBulkLaunching,
-      isThreadPanelOpen,
-      threadUsageTotals,
-      openReview: () => setIsThreadReviewOpen(true),
-      createThread: () => {
+      createThread() {
         void handleCreateThread();
       },
+      isBulkLaunching,
+      isMutating,
+      isThreadPanelOpen,
+      openReview: () => setIsThreadReviewOpen(true),
+      pendingReviewCount,
+      reviewProposalCount,
+      selectedThreadId,
+      threadUsageTotals,
       toggleThreadPanel
     },
     timeline: {
-      selectedThreadId,
-      isLoading: threadQuery.isLoading,
+      activeOptimisticEvents: runtime.timeline.activeOptimisticEvents,
+      activeOptimisticToolCalls: runtime.timeline.activeOptimisticToolCalls,
+      activeStreamReasoningText: runtime.timeline.activeStreamReasoningText,
+      activeStreamText: runtime.timeline.activeStreamText,
       errorMessage: threadQuery.isError ? (threadQuery.error as Error).message : null,
+      hydratingToolCallIds: runtime.timeline.hydratingToolCallIds,
+      isAtBottom: runtime.timeline.isAtBottom,
+      isLoading: threadQuery.isLoading,
+      isMutating,
       messages: threadQuery.data?.messages,
-      timelineScrollRef,
-      runsByAssistantMessageId,
+      onHydrateToolCall: runtime.timeline.onHydrateToolCall,
+      optimisticRunEventsByRunId: runtime.timeline.optimisticRunEventsByRunId,
+      optimisticToolCallsByRunId: runtime.timeline.optimisticToolCallsByRunId,
+      pendingAssistantMessage: runtime.timeline.pendingAssistantMessage,
       pendingAssistantRuns,
       pendingAssistantRunsByUserMessageId,
-      pendingUserMessage,
-      pendingAssistantMessage,
-      shouldShowOptimisticAssistantBubble,
-      pendingRunAttachedToOptimisticMessage,
-      isMutating,
-      activeStreamReasoningText,
-      activeStreamText,
-      optimisticRunEventsByRunId,
-      optimisticToolCallsByRunId,
-      activeOptimisticEvents,
-      activeOptimisticToolCalls,
-      onHydrateToolCall: handleHydrateToolCall,
-      hydratingToolCallIds,
-      isAtBottom,
-      scrollToBottom
+      pendingRunAttachedToOptimisticMessage: runtime.timeline.pendingRunAttachedToOptimisticMessage,
+      pendingUserMessage: runtime.timeline.pendingUserMessage,
+      runsByAssistantMessageId,
+      scrollToBottom: runtime.timeline.scrollToBottom,
+      selectedThreadId,
+      shouldShowOptimisticAssistantBubble: runtime.timeline.shouldShowOptimisticAssistantBubble,
+      timelineScrollRef: runtime.timeline.timelineScrollRef
     },
     composer: {
-      isComposerDragActive,
-      draftAttachmentPreviews,
-      previewAttachmentId,
-      setPreviewAttachmentId,
-      onRemoveAttachment: removeDraftAttachment,
-      composerTextareaRef,
-      fileInputRef,
-      draftMessage,
-      availableModels: availableComposerModels,
-      selectedModel: selectedComposerModel,
-      isModelPickerDisabled: isMutating || isBulkLaunching,
-      isMutating,
-      isRunInFlight,
-      isSendingMessage,
-      isBulkMode,
-      isBulkLaunching,
-      isInterruptPending: interruptRunMutation.isPending,
-      bulkModeHelpText: BULK_MODE_HELP_TEXT,
-      actionError,
-      onBulkModeChange: handleBulkModeChange,
-      onSubmit: handleSubmitMessage,
-      onDragEnter: handleComposerDragEnter,
-      onDragOver: handleComposerDragOver,
-      onDragLeave: handleComposerDragLeave,
-      onDrop: handleComposerDrop,
-      onMessageChange: handleDraftMessageChange,
-      onModelChange: handleComposerModelChange,
-      onComposerKeyDown: handleComposerKeyDown,
-      onComposerPaste: handleComposerPaste,
-      onFileSelection: handleDraftFileSelection,
-      onStopRun: () => {
-        void handleStopRun();
-      }
+      ...runtime.composer
     },
     threadPanel: {
-      isOpen: isThreadPanelOpen,
-      panelWidth,
+      deletingThreadId: deleteThreadMutation.isPending ? (deleteThreadMutation.variables ?? null) : null,
+      errorMessage: threadsQuery.isError ? (threadsQuery.error as Error).message : null,
       handleResizeMouseDown,
+      isDeleteDisabled: isMutating || runtime.composer.isRunInFlight || isBulkLaunching,
+      isLoading: threadsQuery.isLoading,
+      isOpen: isThreadPanelOpen,
+      isRenameDisabled: isMutating || runtime.composer.isRunInFlight || isBulkLaunching,
+      onDeleteThread(threadId: string) {
+        void handleDeleteThread(threadId);
+      },
+      onRenameThread: handleRenameThread,
+      onSelectThread: setSelectedThreadId,
+      optimisticRunningThreadIds,
+      panelWidth,
+      renamingThreadId: renameThreadMutation.isPending ? (renameThreadMutation.variables?.threadId ?? null) : null,
+      selectedThreadId,
       slotClassName: isThreadPanelOpen
         ? "agent-thread-panel-slot"
         : "agent-thread-panel-slot agent-thread-panel-slot-collapsed",
-      threads: displayedThreads,
-      selectedThreadId,
-      isLoading: threadsQuery.isLoading,
-      errorMessage: threadsQuery.isError ? (threadsQuery.error as Error).message : null,
-      onSelectThread: setSelectedThreadId,
-      onRenameThread: handleRenameThread,
-      onDeleteThread: (threadId: string) => {
-        void handleDeleteThread(threadId);
-      },
-      renamingThreadId: renameThreadMutation.isPending ? (renameThreadMutation.variables?.threadId ?? null) : null,
-      deletingThreadId: deleteThreadMutation.isPending ? (deleteThreadMutation.variables ?? null) : null,
-      isDeleteDisabled: isMutating || isRunInFlight || isBulkLaunching,
-      isRenameDisabled: isMutating || isRunInFlight || isBulkLaunching,
-      optimisticRunningThreadIds
+      threads: displayedThreads
     },
     reviewModal: {
-      open: isThreadReviewOpen,
-      runs: threadQuery.data?.runs ?? [],
-      onOpenChange: setIsThreadReviewOpen,
+      isBusy: isMutating,
       onApproveItem: handleApproveItem,
+      onOpenChange: setIsThreadReviewOpen,
       onRejectItem: handleRejectItem,
       onReopenItem: handleReopenItem,
-      isBusy: isMutating
+      open: isThreadReviewOpen,
+      runs: threadQuery.data?.runs ?? []
     },
-    previewDialog: {
-      preview: selectedDraftAttachmentPreview,
-      onClose: () => {
-        setPreviewAttachmentId(null);
-      }
-    }
+    previewDialog: runtime.previewDialog
   };
 }

@@ -169,7 +169,8 @@
 - `agent/AgentRunBlock.tsx`: extracted run activity/summary renderer used by `AgentPanel`.
 - `agent/activity.ts`: extracted run/activity derivation helpers for agent timeline state.
 - `agent/review/model.ts`: review-item summaries, proposal-domain grouping, and shared change-type labels.
-- `agent/panel/*`: agent panel presentation layer (`AgentThreadList`, `AgentThreadPanel`, `AgentTimeline`, `AgentComposer`, `AgentThreadUsageBar`, `AgentAttachmentPreviewDialog`) plus panel-local hooks (`useResizablePanel`, `useStickToBottom`, `useAgentDraftAttachments`), type and format helpers.
+- `agent/panel/*`: agent panel presentation layer (`AgentThreadList`, `AgentThreadPanel`, `AgentTimeline`, `AgentComposer`, `AgentThreadUsageBar`, `AgentAttachmentPreviewDialog`) plus the coordinator hooks (`useAgentPanelController`, `useAgentComposerRuntime`), panel-local hooks (`useResizablePanel`, `useStickToBottom`, `useAgentDraftAttachments`), and type/format helpers.
+- `agent/review/*`: thread-review modal shell, controller hook, extracted editor/navigation components, and review diff/draft helpers.
 
 #### Pages (`/frontend/src/pages`)
 
