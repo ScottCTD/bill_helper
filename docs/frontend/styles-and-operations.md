@@ -18,6 +18,10 @@
 - `agent/review/useAgentThreadReviewController.ts`
 - `agent/review/useAgentReviewEditorResources.ts`
 - `agent/review/useAgentReviewDraftState.ts`
+- `agent/review/ReviewModalHeader.tsx`
+- `agent/review/ReviewModalControls.tsx`
+- `agent/review/ReviewActiveItemCard.tsx`
+- `agent/review/ReviewModalFooter.tsx`
 - `agent/review/ReviewEditors.tsx`
 - `agent/review/ReviewTocSection.tsx`
 - `agent/review/ReviewCatalogEditors.tsx`
