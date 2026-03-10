@@ -71,6 +71,9 @@ echo "Syncing frontend dependencies..."
   npm install
 )
 
+echo "Resetting frontend Vite optimized deps cache..."
+rm -rf "$ROOT_DIR/frontend/node_modules/.vite"
+
 echo "Starting backend (log: $BACKEND_LOG)"
 uv run bill-helper-api > >(tee "$BACKEND_LOG") 2>&1 &
 BACKEND_PID=$!

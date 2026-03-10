@@ -219,6 +219,7 @@ Behavior:
   - fresh worktree impact: first boot auto-seeds demo data into that worktree-local SQLite database
 - skips demo seeding when existing accounts are present
 - runs `npm install` in `frontend/` before starting services to keep UI deps in sync
+- clears `frontend/node_modules/.vite` before starting Vite so local restarts rebuild optimized frontend dependencies
 - starts both processes
 - writes logs in `/path/to/bill_helper/logs`
 - prints service URLs

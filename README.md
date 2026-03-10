@@ -108,6 +108,8 @@ This starts both backend and frontend, applies pending migrations, and opens:
 
 Press `Ctrl+C` to stop both services.
 
+`./scripts/dev_up.sh` also clears `frontend/node_modules/.vite` before launching Vite so local restarts do not reuse stale optimized dependency chunks for the markdown editor.
+
 On first frontend load, the app now requires an explicit local principal session for protected API calls. Set `VITE_DEV_PRINCIPAL_NAME` to prefill that session, or enter a principal name in the browser when prompted.
 
 For local Telegram bot polling/webhook development, see [docs/development.md](docs/development.md). For package-local Telegram module notes, see [telegram/README.md](telegram/README.md).
