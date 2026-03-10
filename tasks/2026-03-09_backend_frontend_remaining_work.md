@@ -43,13 +43,13 @@ Desloppify snapshot after forced rescan and forced batch review rerun:
 
 ### 1. Agent contract decomposition
 
-The next major backend batch should reduce the remaining proposal/runtime cleanup after the contract split, shared thread-proposal query cleanup, direct tool-arg ownership cleanup, payload-normalization split, reviewer-principal entry-scope fix, and the tool-result status contract cleanup:
+The next major backend batch should reduce the remaining proposal/runtime cleanup after the contract split, shared thread-proposal query cleanup, direct tool-arg ownership cleanup, payload-normalization split, reviewer-principal entry-scope fix, tool-result status contract cleanup, and the catalog-contract convergence pass:
 
-- `review::.::holistic::contract_coherence::agent_finance_contract_drift::7c20f194`
+- `review::.::holistic::convention_outlier::agent_tool_family_layout_drift::db535536`
 
 Recommended direction:
 
-- finish converging agent proposal payloads on the finance create/update contracts that routers and services already share
+- keep pushing agent tool ownership toward one consistent package shape instead of mixing read packages with flat singleton handlers
 - keep agent apply/read helpers on the same principal-aware entry scope as normal ledger routes
 
 ### 2. Service/API contract cleanup outside the agent
