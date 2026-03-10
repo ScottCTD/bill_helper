@@ -22,6 +22,8 @@
 - `agent/review/diff/*`
 - `agent/panel/useAgentPanelController.ts`
 - `agent/panel/useAgentComposerRuntime.ts`
+- `agent/panel/useAgentComposerStreamState.ts`
+- `agent/panel/useAgentComposerActions.ts`
 - `components/ui/*` for shared primitives
 
 ## Feature Modules
