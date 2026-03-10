@@ -24,7 +24,7 @@ Excluded from this pass and from the current `desloppify` scope:
 Verification:
 
 - Backend targeted compile/test batches passed for each refactor batch.
-- Full backend suite baseline after the refactors: `292 passed, 8 failed`.
+- Full backend suite baseline after the refactors: `297 passed, 8 failed`.
 - The 8 backend failures are unchanged, pre-existing runtime-settings/default-model expectation failures around `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0`.
 - Frontend `AgentThreadReviewModal.test.tsx` and `AgentPanel.test.tsx` pass.
 - Frontend production build passes.
@@ -144,4 +144,4 @@ Recommended direction:
 - `70e42b9` `Extract agent runtime loop adapters`
 - `7c5d72b` `Split agent router by endpoint family`
 - `b2b958e` `Refactor agent panel into controller and helpers`
-- pending current commit: split agent review modal and panel runtime ownership
+- `f528187` `Split agent frontend review and runtime ownership`
