@@ -111,6 +111,7 @@ Service conventions:
 - `ensure_*` helpers are explicit mutating lookup or create paths and may write plus `flush`
 - `read_*` and `find_*` helpers are read-only
 - shared CRUD validation lives in `crud_policy.py`
+- user-facing group mutation failures also use `PolicyViolation` now; router modules should not translate group `ValueError` strings by hand
 - shared owner/admin policy lives in `access_scope.py`
 - package `__init__.py` files stay marker-only and should not become barrel re-export modules
 - application code and tests should import direct domain modules (`*_finance`, `*_agent`) instead of rebuilding aggregate facades
