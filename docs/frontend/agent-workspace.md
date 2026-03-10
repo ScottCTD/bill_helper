@@ -5,12 +5,13 @@
 - `frontend/src/features/agent/AgentPanel.tsx`
 - used as the primary AI page via `frontend/src/pages/HomePage.tsx`
 - acts as a render shell that wires the header, timeline, composer, thread rail, review modal, and preview dialog together
-- stateful coordination now lives in `frontend/src/features/agent/panel/useAgentPanelController.ts`, while pure panel helpers live in `frontend/src/features/agent/panel/helpers.ts`
+- stateful coordination now lives in `frontend/src/features/agent/panel/useAgentPanelController.ts` plus `frontend/src/features/agent/panel/useAgentComposerRuntime.ts`, while pure panel helpers live in `frontend/src/features/agent/panel/helpers.ts`
 - page header uses the static title `Bill Assistant`; model selection stays in the composer dropdown instead of the title row
 
 Supporting modules include:
 
 - `frontend/src/features/agent/panel/useAgentPanelController.ts`
+- `frontend/src/features/agent/panel/useAgentComposerRuntime.ts`
 - `frontend/src/features/agent/panel/helpers.ts`
 - `frontend/src/features/agent/AgentRunBlock.tsx`
 - `frontend/src/features/agent/activity.ts`
@@ -24,6 +25,9 @@ Supporting modules include:
 - `frontend/src/features/agent/panel/useStickToBottom.ts`
 - `frontend/src/hooks/useResizablePanel.ts`
 - `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`
+- `frontend/src/features/agent/review/useAgentThreadReviewController.ts`
+- `frontend/src/features/agent/review/ReviewEditors.tsx`
+- `frontend/src/features/agent/review/modalHelpers.ts`
 - `frontend/src/features/agent/review/drafts.ts`
 - `frontend/src/features/agent/review/model.ts`
 - `frontend/src/features/agent/review/diff.ts`
@@ -43,10 +47,11 @@ Supporting modules include:
 
 ## Thread Review Surface
 
-- review actions are handled in `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`
+- review actions are coordinated by `frontend/src/features/agent/review/useAgentThreadReviewController.ts`, while `AgentThreadReviewModal.tsx` now stays focused on modal layout and card composition
 - the header `Review` button is the only review entry point and opens one thread-scoped dialog for all proposal items across the selected thread
 - the dialog uses responsive width rules, lets reviewers collapse the left TOC, groups TOC rows by proposal domain (`Entries`, `Accounts`, `Groups`, `Entities`, `Tags`) within `Pending` and `Reviewed / Failed`, and surfaces batch plus per-item review controls in a full-width bar above the denser review surface
 - proposals render CRUD-aware field-level diffs, and reviewer overrides update the preview for create and update entry/account/tag/entity/group proposals plus add-member group proposals
+- TOC navigation, edit forms, and dependency chips live in `frontend/src/features/agent/review/ReviewEditors.tsx`, while reusable selection/status helpers live in `frontend/src/features/agent/review/modalHelpers.ts`
 - entry create/update review uses the same field model as `EntryEditorModal` through `frontend/src/features/agent/review/drafts.ts`; account review edits `name`, `currency`, `active`, and `notes`; tag review edits only `name` and `type`; entity review edits only `name` and `category`; create/update group review edits `name` plus create-only `group_type`
 - create-group-member review shows the resolved parent group name plus a read-only full entry snapshot for entry members; the only editable field in v1 is split role, and the diff preview treats membership changes as a group assignment update so only the `group` field (and split role when relevant) changes instead of re-highlighting the whole entry payload
 - proposal-backed group or entry dependencies show chips only while the referenced create proposal is still unresolved; once that dependency is `APPLIED`, the review surface falls back to the resolved group name and entry snapshot without a dependency banner
