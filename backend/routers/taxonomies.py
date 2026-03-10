@@ -7,7 +7,6 @@ from backend.auth.contracts import RequestPrincipal
 from backend.auth.dependencies import require_admin_principal
 from backend.database import get_db
 from backend.schemas_finance import TaxonomyRead, TaxonomyTermCreate, TaxonomyTermRead, TaxonomyTermUpdate
-from backend.services.crud_policy import PolicyViolation, translate_policy_violation
 from backend.services.taxonomy import (
     build_taxonomy_term_read,
     create_term_from_payload,
@@ -28,10 +27,7 @@ def list_taxonomies(db: Session = Depends(get_db)) -> list[TaxonomyRead]:
 
 @router.get("/{taxonomy_key}/terms", response_model=list[TaxonomyTermRead])
 def list_taxonomy_terms(taxonomy_key: str, db: Session = Depends(get_db)) -> list[TaxonomyTermRead]:
-    try:
-        return list_taxonomy_term_reads(db, taxonomy_key=taxonomy_key)
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    return list_taxonomy_term_reads(db, taxonomy_key=taxonomy_key)
 
 
 @router.post("/{taxonomy_key}/terms", response_model=TaxonomyTermRead, status_code=status.HTTP_201_CREATED)
@@ -41,15 +37,12 @@ def create_taxonomy_term(
     db: Session = Depends(get_db),
     _: RequestPrincipal = Depends(require_admin_principal),
 ) -> TaxonomyTermRead:
-    try:
-        term = create_term_from_payload(
-            db,
-            taxonomy_key=taxonomy_key,
-            name=payload.name,
-            description=payload.description,
-        )
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    term = create_term_from_payload(
+        db,
+        taxonomy_key=taxonomy_key,
+        name=payload.name,
+        description=payload.description,
+    )
 
     db.commit()
     db.refresh(term)
@@ -64,17 +57,14 @@ def update_taxonomy_term(
     db: Session = Depends(get_db),
     _: RequestPrincipal = Depends(require_admin_principal),
 ) -> TaxonomyTermRead:
-    try:
-        term = update_term_from_payload(
-            db,
-            taxonomy_key=taxonomy_key,
-            term_id=term_id,
-            name=payload.name,
-            description=payload.description,
-            fields_set=set(payload.model_dump(exclude_unset=True)),
-        )
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    term = update_term_from_payload(
+        db,
+        taxonomy_key=taxonomy_key,
+        term_id=term_id,
+        name=payload.name,
+        description=payload.description,
+        fields_set=set(payload.model_dump(exclude_unset=True)),
+    )
 
     db.commit()
     db.refresh(term)

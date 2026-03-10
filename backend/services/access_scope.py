@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal, is_admin_principal
 from backend.models_finance import Account, Entry, EntryGroup, User
-from backend.services.crud_policy import PolicyViolation, translate_policy_violation
+from backend.services.crud_policy import PolicyViolation
 
 
 def account_owner_filter(principal: RequestPrincipal):
@@ -32,10 +32,7 @@ def get_account_for_principal_or_404(
     account_id: str,
     principal: RequestPrincipal,
 ) -> Account:
-    try:
-        return load_account_for_principal(db, account_id=account_id, principal=principal)
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    return load_account_for_principal(db, account_id=account_id, principal=principal)
 
 
 def load_account_for_principal(
@@ -62,15 +59,12 @@ def get_entry_for_principal_or_404(
     principal: RequestPrincipal,
     stmt: Select[tuple[Entry]] | None = None,
 ) -> Entry:
-    try:
-        return load_entry_for_principal(
-            db,
-            entry_id=entry_id,
-            principal=principal,
-            stmt=stmt,
-        )
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    return load_entry_for_principal(
+        db,
+        entry_id=entry_id,
+        principal=principal,
+        stmt=stmt,
+    )
 
 
 def load_entry_for_principal(
@@ -99,10 +93,7 @@ def get_user_for_principal_or_404(
     user_id: str,
     principal: RequestPrincipal,
 ) -> User:
-    try:
-        return load_user_for_principal(db, user_id=user_id, principal=principal)
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    return load_user_for_principal(db, user_id=user_id, principal=principal)
 
 
 def load_user_for_principal(
@@ -126,15 +117,12 @@ def get_group_for_principal_or_404(
     principal: RequestPrincipal,
     stmt: Select[tuple[EntryGroup]] | None = None,
 ) -> EntryGroup:
-    try:
-        return load_group_for_principal(
-            db,
-            group_id=group_id,
-            principal=principal,
-            stmt=stmt,
-        )
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    return load_group_for_principal(
+        db,
+        group_id=group_id,
+        principal=principal,
+        stmt=stmt,
+    )
 
 
 def load_group_for_principal(

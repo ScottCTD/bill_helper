@@ -10,10 +10,6 @@ from backend.auth.dependencies import require_admin_principal
 from backend.database import get_db
 from backend.models_finance import Entity
 from backend.schemas_finance import EntityCreate, EntityRead, EntityUpdate
-from backend.services.crud_policy import (
-    PolicyViolation,
-    translate_policy_violation,
-)
 from backend.services.entities import (
     create_entity as create_entity_service,
     delete_entity_and_preserve_labels,
@@ -86,13 +82,10 @@ def create_entity(
     db: Session = Depends(get_db),
     _: RequestPrincipal = Depends(require_admin_principal),
 ) -> EntityRead:
-    try:
-        entity = create_entity_service(
-            db,
-            command=EntityCreateCommand.model_validate(payload.model_dump()),
-        )
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    entity = create_entity_service(
+        db,
+        command=EntityCreateCommand.model_validate(payload.model_dump()),
+    )
     category = read_entity_category(db, entity)
     db.commit()
     db.refresh(entity)
@@ -109,11 +102,7 @@ def delete_entity(
     if entity is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found")
 
-    try:
-        delete_entity_and_preserve_labels(db, entity=entity)
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
-
+    delete_entity_and_preserve_labels(db, entity=entity)
     db.commit()
 
 
@@ -128,14 +117,11 @@ def update_entity(
     if entity is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found")
 
-    try:
-        update_entity_service(
-            db,
-            entity=entity,
-            patch=EntityPatch.model_validate(payload.model_dump(exclude_unset=True)),
-        )
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    update_entity_service(
+        db,
+        entity=entity,
+        patch=EntityPatch.model_validate(payload.model_dump(exclude_unset=True)),
+    )
 
     category = read_entity_category(db, entity)
     db.commit()

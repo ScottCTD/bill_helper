@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import uvicorn
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from backend.auth.dependencies import get_or_create_current_principal
 from backend.config import get_settings
 from backend.routers import currencies, dashboard, entities, entries, groups, settings, tags, taxonomies, users
 from backend.routers.agent import router as agent_router
 from backend.routers.accounts import router as accounts_router
+from backend.services.crud_policy import PolicyViolation
 
 
 def create_app() -> FastAPI:
@@ -16,6 +18,10 @@ def create_app() -> FastAPI:
     app_settings.ensure_data_dir()
 
     app = FastAPI(title=app_settings.app_name)
+
+    @app.exception_handler(PolicyViolation)
+    def handle_policy_violation(_request: Request, error: PolicyViolation) -> JSONResponse:
+        return JSONResponse(status_code=error.status_code, content={"detail": error.detail})
 
     app.add_middleware(
         CORSMiddleware,
