@@ -1413,7 +1413,7 @@ def test_list_tags_tool_output_includes_tag_descriptions(client, monkeypatch):
     assert run["status"] == "completed"
     assert len(run["tool_calls"]) == 1
     output_json = run["tool_calls"][0]["output_json"]
-    assert output_json["status"] == "OK"
+    assert output_json["status"] == "ok"
     assert output_json["tags"][0]["name"] == "groceries"
     assert output_json["tags"][0]["type"] == "expense"
     assert output_json["tags"][0]["description"] == "Food and household staples from grocery stores and supermarkets."
@@ -2302,7 +2302,7 @@ def test_propose_create_entry_accepts_double_encoded_tool_arguments(client, monk
     assert run["status"] == "completed"
     assert len(run["change_items"]) == 1
     assert run["tool_calls"][0]["input_json"] == entry_args
-    assert run["tool_calls"][0]["output_json"]["status"] == "OK"
+    assert run["tool_calls"][0]["output_json"]["status"] == "ok"
     assert run["change_items"][0]["change_type"] == "create_entry"
 
 
@@ -2335,7 +2335,7 @@ def test_malformed_tool_arguments_do_not_crash_followup_model_step(client, monke
     assert run["status"] == "completed"
     assert run["change_items"] == []
     assert len(run["tool_calls"]) == 1
-    assert run["tool_calls"][0]["output_json"]["status"] == "ERROR"
+    assert run["tool_calls"][0]["output_json"]["status"] == "error"
     assert run["tool_calls"][0]["output_json"]["summary"] == "tool argument decode failed"
     assert run["tool_calls"][0]["output_json"]["details"]["decode_error"] == "arguments are not valid JSON"
 
@@ -2588,7 +2588,7 @@ def test_list_entries_source_matches_name_and_counterparties(client, monkeypatch
 
     assert run["status"] == "completed"
     output = run["tool_calls"][0]["output_json"]
-    assert output["status"] == "OK"
+    assert output["status"] == "ok"
     assert output["returned_count"] == 4
     assert output["total_available"] == 4
     names = [entry["name"] for entry in output["entries"]]
@@ -2730,7 +2730,7 @@ def test_entry_proposal_can_reference_pending_account_in_same_turn(client, monke
     change_items_by_type = {item["change_type"]: item for item in run["change_items"]}
     assert change_items_by_type["create_account"]["payload_json"]["name"] == "Travel Card"
     assert change_items_by_type["create_entry"]["payload_json"]["to_entity"] == "Travel Card"
-    assert all(tool_call["output_json"]["status"] == "OK" for tool_call in run["tool_calls"])
+    assert all(tool_call["output_json"]["status"] == "ok" for tool_call in run["tool_calls"])
 
 
 def test_entry_approval_waits_for_pending_account_dependency(client, monkeypatch):
@@ -2851,7 +2851,7 @@ def test_entry_proposal_can_reference_pending_entity_in_same_turn(client, monkey
     change_items_by_type = {item["change_type"]: item for item in run["change_items"]}
     assert change_items_by_type["create_entity"]["payload_json"]["name"] == "Molly Tea"
     assert change_items_by_type["create_entry"]["payload_json"]["to_entity"] == "Molly Tea"
-    assert all(tool_call["output_json"]["status"] == "OK" for tool_call in run["tool_calls"])
+    assert all(tool_call["output_json"]["status"] == "ok" for tool_call in run["tool_calls"])
 
 
 def test_entry_approval_waits_for_pending_entity_dependency(client, monkeypatch):
@@ -3028,7 +3028,7 @@ def test_duplicate_pending_entity_creation_is_rejected_in_same_thread(client, mo
 
     second_run = send_message(client, thread["id"], "Create Molly Tea again")
     assert second_run["change_items"] == []
-    assert second_run["tool_calls"][0]["output_json"]["status"] == "ERROR"
+    assert second_run["tool_calls"][0]["output_json"]["status"] == "error"
     assert second_run["tool_calls"][0]["output_json"]["summary"] == (
         "entity or account already has a pending creation proposal in this thread"
     )
@@ -3311,7 +3311,7 @@ def test_propose_create_entity_rejects_account_category(client, monkeypatch):
 
     assert run["status"] == "completed"
     assert run["change_items"] == []
-    assert run["tool_calls"][0]["output_json"]["status"] == "ERROR"
+    assert run["tool_calls"][0]["output_json"]["status"] == "error"
     assert "Use /accounts instead" in run["tool_calls"][0]["output_json"]["summary"]
 
 
@@ -3731,7 +3731,7 @@ def test_propose_delete_tag_reports_references_but_still_creates_proposal(client
     assert len(run["change_items"]) == 1
     assert len(run["tool_calls"]) == 1
     tool_output = run["tool_calls"][0]["output_json"]
-    assert tool_output["status"] == "OK"
+    assert tool_output["status"] == "ok"
     preview = tool_output["preview"]
     assert preview["name"] == "groceries"
     assert preview["referenced_entry_count"] == 1
@@ -3837,7 +3837,7 @@ def test_propose_delete_entity_rejects_account_backed_entity_roots(client, monke
     assert run["change_items"] == []
     assert len(run["tool_calls"]) == 1
     tool_output = run["tool_calls"][0]["output_json"]
-    assert tool_output["status"] == "ERROR"
+    assert tool_output["status"] == "error"
     assert "managed from Accounts" in tool_output["summary"]
 
 
@@ -4111,7 +4111,7 @@ def test_update_entry_selector_ambiguity_is_reported_to_agent(client, monkeypatc
     assert run["change_items"] == []
     assert len(run["tool_calls"]) == 1
     tool_output = run["tool_calls"][0]["output_json"]
-    assert tool_output["status"] == "ERROR"
+    assert tool_output["status"] == "error"
     assert "ambiguous selector" in tool_output["summary"]
 
 
@@ -4185,7 +4185,7 @@ def test_update_entry_rejects_conflicting_entry_id_and_selector(client, monkeypa
     assert run["change_items"] == []
     assert len(run["tool_calls"]) == 1
     tool_output = run["tool_calls"][0]["output_json"]
-    assert tool_output["status"] == "ERROR"
+    assert tool_output["status"] == "error"
     assert tool_output["summary"] == "conflicting entry reference"
 
 
@@ -4250,7 +4250,7 @@ def test_update_entry_accepts_stringified_selector_and_patch(client, monkeypatch
     assert run["change_items"][0]["status"] == "PENDING_REVIEW"
     assert run["change_items"][0]["payload_json"]["selector"]["name"] == "Uniqlo Canada"
     assert run["change_items"][0]["payload_json"]["patch"]["name"] == "Uniqlo"
-    assert run["tool_calls"][0]["output_json"]["status"] == "OK"
+    assert run["tool_calls"][0]["output_json"]["status"] == "ok"
 
 
 def test_reviewed_items_are_injected_into_followup_turn(client, monkeypatch):
@@ -4424,7 +4424,7 @@ def test_propose_tools_allowed_when_pending_reviews_exist(client, monkeypatch):
     assert len(second_run["change_items"]) == 1
     assert second_run["change_items"][0]["status"] == "PENDING_REVIEW"
     assert second_run["change_items"][0]["change_type"] == "create_entity"
-    assert second_run["tool_calls"][0]["output_json"]["status"] == "OK"
+    assert second_run["tool_calls"][0]["output_json"]["status"] == "ok"
     assert second_run["tool_calls"][0]["output_json"]["proposal_id"] == second_run["change_items"][0]["id"]
 
 
@@ -4500,7 +4500,7 @@ def test_update_pending_proposal_tool_updates_existing_item(client, monkeypatch)
     assert second_run["change_items"] == []
     assert len(second_run["tool_calls"]) == 1
     update_output = second_run["tool_calls"][0]["output_json"]
-    assert update_output["status"] == "OK"
+    assert update_output["status"] == "ok"
     assert update_output["proposal_id"] == pending_item_id
     assert "amount_minor" in update_output["patch_fields"]
     assert "date" in update_output["patch_fields"]
@@ -4565,7 +4565,7 @@ def test_remove_pending_proposal_tool_removes_existing_item(client, monkeypatch)
     assert len(second_run["tool_calls"]) == 1
 
     remove_output = second_run["tool_calls"][0]["output_json"]
-    assert remove_output["status"] == "OK"
+    assert remove_output["status"] == "ok"
     assert remove_output["proposal_id"] == pending_item_id
     assert remove_output["proposal_short_id"] == pending_short_id
     assert remove_output["removed"] is True
@@ -4660,7 +4660,7 @@ def test_list_proposals_tool_filters_by_status_and_type_in_current_thread(client
     assert list_run["status"] == "completed"
     assert list_run["change_items"] == []
     output = list_run["tool_calls"][0]["output_json"]
-    assert output["status"] == "OK"
+    assert output["status"] == "ok"
     assert output["returned_count"] == 1
     assert output["total_available"] == 1
 
@@ -4726,7 +4726,7 @@ def test_list_groups_tool_supports_list_and_detail_modes(client, monkeypatch):
 
     assert list_run["status"] == "completed"
     list_output = list_run["tool_calls"][0]["output_json"]
-    assert list_output["status"] == "OK"
+    assert list_output["status"] == "ok"
     assert list_output["returned_count"] == 1
     assert list_output["groups"][0]["group_id"] == group_short_id
     assert list_output["groups"][0]["name"] == "Monthly Bills"
@@ -4736,7 +4736,7 @@ def test_list_groups_tool_supports_list_and_detail_modes(client, monkeypatch):
 
     assert detail_run["status"] == "completed"
     detail_output = detail_run["tool_calls"][0]["output_json"]
-    assert detail_output["status"] == "OK"
+    assert detail_output["status"] == "ok"
     assert detail_output["group"]["group_id"] == group_short_id
     assert detail_output["group"]["name"] == "Monthly Bills"
     assert "derived_graph" not in detail_output["group"]
@@ -4792,7 +4792,7 @@ def test_list_proposals_tool_can_filter_group_domain(client, monkeypatch):
 
     assert list_run["status"] == "completed"
     output = list_run["tool_calls"][0]["output_json"]
-    assert output["status"] == "OK"
+    assert output["status"] == "ok"
     assert output["returned_count"] == 1
     proposal = output["proposals"][0]
     assert proposal["proposal_id"] == created_item["id"]
@@ -4860,7 +4860,7 @@ def test_list_proposals_tool_can_lookup_single_proposal_by_short_id(client, monk
     assert list_run["status"] == "completed"
     assert list_run["change_items"] == []
     output = list_run["tool_calls"][0]["output_json"]
-    assert output["status"] == "OK"
+    assert output["status"] == "ok"
     assert output["returned_count"] == 1
     assert output["total_available"] == 1
 
@@ -5391,7 +5391,7 @@ def test_group_membership_duplicate_detection_uses_canonical_existing_refs(clien
     patch_model(monkeypatch, propose_full_membership_model)
     second_run = send_message(client, thread["id"], "Attach the same entry again")
     assert second_run["change_items"] == []
-    assert second_run["tool_calls"][0]["output_json"]["status"] == "ERROR"
+    assert second_run["tool_calls"][0]["output_json"]["status"] == "error"
     assert "pending group membership proposal already exists" in second_run["tool_calls"][0]["output_json"]["summary"]
 
 
@@ -5493,7 +5493,7 @@ def test_update_pending_group_membership_rejects_conflicting_alias_variant(clien
     patch_model(monkeypatch, update_pending_model)
     update_run = send_message(client, thread["id"], "Revise the second membership proposal")
     assert update_run["change_items"] == []
-    assert update_run["tool_calls"][0]["output_json"]["status"] == "ERROR"
+    assert update_run["tool_calls"][0]["output_json"]["status"] == "error"
     assert "pending group membership proposal already exists" in update_run["tool_calls"][0]["output_json"]["summary"]
 
 

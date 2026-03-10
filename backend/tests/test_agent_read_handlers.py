@@ -21,7 +21,7 @@ def test_list_accounts_does_not_bootstrap_runtime_settings_user() -> None:
     try:
         result = list_accounts(ToolContext(db=db, run_id="run-1"), ListAccountsArgs())
 
-        assert result.output_json["status"] == "OK"
+        assert result.output_json["status"] == "ok"
         assert result.output_json["accounts"] == []
         assert _user_count(db) == 0
     finally:
@@ -36,7 +36,7 @@ def test_list_groups_does_not_bootstrap_context_principal_user() -> None:
             ListGroupsArgs(),
         )
 
-        assert result.output_json["status"] == "OK"
+        assert result.output_json["status"] == "ok"
         assert result.output_json["groups"] == []
         assert _user_count(db) == 0
     finally:

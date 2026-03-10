@@ -48,7 +48,7 @@ describe("AgentRunBlock", () => {
       id: "tool-1",
       tool_name: "list_entries",
       output_text: "OK\nsummary: returned 2 of 2 matching entries",
-      output_json: { status: "OK", summary: "returned 2 of 2 matching entries" }
+      output_json: { status: "ok", summary: "returned 2 of 2 matching entries" }
     });
     const run = buildRun({
       id: "run-tool-output",
