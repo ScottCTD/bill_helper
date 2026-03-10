@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal
-from backend.auth.dependencies import require_admin_principal
+from backend.auth.dependencies import get_or_create_current_principal, require_admin_principal
 from backend.database import get_db
 from backend.schemas_finance import TagCreate, TagRead, TagUpdate
 from backend.services.finance_contracts import TagCreateCommand, TagPatch
@@ -20,15 +20,18 @@ from backend.services.tags import (
 router = APIRouter(prefix="/tags", tags=["tags"])
 
 @router.get("", response_model=list[TagRead])
-def list_tags(db: Session = Depends(get_db)) -> list[TagRead]:
-    return list_tag_reads(db)
+def list_tags(
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+) -> list[TagRead]:
+    return list_tag_reads(db, principal=principal)
 
 
 @router.post("", response_model=TagRead, status_code=status.HTTP_201_CREATED)
 def create_tag(
     payload: TagCreate,
     db: Session = Depends(get_db),
-    _: RequestPrincipal = Depends(require_admin_principal),
+    principal: RequestPrincipal = Depends(require_admin_principal),
 ) -> TagRead:
     tag = create_tag_service(
         db,
@@ -37,7 +40,7 @@ def create_tag(
 
     db.commit()
     db.refresh(tag)
-    return build_tag_read(db, tag=tag, entry_count=0)
+    return build_tag_read(db, tag=tag, principal=principal, entry_count=0)
 
 
 @router.patch("/{tag_id}", response_model=TagRead)
@@ -45,7 +48,7 @@ def update_tag(
     tag_id: int,
     payload: TagUpdate,
     db: Session = Depends(get_db),
-    _: RequestPrincipal = Depends(require_admin_principal),
+    principal: RequestPrincipal = Depends(require_admin_principal),
 ) -> TagRead:
     tag = load_tag(db, tag_id=tag_id)
     update_tag_service(
@@ -56,7 +59,7 @@ def update_tag(
 
     db.commit()
     db.refresh(tag)
-    return build_tag_read(db, tag=tag)
+    return build_tag_read(db, tag=tag, principal=principal)
 
 
 @router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)

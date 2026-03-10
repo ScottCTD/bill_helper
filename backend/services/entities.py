@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
+from backend.auth.contracts import RequestPrincipal, is_admin_principal
 from backend.models_finance import Account, Entity, Entry
+from backend.services.access_scope import owner_user_filter
 from backend.services.crud_policy import (
     PolicyViolation,
     assert_unique_name,
@@ -113,12 +115,13 @@ def ensure_entity_is_not_account_backed(entity: Entity) -> None:
         raise PolicyViolation.conflict("Account-backed entities must be managed from Accounts")
 
 
-def list_entities_with_usage(db: Session) -> list[EntityUsageRow]:
+def list_entities_with_usage(db: Session, *, principal: RequestPrincipal) -> list[EntityUsageRow]:
     from_count_subquery = (
         select(func.count(Entry.id))
         .where(
             Entry.is_deleted.is_(False),
             Entry.from_entity_id == Entity.id,
+            owner_user_filter(Entry.owner_user_id, principal),
         )
         .scalar_subquery()
     )
@@ -127,6 +130,7 @@ def list_entities_with_usage(db: Session) -> list[EntityUsageRow]:
         .where(
             Entry.is_deleted.is_(False),
             Entry.to_entity_id == Entity.id,
+            owner_user_filter(Entry.owner_user_id, principal),
         )
         .scalar_subquery()
     )
@@ -134,6 +138,7 @@ def list_entities_with_usage(db: Session) -> list[EntityUsageRow]:
         select(func.count(Account.id))
         .where(
             Account.id == Entity.id,
+            owner_user_filter(Account.owner_user_id, principal),
         )
         .scalar_subquery()
     )
@@ -141,6 +146,7 @@ def list_entities_with_usage(db: Session) -> list[EntityUsageRow]:
         select(func.count(Entry.id))
         .where(
             Entry.is_deleted.is_(False),
+            owner_user_filter(Entry.owner_user_id, principal),
             or_(
                 Entry.from_entity_id == Entity.id,
                 Entry.to_entity_id == Entity.id,
@@ -148,15 +154,26 @@ def list_entities_with_usage(db: Session) -> list[EntityUsageRow]:
         )
         .scalar_subquery()
     )
-    rows = db.execute(
+    account_alias = aliased(Account)
+    stmt = (
         select(
             Entity,
             from_count_subquery.label("from_count"),
             to_count_subquery.label("to_count"),
             account_count_subquery.label("account_count"),
             entry_count_subquery.label("entry_count"),
-        ).order_by(func.lower(Entity.name).asc())
-    ).all()
+        )
+        .outerjoin(account_alias, account_alias.id == Entity.id)
+        .order_by(func.lower(Entity.name).asc())
+    )
+    if not is_admin_principal(principal):
+        stmt = stmt.where(
+            or_(
+                account_alias.id.is_(None),
+                owner_user_filter(account_alias.owner_user_id, principal),
+            )
+        )
+    rows = db.execute(stmt).all()
     return [
         EntityUsageRow(
             entity=entity,

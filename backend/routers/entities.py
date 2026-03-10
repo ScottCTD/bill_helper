@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal
-from backend.auth.dependencies import require_admin_principal
+from backend.auth.dependencies import get_or_create_current_principal, require_admin_principal
 from backend.database import get_db
 from backend.models_finance import Entity
 from backend.schemas_finance import EntityCreate, EntityRead, EntityUpdate
@@ -52,8 +52,11 @@ def _to_schema(
 
 
 @router.get("", response_model=list[EntityRead])
-def list_entities(db: Session = Depends(get_db)) -> list[EntityRead]:
-    rows = list_entities_with_usage(db)
+def list_entities(
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+) -> list[EntityRead]:
+    rows = list_entities_with_usage(db, principal=principal)
     category_by_entity_id = get_single_term_name_map(
         db,
         taxonomy_key="entity_category",
