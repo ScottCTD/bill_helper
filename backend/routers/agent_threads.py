@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+import json
+from pathlib import Path
 from threading import Thread
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, status, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, load_only, selectinload
 
+from backend.auth.dependencies import require_admin_principal
+from backend.config import get_settings
 from backend.database import get_db
+from backend.database import get_session_maker
 from backend.enums_agent import AgentChangeStatus, AgentRunStatus, SUPPORTED_AGENT_CHANGE_TYPES
 from backend.models_agent import (
     AgentChangeItem,
@@ -16,14 +22,6 @@ from backend.models_agent import (
     AgentRun,
     AgentThread,
     AgentToolCall,
-)
-from backend.routers.agent_support import (
-    AGENT_ROUTER_KWARGS,
-    AgentSurface,
-    agent_upload_root,
-    create_user_message_run_or_503,
-    open_background_session,
-    sse_event,
 )
 from backend.schemas_agent import (
     AgentRunRead,
@@ -38,9 +36,12 @@ from backend.services.agent.attachments import (
     thread_attachment_directories,
 )
 from backend.services.agent.execution import (
+    AgentExecutionPolicyError,
+    create_user_message_and_start_run,
     current_context_tokens_for_thread,
     run_agent_in_background,
 )
+from backend.services.agent.runtime import AgentRuntimeUnavailable
 from backend.services.agent.runtime import run_existing_agent_run_stream
 from backend.services.agent.serializers import (
     message_to_schema,
@@ -51,7 +52,50 @@ from backend.services.agent.serializers import (
 from backend.services.agent.threads import AgentThreadNotFoundError, rename_thread_by_id
 from backend.services.runtime_settings import resolve_runtime_settings
 
-router = APIRouter(**AGENT_ROUTER_KWARGS)
+AgentSurface = Literal["app", "telegram"]
+
+router = APIRouter(
+    prefix="/agent",
+    tags=["agent"],
+    dependencies=[Depends(require_admin_principal)],
+)
+
+
+def sse_event(event_type: str, payload: dict[str, object]) -> str:
+    return f"event: {event_type}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
+
+
+def agent_upload_root() -> Path:
+    return get_settings().data_dir / "agent_uploads"
+
+
+def open_background_session() -> Session:
+    return get_session_maker()()
+
+
+async def create_user_message_run_or_503(
+    *,
+    thread_id: str,
+    content: str,
+    files: list[UploadFile],
+    surface: AgentSurface,
+    db: Session,
+    model_name: str | None,
+) -> AgentRun:
+    try:
+        return await create_user_message_and_start_run(
+            thread_id=thread_id,
+            content=content,
+            files=files,
+            upload_root=agent_upload_root(),
+            db=db,
+            model_name=model_name,
+            surface=surface,
+        )
+    except AgentRuntimeUnavailable as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except AgentExecutionPolicyError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:

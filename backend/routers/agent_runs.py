@@ -1,17 +1,25 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from backend.auth.dependencies import require_admin_principal
 from backend.database import get_db
 from backend.models_agent import AgentChangeItem, AgentRun, AgentToolCall
-from backend.routers.agent_support import AGENT_ROUTER_KWARGS, AgentSurface
 from backend.schemas_agent import AgentRunRead, AgentToolCallRead
 from backend.services.agent.runtime import interrupt_agent_run
 from backend.services.agent.serializers import run_to_schema, tool_call_to_schema
 
-router = APIRouter(**AGENT_ROUTER_KWARGS)
+AgentSurface = Literal["app", "telegram"]
+
+router = APIRouter(
+    prefix="/agent",
+    tags=["agent"],
+    dependencies=[Depends(require_admin_principal)],
+)
 
 
 @router.get("/runs/{run_id}", response_model=AgentRunRead)

@@ -6,11 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from backend.auth.dependencies import require_admin_principal
 from backend.database import get_db
 from backend.models_agent import AgentMessageAttachment
-from backend.routers.agent_support import AGENT_ROUTER_KWARGS
 
-router = APIRouter(**AGENT_ROUTER_KWARGS)
+router = APIRouter(
+    prefix="/agent",
+    tags=["agent"],
+    dependencies=[Depends(require_admin_principal)],
+)
 
 
 @router.get("/attachments/{attachment_id}")

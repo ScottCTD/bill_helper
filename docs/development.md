@@ -388,7 +388,6 @@ Backend agent modules:
 - `backend/routers/agent_runs.py`
 - `backend/routers/agent_reviews.py`
 - `backend/routers/agent_attachments.py`
-- `backend/routers/agent_support.py`
 - `backend/services/agent/runtime.py`
 - `backend/services/agent/runtime_loop.py`
 - `backend/services/agent/runtime_state.py`

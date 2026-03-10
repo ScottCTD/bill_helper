@@ -50,8 +50,8 @@ AGENT_SESSION_TOOLS_PACKAGE = BACKEND_DIR / "services" / "agent" / "session_tool
 REMOVED_AGENT_CHANGE_CONTRACTS_MODULE = BACKEND_DIR / "services" / "agent" / "change_contracts.py"
 AGENT_CHANGE_CONTRACTS_PACKAGE = BACKEND_DIR / "services" / "agent" / "change_contracts"
 AGENT_ROUTER_PATH = BACKEND_DIR / "routers" / "agent.py"
+REMOVED_AGENT_ROUTER_SUPPORT_MODULE = BACKEND_DIR / "routers" / "agent_support.py"
 AGENT_ROUTER_SPLIT_MODULES = (
-    BACKEND_DIR / "routers" / "agent_support.py",
     BACKEND_DIR / "routers" / "agent_threads.py",
     BACKEND_DIR / "routers" / "agent_runs.py",
     BACKEND_DIR / "routers" / "agent_reviews.py",
@@ -240,6 +240,7 @@ def test_agent_change_contracts_are_grouped_by_domain() -> None:
 
 
 def test_agent_router_is_split_by_http_boundary() -> None:
+    assert not REMOVED_AGENT_ROUTER_SUPPORT_MODULE.exists(), "agent router helpers should stay owned by the split endpoint modules"
     for path in AGENT_ROUTER_SPLIT_MODULES:
         assert path.exists(), f"missing split router module: {path.name}"
 
