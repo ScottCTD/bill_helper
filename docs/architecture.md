@@ -85,7 +85,8 @@ Contract notes:
 
 ## Agent Internal Boundaries (Refactor Baseline)
 
-- `runtime.py`: run lifecycle coordinator and stable model-call monkeypatch seam (`call_model`, `call_model_stream`)
+- `runtime.py`: public runtime facade and stable model-call monkeypatch seam (`call_model`, `call_model_stream`, `calculate_context_tokens`)
+- `runtime_support/`: grouped run-lifecycle and tool-turn internals behind the runtime facade
 - `runtime_state.py`: runtime event/tool-call/terminal-state persistence helpers
 - `run_orchestrator.py`: shared step-state machine used by runtime sync/stream flows and benchmark adapters
 - `message_history.py`: message-history query flow and turn-level review/interruption prefix composition

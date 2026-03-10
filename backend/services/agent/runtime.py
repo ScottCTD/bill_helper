@@ -1,32 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass
-import re
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from backend.config import DEFAULT_AGENT_MODEL
-from backend.enums_agent import (
-    AgentRunEventSource,
-    AgentRunEventType,
-    AgentRunStatus,
-)
-from backend.models_agent import (
-    AgentMessage,
-    AgentRun,
-    AgentRunEvent,
-    AgentThread,
-)
+from backend.models_agent import AgentMessage, AgentRun, AgentThread
 from backend.services.agent.context_tokens import count_context_tokens
-from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.model_client import (
     LiteLLMModelClient,
     validate_litellm_environment,
-)
-from backend.services.agent.protocol_helpers import (
-    canonicalize_tool_call,
 )
 from backend.services.agent.runtime_loop import (
     RuntimeLoopDependencies,
@@ -34,41 +18,42 @@ from backend.services.agent.runtime_loop import (
     RuntimeStreamRunLoopAdapter,
     iter_run_loop_payloads,
 )
-from backend.services.agent.runtime_state import (
-    PreparedToolCall,
-    cancel_incomplete_tool_calls as _cancel_incomplete_tool_calls,
-    load_run_snapshot as _load_run_snapshot,
-    persist_final_message as _persist_final_message,
-    persist_run_event as _persist_run_event,
-    queue_tool_call_record as _queue_tool_call_record,
-    record_reasoning_update_event as _record_reasoning_update_event,
-    run_has_terminal_event as _run_has_terminal_event,
-    utc_now,
+from backend.services.agent.runtime_state import load_run_snapshot as _load_run_snapshot
+from backend.services.agent.runtime_support.lifecycle import (
+    interrupt_run as _interrupt_run,
+)
+from backend.services.agent.runtime_support.lifecycle import (
+    create_run as _create_run,
+)
+from backend.services.agent.runtime_support.lifecycle import (
+    resolve_existing_run as _resolve_existing_run,
+)
+from backend.services.agent.runtime_support.lifecycle import (
+    run_is_stopped as _run_is_stopped,
+)
+from backend.services.agent.runtime_support.lifecycle import (
+    persist_terminal_run_state as _persist_terminal_run_state,
+)
+from backend.services.agent.runtime_support.tool_turns import (
+    final_assistant_content as _final_assistant_content_support,
+)
+from backend.services.agent.runtime_support.tool_turns import (
+    prepare_tool_turn as _prepare_tool_turn_support,
+)
+from backend.services.agent.runtime_support.tool_turns import (
+    update_run_context_tokens as _update_run_context_tokens_support,
 )
 from backend.services.agent.run_orchestrator import (
     run_agent_loop,
 )
+from backend.services.agent.serializers import stream_run_event_to_payload
 from backend.services.agent.tool_runtime import build_openai_tool_schemas
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.validation.runtime_settings import normalize_text_or_none
 
 
-EMPTY_PENDING_REVIEW_FOOTER_PATTERN = re.compile(
-    r"^\s*Tools used \(high level\):.*Pending review item ids:\s*\[\s*\]\s*$",
-    re.IGNORECASE | re.MULTILINE,
-)
-
-
 class AgentRuntimeUnavailable(RuntimeError):
     pass
-
-
-@dataclass(slots=True)
-class ExistingRunResolution:
-    state: str
-    run: AgentRun | None = None
-    thread: AgentThread | None = None
-    terminal_event: AgentRunEvent | None = None
 
 
 def ensure_agent_available(db: Session, *, model_name: str | None = None) -> None:
@@ -138,174 +123,14 @@ def calculate_context_tokens(
 
 
 def _update_run_context_tokens(
-    *,
     run: AgentRun,
     llm_messages: list[dict[str, Any]],
 ) -> None:
-    run.context_tokens = calculate_context_tokens(
-        model_name=run.model_name,
+    _update_run_context_tokens_support(
+        run=run,
         llm_messages=llm_messages,
+        calculate_context_tokens=calculate_context_tokens,
     )
-
-
-def _final_assistant_content(content: str) -> str:
-    normalized = content.strip()
-    if normalized:
-        cleaned = EMPTY_PENDING_REVIEW_FOOTER_PATTERN.sub("", normalized)
-        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
-        if cleaned:
-            return cleaned
-    return (
-        "I completed tool execution but did not receive a final assistant response. "
-        "Please review pending items below if any were created."
-    )
-
-
-def _create_run(
-    db: Session,
-    *,
-    thread: AgentThread,
-    user_message: AgentMessage,
-    model_name: str | None = None,
-    surface: str = "app",
-) -> AgentRun:
-    settings = resolve_runtime_settings(db)
-    selected_model_name = normalize_text_or_none(model_name) or settings.agent_model
-    llm_messages = build_llm_messages(
-        db,
-        thread.id,
-        current_user_message_id=user_message.id,
-        model_name=selected_model_name,
-        surface=surface,
-    )
-
-    run = AgentRun(
-        thread_id=thread.id,
-        user_message_id=user_message.id,
-        status=AgentRunStatus.RUNNING,
-        model_name=selected_model_name,
-        surface=surface,
-        context_tokens=calculate_context_tokens(
-            model_name=selected_model_name,
-            llm_messages=llm_messages,
-        ),
-    )
-    thread.updated_at = utc_now()
-    db.add(run)
-    db.add(thread)
-    db.commit()
-    db.refresh(run)
-    return run
-
-
-def _run_is_stopped(db: Session, run: AgentRun) -> bool:
-    db.refresh(run, attribute_names=["status"])
-    return run.status != AgentRunStatus.RUNNING
-
-
-def _persist_terminal_run_state(
-    db: Session,
-    *,
-    thread: AgentThread | None,
-    run: AgentRun,
-    status: AgentRunStatus,
-    error_text: str | None,
-    event_type: AgentRunEventType,
-    event_message: str | None,
-    assistant_content: str | None = None,
-    persist_assistant_message: bool = True,
-) -> AgentRunEvent | None:
-    if _run_has_terminal_event(db, run.id):
-        return None
-
-    if persist_assistant_message and assistant_content is not None:
-        _persist_final_message(
-            db,
-            thread
-            if thread is not None
-            else db.get(AgentThread, run.thread_id),  # pragma: no cover - defensive
-            run,
-            assistant_content,
-            status=status,
-            error_text=error_text,
-            commit=False,
-        )
-    else:
-        run.status = status
-        run.error_text = error_text
-        run.completed_at = utc_now()
-        if thread is not None:
-            thread.updated_at = utc_now()
-            db.add(thread)
-        db.add(run)
-        db.flush()
-
-    terminal_event = _persist_run_event(
-        db,
-        run=run,
-        event_type=event_type,
-        message=event_message,
-    )
-    db.commit()
-    return terminal_event
-
-
-def _prepare_tool_turn(
-    db: Session,
-    *,
-    run: AgentRun,
-    llm_messages: list[dict[str, Any]],
-    assistant_content: str,
-    model_reasoning: str,
-    tool_calls: list[dict[str, Any]],
-) -> tuple[list[PreparedToolCall], list[AgentRunEvent]]:
-    prepared_calls: list[PreparedToolCall] = []
-    event_rows: list[AgentRunEvent] = []
-    sanitized_tool_calls = [canonicalize_tool_call(tool_call) for tool_call in tool_calls]
-
-    reasoning_event = _record_reasoning_update_event(
-        db,
-        run=run,
-        message=model_reasoning,
-        source=AgentRunEventSource.MODEL_REASONING,
-    )
-    if reasoning_event is not None:
-        event_rows.append(reasoning_event)
-
-    llm_messages.append(
-        {
-            "role": "assistant",
-            "content": assistant_content,
-            "tool_calls": sanitized_tool_calls,
-        }
-    )
-    assistant_event = _record_reasoning_update_event(
-        db,
-        run=run,
-        message=assistant_content,
-        source=AgentRunEventSource.ASSISTANT_CONTENT,
-    )
-    if assistant_event is not None:
-        event_rows.append(assistant_event)
-
-    for tool_call in sanitized_tool_calls:
-        prepared_call = _queue_tool_call_record(db, run=run, tool_call=tool_call)
-        prepared_calls.append(prepared_call)
-        if prepared_call.persisted_row is None:
-            continue
-        event_rows.append(
-            _persist_run_event(
-                db,
-                run=run,
-                event_type=AgentRunEventType.TOOL_CALL_QUEUED,
-                tool_call=prepared_call.persisted_row,
-            )
-        )
-
-    _update_run_context_tokens(run=run, llm_messages=llm_messages)
-    db.add(run)
-    db.commit()
-    return prepared_calls, event_rows
 
 
 def _runtime_loop_dependencies() -> RuntimeLoopDependencies:
@@ -313,20 +138,18 @@ def _runtime_loop_dependencies() -> RuntimeLoopDependencies:
         call_model=call_model,
         call_model_stream=call_model_stream,
         run_is_stopped=_run_is_stopped,
-        prepare_tool_turn=lambda db, run, llm_messages, assistant_content, model_reasoning, tool_calls: _prepare_tool_turn(
+        prepare_tool_turn=lambda db, run, llm_messages, assistant_content, model_reasoning, tool_calls: _prepare_tool_turn_support(
             db,
             run=run,
             llm_messages=llm_messages,
             assistant_content=assistant_content,
             model_reasoning=model_reasoning,
             tool_calls=tool_calls,
+            update_run_context_tokens=_update_run_context_tokens,
         ),
         persist_terminal_run_state=_persist_terminal_run_state,
-        update_run_context_tokens=lambda run, llm_messages: _update_run_context_tokens(
-            run=run,
-            llm_messages=llm_messages,
-        ),
-        finalize_assistant_content=_final_assistant_content,
+        update_run_context_tokens=_update_run_context_tokens,
+        finalize_assistant_content=_final_assistant_content_support,
     )
 
 
@@ -362,42 +185,6 @@ def _execute_agent_run_stream(
     yield from iter_run_loop_payloads(run_agent_loop(adapter))
 
 
-def _resolve_existing_run(db: Session, run_id: str) -> ExistingRunResolution:
-    run = db.get(AgentRun, run_id)
-    if run is None:
-        return ExistingRunResolution(state="missing")
-
-    if run.status != AgentRunStatus.RUNNING:
-        return ExistingRunResolution(
-            state="replay",
-            run=_load_run_snapshot(db, run.id),
-        )
-
-    thread = db.get(AgentThread, run.thread_id)
-    if thread is not None:
-        return ExistingRunResolution(
-            state="execute",
-            run=run,
-            thread=thread,
-        )
-
-    terminal_event = _persist_terminal_run_state(
-        db,
-        thread=None,
-        run=run,
-        status=AgentRunStatus.FAILED,
-        error_text="thread not found",
-        event_type=AgentRunEventType.RUN_FAILED,
-        event_message="thread not found",
-        persist_assistant_message=False,
-    )
-    return ExistingRunResolution(
-        state="failed_missing_thread",
-        run=_load_run_snapshot(db, run.id),
-        terminal_event=terminal_event,
-    )
-
-
 def start_agent_run(
     db: Session,
     thread: AgentThread,
@@ -411,6 +198,7 @@ def start_agent_run(
         db,
         thread=thread,
         user_message=user_message,
+        calculate_context_tokens=calculate_context_tokens,
         model_name=model_name,
         surface=surface,
     )
@@ -462,22 +250,4 @@ def run_agent_turn(
 def interrupt_agent_run(
     db: Session, run_id: str, *, reason: str = "Run interrupted by user."
 ) -> AgentRun | None:
-    run = db.get(AgentRun, run_id)
-    if run is None:
-        return None
-    if run.status != AgentRunStatus.RUNNING:
-        return _load_run_snapshot(db, run.id)
-
-    thread = db.get(AgentThread, run.thread_id)
-    _cancel_incomplete_tool_calls(db, run)
-    _persist_terminal_run_state(
-        db,
-        thread=thread,
-        run=run,
-        status=AgentRunStatus.FAILED,
-        error_text=reason,
-        event_type=AgentRunEventType.RUN_FAILED,
-        event_message=reason,
-        persist_assistant_message=False,
-    )
-    return _load_run_snapshot(db, run.id)
+    return _interrupt_run(db, run_id=run_id, reason=reason)
