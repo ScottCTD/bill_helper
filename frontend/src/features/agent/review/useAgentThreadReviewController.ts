@@ -1,30 +1,6 @@
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 
-import { getRuntimeSettings, listCurrencies, listEntities, listTags } from "../../../lib/api";
-import { queryKeys } from "../../../lib/queryKeys";
-import type { AgentChangeItem, Currency, Entity, Tag } from "../../../lib/types";
-import {
-  buildAccountOverrideState,
-  buildAccountReviewDraft,
-  buildEntityOverrideState,
-  buildEntityReviewDraft,
-  buildEntryOverrideState,
-  buildEntryReviewDraft,
-  buildGroupMembershipOverrideState,
-  buildGroupMembershipReviewDraft,
-  buildGroupOverrideState,
-  buildGroupReviewDraft,
-  buildTagOverrideState,
-  buildTagReviewDraft,
-  type AccountReviewDraft,
-  type EntityReviewDraft,
-  type EntryReviewDraft,
-  type GroupMembershipReviewDraft,
-  type GroupReviewDraft,
-  type ReviewOverrideState,
-  type TagReviewDraft
-} from "./drafts";
+import type { AgentChangeItem } from "../../../lib/types";
 import { buildProposalDiff } from "./diff";
 import {
   findNextPendingItemId,
@@ -36,25 +12,8 @@ import {
 } from "./modalHelpers";
 import { type BatchSummary, type AgentThreadReviewModalProps } from "./modalTypes";
 import { buildThreadReviewItems, isPendingReviewStatus, shortId, type ThreadReviewItem } from "./model";
-
-interface ReviewEditorResources {
-  currencies: Currency[];
-  entities: Entity[];
-  tags: Tag[];
-  defaultCurrencyCode: string;
-  editorLoadError: string | null;
-  entityCategoryOptions: string[];
-  tagTypeOptions: string[];
-}
-
-interface ReviewActiveDrafts {
-  activeAccountDraft: AccountReviewDraft | null;
-  activeEntityDraft: EntityReviewDraft | null;
-  activeEntryDraft: EntryReviewDraft | null;
-  activeGroupDraft: GroupReviewDraft | null;
-  activeGroupMembershipDraft: GroupMembershipReviewDraft | null;
-  activeTagDraft: TagReviewDraft | null;
-}
+import { useAgentReviewDraftState } from "./useAgentReviewDraftState";
+import { useAgentReviewEditorResources } from "./useAgentReviewEditorResources";
 
 export function useAgentThreadReviewController({
   open,
@@ -66,61 +25,46 @@ export function useAgentThreadReviewController({
 }: AgentThreadReviewModalProps) {
   const [items, setItems] = useState<ThreadReviewItem[]>([]);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
-  const [entryDrafts, setEntryDrafts] = useState<Record<string, EntryReviewDraft>>({});
-  const [tagDrafts, setTagDrafts] = useState<Record<string, TagReviewDraft>>({});
-  const [accountDrafts, setAccountDrafts] = useState<Record<string, AccountReviewDraft>>({});
-  const [entityDrafts, setEntityDrafts] = useState<Record<string, EntityReviewDraft>>({});
-  const [groupDrafts, setGroupDrafts] = useState<Record<string, GroupReviewDraft>>({});
-  const [groupMembershipDrafts, setGroupMembershipDrafts] = useState<Record<string, GroupMembershipReviewDraft>>({});
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [batchSummary, setBatchSummary] = useState<BatchSummary | null>(null);
   const [isBatchRunning, setIsBatchRunning] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  const runtimeSettingsQuery = useQuery({
-    queryKey: queryKeys.settings.runtime,
-    queryFn: getRuntimeSettings,
-    enabled: open
-  });
-  const entitiesQuery = useQuery({
-    queryKey: queryKeys.properties.entities,
-    queryFn: listEntities,
-    enabled: open
-  });
-  const tagsQuery = useQuery({
-    queryKey: queryKeys.properties.tags,
-    queryFn: listTags,
-    enabled: open
-  });
-  const currenciesQuery = useQuery({
-    queryKey: queryKeys.properties.currencies,
-    queryFn: listCurrencies,
-    enabled: open
-  });
-
   const flattenedItems = useMemo(() => buildThreadReviewItems(runs), [runs]);
+  const editorResources = useAgentReviewEditorResources(open);
+  const activeReviewItem = useMemo(() => items.find((item) => item.item.id === activeItemId) ?? null, [activeItemId, items]);
+  const draftState = useAgentReviewDraftState({
+    activeReviewItem,
+    defaultCurrencyCode: editorResources.defaultCurrencyCode
+  });
+  const {
+    activeDrafts,
+    clearReviewDrafts,
+    resolveOverrideState,
+    setActiveAccountDraft,
+    setActiveEntityDraft,
+    setActiveEntryDraft,
+    setActiveGroupDraft,
+    setActiveGroupMembershipDraft,
+    setActiveTagDraft
+  } = draftState;
 
   useEffect(() => {
     if (!open) {
       setItems([]);
       setActiveItemId(null);
-      setEntryDrafts({});
-      setTagDrafts({});
-      setAccountDrafts({});
-      setEntityDrafts({});
-      setGroupDrafts({});
-      setGroupMembershipDrafts({});
       setActionError(null);
       setActionNotice(null);
       setBatchSummary(null);
       setIsBatchRunning(false);
       setIsSidebarCollapsed(false);
+      clearReviewDrafts();
       return;
     }
 
     setItems(flattenedItems);
-  }, [flattenedItems, open]);
+  }, [clearReviewDrafts, flattenedItems, open]);
 
   useEffect(() => {
     if (!open) {
@@ -139,73 +83,7 @@ export function useAgentThreadReviewController({
 
   const pendingItems = useMemo(() => items.filter((item) => isPendingReviewStatus(item.item.status)), [items]);
   const resolvedItems = useMemo(() => items.filter((item) => !isPendingReviewStatus(item.item.status)), [items]);
-  const activeReviewItem = useMemo(() => items.find((item) => item.item.id === activeItemId) ?? null, [activeItemId, items]);
   const pendingCount = pendingItems.length;
-
-  const editorResources = useMemo<ReviewEditorResources>(() => {
-    const defaultCurrencyCode = runtimeSettingsQuery.data?.default_currency_code ?? "USD";
-    const editorLoadError = [runtimeSettingsQuery, entitiesQuery, tagsQuery, currenciesQuery]
-      .map((query) => (query.isError ? (query.error as Error).message : null))
-      .find((message): message is string => Boolean(message)) ?? null;
-    const tagTypeOptions = Array.from(
-      new Set(
-        (tagsQuery.data ?? [])
-          .map((tag) => tag.type?.trim())
-          .filter((value): value is string => Boolean(value))
-      )
-    ).sort((left, right) => left.localeCompare(right));
-    const entityCategoryOptions = Array.from(
-      new Set(
-        (entitiesQuery.data ?? [])
-          .map((entity) => entity.category?.trim())
-          .filter((value): value is string => Boolean(value))
-      )
-    ).sort((left, right) => left.localeCompare(right));
-    return {
-      currencies: currenciesQuery.data ?? [],
-      defaultCurrencyCode,
-      editorLoadError,
-      entities: entitiesQuery.data ?? [],
-      entityCategoryOptions,
-      tags: tagsQuery.data ?? [],
-      tagTypeOptions
-    };
-  }, [currenciesQuery, entitiesQuery, runtimeSettingsQuery, tagsQuery]);
-
-  function resolveOverrideState(reviewItem: ThreadReviewItem): ReviewOverrideState {
-    if (reviewItem.item.change_type === "create_entry" || reviewItem.item.change_type === "update_entry") {
-      return buildEntryOverrideState(
-        reviewItem.item,
-        entryDrafts[reviewItem.item.id] ?? buildEntryReviewDraft(reviewItem.item, editorResources.defaultCurrencyCode),
-        editorResources.defaultCurrencyCode
-      );
-    }
-    if (reviewItem.item.change_type === "create_tag" || reviewItem.item.change_type === "update_tag") {
-      return buildTagOverrideState(reviewItem.item, tagDrafts[reviewItem.item.id] ?? buildTagReviewDraft(reviewItem.item));
-    }
-    if (reviewItem.item.change_type === "create_account" || reviewItem.item.change_type === "update_account") {
-      return buildAccountOverrideState(
-        reviewItem.item,
-        accountDrafts[reviewItem.item.id] ?? buildAccountReviewDraft(reviewItem.item)
-      );
-    }
-    if (reviewItem.item.change_type === "create_entity" || reviewItem.item.change_type === "update_entity") {
-      return buildEntityOverrideState(
-        reviewItem.item,
-        entityDrafts[reviewItem.item.id] ?? buildEntityReviewDraft(reviewItem.item)
-      );
-    }
-    if (reviewItem.item.change_type === "create_group" || reviewItem.item.change_type === "update_group") {
-      return buildGroupOverrideState(reviewItem.item, groupDrafts[reviewItem.item.id] ?? buildGroupReviewDraft(reviewItem.item));
-    }
-    if (reviewItem.item.change_type === "create_group_member") {
-      return buildGroupMembershipOverrideState(
-        reviewItem.item,
-        groupMembershipDrafts[reviewItem.item.id] ?? buildGroupMembershipReviewDraft(reviewItem.item)
-      );
-    }
-    return { hasChanges: false, validationError: null };
-  }
 
   function mergeUpdatedItem(updated: AgentChangeItem) {
     setItems((current) => replaceItem(current, updated));
@@ -420,45 +298,6 @@ export function useAgentThreadReviewController({
   const isActivePending = activeReviewItem ? isPendingReviewStatus(activeReviewItem.item.status) : false;
   const isActiveEditable = activeReviewItem ? isEditableReviewStatus(activeReviewItem.item.status) : false;
 
-  const activeDrafts = useMemo<ReviewActiveDrafts>(
-    () => ({
-      activeAccountDraft:
-        activeReviewItem && (activeReviewItem.item.change_type === "create_account" || activeReviewItem.item.change_type === "update_account")
-          ? accountDrafts[activeReviewItem.item.id] ?? buildAccountReviewDraft(activeReviewItem.item)
-          : null,
-      activeEntityDraft:
-        activeReviewItem && (activeReviewItem.item.change_type === "create_entity" || activeReviewItem.item.change_type === "update_entity")
-          ? entityDrafts[activeReviewItem.item.id] ?? buildEntityReviewDraft(activeReviewItem.item)
-          : null,
-      activeEntryDraft:
-        activeReviewItem && (activeReviewItem.item.change_type === "create_entry" || activeReviewItem.item.change_type === "update_entry")
-          ? entryDrafts[activeReviewItem.item.id] ?? buildEntryReviewDraft(activeReviewItem.item, editorResources.defaultCurrencyCode)
-          : null,
-      activeGroupDraft:
-        activeReviewItem && (activeReviewItem.item.change_type === "create_group" || activeReviewItem.item.change_type === "update_group")
-          ? groupDrafts[activeReviewItem.item.id] ?? buildGroupReviewDraft(activeReviewItem.item)
-          : null,
-      activeGroupMembershipDraft:
-        activeReviewItem && activeReviewItem.item.change_type === "create_group_member"
-          ? groupMembershipDrafts[activeReviewItem.item.id] ?? buildGroupMembershipReviewDraft(activeReviewItem.item)
-          : null,
-      activeTagDraft:
-        activeReviewItem && (activeReviewItem.item.change_type === "create_tag" || activeReviewItem.item.change_type === "update_tag")
-          ? tagDrafts[activeReviewItem.item.id] ?? buildTagReviewDraft(activeReviewItem.item)
-          : null
-    }),
-    [
-      accountDrafts,
-      activeReviewItem,
-      editorResources.defaultCurrencyCode,
-      entityDrafts,
-      entryDrafts,
-      groupDrafts,
-      groupMembershipDrafts,
-      tagDrafts
-    ]
-  );
-
   return {
     actionError,
     actionNotice,
@@ -482,60 +321,12 @@ export function useAgentThreadReviewController({
       setActiveItemId((current) => findRelativeItemId(items, current, delta));
     },
     setActiveItemId,
-    setActiveAccountDraft(nextDraft: AccountReviewDraft) {
-      if (!activeReviewItem) {
-        return;
-      }
-      setAccountDrafts((current) => ({
-        ...current,
-        [activeReviewItem.item.id]: nextDraft
-      }));
-    },
-    setActiveEntityDraft(nextDraft: EntityReviewDraft) {
-      if (!activeReviewItem) {
-        return;
-      }
-      setEntityDrafts((current) => ({
-        ...current,
-        [activeReviewItem.item.id]: nextDraft
-      }));
-    },
-    setActiveEntryDraft(nextDraft: EntryReviewDraft) {
-      if (!activeReviewItem) {
-        return;
-      }
-      setEntryDrafts((current) => ({
-        ...current,
-        [activeReviewItem.item.id]: nextDraft
-      }));
-    },
-    setActiveGroupDraft(nextDraft: GroupReviewDraft) {
-      if (!activeReviewItem) {
-        return;
-      }
-      setGroupDrafts((current) => ({
-        ...current,
-        [activeReviewItem.item.id]: nextDraft
-      }));
-    },
-    setActiveGroupMembershipDraft(nextDraft: GroupMembershipReviewDraft) {
-      if (!activeReviewItem) {
-        return;
-      }
-      setGroupMembershipDrafts((current) => ({
-        ...current,
-        [activeReviewItem.item.id]: nextDraft
-      }));
-    },
-    setActiveTagDraft(nextDraft: TagReviewDraft) {
-      if (!activeReviewItem) {
-        return;
-      }
-      setTagDrafts((current) => ({
-        ...current,
-        [activeReviewItem.item.id]: nextDraft
-      }));
-    },
+    setActiveAccountDraft,
+    setActiveEntityDraft,
+    setActiveEntryDraft,
+    setActiveGroupDraft,
+    setActiveGroupMembershipDraft,
+    setActiveTagDraft,
     toggleSidebar() {
       setIsSidebarCollapsed((current) => !current);
     },

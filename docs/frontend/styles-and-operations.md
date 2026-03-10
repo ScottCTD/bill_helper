@@ -16,6 +16,8 @@
 - `agent/activity.ts`
 - `agent/review/AgentThreadReviewModal.tsx`
 - `agent/review/useAgentThreadReviewController.ts`
+- `agent/review/useAgentReviewEditorResources.ts`
+- `agent/review/useAgentReviewDraftState.ts`
 - `agent/review/ReviewEditors.tsx`
 - `agent/review/modalHelpers.ts`
 - `agent/review/drafts/*`

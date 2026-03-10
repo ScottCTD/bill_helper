@@ -83,9 +83,13 @@ Recommended direction:
 The thread review modal and panel controller split are now in place:
 
 - `frontend/src/features/agent/review/AgentThreadReviewModal.tsx` is reduced to the modal/card shell
-- `frontend/src/features/agent/review/useAgentThreadReviewController.ts` owns review queries, draft maps, navigation, and review actions
+- `frontend/src/features/agent/review/useAgentThreadReviewController.ts` now owns review navigation and approve/reject/reopen workflows
+- `frontend/src/features/agent/review/useAgentReviewEditorResources.ts` owns review-time settings/catalog queries and derived editor options
+- `frontend/src/features/agent/review/useAgentReviewDraftState.ts` owns reviewer draft maps plus payload-override shaping
 - `frontend/src/features/agent/review/ReviewEditors.tsx` owns TOC navigation plus the proposal editor surfaces
-- `frontend/src/features/agent/panel/useAgentComposerRuntime.ts` now owns the optimistic send/stream/composer runtime
+- `frontend/src/features/agent/panel/useAgentComposerRuntime.ts` now stays on composer UI state and panel coordination
+- `frontend/src/features/agent/panel/useAgentComposerStreamState.ts` owns optimistic stream and tool-call hydration state
+- `frontend/src/features/agent/panel/useAgentComposerActions.ts` owns bulk launch, stream send, and stop-run workflows
 - `frontend/src/features/settings/useSettingsPageModel.ts` now owns runtime-settings query/mutation orchestration and form state, while `frontend/src/pages/SettingsPage.tsx` is reduced to a route shell
 
 The remaining frontend cleanup is now follow-on work rather than a critical route split:
