@@ -87,16 +87,15 @@ The thread review modal and panel controller split are now in place:
 - `frontend/src/features/agent/review/useAgentThreadReviewController.ts` owns review queries, draft maps, navigation, and review actions
 - `frontend/src/features/agent/review/ReviewEditors.tsx` owns TOC navigation plus the proposal editor surfaces
 - `frontend/src/features/agent/panel/useAgentComposerRuntime.ts` now owns the optimistic send/stream/composer runtime
+- `frontend/src/features/settings/useSettingsPageModel.ts` now owns runtime-settings query/mutation orchestration and form state, while `frontend/src/pages/SettingsPage.tsx` is reduced to a route shell
 
-The next frontend cleanup should target the remaining page orchestration and any follow-on helper extraction after the review packages landed:
+The remaining frontend cleanup is now follow-on work rather than a critical route split:
 
-- `frontend/src/pages/SettingsPage.tsx` (`763` lines before the next split)
 - `frontend/src/features/agent/review/drafts/` follow-up if the family modules accumulate more editor-only logic
 - `frontend/src/features/agent/review/diff/` follow-up if diff record builders need another domain split
 
 Recommended direction:
 
-- move settings page orchestration into feature hooks, like the other page models in the repo
 - keep review draft ownership split between shared coercion helpers and family modules
 - keep diff ownership split between reusable primitives and proposal-family record builders
 
@@ -134,9 +133,8 @@ Recommended direction:
 
 1. Reduce pending-review normalization switchboards.
 2. Unify router `PolicyViolation` translation and typed error mapping across CRUD routers.
-3. Split `frontend/src/pages/SettingsPage.tsx` into feature-owned controller and section modules.
-4. Revisit any remaining frontend helpers that still combine rendering with normalization or transport concerns.
-5. Attack test-health items around the new service seams.
+3. Revisit any remaining frontend helpers that still combine rendering with normalization or transport concerns.
+4. Attack test-health items around the new service seams.
 
 ## Latest Major Commits From This Pass
 
