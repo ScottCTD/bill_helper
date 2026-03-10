@@ -93,6 +93,8 @@ Contract notes:
 - `user_context.py`: current-user/account context normalization and truncation for prompt assembly
 - `model_client.py`: thin public seam for the LiteLLM client contract
 - `model_client_support/`: grouped environment, streaming, usage-normalization, and retrying client internals behind the public model-client seam
+- `tool_runtime.py`: thin public seam for tool contracts and execution entrypoints
+- `tool_runtime_support/`: grouped tool metadata, schema-building, family registries, and retry/error policy behind the public tool-runtime seam
 - `apply/`: change-type apply package for review-time resource application
 - `reviews/`: approval/rejection transitions, dependency checks, override normalization, and audit writes
 - `benchmark_interface.py`: benchmark-facing case execution contract returning normalized predictions/trace payloads

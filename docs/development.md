@@ -401,6 +401,7 @@ Backend agent modules:
 - `backend/services/agent/read_tools/`
 - `backend/services/agent/proposal_patching.py`
 - `backend/services/agent/tool_runtime.py`
+- `backend/services/agent/tool_runtime_support/`
 - `backend/services/agent/tools.py` (thin facade)
 - `backend/services/agent/reviews/`
 - `backend/services/agent/serializers.py`
