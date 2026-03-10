@@ -6,12 +6,24 @@ from backend.config import get_settings
 from backend.database import get_session_maker
 from backend.models_settings import RuntimeSettings
 from backend.services.runtime_settings import (
+    DEFAULT_AVAILABLE_AGENT_MODELS,
     append_user_memory_items,
     build_runtime_settings_view,
     resolve_runtime_settings,
     update_runtime_settings_override,
 )
 from backend.services.runtime_settings_contracts import RuntimeSettingsPatch
+
+
+def expected_available_agent_models(*extra_models: str) -> list[str]:
+    models = list(DEFAULT_AVAILABLE_AGENT_MODELS)
+    seen = {model.casefold() for model in models}
+    for model in extra_models:
+        if model.casefold() in seen:
+            continue
+        seen.add(model.casefold())
+        models.append(model)
+    return models
 
 
 def test_resolve_runtime_settings_applies_override_and_sanitization() -> None:
@@ -58,11 +70,7 @@ def test_build_runtime_settings_read_prefers_request_principal_name() -> None:
         payload = build_runtime_settings_view(db, principal_name="alice")
         assert payload.current_user_name == "alice"
         assert payload.agent_model == "openai/gpt-4.1-mini"
-        assert payload.available_agent_models == [
-            get_settings().agent_model,
-            "openai/gpt-4.1-mini",
-            "openrouter/qwen/qwen3.5-27b",
-        ]
+        assert payload.available_agent_models == expected_available_agent_models("openai/gpt-4.1-mini")
         assert payload.overrides.agent_model == "openai/gpt-4.1-mini"
         assert payload.agent_bulk_max_concurrent_threads == get_settings().agent_bulk_max_concurrent_threads
     finally:

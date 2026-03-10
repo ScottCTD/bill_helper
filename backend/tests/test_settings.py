@@ -6,6 +6,12 @@ from unittest.mock import patch
 from backend.tests.agent_test_utils import create_thread, patch_model, send_message
 
 
+def expected_default_available_agent_models() -> list[str]:
+    from backend.services.runtime_settings import DEFAULT_AVAILABLE_AGENT_MODELS
+
+    return list(DEFAULT_AVAILABLE_AGENT_MODELS)
+
+
 def test_settings_endpoint_returns_effective_defaults(client):
     from backend.config import get_settings
 
@@ -19,11 +25,7 @@ def test_settings_endpoint_returns_effective_defaults(client):
     assert payload["default_currency_code"] == settings.default_currency_code
     assert payload["dashboard_currency_code"] == settings.dashboard_currency_code
     assert payload["agent_model"] == settings.agent_model
-    assert payload["available_agent_models"] == [
-        settings.agent_model,
-        "openai/gpt-4.1-mini",
-        "openrouter/qwen/qwen3.5-27b",
-    ]
+    assert payload["available_agent_models"] == expected_default_available_agent_models()
     assert payload["agent_bulk_max_concurrent_threads"] == settings.agent_bulk_max_concurrent_threads
     assert payload["overrides"]["user_memory"] is None
     assert payload["overrides"]["agent_model"] is None
@@ -50,6 +52,8 @@ def test_settings_patch_rejects_identity_override_field(client):
 
 
 def test_settings_model_override_and_clear(client):
+    from backend.config import get_settings
+
     set_override = client.patch("/api/v1/settings", json={"agent_model": "openai/gpt-4.1-mini"})
     set_override.raise_for_status()
     set_payload = set_override.json()
@@ -59,11 +63,13 @@ def test_settings_model_override_and_clear(client):
     clear_override = client.patch("/api/v1/settings", json={"agent_model": ""})
     clear_override.raise_for_status()
     clear_payload = clear_override.json()
-    assert clear_payload["agent_model"] == "bedrock/us.anthropic.claude-sonnet-4-6"
+    assert clear_payload["agent_model"] == get_settings().agent_model
     assert clear_payload["overrides"]["agent_model"] is None
 
 
 def test_settings_available_models_override_and_clear(client):
+    from backend.config import get_settings
+
     set_override = client.patch(
         "/api/v1/settings",
         json={
@@ -78,7 +84,7 @@ def test_settings_available_models_override_and_clear(client):
     assert set_payload["available_agent_models"] == [
         "openai/gpt-4.1-mini",
         "google/gemini-2.5-pro",
-        "bedrock/us.anthropic.claude-sonnet-4-6",
+        get_settings().agent_model,
     ]
     assert set_payload["overrides"]["available_agent_models"] == [
         "openai/gpt-4.1-mini",
@@ -88,11 +94,7 @@ def test_settings_available_models_override_and_clear(client):
     clear_override = client.patch("/api/v1/settings", json={"available_agent_models": []})
     clear_override.raise_for_status()
     clear_payload = clear_override.json()
-    assert clear_payload["available_agent_models"] == [
-        "bedrock/us.anthropic.claude-sonnet-4-6",
-        "openai/gpt-4.1-mini",
-        "openrouter/qwen/qwen3.5-27b",
-    ]
+    assert clear_payload["available_agent_models"] == expected_default_available_agent_models()
     assert clear_payload["overrides"]["available_agent_models"] is None
 
 
