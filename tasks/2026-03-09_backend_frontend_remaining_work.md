@@ -43,15 +43,14 @@ Desloppify snapshot after forced rescan and forced batch review rerun:
 
 ### 1. Agent contract decomposition
 
-The next major backend batch should reduce the remaining proposal/runtime cleanup after the contract split, shared thread-proposal query cleanup, direct tool-arg ownership cleanup, and payload-normalization split:
+The next major backend batch should reduce the remaining proposal/runtime cleanup after the contract split, shared thread-proposal query cleanup, direct tool-arg ownership cleanup, payload-normalization split, and the reviewer-principal entry-scope fix:
 
 - `review::.::holistic::api_surface_coherence::tool_result_status_shape_drift::a7d7b0fc`
-- `review::.::holistic::authorization_consistency::agent_entry_scope_bypass::328518a7`
 
 Recommended direction:
 
 - unify tool result status around one canonical contract
-- apply owner scoping in agent entry lookup/apply helpers the same way normal entry routes do
+- keep agent apply/read helpers on the same principal-aware entry scope as normal ledger routes
 
 ### 2. Service/API contract cleanup outside the agent
 

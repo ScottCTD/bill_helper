@@ -40,7 +40,7 @@ from backend.services.finance_contracts import (
 from backend.services.tags import create_tag, delete_tag, update_tag
 
 
-def apply_create_tag(db: Session, payload: CreateTagPayload) -> AppliedResource:
+def apply_create_tag(db: Session, payload: CreateTagPayload, actor_name: str) -> AppliedResource:
     existing = db.scalar(select(Tag).where(Tag.name == payload.name))
     if existing is not None:
         return AppliedResource(resource_type="tag", resource_id=str(existing.id))
@@ -55,7 +55,7 @@ def apply_create_tag(db: Session, payload: CreateTagPayload) -> AppliedResource:
     return AppliedResource(resource_type="tag", resource_id=str(tag.id))
 
 
-def apply_update_tag(db: Session, payload: UpdateTagPayload) -> AppliedResource:
+def apply_update_tag(db: Session, payload: UpdateTagPayload, actor_name: str) -> AppliedResource:
     tag = db.scalar(select(Tag).where(Tag.name == payload.name))
     if tag is None:
         raise ValueError("Tag not found")
@@ -71,7 +71,7 @@ def apply_update_tag(db: Session, payload: UpdateTagPayload) -> AppliedResource:
     return AppliedResource(resource_type="tag", resource_id=str(tag.id))
 
 
-def apply_delete_tag(db: Session, payload: DeleteTagPayload) -> AppliedResource:
+def apply_delete_tag(db: Session, payload: DeleteTagPayload, actor_name: str) -> AppliedResource:
     tag = db.scalar(select(Tag).where(Tag.name == payload.name))
     if tag is None:
         raise ValueError("Tag not found")
@@ -81,7 +81,7 @@ def apply_delete_tag(db: Session, payload: DeleteTagPayload) -> AppliedResource:
     return AppliedResource(resource_type="tag", resource_id=resource_id)
 
 
-def apply_create_entity(db: Session, payload: CreateEntityPayload) -> AppliedResource:
+def apply_create_entity(db: Session, payload: CreateEntityPayload, actor_name: str) -> AppliedResource:
     try:
         entity = create_entity(
             db,
@@ -92,7 +92,7 @@ def apply_create_entity(db: Session, payload: CreateEntityPayload) -> AppliedRes
     return AppliedResource(resource_type="entity", resource_id=entity.id)
 
 
-def apply_update_entity(db: Session, payload: UpdateEntityPayload) -> AppliedResource:
+def apply_update_entity(db: Session, payload: UpdateEntityPayload, actor_name: str) -> AppliedResource:
     entity = find_entity_by_name(db, payload.name)
     if entity is None:
         raise ValueError("Entity not found")
@@ -107,7 +107,7 @@ def apply_update_entity(db: Session, payload: UpdateEntityPayload) -> AppliedRes
     return AppliedResource(resource_type="entity", resource_id=entity.id)
 
 
-def apply_delete_entity(db: Session, payload: DeleteEntityPayload) -> AppliedResource:
+def apply_delete_entity(db: Session, payload: DeleteEntityPayload, actor_name: str) -> AppliedResource:
     entity = find_entity_by_name(db, payload.name)
     if entity is None:
         raise ValueError("Entity not found")
@@ -120,8 +120,8 @@ def apply_delete_entity(db: Session, payload: DeleteEntityPayload) -> AppliedRes
     return AppliedResource(resource_type="entity", resource_id=resource_id)
 
 
-def apply_create_account(db: Session, payload: CreateAccountPayload) -> AppliedResource:
-    owner_user = resolve_current_user(db)
+def apply_create_account(db: Session, payload: CreateAccountPayload, actor_name: str) -> AppliedResource:
+    owner_user = resolve_current_user(db, actor_name=actor_name)
     command = AccountCreateCommand(
         name=payload.name,
         owner_user_id=owner_user.id,
@@ -143,7 +143,7 @@ def apply_create_account(db: Session, payload: CreateAccountPayload) -> AppliedR
     return AppliedResource(resource_type="account", resource_id=account.id)
 
 
-def apply_update_account(db: Session, payload: UpdateAccountPayload) -> AppliedResource:
+def apply_update_account(db: Session, payload: UpdateAccountPayload, actor_name: str) -> AppliedResource:
     account = find_account_by_name(db, payload.name)
     if account is None:
         raise ValueError("Account not found")
@@ -156,7 +156,7 @@ def apply_update_account(db: Session, payload: UpdateAccountPayload) -> AppliedR
     return AppliedResource(resource_type="account", resource_id=account.id)
 
 
-def apply_delete_account(db: Session, payload: DeleteAccountPayload) -> AppliedResource:
+def apply_delete_account(db: Session, payload: DeleteAccountPayload, actor_name: str) -> AppliedResource:
     account = find_account_by_name(db, payload.name)
     if account is None:
         raise ValueError("Account not found")

@@ -57,6 +57,7 @@ def approve_change_item(
             db,
             change_type=item.change_type,
             payload=payload,
+            actor_name=actor,
         )
     except Exception as exc:
         item.status = AgentChangeStatus.APPLY_FAILED
