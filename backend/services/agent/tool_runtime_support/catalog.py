@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import Any
 
 from backend.services.agent.tool_runtime_support.catalog_proposals import PROPOSAL_TOOLS
@@ -15,5 +16,21 @@ TOOLS: dict[str, AgentToolDefinition] = {
 }
 
 
-def build_openai_tool_schemas() -> list[dict[str, Any]]:
-    return [tool.openai_tool_schema for tool in TOOLS.values()]
+def build_openai_tool_schemas(
+    *,
+    tool_names: Collection[str] | None = None,
+) -> list[dict[str, Any]]:
+    if tool_names is None:
+        return [tool.openai_tool_schema for tool in TOOLS.values()]
+
+    requested_names = set(tool_names)
+    unknown_names = requested_names.difference(TOOLS)
+    if unknown_names:
+        unknown_names_text = ", ".join(sorted(unknown_names))
+        raise ValueError(f"unknown tool names: {unknown_names_text}")
+
+    return [
+        tool.openai_tool_schema
+        for name, tool in TOOLS.items()
+        if name in requested_names
+    ]

@@ -11,7 +11,7 @@ This document describes the architecture, prompts, tools, and usage workflow of 
 5. Review the timeline as the agent works:
   - User/assistant messages render inline; assistant messages support markdown.
   - In-flight tool-call progress and reasoning updates appear while the run is active.
-  - The first tool call in a fresh thread should normally be `rename_thread`, which gives the thread a short topical label immediately.
+  - Fresh untitled threads are runtime-gated so the first model step only exposes `rename_thread`, which gives the thread a short topical label immediately.
   - Run/tool context is shown alongside the assistant message.
   - Removable attachment chips (image thumbnails + PDF file chips) appear above the composer before send.
   - Paste (`Cmd/Ctrl+V`) and drag-drop ingestion for image/PDF attachments.
@@ -74,6 +74,9 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
   - PDF page images appended to multimodal payloads when model vision is supported
   - for the latest user turn only: review outcomes (if any) and interruption prefix (if the previous run was interrupted) prepended before that user feedback text
 4. Runtime loops: model call → optional tool calls (including sparse `send_intermediate_update` progress notes) → tool results appended → repeat (bounded by `agent_max_steps`).
+  - while `thread.title` is empty, runtime narrows the exposed tool set to `rename_thread`
+  - most models also receive an explicit required `tool_choice` for `rename_thread`
+  - `openrouter/qwen/qwen3.5-27b` is the exception: OpenRouter rejects explicit `tool_choice` for that model in thinking mode, so runtime relies on the single-tool restriction instead
 5. Runtime persists final assistant message and marks run `completed` or `failed`.
 6. For streaming: SSE emits `text_delta` plus persisted `run_event` rows. `run_event` covers run start/finish, `reasoning_update`, and each tool lifecycle transition. `rename_thread` lifecycle events arrive before the run finishes so the client can relabel the thread immediately. `send_intermediate_update` is stored only as a reasoning event (not a fake tool row). On client disconnect mid-stream, the run continues in the background.
 

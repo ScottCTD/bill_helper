@@ -115,12 +115,15 @@ class LiteLLMModelClient:
     def _base_request(
         self,
         messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: Any = None,
     ) -> dict[str, Any]:
         request: dict[str, Any] = {
             "model": self._model_name,
             "messages": messages,
-            "tools": self._tools,
-            "tool_choice": "auto",
+            "tools": self._tools if tools is None else tools,
+            "tool_choice": "auto" if tool_choice is None else tool_choice,
         }
         if supports_prompt_caching(self._model_name):
             injection_points = _cache_injection_points_for_messages(messages)
@@ -167,8 +170,15 @@ class LiteLLMModelClient:
     def _chat_completion_once(
         self,
         messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: Any = None,
     ) -> Any:
-        request = self._base_request(messages)
+        request = self._base_request(
+            messages,
+            tools=tools,
+            tool_choice=tool_choice,
+        )
         try:
             return self._completion_with_transient_ssl_retry(request)
         except Exception as exc:
@@ -191,6 +201,9 @@ class LiteLLMModelClient:
     def complete(
         self,
         messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: Any = None,
     ) -> dict[str, Any]:
         retrying = Retrying(
             stop=stop_after_attempt(self._retry_max_attempts),
@@ -205,7 +218,11 @@ class LiteLLMModelClient:
         response = None
         for attempt in retrying:
             with attempt:
-                response = self._chat_completion_once(messages)
+                response = self._chat_completion_once(
+                    messages,
+                    tools=tools,
+                    tool_choice=tool_choice,
+                )
         if response is None:  # pragma: no cover - defensive guard
             raise AgentModelError("model request failed: no response")
 
@@ -237,8 +254,15 @@ class LiteLLMModelClient:
     def complete_stream(
         self,
         messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: Any = None,
     ) -> Iterator[dict[str, Any]]:
-        request = self._base_request(messages)
+        request = self._base_request(
+            messages,
+            tools=tools,
+            tool_choice=tool_choice,
+        )
         request["stream"] = True
         request["stream_options"] = {"include_usage": True}
 

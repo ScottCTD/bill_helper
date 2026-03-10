@@ -95,9 +95,15 @@ def call_model(
     db: Session,
     *,
     model_name: str | None = None,
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: Any = None,
 ) -> dict[str, Any]:
     # Stable seam for tests/bench harnesses to inject model responses.
-    return _build_model_client(db, model_name=model_name).complete(messages)
+    return _build_model_client(db, model_name=model_name).complete(
+        messages,
+        tools=tools,
+        tool_choice=tool_choice,
+    )
 
 
 def call_model_stream(
@@ -105,9 +111,15 @@ def call_model_stream(
     db: Session,
     *,
     model_name: str | None = None,
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: Any = None,
 ) -> Iterator[dict[str, Any]]:
     # Stable seam for tests/bench harnesses to inject streaming model responses.
-    return _build_model_client(db, model_name=model_name).complete_stream(messages)
+    return _build_model_client(db, model_name=model_name).complete_stream(
+        messages,
+        tools=tools,
+        tool_choice=tool_choice,
+    )
 
 
 def calculate_context_tokens(

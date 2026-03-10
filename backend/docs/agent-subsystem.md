@@ -91,6 +91,7 @@
 - `send_intermediate_update` is required as the first tool call when tool work is needed
 - `add_user_memory` is an add-only tool for explicit remember-this requests; mutate/remove requests must be declined
 - `rename_thread` should run right after the first user message in a new thread, then only when the user explicitly asks or the topic materially changes
+- untitled threads are runtime-gated to expose only the `rename_thread` tool on the first model step; most models also receive an explicit required `tool_choice`, but `openrouter/qwen/qwen3.5-27b` falls back to tool-list restriction only because OpenRouter rejects explicit `tool_choice` for that model in thinking mode
 - model-facing tool interfaces avoid requiring full domain IDs; entry mutations prefer `entry_id` aliases from `list_entries` with selector fallback
 - `list_entries(source=...)` mirrors the Entries table broad text search across entry name, from-entity, and to-entity, and it applies the same owner-scope rules as normal entry reads using the resolved `ToolContext` principal
 - existing-group mutations prefer `group_id` aliases from `list_groups`

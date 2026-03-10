@@ -979,7 +979,9 @@ def test_system_prompt_guides_thread_naming_policy():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
-    assert "Right after the first user message in a new thread, call rename_thread" in prompt
+    assert "Right after the first user message in a new thread" in prompt
+    assert "you MUST call rename_thread" in prompt
+    assert "runtime only allows rename_thread" in prompt
     assert "only call rename_thread again if the user explicitly asks" in prompt
     assert "Keep thread titles concise and topical" in prompt
 
@@ -1116,6 +1118,94 @@ def test_rename_thread_tool_persists_thread_title(client, monkeypatch):
     detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
     detail_response.raise_for_status()
     assert detail_response.json()["thread"]["title"] == "Budget Review"
+
+
+def test_untitled_thread_restricts_model_request_to_rename_thread(client, monkeypatch):
+    from backend.services.agent import runtime
+
+    captured_kwargs: list[dict[str, object]] = []
+    calls = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_rename_thread",
+                    "type": "function",
+                    "function": {
+                        "name": "rename_thread",
+                        "arguments": json.dumps({"title": "Budget Review"}),
+                    },
+                }
+            ],
+        },
+        {"role": "assistant", "content": "Done."},
+    ]
+
+    def fake_model(_messages, _db, **kwargs):
+        captured_kwargs.append(kwargs)
+        return calls.pop(0)
+
+    monkeypatch.setattr(runtime, "call_model", fake_model)
+
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Please summarize my budget.")
+
+    assert run["status"] == "completed"
+    assert captured_kwargs
+    assert captured_kwargs[0]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "rename_thread"},
+    }
+    assert [tool["function"]["name"] for tool in captured_kwargs[0]["tools"]] == [
+        "rename_thread"
+    ]
+
+
+def test_openrouter_qwen_untitled_thread_skips_explicit_tool_choice(client, monkeypatch):
+    from backend.services.agent import runtime
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter-key")
+
+    captured_kwargs: list[dict[str, object]] = []
+    calls = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_rename_thread",
+                    "type": "function",
+                    "function": {
+                        "name": "rename_thread",
+                        "arguments": json.dumps({"title": "Budget Review"}),
+                    },
+                }
+            ],
+        },
+        {"role": "assistant", "content": "Done."},
+    ]
+
+    def fake_model(_messages, _db, **kwargs):
+        captured_kwargs.append(kwargs)
+        return calls.pop(0)
+
+    monkeypatch.setattr(runtime, "call_model", fake_model)
+
+    thread = create_thread(client)
+    run = send_message(
+        client,
+        thread["id"],
+        "Please summarize my budget.",
+        model_name="openrouter/qwen/qwen3.5-27b",
+    )
+
+    assert run["status"] == "completed"
+    assert captured_kwargs
+    assert "tool_choice" not in captured_kwargs[0]
+    assert [tool["function"]["name"] for tool in captured_kwargs[0]["tools"]] == [
+        "rename_thread"
+    ]
 
 
 def test_thread_title_stays_untitled_without_rename_tool(client, monkeypatch):

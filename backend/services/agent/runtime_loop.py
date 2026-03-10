@@ -35,14 +35,22 @@ from backend.services.agent.runtime_state import (
 )
 from backend.services.agent.serializers import stream_run_event_to_payload
 from backend.services.agent.tool_args.shared import INTERMEDIATE_UPDATE_TOOL_NAME
-from backend.services.agent.tool_runtime import execute_tool
+from backend.services.agent.tool_runtime import build_openai_tool_schemas, execute_tool
 from backend.services.agent.tool_types import ToolContext, ToolExecutionStatus
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.users import find_user_by_name
 
 
-ModelCall = Callable[[list[dict[str, Any]], Session, str | None], dict[str, Any]]
-ModelStreamCall = Callable[[list[dict[str, Any]], Session, str | None], Iterator[dict[str, Any]]]
+_RENAME_THREAD_TOOL_NAME = "rename_thread"
+_MODELS_WITHOUT_EXPLICIT_TOOL_CHOICE = frozenset(
+    {
+        "openrouter/qwen/qwen3.5-27b",
+        "qwen/qwen3.5-27b",
+    }
+)
+
+ModelCall = Callable[..., dict[str, Any]]
+ModelStreamCall = Callable[..., Iterator[dict[str, Any]]]
 RunContextUpdate = Callable[[AgentRun, list[dict[str, Any]]], None]
 RunStoppedCheck = Callable[[Session, AgentRun], bool]
 PrepareToolTurn = Callable[
@@ -109,6 +117,20 @@ class RuntimeRunLoopAdapterBase(AgentRunLoopAdapter[PreparedToolCall]):
             if payload is not None:
                 payloads.append(payload)
         return payloads
+
+    def _model_request_kwargs(self) -> dict[str, Any]:
+        if self.thread.title is not None:
+            return {}
+        request_kwargs: dict[str, Any] = {
+            "tools": build_openai_tool_schemas(tool_names=[_RENAME_THREAD_TOOL_NAME]),
+        }
+        model_name = (self.run.model_name or "").strip().casefold()
+        if model_name not in _MODELS_WITHOUT_EXPLICIT_TOOL_CHOICE:
+            request_kwargs["tool_choice"] = {
+                "type": "function",
+                "function": {"name": _RENAME_THREAD_TOOL_NAME},
+            }
+        return request_kwargs
 
     def build_initial_messages(self) -> list[dict[str, Any]]:
         from backend.services.agent.message_history import build_llm_messages
@@ -330,6 +352,7 @@ class RuntimeNonStreamRunLoopAdapter(RuntimeRunLoopAdapterBase):
             llm_messages,
             self.db,
             model_name=self.run.model_name,
+            **self._model_request_kwargs(),
         )
         return (yield from _empty_model_result(assistant_message))
 
@@ -369,6 +392,7 @@ class RuntimeStreamRunLoopAdapter(RuntimeRunLoopAdapterBase):
             llm_messages,
             self.db,
             model_name=self.run.model_name,
+            **self._model_request_kwargs(),
         ):
             event_type = str(event.get("type") or "")
             if event_type == "reasoning_delta":
