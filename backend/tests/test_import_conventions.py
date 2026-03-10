@@ -49,6 +49,8 @@ REMOVED_AGENT_PROGRESS_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "re
 AGENT_SESSION_TOOLS_PACKAGE = BACKEND_DIR / "services" / "agent" / "session_tools"
 AGENT_MODEL_CLIENT_PATH = BACKEND_DIR / "services" / "agent" / "model_client.py"
 AGENT_MODEL_CLIENT_SUPPORT_PACKAGE = BACKEND_DIR / "services" / "agent" / "model_client_support"
+AGENT_TOOL_RUNTIME_PATH = BACKEND_DIR / "services" / "agent" / "tool_runtime.py"
+AGENT_TOOL_RUNTIME_SUPPORT_PACKAGE = BACKEND_DIR / "services" / "agent" / "tool_runtime_support"
 REMOVED_AGENT_CHANGE_CONTRACTS_MODULE = BACKEND_DIR / "services" / "agent" / "change_contracts.py"
 AGENT_CHANGE_CONTRACTS_PACKAGE = BACKEND_DIR / "services" / "agent" / "change_contracts"
 AGENT_ROUTER_PATH = BACKEND_DIR / "routers" / "agent.py"
@@ -93,6 +95,7 @@ def test_service_package_init_modules_are_marker_only() -> None:
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "reviews" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "session_tools" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "model_client_support" / "__init__.py")
+    _assert_marker_module(BACKEND_DIR / "services" / "agent" / "tool_runtime_support" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "validation" / "__init__.py")
 
 
@@ -243,6 +246,21 @@ def test_agent_model_client_uses_grouped_support_modules() -> None:
     for name in ("client.py", "environment.py", "streaming.py", "usage.py"):
         assert (AGENT_MODEL_CLIENT_SUPPORT_PACKAGE / name).exists(), f"missing model client support module: {name}"
     assert not _defined_class_names(AGENT_MODEL_CLIENT_PATH), "model_client.py should stay a thin public seam"
+
+
+def test_agent_tool_runtime_uses_grouped_support_modules() -> None:
+    assert AGENT_TOOL_RUNTIME_SUPPORT_PACKAGE.is_dir(), "tool_runtime support package should exist"
+    for name in (
+        "catalog.py",
+        "catalog_proposals.py",
+        "catalog_read.py",
+        "catalog_session.py",
+        "definitions.py",
+        "execution.py",
+        "schema.py",
+    ):
+        assert (AGENT_TOOL_RUNTIME_SUPPORT_PACKAGE / name).exists(), f"missing tool runtime support module: {name}"
+    assert not _defined_class_names(AGENT_TOOL_RUNTIME_PATH), "tool_runtime.py should stay a thin public seam"
 
 
 def test_agent_change_contracts_are_grouped_by_domain() -> None:

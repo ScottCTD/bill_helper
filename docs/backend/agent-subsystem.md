@@ -22,6 +22,10 @@
   - thin public seam re-exporting the LiteLLM client contract
 - `backend/services/agent/model_client_support/`
   - grouped model-client internals: `client.py` for the retrying LiteLLM adapter, `environment.py` for provider/env validation and prompt-cache support, `streaming.py` for streamed delta reconciliation, and `usage.py` for usage-shape normalization
+- `backend/services/agent/tool_runtime.py`
+  - thin public seam for tool contracts plus runtime execution entrypoints
+- `backend/services/agent/tool_runtime_support/`
+  - grouped tool-runtime internals: `definitions.py` for tool metadata, `schema.py` for OpenAI schema inlining, `catalog_*.py` for read/session/proposal tool-family registration, `catalog.py` for the merged registry, and `execution.py` for retry/error policy
 - `backend/services/agent/pricing.py`
   - LiteLLM-backed pricing helper
 - `backend/services/agent/tool_args/`
@@ -40,8 +44,6 @@
   - canonical mapping from `change_type` to proposal domain/action/tool name for `list_proposals`, history, and review summaries
 - `backend/services/agent/proposal_patching.py`
   - patch-map helpers for pending proposal edits
-- `backend/services/agent/tool_runtime.py`
-  - tool registry, schema composition, and execution policy; runtime adapters pass a resolved principal snapshot through `ToolContext`
 - `backend/services/agent/threads.py`
   - thread-title normalization plus rename persistence helpers shared by the router and tool handler
 - `backend/services/agent/tools.py`
