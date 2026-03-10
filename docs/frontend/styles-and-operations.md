@@ -26,6 +26,8 @@
 - `agent/review/drafts/*`
 - `agent/review/diff/*`
 - `agent/panel/useAgentPanelController.ts`
+- `agent/panel/useAgentPanelQueries.ts`
+- `agent/panel/useAgentThreadActions.ts`
 - `agent/panel/useAgentComposerRuntime.ts`
 - `agent/panel/useAgentComposerStreamState.ts`
 - `agent/panel/useAgentComposerActions.ts`

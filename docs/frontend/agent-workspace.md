@@ -5,12 +5,14 @@
 - `frontend/src/features/agent/AgentPanel.tsx`
 - used as the primary AI page via `frontend/src/pages/HomePage.tsx`
 - acts as a render shell that wires the header, timeline, composer, thread rail, review modal, and preview dialog together
-- stateful coordination now lives in `frontend/src/features/agent/panel/useAgentPanelController.ts` plus `frontend/src/features/agent/panel/useAgentComposerRuntime.ts`, while stream hydration/state lives in `useAgentComposerStreamState.ts`, send-stop orchestration lives in `useAgentComposerActions.ts`, and pure panel helpers live in `frontend/src/features/agent/panel/helpers.ts`
+- stateful coordination now lives in `frontend/src/features/agent/panel/useAgentPanelController.ts`, which composes `useAgentPanelQueries.ts` for thread/runtime queries, `useAgentThreadActions.ts` for thread/review mutations plus cache helpers, and `useAgentComposerRuntime.ts` for composer/panel coordination; stream hydration/state lives in `useAgentComposerStreamState.ts`, send-stop orchestration lives in `useAgentComposerActions.ts`, and pure panel helpers live in `frontend/src/features/agent/panel/helpers.ts`
 - page header uses the static title `Bill Assistant`; model selection stays in the composer dropdown instead of the title row
 
 Supporting modules include:
 
 - `frontend/src/features/agent/panel/useAgentPanelController.ts`
+- `frontend/src/features/agent/panel/useAgentPanelQueries.ts`
+- `frontend/src/features/agent/panel/useAgentThreadActions.ts`
 - `frontend/src/features/agent/panel/useAgentComposerRuntime.ts`
 - `frontend/src/features/agent/panel/useAgentComposerStreamState.ts`
 - `frontend/src/features/agent/panel/useAgentComposerActions.ts`
@@ -88,6 +90,7 @@ Supporting modules include:
 - idle primary action is `Send`; active-run primary action is `Stop`
 - when Bulk mode is enabled, the primary action becomes `Start Bulk` and uses the existing non-stream send endpoint per created thread
 - agent messages stream over SSE from `POST /api/v1/agent/threads/{thread_id}/messages/stream`
+- `useAgentPanelController.ts` now stays on panel composition, while `useAgentPanelQueries.ts` owns query polling/derived read models and `useAgentThreadActions.ts` owns thread lifecycle mutations plus cache reconciliation
 - `useAgentComposerRuntime.ts` now stays focused on composer UI state, while `useAgentComposerActions.ts` owns bulk launches, stream sends, and stop-run orchestration
 
 ## Usage And Activity
