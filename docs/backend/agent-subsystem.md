@@ -97,8 +97,8 @@
   - approve/reject/reopen HTTP translation for review actions
 - `backend/routers/agent_attachments.py`
   - attachment file download endpoint
-- `backend/routers/agent_support.py`
-  - shared router config, SSE formatting, upload-root helpers, and message-create HTTP error translation
+- `backend/routers/agent_threads.py`
+  - also owns the message-create HTTP translation, SSE event formatting, upload-root wiring, and background-session launch helpers used only by the thread send endpoints
 - delegates message validation and run lifecycle policy to `backend/services/agent/execution.py`
 - accepts an optional `surface` form field on message-send routes and persists it onto the created run for background continuation
 - delegates attachment storage and cleanup to `backend/services/agent/attachments.py`
