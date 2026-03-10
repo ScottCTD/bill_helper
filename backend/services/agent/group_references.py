@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import NotRequired, TypedDict
 
 from sqlalchemy import func, or_, select
@@ -34,19 +35,19 @@ class GroupMemberDateRangeRecord(TypedDict):
 class GroupMemberPublicRecord(TypedDict):
     member_type: str
     name: str
-    member_role: NotRequired[object]
+    member_role: NotRequired[str]
     entry_id: NotRequired[str]
-    occurred_at: NotRequired[object]
-    kind: NotRequired[object]
-    amount_minor: NotRequired[object]
+    occurred_at: NotRequired[str]
+    kind: NotRequired[str]
+    amount_minor: NotRequired[int]
     group_id: NotRequired[str]
-    group_type: NotRequired[object]
-    descendant_entry_count: NotRequired[object]
+    group_type: NotRequired[str]
+    descendant_entry_count: NotRequired[int]
     date_range: NotRequired[GroupMemberDateRangeRecord]
 
 
 class GroupRelationshipRecord(TypedDict):
-    relation: object
+    relation: str
     source: NotRequired[GroupMemberPublicRecord]
     target: NotRequired[GroupMemberPublicRecord]
 
@@ -89,6 +90,15 @@ def group_summary_to_public_record(summary: GroupSummaryRead, *, full_id: bool =
     }
 
 
+def _json_public_value(value: object) -> object:
+    if isinstance(value, date):
+        return value.isoformat()
+    enum_value = getattr(value, "value", None)
+    if isinstance(enum_value, (str, int, float, bool)) or enum_value is None:
+        return enum_value if hasattr(value, "value") else value
+    return value
+
+
 def _node_to_public_record(node: GroupNode) -> GroupMemberPublicRecord:
     node_type = node.node_type
     record = {
@@ -96,19 +106,19 @@ def _node_to_public_record(node: GroupNode) -> GroupMemberPublicRecord:
         "name": node.name,
     }
     if node.member_role is not None:
-        record["member_role"] = node.member_role
+        record["member_role"] = str(_json_public_value(node.member_role))
     if node_type == "ENTRY":
         record["entry_id"] = entry_public_id(node.subject_id)
         if node.occurred_at is not None:
-            record["occurred_at"] = node.occurred_at
+            record["occurred_at"] = str(_json_public_value(node.occurred_at))
         if node.kind is not None:
-            record["kind"] = node.kind
+            record["kind"] = str(_json_public_value(node.kind))
         if node.amount_minor is not None:
             record["amount_minor"] = node.amount_minor
     elif node_type == "GROUP":
         record["group_id"] = group_public_id(node.subject_id)
         if node.group_type is not None:
-            record["group_type"] = node.group_type
+            record["group_type"] = str(_json_public_value(node.group_type))
         if node.descendant_entry_count is not None:
             record["descendant_entry_count"] = node.descendant_entry_count
         if node.first_occurred_at is not None or node.last_occurred_at is not None:
@@ -123,7 +133,7 @@ def _relationship_record(edge: GroupEdge, node_by_graph_id: dict[str, GroupNode]
     source_node = node_by_graph_id.get(edge.source_graph_id)
     target_node = node_by_graph_id.get(edge.target_graph_id)
     relationship: GroupRelationshipRecord = {
-        "relation": edge.group_type,
+        "relation": str(_json_public_value(edge.group_type)),
     }
     if source_node is not None:
         relationship["source"] = _node_to_public_record(source_node)
