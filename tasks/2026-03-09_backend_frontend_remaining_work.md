@@ -55,17 +55,15 @@ Recommended direction:
 
 ### 2. Service/API contract cleanup outside the agent
 
-The next backend cleanup after the agent contract split should reduce duplicated contract shapes and schema/service drift:
+The next backend cleanup after the agent contract split should continue reducing read-side/API-shape drift:
 
 - `review::.::holistic::cross_module_architecture::service_schema_entanglement::...` follow-up items now showing as read-side/API-shape drift in the new review set
-- `review::.::holistic::api_surface_coherence::group_membership_target_overload::10d4e80e`
-- `review::.::holistic::api_surface_coherence::sibling_resource_services_mix_command_model_apis_with_primitive_heavy_mutation_signatures::9119f48e`
 
 Recommended direction:
 
 - continue moving services onto service-local command/result types
-- reduce group membership “entry vs child group” exclusivity into clearer target contracts
-- standardize mutation APIs so sibling services are not half command-model, half primitive-heavy
+- keep group/user write paths on the same command/patch convention already used by account/entity/tag mutations
+- keep read-side services off API schemas and duplicate response assemblers
 
 ### 3. Router/service consistency cleanup
 

@@ -5,7 +5,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from backend.contracts_groups import GroupCreateCommand, GroupMemberCreateCommand, GroupPatch
+from backend.contracts_users import UserCreateCommand, UserPatch
 from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
+from backend.validation.contract_fields import NonEmptyPatchModel
 
 
 class TagRead(BaseModel):
@@ -26,7 +29,7 @@ class TagCreate(BaseModel):
     type: str | None = Field(default=None, max_length=100)
 
 
-class TagUpdate(BaseModel):
+class TagUpdate(NonEmptyPatchModel):
     name: str | None = Field(default=None, min_length=1, max_length=64)
     color: str | None = Field(default=None, max_length=20)
     description: str | None = Field(default=None, max_length=2000)
@@ -51,7 +54,7 @@ class EntityCreate(BaseModel):
     category: str | None = Field(default=None, max_length=100)
 
 
-class EntityUpdate(BaseModel):
+class EntityUpdate(NonEmptyPatchModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     category: str | None = Field(default=None, max_length=100)
 
@@ -67,12 +70,12 @@ class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class UserCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
+class UserCreate(UserCreateCommand):
+    pass
 
 
-class UserUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=255)
+class UserUpdate(UserPatch):
+    pass
 
 
 class CurrencyRead(BaseModel):
@@ -128,7 +131,7 @@ class AccountCreate(AccountBase):
     is_active: bool = True
 
 
-class AccountUpdate(BaseModel):
+class AccountUpdate(NonEmptyPatchModel):
     owner_user_id: str | None = None
     name: str | None = Field(default=None, min_length=1, max_length=200)
     markdown_body: str | None = None
@@ -263,33 +266,16 @@ class EntryGroupRefRead(BaseModel):
     group_type: GroupType
 
 
-class GroupCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(min_length=1, max_length=255)
-    group_type: GroupType
+class GroupCreate(GroupCreateCommand):
+    pass
 
 
-class GroupUpdate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str | None = Field(default=None, min_length=1, max_length=255)
+class GroupUpdate(GroupPatch):
+    pass
 
 
-class GroupMemberCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    entry_id: str | None = None
-    child_group_id: str | None = None
-    member_role: GroupMemberRole | None = None
-
-    @model_validator(mode="after")
-    def validate_target(self) -> GroupMemberCreate:
-        has_entry = self.entry_id is not None
-        has_child_group = self.child_group_id is not None
-        if has_entry == has_child_group:
-            raise ValueError("Provide exactly one of entry_id or child_group_id.")
-        return self
+class GroupMemberCreate(GroupMemberCreateCommand):
+    pass
 
 
 class GroupNode(BaseModel):

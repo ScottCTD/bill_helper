@@ -1,6 +1,14 @@
 export type EntryKind = "EXPENSE" | "INCOME" | "TRANSFER";
 export type GroupType = "BUNDLE" | "SPLIT" | "RECURRING";
 export type GroupMemberRole = "PARENT" | "CHILD";
+export type GroupMemberTarget =
+  | { target_type: "entry"; entry_id: string }
+  | { target_type: "child_group"; group_id: string };
+
+export interface GroupMemberCreatePayload {
+  target: GroupMemberTarget;
+  member_role?: GroupMemberRole;
+}
 
 export interface Tag {
   id: number;

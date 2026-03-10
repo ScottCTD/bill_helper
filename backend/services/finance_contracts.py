@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.validation.contract_fields import (
+    NonEmptyPatchModel,
     OptionalCategory,
     OptionalCurrencyCode,
     OptionalEntityName,
@@ -28,7 +29,7 @@ class AccountCreateCommand(BaseModel):
     is_active: bool = True
 
 
-class AccountPatch(BaseModel):
+class AccountPatch(NonEmptyPatchModel):
     model_config = ConfigDict(extra="forbid")
 
     owner_user_id: str | None = None
@@ -48,7 +49,7 @@ class EntityCreateCommand(BaseModel):
     category: OptionalCategory = Field(default=None, max_length=100)
 
 
-class EntityPatch(BaseModel):
+class EntityPatch(NonEmptyPatchModel):
     model_config = ConfigDict(extra="forbid")
 
     name: OptionalEntityName = Field(default=None, min_length=1, max_length=255)
@@ -64,7 +65,7 @@ class TagCreateCommand(BaseModel):
     type: OptionalCategory = Field(default=None, max_length=100)
 
 
-class TagPatch(BaseModel):
+class TagPatch(NonEmptyPatchModel):
     model_config = ConfigDict(extra="forbid")
 
     name: OptionalTagName = Field(default=None, min_length=1, max_length=64)

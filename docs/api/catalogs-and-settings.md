@@ -28,6 +28,10 @@ Update user. Response: `UserRead`
 
 Behavior: non-admin principal may update only itself.
 
+Errors:
+
+- `422` when no updatable fields are provided
+
 ## Entities
 
 ### `GET /entities`
@@ -69,6 +73,7 @@ Behavior:
 - response category is resolved from taxonomy assignments
 - returns `409` if `category="account"` is requested
 - returns `409` for account-backed entities
+- returns `422` when no updatable fields are provided
 
 ### `DELETE /entities/{entity_id}`
 
@@ -110,6 +115,10 @@ Authorization: admin principal only.
 Update tag name, color, description, or type. Response: `TagRead`
 
 Authorization: admin principal only.
+
+Errors:
+
+- `422` when no updatable fields are provided
 
 ### `DELETE /tags/{tag_id}`
 

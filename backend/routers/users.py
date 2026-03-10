@@ -5,12 +5,9 @@ from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal
 from backend.auth.dependencies import get_or_create_current_principal, require_admin_principal
+from backend.contracts_users import UserCreateCommand, UserPatch
 from backend.database import get_db
 from backend.schemas_finance import UserCreate, UserRead, UserUpdate
-from backend.services.crud_policy import (
-    PolicyViolation,
-    translate_policy_violation,
-)
 from backend.services.users import (
     build_user_read,
     create_user_for_principal,
@@ -35,10 +32,11 @@ def create_user(
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(require_admin_principal),
 ) -> UserRead:
-    try:
-        user = create_user_for_principal(db, raw_name=payload.name, principal=principal)
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    user = create_user_for_principal(
+        db,
+        command=UserCreateCommand.model_validate(payload.model_dump()),
+        principal=principal,
+    )
 
     db.commit()
     db.refresh(user)
@@ -53,15 +51,12 @@ def update_user(
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> UserRead:
-    try:
-        user = update_user_for_principal(
-            db,
-            user_id=user_id,
-            raw_name=payload.name if "name" in payload.model_dump(exclude_unset=True) else None,
-            principal=principal,
-        )
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    user = update_user_for_principal(
+        db,
+        user_id=user_id,
+        patch=UserPatch.model_validate(payload.model_dump(exclude_unset=True)),
+        principal=principal,
+    )
     db.commit()
     db.refresh(user)
     return build_user_read(db, user=user, principal_name=principal.user_name)

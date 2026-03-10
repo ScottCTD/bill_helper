@@ -98,7 +98,7 @@ def test_group_membership_updates_entry_context_and_allows_group_delete_after_un
 
     membership_response = client.post(
         f"/api/v1/groups/{group['id']}/members",
-        json={"entry_id": entry["id"]},
+        json={"target": {"target_type": "entry", "entry_id": entry["id"]}},
     )
     membership_response.raise_for_status()
 
@@ -259,9 +259,15 @@ def test_bundle_group_graph_and_summary_include_empty_groups(client):
     create_group(client, "Empty Group", "BUNDLE")
     group = create_group(client, "Bundle Group", "BUNDLE")
 
-    add_first = client.post(f"/api/v1/groups/{group['id']}/members", json={"entry_id": first["id"]})
+    add_first = client.post(
+        f"/api/v1/groups/{group['id']}/members",
+        json={"target": {"target_type": "entry", "entry_id": first["id"]}},
+    )
     add_first.raise_for_status()
-    add_second = client.post(f"/api/v1/groups/{group['id']}/members", json={"entry_id": second["id"]})
+    add_second = client.post(
+        f"/api/v1/groups/{group['id']}/members",
+        json={"target": {"target_type": "entry", "entry_id": second["id"]}},
+    )
     add_second.raise_for_status()
 
     groups_response = client.get("/api/v1/groups")
@@ -323,23 +329,23 @@ def test_split_group_validation_and_graph(client):
 
     parent_response = client.post(
         f"/api/v1/groups/{group['id']}/members",
-        json={"entry_id": parent["id"], "member_role": "PARENT"},
+        json={"target": {"target_type": "entry", "entry_id": parent["id"]}, "member_role": "PARENT"},
     )
     parent_response.raise_for_status()
     child_response = client.post(
         f"/api/v1/groups/{group['id']}/members",
-        json={"entry_id": child_income.json()["id"], "member_role": "CHILD"},
+        json={"target": {"target_type": "entry", "entry_id": child_income.json()["id"]}, "member_role": "CHILD"},
     )
     child_response.raise_for_status()
     second_child_response = client.post(
         f"/api/v1/groups/{group['id']}/members",
-        json={"entry_id": other_child_income.json()["id"], "member_role": "CHILD"},
+        json={"target": {"target_type": "entry", "entry_id": other_child_income.json()["id"]}, "member_role": "CHILD"},
     )
     second_child_response.raise_for_status()
 
     invalid_response = client.post(
         f"/api/v1/groups/{group['id']}/members",
-        json={"entry_id": invalid_child["id"], "member_role": "CHILD"},
+        json={"target": {"target_type": "entry", "entry_id": invalid_child["id"]}, "member_role": "CHILD"},
     )
     assert invalid_response.status_code == 400
 
@@ -373,12 +379,15 @@ def test_recurring_group_validation_and_graph(client):
     group = create_group(client, "Monthly Rent", "RECURRING")
 
     for entry in (first, second, third):
-        response = client.post(f"/api/v1/groups/{group['id']}/members", json={"entry_id": entry["id"]})
+        response = client.post(
+            f"/api/v1/groups/{group['id']}/members",
+            json={"target": {"target_type": "entry", "entry_id": entry["id"]}},
+        )
         response.raise_for_status()
 
     invalid_response = client.post(
         f"/api/v1/groups/{group['id']}/members",
-        json={"entry_id": invalid_income.json()["id"]},
+        json={"target": {"target_type": "entry", "entry_id": invalid_income.json()["id"]}},
     )
     assert invalid_response.status_code == 400
 
@@ -399,35 +408,38 @@ def test_nested_groups_depth_one_and_no_sharing(client):
     child = create_group(client, "Streaming", "BUNDLE")
     second_child = create_group(client, "Podcasts", "BUNDLE")
 
-    add_child_entry = client.post(f"/api/v1/groups/{child['id']}/members", json={"entry_id": child_entry["id"]})
+    add_child_entry = client.post(
+        f"/api/v1/groups/{child['id']}/members",
+        json={"target": {"target_type": "entry", "entry_id": child_entry["id"]}},
+    )
     add_child_entry.raise_for_status()
 
     attach_child = client.post(
         f"/api/v1/groups/{parent['id']}/members",
-        json={"child_group_id": child["id"]},
+        json={"target": {"target_type": "child_group", "group_id": child["id"]}},
     )
     attach_child.raise_for_status()
 
     nested_response = client.post(
         f"/api/v1/groups/{child['id']}/members",
-        json={"child_group_id": second_child["id"]},
+        json={"target": {"target_type": "child_group", "group_id": second_child["id"]}},
     )
     assert nested_response.status_code == 400
 
     shared_response = client.post(
         f"/api/v1/groups/{second_parent['id']}/members",
-        json={"child_group_id": child["id"]},
+        json={"target": {"target_type": "child_group", "group_id": child["id"]}},
     )
     assert shared_response.status_code == 400
 
     add_second_child_entry = client.post(
         f"/api/v1/groups/{second_child['id']}/members",
-        json={"entry_id": other_entry["id"]},
+        json={"target": {"target_type": "entry", "entry_id": other_entry["id"]}},
     )
     add_second_child_entry.raise_for_status()
     parented_nested_child = client.post(
         f"/api/v1/groups/{child['id']}/members",
-        json={"child_group_id": second_child["id"]},
+        json={"target": {"target_type": "child_group", "group_id": second_child["id"]}},
     )
     assert parented_nested_child.status_code == 400
 
@@ -462,7 +474,10 @@ def test_group_routes_are_scoped_by_principal(client):
     admin_account_id = create_account(client)
     admin_entry = create_entry(client, admin_account_id, "Admin Entry 1")
     admin_group = create_group(client, "Admin Group", "BUNDLE")
-    admin_add = client.post(f"/api/v1/groups/{admin_group['id']}/members", json={"entry_id": admin_entry["id"]})
+    admin_add = client.post(
+        f"/api/v1/groups/{admin_group['id']}/members",
+        json={"target": {"target_type": "entry", "entry_id": admin_entry["id"]}},
+    )
     admin_add.raise_for_status()
 
     alice_headers = {"X-Bill-Helper-Principal": "alice"}
@@ -471,7 +486,7 @@ def test_group_routes_are_scoped_by_principal(client):
     alice_group = create_group(client, "Alice Group", "BUNDLE", headers=alice_headers)
     alice_add = client.post(
         f"/api/v1/groups/{alice_group['id']}/members",
-        json={"entry_id": alice_entry["id"]},
+        json={"target": {"target_type": "entry", "entry_id": alice_entry["id"]}},
         headers=alice_headers,
     )
     alice_add.raise_for_status()
@@ -489,7 +504,10 @@ def test_soft_delete_entry_removes_group_membership(client):
     account_id = create_account(client)
     entry = create_entry(client, account_id, "Child")
     group = create_group(client, "Temp Group", "BUNDLE")
-    add_response = client.post(f"/api/v1/groups/{group['id']}/members", json={"entry_id": entry["id"]})
+    add_response = client.post(
+        f"/api/v1/groups/{group['id']}/members",
+        json={"target": {"target_type": "entry", "entry_id": entry["id"]}},
+    )
     add_response.raise_for_status()
 
     delete_response = client.delete(f"/api/v1/entries/{entry['id']}")
@@ -516,6 +534,29 @@ def test_entry_defaults_owner_to_current_user(client):
     current_users = [user for user in users if user["is_current_user"]]
     assert len(current_users) == 1
     assert current_users[0]["name"] == "admin"
+
+
+def test_catalog_patch_endpoints_reject_empty_payloads(client):
+    account_id = create_account(client)
+    entity = create_entity(client, "Merchant")
+    group = create_group(client, "Bills", "BUNDLE")
+
+    tag_response = client.post(
+        "/api/v1/tags",
+        json={"name": "utilities"},
+    )
+    tag_response.raise_for_status()
+    tag = tag_response.json()
+
+    users_response = client.get("/api/v1/users")
+    users_response.raise_for_status()
+    user_id = users_response.json()[0]["id"]
+
+    assert client.patch(f"/api/v1/accounts/{account_id}", json={}).status_code == 422
+    assert client.patch(f"/api/v1/entities/{entity['id']}", json={}).status_code == 422
+    assert client.patch(f"/api/v1/tags/{tag['id']}", json={}).status_code == 422
+    assert client.patch(f"/api/v1/groups/{group['id']}", json={}).status_code == 422
+    assert client.patch(f"/api/v1/users/{user_id}", json={}).status_code == 422
 
 
 def test_entry_accepts_entity_ids_and_owner_user_id(client):

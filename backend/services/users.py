@@ -6,6 +6,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from backend.auth.dev_session import is_admin_principal_name
+from backend.contracts_users import UserCreateCommand, UserPatch
 from backend.models_finance import Account, Entry, User
 from backend.schemas_finance import UserRead
 from backend.services.crud_policy import PolicyViolation, assert_unique_name, normalize_required_name
@@ -211,28 +212,28 @@ def rename_user_and_sync_entry_owner_labels(
 def create_user_for_principal(
     db: Session,
     *,
-    raw_name: str,
+    command: UserCreateCommand,
     principal: RequestPrincipal,
 ) -> User:
     if not _is_admin_principal(principal):
         raise PolicyViolation.forbidden("Only admin principal can create users.")
-    return create_user_with_unique_name(db, raw_name=raw_name, is_admin=False)
+    return create_user_with_unique_name(db, raw_name=command.name, is_admin=False)
 
 
 def update_user_for_principal(
     db: Session,
     *,
     user_id: str,
-    raw_name: str | None,
+    patch: UserPatch,
     principal: RequestPrincipal,
 ) -> User:
     from backend.services.access_scope import load_user_for_principal
 
     user = load_user_for_principal(db, user_id=user_id, principal=principal)
-    if raw_name is not None:
+    if "name" in patch.model_fields_set and patch.name is not None:
         rename_user_and_sync_entry_owner_labels(
             db,
             user=user,
-            raw_name=raw_name,
+            raw_name=patch.name,
         )
     return user

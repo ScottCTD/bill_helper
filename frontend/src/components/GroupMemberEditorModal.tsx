@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { GroupMemberRole, GroupType } from "../lib/types";
+import type { GroupMemberCreatePayload, GroupMemberRole, GroupType } from "../lib/types";
 import { SingleSelect } from "./SingleSelect";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -20,7 +20,7 @@ interface GroupMemberEditorModalProps {
   isSaving: boolean;
   saveError?: string | null;
   onClose: () => void;
-  onSubmit: (payload: { entry_id?: string; child_group_id?: string; member_role?: GroupMemberRole }) => void;
+  onSubmit: (payload: GroupMemberCreatePayload) => void;
 }
 
 export function GroupMemberEditorModal({
@@ -67,11 +67,17 @@ export function GroupMemberEditorModal({
     onSubmit(
       subjectType === "ENTRY"
         ? {
-            entry_id: selectedId,
+            target: {
+              target_type: "entry",
+              entry_id: selectedId
+            },
             member_role: groupType === "SPLIT" ? memberRole : undefined
           }
         : {
-            child_group_id: selectedId,
+            target: {
+              target_type: "child_group",
+              group_id: selectedId
+            },
             member_role: groupType === "SPLIT" ? memberRole : undefined
           }
     );
