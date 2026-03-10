@@ -4748,6 +4748,60 @@ def test_list_groups_tool_supports_list_and_detail_modes(client, monkeypatch):
     assert detail_output["group"]["derived_relationships"] == []
 
 
+def test_propose_update_group_serializes_group_detail_members(client, monkeypatch):
+    account_id = create_account(client)
+    entry = create_entry(client, account_id, "Snapshot Smoke Coffee Alpha", occurred_at="2026-03-06")
+    group = create_group(client, "Snapshot Smoke Meals Bundle", "BUNDLE")
+
+    membership_response = client.post(
+        f"/api/v1/groups/{group['id']}/members",
+        json={"target": {"target_type": "entry", "entry_id": entry["id"]}},
+    )
+    membership_response.raise_for_status()
+
+    def propose_update_group_model(messages):
+        if messages[-1]["role"] == "tool":
+            return {"role": "assistant", "content": "Group update proposal created."}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_propose_update_group",
+                    "type": "function",
+                    "function": {
+                        "name": "propose_update_group",
+                        "arguments": json.dumps(
+                            {
+                                "group_id": group["id"][:8],
+                                "patch": {"name": "Snapshot Smoke Meals Archive"},
+                            }
+                        ),
+                    },
+                }
+            ],
+        }
+
+    patch_model(monkeypatch, propose_update_group_model)
+    thread = create_thread(client)
+    run = send_message(client, thread["id"], "Rename the snapshot smoke meals group")
+
+    assert run["status"] == "completed"
+    item = run["change_items"][0]
+    assert item["change_type"] == "update_group"
+    assert item["payload_json"]["target"]["group_type"] == "BUNDLE"
+    assert item["payload_json"]["target"]["direct_members"] == [
+        {
+            "member_type": "entry",
+            "name": "Snapshot Smoke Coffee Alpha",
+            "entry_id": entry["id"][:8],
+            "occurred_at": "2026-03-06",
+            "kind": "EXPENSE",
+            "amount_minor": 1234,
+        }
+    ]
+
+
 def test_list_proposals_tool_can_filter_group_domain(client, monkeypatch):
     def propose_group_model(messages):
         if messages[-1]["role"] == "tool":
