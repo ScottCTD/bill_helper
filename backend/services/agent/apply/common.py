@@ -6,6 +6,7 @@ from typing import Callable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.auth.contracts import RequestPrincipal
 from backend.enums_agent import AgentChangeType
 from backend.models_agent import AgentChangeItem
 from backend.models_finance import Entry, EntryGroup
@@ -26,6 +27,7 @@ from backend.services.agent.group_references import (
     group_owner_condition,
     group_public_summary,
 )
+from backend.services.principals import ensure_request_principal
 from backend.services.groups import group_tree_options
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.services.users import ensure_current_user
@@ -37,11 +39,21 @@ class AppliedResource:
     resource_id: str
 
 
-ChangeApplyHandler = Callable[[Session, ChangePayloadModel], AppliedResource]
+ChangeApplyHandler = Callable[[Session, ChangePayloadModel, str], AppliedResource]
 
 
-def find_unique_entry_by_selector(db: Session, selector_payload: EntrySelectorPayload) -> Entry:
-    matches = find_entries_by_selector(db, selector_payload)
+def resolve_apply_principal(db: Session, *, actor_name: str) -> RequestPrincipal:
+    return ensure_request_principal(db, principal_name=actor_name)
+
+
+def find_unique_entry_by_selector(db: Session, selector_payload: EntrySelectorPayload, *, actor_name: str) -> Entry:
+    principal = resolve_apply_principal(db, actor_name=actor_name)
+    matches = find_entries_by_selector(
+        db,
+        selector_payload,
+        principal_user_id=principal.user_id,
+        is_admin=principal.is_admin,
+    )
     if not matches:
         raise ValueError("Entry selector did not match any entry")
     if len(matches) > 1:
@@ -50,8 +62,14 @@ def find_unique_entry_by_selector(db: Session, selector_payload: EntrySelectorPa
     return matches[0]
 
 
-def find_unique_entry_by_id(db: Session, entry_id: str) -> Entry:
-    matches = find_entries_by_exact_id(db, entry_id)
+def find_unique_entry_by_id(db: Session, entry_id: str, *, actor_name: str) -> Entry:
+    principal = resolve_apply_principal(db, actor_name=actor_name)
+    matches = find_entries_by_exact_id(
+        db,
+        entry_id,
+        principal_user_id=principal.user_id,
+        is_admin=principal.is_admin,
+    )
     if not matches:
         raise ValueError("Entry id did not match any entry")
     if len(matches) > 1:
@@ -77,8 +95,14 @@ def resolve_existing_group_id(db: Session, *, group_id: str, current_user_id: st
     return str(matches[0].id)
 
 
-def resolve_existing_entry_id(db: Session, *, entry_id: str) -> str:
-    matches = find_entries_by_exact_id(db, entry_id)
+def resolve_existing_entry_id(db: Session, *, entry_id: str, actor_name: str) -> str:
+    principal = resolve_apply_principal(db, actor_name=actor_name)
+    matches = find_entries_by_exact_id(
+        db,
+        entry_id,
+        principal_user_id=principal.user_id,
+        is_admin=principal.is_admin,
+    )
     if not matches:
         raise ValueError("Entry id did not match any entry")
     if len(matches) > 1:
@@ -100,9 +124,9 @@ def resolve_applied_group_id(db: Session, reference: GroupReferencePayload, *, c
     return item.applied_resource_id
 
 
-def resolve_applied_entry_id(db: Session, reference: EntryReferencePayload) -> str:
+def resolve_applied_entry_id(db: Session, reference: EntryReferencePayload, *, actor_name: str) -> str:
     if reference.entry_id is not None:
-        return resolve_existing_entry_id(db, entry_id=reference.entry_id)
+        return resolve_existing_entry_id(db, entry_id=reference.entry_id, actor_name=actor_name)
 
     assert reference.create_entry_proposal_id is not None
     item = find_change_item_by_id(db, reference.create_entry_proposal_id)
@@ -118,9 +142,10 @@ def resolve_applied_group_member_target_ids(
     *,
     target: EntryGroupMemberTargetPayload | ChildGroupMemberTargetPayload,
     current_user_id: str,
+    actor_name: str,
 ) -> tuple[str | None, str | None]:
     if isinstance(target, EntryGroupMemberTargetPayload):
-        return resolve_applied_entry_id(db, target.entry_ref), None
+        return resolve_applied_entry_id(db, target.entry_ref, actor_name=actor_name), None
     return None, resolve_applied_group_id(db, target.group_ref, current_user_id=current_user_id)
 
 
@@ -139,6 +164,7 @@ def find_scoped_group_by_id(db: Session, *, group_id: str, current_user_id: str)
     return group
 
 
-def resolve_current_user(db: Session):
+def resolve_current_user(db: Session, *, actor_name: str):
     settings = resolve_runtime_settings(db)
-    return ensure_current_user(db, settings.current_user_name)
+    current_user_name = actor_name or settings.current_user_name
+    return ensure_current_user(db, current_user_name)

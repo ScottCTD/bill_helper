@@ -253,7 +253,7 @@ Tool execution is composed from `backend/services/agent/tool_runtime.py` (regist
 
 #### `list_entries` (read)
 
-**Description:** List/query entries by date, date range, `source`, name, from_entity, to_entity, tags, and kind. Use `source` for broad text search across entry name, `from_entity`, and `to_entity`, matching the Entries table search. When source/name/from/to filters are present, exact matches are ranked higher than substring matches. Each returned entry includes an `entry_id` alias (the first 8 characters of the full entry id) that can be reused with `propose_update_entry` and `propose_delete_entry`. This tool is read-only and never mutates data.
+**Description:** List/query entries by date, date range, `source`, name, from_entity, to_entity, tags, and kind. Use `source` for broad text search across entry name, `from_entity`, and `to_entity`, matching the Entries table search. When source/name/from/to filters are present, exact matches are ranked higher than substring matches. Results are principal-scoped from the runtime `ToolContext` the same way normal entry reads are owner-scoped. Each returned entry includes an `entry_id` alias (the first 8 characters of the full entry id) that can be reused with `propose_update_entry` and `propose_delete_entry`. This tool is read-only and never mutates data.
 
 **Arguments:**
 
@@ -875,14 +875,17 @@ Try again with the right type
 
 In `backend/services/agent/apply/`:
 
-- `create_entry`: create entry directly
-- `update_entry`: update uniquely-selected entry by `entry_id` (preferred) or selector
-- `delete_entry`: soft-delete uniquely-selected entry
-- `create_group`: create a new named typed group owned by the runtime current user
+- `create_entry`: create entry directly, owned by the approving reviewer principal
+- `update_entry`: update uniquely-selected entry by `entry_id` (preferred) or selector, scoped to the approving reviewer principal
+- `delete_entry`: soft-delete uniquely-selected entry scoped to the approving reviewer principal
+- `create_group`: create a new named typed group owned by the approving reviewer principal
 - `update_group`: rename an existing scoped group
 - `delete_group`: delete an existing scoped group if it has no direct members and no parent membership
 - `create_group_member`: resolve existing or approved pending refs and add one direct member to a group
 - `delete_group_member`: resolve direct membership by group + member target and remove it
+- `create_account`: create an account owned by the approving reviewer principal
+- `update_account`: update an existing account by normalized account name
+- `delete_account`: delete an existing account by normalized account name
 - `create_tag`: create/reuse normalized tag + assign type
 - `update_tag`: rename and/or update type
 - `delete_tag`: delete tag, clear taxonomy-backed type assignment, and remove entry junction rows by cascade

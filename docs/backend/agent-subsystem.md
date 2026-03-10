@@ -78,7 +78,7 @@
 - `add_user_memory` is an add-only tool for explicit remember-this requests; mutate/remove requests must be declined
 - `rename_thread` should run right after the first user message in a new thread, then only when the user explicitly asks or the topic materially changes
 - model-facing tool interfaces avoid requiring full domain IDs; entry mutations prefer `entry_id` aliases from `list_entries` with selector fallback
-- `list_entries(source=...)` mirrors the Entries table broad text search across entry name, from-entity, and to-entity
+- `list_entries(source=...)` mirrors the Entries table broad text search across entry name, from-entity, and to-entity, and it applies the same owner-scope rules as normal entry reads using the resolved `ToolContext` principal
 - existing-group mutations prefer `group_id` aliases from `list_groups`
 - the prompt has a dedicated `Grouping` section that combines fixed `BUNDLE` / `SPLIT` / `RECURRING` semantics, examples, and workflow guidance
 - after proposing a new entry, the prompt instructs the agent to check whether an existing recurring, split, or bundle group should absorb it and to propose the membership change when needed
@@ -156,6 +156,7 @@ Endpoints:
 - invalid reviewer overrides fail during payload normalization and leave the proposal unchanged instead of marking it `APPLY_FAILED`
 - group-member approvals that reference pending `create_group` / `create_entry` proposals are blocked until those dependencies are applied; rejected or failed dependencies leave the member proposal unapprovable until edited or removed
 - apply-time group-member resolution canonicalizes existing short `group_id` and `entry_id` aliases to full ids before scoped lookup and membership matching, so approval semantics match proposal-time alias handling
+- review apply uses the approving reviewer principal for principal-scoped entry lookup and for owner attribution on newly created entry/account/group resources; mutable runtime settings remain only as a non-request fallback
 - `update_pending_proposal` re-runs group conflict checks after normalization, so revised group create/update/delete/member proposals cannot be patched into duplicate or conflicting pending states
 - `backend/services/agent/apply/` owns the actual domain mutation after approval, including group create/rename/delete and group membership add/remove
 - `backend/services/agent/message_history.py` prepends compact review outcome lines before the next user feedback message and includes `review_override=...` when reviewer edits changed the applied payload

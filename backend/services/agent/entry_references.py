@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.models_finance import Entry
 from backend.services.agent.change_contracts.entries import EntrySelectorPayload
+from backend.services.access_scope import owner_user_condition
 from backend.validation.finance_names import normalize_tag_name
 
 ENTRY_PUBLIC_ID_LENGTH = 8
@@ -98,12 +99,27 @@ def entry_selector_to_json(selector: EntrySelectorPayload) -> EntrySelectorRecor
     }
 
 
-def find_entries_by_selector(db: Session, selector: EntrySelectorPayload) -> list[Entry]:
+def _entry_scope_condition(*, principal_user_id: str | None, is_admin: bool):
+    return owner_user_condition(
+        Entry.owner_user_id,
+        principal_user_id=principal_user_id,
+        is_admin=is_admin,
+    )
+
+
+def find_entries_by_selector(
+    db: Session,
+    selector: EntrySelectorPayload,
+    *,
+    principal_user_id: str | None = None,
+    is_admin: bool = True,
+) -> list[Entry]:
     return list(
         db.scalars(
             select(Entry)
             .where(
                 Entry.is_deleted.is_(False),
+                _entry_scope_condition(principal_user_id=principal_user_id, is_admin=is_admin),
                 Entry.occurred_at == selector.date,
                 Entry.amount_minor == selector.amount_minor,
                 func.lower(func.coalesce(Entry.name, "")) == selector.name.lower(),
@@ -116,7 +132,13 @@ def find_entries_by_selector(db: Session, selector: EntrySelectorPayload) -> lis
     )
 
 
-def find_entries_by_exact_id(db: Session, entry_id: str) -> list[Entry]:
+def find_entries_by_exact_id(
+    db: Session,
+    entry_id: str,
+    *,
+    principal_user_id: str | None = None,
+    is_admin: bool = True,
+) -> list[Entry]:
     normalized = entry_id.strip().lower()
     if not normalized:
         return []
@@ -125,6 +147,7 @@ def find_entries_by_exact_id(db: Session, entry_id: str) -> list[Entry]:
             select(Entry)
             .where(
                 Entry.is_deleted.is_(False),
+                _entry_scope_condition(principal_user_id=principal_user_id, is_admin=is_admin),
                 func.lower(Entry.id) == normalized,
             )
             .options(selectinload(Entry.tags))
@@ -133,7 +156,13 @@ def find_entries_by_exact_id(db: Session, entry_id: str) -> list[Entry]:
     )
 
 
-def find_entries_by_public_id_prefix(db: Session, entry_id_prefix: str) -> list[Entry]:
+def find_entries_by_public_id_prefix(
+    db: Session,
+    entry_id_prefix: str,
+    *,
+    principal_user_id: str | None = None,
+    is_admin: bool = True,
+) -> list[Entry]:
     normalized = entry_id_prefix.strip().lower()
     if not normalized:
         return []
@@ -142,6 +171,7 @@ def find_entries_by_public_id_prefix(db: Session, entry_id_prefix: str) -> list[
             select(Entry)
             .where(
                 Entry.is_deleted.is_(False),
+                _entry_scope_condition(principal_user_id=principal_user_id, is_admin=is_admin),
                 func.lower(Entry.id).like(f"{normalized}%"),
             )
             .options(selectinload(Entry.tags))

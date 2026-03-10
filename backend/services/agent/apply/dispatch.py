@@ -56,8 +56,9 @@ def apply_change_item_payload(
     *,
     change_type: AgentChangeType,
     payload: ChangePayloadModel,
+    actor_name: str,
 ) -> AppliedResource:
     handler = APPLY_CHANGE_HANDLERS.get(change_type)
     if handler is None:  # pragma: no cover - enum guard
         raise ValueError(f"Unsupported change type: {change_type}")
-    return handler(db, payload)
+    return handler(db, payload, actor_name)

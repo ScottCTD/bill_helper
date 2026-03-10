@@ -33,8 +33,8 @@ from backend.services.groups import (
 )
 
 
-def apply_create_group(db: Session, payload: CreateGroupPayload) -> AppliedResource:
-    current_user = resolve_current_user(db)
+def apply_create_group(db: Session, payload: CreateGroupPayload, actor_name: str) -> AppliedResource:
+    current_user = resolve_current_user(db, actor_name=actor_name)
     group = create_group(
         db,
         command=GroupCreateCommand(name=payload.name, group_type=payload.group_type),
@@ -44,8 +44,8 @@ def apply_create_group(db: Session, payload: CreateGroupPayload) -> AppliedResou
     return AppliedResource(resource_type="group", resource_id=group.id)
 
 
-def apply_update_group(db: Session, payload: UpdateGroupPayload) -> AppliedResource:
-    current_user = resolve_current_user(db)
+def apply_update_group(db: Session, payload: UpdateGroupPayload, actor_name: str) -> AppliedResource:
+    current_user = resolve_current_user(db, actor_name=actor_name)
     group = find_scoped_group_by_id(db, group_id=payload.group_id, current_user_id=current_user.id)
     updated = update_group(
         db,
@@ -56,8 +56,8 @@ def apply_update_group(db: Session, payload: UpdateGroupPayload) -> AppliedResou
     return AppliedResource(resource_type="group", resource_id=updated.id)
 
 
-def apply_delete_group(db: Session, payload: DeleteGroupPayload) -> AppliedResource:
-    current_user = resolve_current_user(db)
+def apply_delete_group(db: Session, payload: DeleteGroupPayload, actor_name: str) -> AppliedResource:
+    current_user = resolve_current_user(db, actor_name=actor_name)
     group = find_scoped_group_by_id(db, group_id=payload.group_id, current_user_id=current_user.id)
     resource_id = group.id
     delete_group(db, group=group)
@@ -65,8 +65,8 @@ def apply_delete_group(db: Session, payload: DeleteGroupPayload) -> AppliedResou
     return AppliedResource(resource_type="group", resource_id=resource_id)
 
 
-def apply_create_group_member(db: Session, payload: CreateGroupMemberPayload) -> AppliedResource:
-    current_user = resolve_current_user(db)
+def apply_create_group_member(db: Session, payload: CreateGroupMemberPayload, actor_name: str) -> AppliedResource:
+    current_user = resolve_current_user(db, actor_name=actor_name)
     group_id = resolve_applied_group_id(db, payload.group_ref, current_user_id=current_user.id)
     group = find_scoped_group_by_id(db, group_id=group_id, current_user_id=current_user.id)
 
@@ -74,9 +74,10 @@ def apply_create_group_member(db: Session, payload: CreateGroupMemberPayload) ->
         db,
         target=payload.target,
         current_user_id=current_user.id,
+        actor_name=actor_name,
     )
     if target_entry_id is not None:
-        entry = find_unique_entry_by_id(db, target_entry_id)
+        entry = find_unique_entry_by_id(db, target_entry_id, actor_name=actor_name)
         command = GroupMemberCreateCommand(
             target=EntryGroupMemberTarget(entry_id=entry.id),
             member_role=payload.member_role,
@@ -97,8 +98,8 @@ def apply_create_group_member(db: Session, payload: CreateGroupMemberPayload) ->
     return AppliedResource(resource_type="group_membership", resource_id=membership.id)
 
 
-def apply_delete_group_member(db: Session, payload: DeleteGroupMemberPayload) -> AppliedResource:
-    current_user = resolve_current_user(db)
+def apply_delete_group_member(db: Session, payload: DeleteGroupMemberPayload, actor_name: str) -> AppliedResource:
+    current_user = resolve_current_user(db, actor_name=actor_name)
     group = find_scoped_group_by_id(
         db,
         group_id=payload.group_ref.group_id or "",
@@ -109,6 +110,7 @@ def apply_delete_group_member(db: Session, payload: DeleteGroupMemberPayload) ->
         db,
         target=payload.target,
         current_user_id=current_user.id,
+        actor_name=actor_name,
     )
     membership = next(
         (

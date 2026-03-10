@@ -70,7 +70,8 @@ This doc is the fast path for understanding how entries are created, edited, gro
    - `backend/services/agent/apply/`
 5. Apply handler resolves target by selector for update/delete:
    - `date + amount_minor + from_entity + to_entity + name`
-6. Entry mutation is applied directly to `entries` (no entry status field); agent-created entries remain ungrouped until a user assigns them to a group.
+   - scoped to the approving reviewer principal the same way normal entry routes scope visibility
+6. Entry mutation is applied directly to `entries` (no entry status field); newly created agent entries are owned by the approving reviewer principal, and agent-created entries remain ungrouped until a user assigns them to a group.
 
 ## Tests
 

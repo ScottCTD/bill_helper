@@ -5,9 +5,11 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
+from backend.auth.dev_session import is_admin_principal_name
 from backend.models_finance import Entry
+from backend.services.access_scope import owner_user_condition
 from backend.services.agent.entry_references import entry_ambiguity_details, entry_to_public_record
-from backend.services.agent.read_tools.common import format_entry_record, string_match_rank
+from backend.services.agent.read_tools.common import format_entry_record, string_match_rank, tool_principal_scope
 from backend.services.agent.tool_args.read import ListEntriesArgs
 from backend.services.agent.tool_results import format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
@@ -15,7 +17,15 @@ from backend.validation.finance_names import normalize_tag_name
 
 
 def list_entries(context: ToolContext, args: ListEntriesArgs) -> ToolExecutionResult:
-    conditions = [Entry.is_deleted.is_(False)]
+    principal_name, principal_user_id = tool_principal_scope(context)
+    conditions = [
+        Entry.is_deleted.is_(False),
+        owner_user_condition(
+            Entry.owner_user_id,
+            principal_user_id=principal_user_id,
+            is_admin=is_admin_principal_name(principal_name),
+        ),
+    ]
     if args.date is not None:
         conditions.append(Entry.occurred_at == args.date)
     if args.start_date is not None:

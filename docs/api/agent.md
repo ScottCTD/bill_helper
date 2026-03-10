@@ -232,6 +232,7 @@ Notes:
 - the endpoint shape is unchanged; reviewer edits are sent through `payload_override`
 - invalid `payload_override` payloads return `422` and leave the item unchanged
 - group-member proposals that reference pending `create_group` or `create_entry` proposals return `422` until those dependencies are approved and applied
+- principal-scoped entry resolution during apply uses the approving reviewer principal, and newly created entry/account/group resources are attributed to that reviewer rather than mutable runtime settings identity
 - when reviewer edits are present, later agent turns receive a compact `review_override=...` summary in the prepended review-results context
 
 ### `POST /agent/change-items/{item_id}/reject`

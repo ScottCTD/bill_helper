@@ -94,7 +94,7 @@ Contract notes:
 - `model_client.py`: LiteLLM adapter and normalized model errors
 - `model_client.py`: tenacity retries for model completion calls
 - `apply/`: change-type apply package for review-time resource application
-- `review.py`: approval/rejection transitions and audit writes
+- `reviews/`: approval/rejection transitions, dependency checks, override normalization, and audit writes
 - `benchmark_interface.py`: benchmark-facing case execution contract returning normalized predictions/trace payloads
 
 ## Frontend State Strategy
@@ -141,8 +141,9 @@ Cross-page consistency:
 
 ## Security / Scope (Current)
 
-- single-user local mode; no auth RBAC yet
-- agent actor label uses configured current-user name
+- explicit development principal sessions gate protected routes; agent endpoints require an admin principal
+- owner-scoped finance and agent-entry reads reuse the same principal visibility rules
+- review apply uses the approving reviewer principal for scoped entry resolution and owner attribution, not mutable runtime settings identity
 - only image and PDF attachments are accepted in agent messages
 - no arbitrary code execution tools in agent runtime
 
