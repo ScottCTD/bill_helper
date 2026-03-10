@@ -60,6 +60,7 @@ from backend.services.agent.session_tools.progress import send_intermediate_upda
 from backend.services.agent.session_tools.threads import rename_thread
 from backend.services.agent.tool_results import error_result
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
+from backend.services.crud_policy import PolicyViolation
 from backend.services.agent.proposals.catalog import (
     propose_create_account,
     propose_create_entity,
@@ -446,7 +447,7 @@ def execute_tool(name: str, arguments: dict[str, Any], context: ToolContext) -> 
             max=settings.agent_retry_max_wait_seconds,
             exp_base=settings.agent_retry_backoff_multiplier,
         ),
-        retry=retry_if_exception(lambda exc: not isinstance(exc, ValueError)),
+        retry=retry_if_exception(lambda exc: not isinstance(exc, (PolicyViolation, ValueError))),
         reraise=True,
     )
 
@@ -458,6 +459,8 @@ def execute_tool(name: str, arguments: dict[str, Any], context: ToolContext) -> 
         if result is None:  # pragma: no cover - defensive guard
             return error_result("tool execution failed", details="no result returned")
         return result
+    except PolicyViolation as exc:
+        return error_result("tool execution failed", details=exc.detail)
     except ValueError as exc:
         return error_result("tool execution failed", details=str(exc))
     except Exception as exc:  # pragma: no cover - guarded for runtime resilience

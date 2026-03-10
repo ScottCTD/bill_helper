@@ -15,6 +15,7 @@ from backend.contracts_groups import (
 from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
 from backend.models_finance import Entry, EntryGroup, EntryGroupMember
 from backend.schemas_finance import GroupEdge, GroupGraphRead, GroupNode, GroupSummaryRead
+from backend.services.crud_policy import PolicyViolation
 
 
 def entry_group_options():
@@ -61,7 +62,7 @@ def create_group(
     db.flush()
     loaded = load_group_tree(db, group.id)
     if loaded is None:  # pragma: no cover - post-flush invariant
-        raise ValueError("Failed to load created group.")
+        raise RuntimeError("Failed to load created group.")
     return loaded
 
 
@@ -77,15 +78,15 @@ def update_group(
     db.flush()
     loaded = load_group_tree(db, group.id)
     if loaded is None:  # pragma: no cover - post-flush invariant
-        raise ValueError("Failed to load renamed group.")
+        raise RuntimeError("Failed to load renamed group.")
     return loaded
 
 
 def delete_group(db: Session, *, group: EntryGroup) -> None:
     if group.parent_membership is not None:
-        raise ValueError("Remove this group from its parent before deleting it.")
+        raise PolicyViolation.bad_request("Remove this group from its parent before deleting it.")
     if group.memberships:
-        raise ValueError("Remove all direct members before deleting this group.")
+        raise PolicyViolation.bad_request("Remove all direct members before deleting this group.")
     db.delete(group)
     db.flush()
 
@@ -118,7 +119,7 @@ def add_group_member(
 
     loaded_group = load_group_tree(db, group.id)
     if loaded_group is None:  # pragma: no cover - post-flush invariant
-        raise ValueError("Failed to load group after membership update.")
+        raise RuntimeError("Failed to load group after membership update.")
     validate_group_integrity(loaded_group)
 
     if loaded_group.parent_membership is not None:
@@ -128,7 +129,7 @@ def add_group_member(
 
     loaded_member = db.get(EntryGroupMember, member.id)
     if loaded_member is None:  # pragma: no cover - post-flush invariant
-        raise ValueError("Failed to load created membership.")
+        raise RuntimeError("Failed to load created membership.")
     return loaded_member
 
 
@@ -145,7 +146,7 @@ def remove_group_member(
         )
     )
     if membership is None:
-        raise ValueError("Group membership not found.")
+        raise PolicyViolation.not_found("Group membership not found.")
     db.delete(membership)
     db.flush()
 
@@ -158,7 +159,7 @@ def set_entry_direct_group(
     member_role: GroupMemberRole | None = None,
 ) -> None:
     if group is None and member_role is not None:
-        raise ValueError("direct_group_member_role requires a direct group.")
+        raise PolicyViolation.bad_request("direct_group_member_role requires a direct group.")
 
     existing_membership = entry.group_membership
     if existing_membership is not None:
@@ -229,28 +230,28 @@ def validate_group_integrity(group: EntryGroup) -> None:
     direct_members = _sorted_memberships(group)
 
     if group.parent_membership is not None and any(member.child_group_id is not None for member in direct_members):
-        raise ValueError("Nested groups cannot contain child groups.")
+        raise PolicyViolation.bad_request("Nested groups cannot contain child groups.")
 
     for member in direct_members:
         if member.child_group is None:
             continue
         nested_members = _sorted_memberships(member.child_group)
         if any(nested_member.child_group_id is not None for nested_member in nested_members):
-            raise ValueError("Nesting depth cannot exceed one level.")
+            raise PolicyViolation.bad_request("Nesting depth cannot exceed one level.")
 
     if group.group_type == GroupType.BUNDLE:
         if any(member.member_role is not None for member in direct_members):
-            raise ValueError("Bundle groups do not accept member roles.")
+            raise PolicyViolation.bad_request("Bundle groups do not accept member roles.")
         return
 
     if group.group_type == GroupType.SPLIT:
         parents = [member for member in direct_members if member.member_role == GroupMemberRole.PARENT]
         if len(parents) > 1:
-            raise ValueError("Split groups can have at most one parent member.")
+            raise PolicyViolation.bad_request("Split groups can have at most one parent member.")
 
         for member in direct_members:
             if member.member_role is None:
-                raise ValueError("Split groups require a role for every direct member.")
+                raise PolicyViolation.bad_request("Split groups require a role for every direct member.")
             expected_kind = (
                 EntryKind.EXPENSE
                 if member.member_role == GroupMemberRole.PARENT
@@ -258,17 +259,17 @@ def validate_group_integrity(group: EntryGroup) -> None:
             )
             for entry in _descendant_entries_for_membership(member):
                 if entry.kind != expected_kind:
-                    raise ValueError(
+                    raise PolicyViolation.bad_request(
                         "Split group descendants must be EXPENSE under the parent and INCOME under children."
                     )
         return
 
     if any(member.member_role is not None for member in direct_members):
-        raise ValueError("Recurring groups do not accept member roles.")
+        raise PolicyViolation.bad_request("Recurring groups do not accept member roles.")
 
     descendant_kinds = {entry.kind for entry in _descendant_entries_for_group(group)}
     if len(descendant_kinds) > 1:
-        raise ValueError("Recurring groups require all descendant entries to share the same kind.")
+        raise PolicyViolation.bad_request("Recurring groups require all descendant entries to share the same kind.")
 
 
 def _validate_member_target(
@@ -281,34 +282,34 @@ def _validate_member_target(
 ) -> None:
     if group.group_type == GroupType.SPLIT:
         if member_role is None:
-            raise ValueError("Split groups require a member role.")
+            raise PolicyViolation.bad_request("Split groups require a member role.")
     elif member_role is not None:
-        raise ValueError("Only split groups accept member roles.")
+        raise PolicyViolation.bad_request("Only split groups accept member roles.")
 
     if entry is not None:
         if entry.is_deleted:
-            raise ValueError("Cannot add a deleted entry to a group.")
+            raise PolicyViolation.bad_request("Cannot add a deleted entry to a group.")
         existing_entry_membership = db.scalar(
             select(EntryGroupMember).where(EntryGroupMember.entry_id == entry.id)
         )
         if existing_entry_membership is not None:
-            raise ValueError("This entry already belongs to a group.")
+            raise PolicyViolation.bad_request("This entry already belongs to a group.")
         return
 
     assert child_group is not None  # narrowed by caller
     if child_group.id == group.id:
-        raise ValueError("A group cannot contain itself.")
+        raise PolicyViolation.bad_request("A group cannot contain itself.")
     if group.parent_membership is not None:
-        raise ValueError("Nested groups cannot contain child groups.")
+        raise PolicyViolation.bad_request("Nested groups cannot contain child groups.")
 
     existing_child_membership = db.scalar(
         select(EntryGroupMember).where(EntryGroupMember.child_group_id == child_group.id)
     )
     if existing_child_membership is not None:
-        raise ValueError("This child group already belongs to a parent group.")
+        raise PolicyViolation.bad_request("This child group already belongs to a parent group.")
 
     if any(member.child_group_id is not None for member in _sorted_memberships(child_group)):
-        raise ValueError("Child groups cannot themselves contain child groups.")
+        raise PolicyViolation.bad_request("Child groups cannot themselves contain child groups.")
 
 
 def _resolve_member_target(
@@ -319,12 +320,12 @@ def _resolve_member_target(
     if isinstance(target, EntryGroupMemberTarget):
         entry = db.get(Entry, target.entry_id)
         if entry is None:
-            raise ValueError("Entry not found.")
+            raise PolicyViolation.not_found("Entry not found.")
         return entry, None
 
     child_group = db.get(EntryGroup, target.group_id)
     if child_group is None:
-        raise ValueError("Child group not found.")
+        raise PolicyViolation.not_found("Child group not found.")
     return None, child_group
 
 
@@ -393,7 +394,7 @@ def _membership_to_node(membership: EntryGroupMember) -> GroupNode:
 
     child_group = membership.child_group
     if child_group is None:  # pragma: no cover - schema invariant
-        raise ValueError("Group membership is missing its target.")
+        raise RuntimeError("Group membership is missing its target.")
 
     descendant_entries = _descendant_entries_for_group(child_group)
     return GroupNode(

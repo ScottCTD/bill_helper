@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -23,6 +23,7 @@ from backend.schemas_finance import (
     GroupSummaryRead,
     GroupUpdate,
 )
+from backend.services.crud_policy import PolicyViolation
 from backend.services.access_scope import (
     get_entry_for_principal_or_404,
     get_group_for_principal_or_404,
@@ -63,15 +64,11 @@ def create_group(
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> GroupSummaryRead:
-    try:
-        group = create_group_service(
-            db,
-            command=GroupCreateCommand.model_validate(payload.model_dump()),
-            owner_user_id=principal.user_id,
-        )
-    except ValueError as exc:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    group = create_group_service(
+        db,
+        command=GroupCreateCommand.model_validate(payload.model_dump()),
+        owner_user_id=principal.user_id,
+    )
 
     db.commit()
     return build_group_summary(group)
@@ -120,15 +117,11 @@ def update_group(
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> GroupSummaryRead:
     group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
-    try:
-        updated_group = update_group_service(
-            db,
-            group=group,
-            patch=GroupPatch.model_validate(payload.model_dump(exclude_unset=True)),
-        )
-    except ValueError as exc:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    updated_group = update_group_service(
+        db,
+        group=group,
+        patch=GroupPatch.model_validate(payload.model_dump(exclude_unset=True)),
+    )
 
     db.commit()
     return build_group_summary(updated_group)
@@ -141,11 +134,7 @@ def delete_group(
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> None:
     group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
-    try:
-        delete_group_service(db, group=group)
-    except ValueError as exc:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    delete_group_service(db, group=group)
     db.commit()
 
 
@@ -165,17 +154,14 @@ def add_group_member(
             group=group,
             command=command,
         )
-    except ValueError as exc:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group membership already exists.") from exc
+        raise PolicyViolation.conflict("Group membership already exists.") from exc
 
     db.commit()
     updated_group = load_group_tree(db, group_id)
     if updated_group is None:  # pragma: no cover - post-commit invariant
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        raise RuntimeError("Failed to load group after membership commit.")
     return build_group_graph(updated_group)
 
 
@@ -187,11 +173,7 @@ def delete_group_member(
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> None:
     group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
-    try:
-        remove_group_member_service(db, group=group, membership_id=membership_id)
-    except ValueError as exc:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    remove_group_member_service(db, group=group, membership_id=membership_id)
     db.commit()
 
 

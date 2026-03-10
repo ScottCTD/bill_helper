@@ -14,6 +14,9 @@ class PolicyViolation(Exception):
     detail: str
     status_code: int
 
+    def __str__(self) -> str:
+        return self.detail
+
     @classmethod
     def bad_request(cls, detail: str) -> PolicyViolation:
         return cls(detail=detail, status_code=status.HTTP_400_BAD_REQUEST)

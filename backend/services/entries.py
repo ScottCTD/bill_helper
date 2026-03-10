@@ -17,7 +17,7 @@ from backend.services.access_scope import (
     load_group_for_principal,
     load_user_for_principal,
 )
-from backend.services.crud_policy import PolicyViolation, map_value_error
+from backend.services.crud_policy import PolicyViolation
 from backend.services.entities import ensure_entity_by_name
 from backend.services.groups import entry_group_options, group_tree_options, set_entry_direct_group
 from backend.services.tags import generate_random_tag_color
@@ -303,15 +303,12 @@ def create_entry_from_command(
     db.add(entry)
     db.flush()
     set_entry_tags(db, entry, command.tags)
-    try:
-        set_entry_direct_group(
-            db,
-            entry=entry,
-            group=target_group,
-            member_role=command.direct_group_member_role,
-        )
-    except ValueError as exc:
-        raise map_value_error(exc) from exc
+    set_entry_direct_group(
+        db,
+        entry=entry,
+        group=target_group,
+        member_role=command.direct_group_member_role,
+    )
 
     db.flush()
     return entry
@@ -388,15 +385,12 @@ def update_entry_from_command(
 
         target_group = _load_target_group(db, group_id=target_group_id, principal=principal)
 
-        try:
-            set_entry_direct_group(
-                db,
-                entry=entry,
-                group=target_group,
-                member_role=target_role,
-            )
-        except ValueError as exc:
-            raise map_value_error(exc) from exc
+        set_entry_direct_group(
+            db,
+            entry=entry,
+            group=target_group,
+            member_role=target_role,
+        )
 
     db.add(entry)
     db.flush()
