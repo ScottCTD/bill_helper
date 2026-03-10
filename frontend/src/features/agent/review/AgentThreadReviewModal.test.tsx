@@ -292,10 +292,12 @@ describe("AgentThreadReviewModal", () => {
             group_ref: {
               create_group_proposal_id: "proposal-group-create"
             },
-            entry_ref: {
-              entry_id: "entry-1234"
+            target: {
+              target_type: "entry",
+              entry_ref: {
+                entry_id: "entry-1234"
+              }
             },
-            child_group_ref: null,
             member_role: "CHILD",
             group_preview: {
               name: "Monthly Bills",
@@ -377,10 +379,12 @@ describe("AgentThreadReviewModal", () => {
             group_ref: {
               create_group_proposal_id: "proposal-group-create"
             },
-            entry_ref: {
-              entry_id: "entry-1234"
+            target: {
+              target_type: "entry",
+              entry_ref: {
+                entry_id: "entry-1234"
+              }
             },
-            child_group_ref: null,
             member_role: null,
             group_preview: {
               name: "Payroll Deposit",

@@ -6,20 +6,29 @@ import type { GroupMembershipReviewDraft, JsonRecord, ReviewOverrideState } from
 interface GroupMembershipRecord {
   action: "add";
   group_ref: JsonRecord;
-  entry_ref: JsonRecord | null;
-  child_group_ref: JsonRecord | null;
+  target: JsonRecord;
   member_role: GroupMemberRole | null;
 }
 
+function normalizeGroupMembershipTarget(target: JsonRecord): JsonRecord {
+  const normalizedTarget = asRecord(target);
+  if (normalizedTarget.target_type === "child_group") {
+    return {
+      target_type: "child_group",
+      group_ref: asRecord(normalizedTarget.group_ref)
+    };
+  }
+  return {
+    target_type: "entry",
+    entry_ref: asRecord(normalizedTarget.entry_ref)
+  };
+}
+
 function normalizeGroupMembershipRecord(record: GroupMembershipRecord): GroupMembershipRecord {
-  const normalizedGroupRef = asRecord(record.group_ref);
-  const normalizedEntryRef = record.entry_ref ? asRecord(record.entry_ref) : null;
-  const normalizedChildGroupRef = record.child_group_ref ? asRecord(record.child_group_ref) : null;
   return {
     action: "add",
-    group_ref: normalizedGroupRef,
-    entry_ref: normalizedEntryRef,
-    child_group_ref: normalizedChildGroupRef,
+    group_ref: asRecord(record.group_ref),
+    target: normalizeGroupMembershipTarget(record.target),
     member_role: record.member_role ?? null
   };
 }
@@ -28,8 +37,7 @@ function buildCreateGroupMembershipRecord(payload: JsonRecord): GroupMembershipR
   return normalizeGroupMembershipRecord({
     action: "add",
     group_ref: asRecord(payload.group_ref),
-    entry_ref: payload.entry_ref ? asRecord(payload.entry_ref) : null,
-    child_group_ref: payload.child_group_ref ? asRecord(payload.child_group_ref) : null,
+    target: asRecord(payload.target),
     member_role: (payload.member_role === "PARENT" || payload.member_role === "CHILD" ? payload.member_role : null) as
       | GroupMemberRole
       | null
@@ -38,10 +46,14 @@ function buildCreateGroupMembershipRecord(payload: JsonRecord): GroupMembershipR
 
 export function buildGroupMembershipReviewDraft(item: AgentChangeItem): GroupMembershipReviewDraft {
   const record = buildCreateGroupMembershipRecord(item.payload_json);
+  const target = normalizeGroupMembershipTarget(record.target);
+  const isEntryTarget = target.target_type === "entry";
+  const entryRef = isEntryTarget ? asRecord(target.entry_ref) : null;
+  const childGroupRef = isEntryTarget ? null : asRecord(target.group_ref);
   return {
     groupId: typeof record.group_ref.group_id === "string" ? record.group_ref.group_id : "",
-    entryId: record.entry_ref && typeof record.entry_ref.entry_id === "string" ? record.entry_ref.entry_id : "",
-    childGroupId: record.child_group_ref && typeof record.child_group_ref.group_id === "string" ? record.child_group_ref.group_id : "",
+    entryId: entryRef && typeof entryRef.entry_id === "string" ? entryRef.entry_id : "",
+    childGroupId: childGroupRef && typeof childGroupRef.group_id === "string" ? childGroupRef.group_id : "",
     memberRole: record.member_role ?? ""
   };
 }
@@ -53,8 +65,8 @@ export function buildGroupMembershipOverrideState(
   const payload = item.payload_json;
   const baseRecord = buildCreateGroupMembershipRecord(payload);
   const groupRef = { ...baseRecord.group_ref };
-  const entryRef = baseRecord.entry_ref ? { ...baseRecord.entry_ref } : null;
-  const childGroupRef = baseRecord.child_group_ref ? { ...baseRecord.child_group_ref } : null;
+  const target = normalizeGroupMembershipTarget(baseRecord.target);
+  const targetRecord = { ...target };
 
   if (groupRef.create_group_proposal_id == null) {
     const nextGroupId = normalizeReferenceId(draft.groupId);
@@ -64,7 +76,8 @@ export function buildGroupMembershipOverrideState(
     groupRef.group_id = nextGroupId;
   }
 
-  if (entryRef) {
+  if (target.target_type === "entry") {
+    const entryRef = { ...asRecord(target.entry_ref) };
     if (entryRef.create_entry_proposal_id == null) {
       const nextEntryId = normalizeReferenceId(draft.entryId);
       if (!nextEntryId) {
@@ -72,7 +85,9 @@ export function buildGroupMembershipOverrideState(
       }
       entryRef.entry_id = nextEntryId;
     }
-  } else if (childGroupRef) {
+    targetRecord.entry_ref = entryRef;
+  } else {
+    const childGroupRef = { ...asRecord(target.group_ref) };
     if (childGroupRef.create_group_proposal_id == null) {
       const nextChildGroupId = normalizeReferenceId(draft.childGroupId);
       if (!nextChildGroupId) {
@@ -80,6 +95,7 @@ export function buildGroupMembershipOverrideState(
       }
       childGroupRef.group_id = nextChildGroupId;
     }
+    targetRecord.group_ref = childGroupRef;
   }
 
   const groupType = asString(asRecord(payload.group_preview).group_type);
@@ -93,8 +109,7 @@ export function buildGroupMembershipOverrideState(
   const normalizedRecord = normalizeGroupMembershipRecord({
     action: "add",
     group_ref: groupRef,
-    entry_ref: entryRef,
-    child_group_ref: childGroupRef,
+    target: targetRecord,
     member_role: normalizedRole === "PARENT" || normalizedRole === "CHILD" ? normalizedRole : null
   });
   const hasChanges = !recordsEqual(baseRecord, normalizedRecord);
@@ -104,8 +119,7 @@ export function buildGroupMembershipOverrideState(
       ? {
           action: "add",
           group_ref: normalizedRecord.group_ref,
-          entry_ref: normalizedRecord.entry_ref,
-          child_group_ref: normalizedRecord.child_group_ref,
+          target: normalizedRecord.target,
           member_role: normalizedRecord.member_role
         }
       : undefined,
