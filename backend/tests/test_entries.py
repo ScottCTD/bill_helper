@@ -931,3 +931,69 @@ def test_currencies_are_scoped_by_principal(client):
     assert currencies["ZZZ"]["is_placeholder"] is True
     assert currencies["USD"]["entry_count"] == 0
     assert currencies["USD"]["is_placeholder"] is False
+
+
+def test_catalog_reads_are_scoped_by_principal(client):
+    vendor = create_entity(client, "Shared Vendor")
+
+    admin_account_id = create_account(client, name="Admin Checking")
+    admin_entry_response = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": admin_account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-14",
+            "name": "Admin vendor expense",
+            "amount_minor": 1000,
+            "currency_code": "USD",
+            "from_entity_id": vendor["id"],
+            "tags": ["food"],
+        },
+    )
+    admin_entry_response.raise_for_status()
+
+    alice_headers = {"X-Bill-Helper-Principal": "alice"}
+    alice_account_id = create_account(client, name="Alice Checking", headers=alice_headers)
+    alice_entry_response = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": alice_account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-15",
+            "name": "Alice vendor expense",
+            "amount_minor": 1500,
+            "currency_code": "USD",
+            "from_entity_id": vendor["id"],
+            "tags": ["food"],
+        },
+        headers=alice_headers,
+    )
+    alice_entry_response.raise_for_status()
+
+    admin_entities_response = client.get("/api/v1/entities")
+    admin_entities_response.raise_for_status()
+    admin_entities = admin_entities_response.json()
+    admin_vendor = next(entity for entity in admin_entities if entity["id"] == vendor["id"])
+    assert admin_vendor["from_count"] == 2
+    assert admin_vendor["entry_count"] == 2
+    assert any(entity["name"] == "Admin Checking" for entity in admin_entities)
+    assert any(entity["name"] == "Alice Checking" for entity in admin_entities)
+
+    alice_entities_response = client.get("/api/v1/entities", headers=alice_headers)
+    alice_entities_response.raise_for_status()
+    alice_entities = alice_entities_response.json()
+    alice_vendor = next(entity for entity in alice_entities if entity["id"] == vendor["id"])
+    assert alice_vendor["from_count"] == 1
+    assert alice_vendor["entry_count"] == 1
+    assert any(entity["name"] == "Alice Checking" for entity in alice_entities)
+    assert all(entity["name"] != "Admin Checking" for entity in alice_entities)
+
+    admin_tags_response = client.get("/api/v1/tags")
+    admin_tags_response.raise_for_status()
+    admin_food = next(tag for tag in admin_tags_response.json() if tag["name"] == "food")
+    assert admin_food["entry_count"] == 2
+
+    alice_tags_response = client.get("/api/v1/tags", headers=alice_headers)
+    alice_tags_response.raise_for_status()
+    alice_food = next(tag for tag in alice_tags_response.json() if tag["name"] == "food")
+    assert alice_food["entry_count"] == 1

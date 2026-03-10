@@ -8,22 +8,22 @@ from backend.models_finance import Account, Entry, EntryGroup, User
 from backend.services.crud_policy import PolicyViolation
 
 
-def account_owner_filter(principal: RequestPrincipal):
+def owner_user_filter(owner_user_id_column, principal: RequestPrincipal):
     if is_admin_principal(principal):
         return true()
-    return or_(Account.owner_user_id == principal.user_id, Account.owner_user_id.is_(None))
+    return or_(owner_user_id_column == principal.user_id, owner_user_id_column.is_(None))
+
+
+def account_owner_filter(principal: RequestPrincipal):
+    return owner_user_filter(Account.owner_user_id, principal)
 
 
 def entry_owner_filter(principal: RequestPrincipal):
-    if is_admin_principal(principal):
-        return true()
-    return or_(Entry.owner_user_id == principal.user_id, Entry.owner_user_id.is_(None))
+    return owner_user_filter(Entry.owner_user_id, principal)
 
 
 def group_owner_filter(principal: RequestPrincipal):
-    if is_admin_principal(principal):
-        return true()
-    return or_(EntryGroup.owner_user_id == principal.user_id, EntryGroup.owner_user_id.is_(None))
+    return owner_user_filter(EntryGroup.owner_user_id, principal)
 
 
 def get_account_for_principal_or_404(

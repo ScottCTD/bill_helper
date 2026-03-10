@@ -41,7 +41,10 @@ List entities with usage counters. Response: `EntityRead[]`
 Behavior:
 
 - each row includes `is_account`
-- account-backed entities are readable but must be managed through `/accounts`
+- admin principals see every entity plus global usage counters
+- non-admin principals still see shared non-account entities, but account-backed entities are limited to the caller's own visible accounts
+- non-admin usage counters (`from_count`, `to_count`, `account_count`, `entry_count`) follow the same owner scope as `/entries` and `/accounts`
+- account-backed entities must be managed through `/accounts`
 
 ### `POST /entities`
 
@@ -92,6 +95,11 @@ Behavior:
 ### `GET /tags`
 
 List tags with non-deleted entry counts. Response: `TagRead[]`
+
+Behavior:
+
+- admin principals see global `entry_count`
+- non-admin `entry_count` reflects only the caller's visible non-deleted entries
 
 ### `POST /tags`
 

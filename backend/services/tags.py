@@ -6,7 +6,9 @@ import random
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from backend.auth.contracts import RequestPrincipal
 from backend.models_finance import Entry, EntryTag, Tag
+from backend.services.access_scope import entry_owner_filter
 from backend.services.crud_policy import PolicyViolation, assert_unique_name, normalize_required_name
 from backend.services.finance_contracts import TagCreateCommand, TagPatch
 from backend.services.taxonomy_constants import (
@@ -126,19 +128,46 @@ def count_entries_for_tag(db: Session, *, tag_id: int) -> int:
     )
 
 
+def count_entries_for_tag_principal(
+    db: Session,
+    *,
+    tag_id: int,
+    principal: RequestPrincipal,
+) -> int:
+    return int(
+        db.scalar(
+            select(func.count(EntryTag.entry_id))
+            .select_from(EntryTag)
+            .join(Entry, Entry.id == EntryTag.entry_id)
+            .where(
+                EntryTag.tag_id == tag_id,
+                Entry.is_deleted.is_(False),
+                entry_owner_filter(principal),
+            )
+        )
+        or 0
+    )
+
+
 def build_tag_read(
     db: Session,
     *,
     tag: Tag,
+    principal: RequestPrincipal,
     entry_count: int | None = None,
+    type_name: str | None = None,
 ) -> TagRead:
-    resolved_entry_count = count_entries_for_tag(db, tag_id=tag.id) if entry_count is None else entry_count
+    resolved_entry_count = (
+        count_entries_for_tag_principal(db, tag_id=tag.id, principal=principal) if entry_count is None else entry_count
+    )
     return TagRead(
         id=tag.id,
         name=tag.name,
         color=tag.color,
         description=tag.description,
-        type=get_single_term_name(
+        type=type_name
+        if type_name is not None
+        else get_single_term_name(
             db,
             taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
             subject_type=TAG_TYPE_SUBJECT_TYPE,
@@ -148,7 +177,7 @@ def build_tag_read(
     )
 
 
-def list_tag_reads(db: Session) -> list[TagRead]:
+def list_tag_reads(db: Session, *, principal: RequestPrincipal) -> list[TagRead]:
     entry_count_subquery = (
         select(func.count(EntryTag.entry_id))
         .select_from(EntryTag)
@@ -156,6 +185,7 @@ def list_tag_reads(db: Session) -> list[TagRead]:
         .where(
             EntryTag.tag_id == Tag.id,
             Entry.is_deleted.is_(False),
+            entry_owner_filter(principal),
         )
         .scalar_subquery()
     )
@@ -172,12 +202,11 @@ def list_tag_reads(db: Session) -> list[TagRead]:
         subject_ids=[tag.id for tag, _ in rows],
     )
     return [
-        TagRead(
-            id=tag.id,
-            name=tag.name,
-            color=tag.color,
-            description=tag.description,
-            type=type_by_tag_id.get(str(tag.id)),
+        build_tag_read(
+            db,
+            tag=tag,
+            principal=principal,
+            type_name=type_by_tag_id.get(str(tag.id)),
             entry_count=int(entry_count or 0),
         )
         for tag, entry_count in rows
