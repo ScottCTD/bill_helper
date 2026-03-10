@@ -89,7 +89,9 @@ Contract notes:
 - `runtime_support/`: grouped run-lifecycle and tool-turn internals behind the runtime facade
 - `runtime_state.py`: runtime event/tool-call/terminal-state persistence helpers
 - `run_orchestrator.py`: shared step-state machine used by runtime sync/stream flows and benchmark adapters
-- `message_history.py`: message-history query flow and turn-level review/interruption prefix composition
+- `message_history.py`: public thread-to-model message assembly facade
+- `message_history_content.py`: attachment-backed user-content shaping and entity-category prompt context
+- `message_history_prefixes.py`: review-window queries and interruption-prefix composition
 - `attachment_content.py`: attachment parsing (PDF text/OCR, image payloads, vision capability checks)
 - `user_context.py`: current-user/account context normalization and truncation for prompt assembly
 - `model_client.py`: thin public seam for the LiteLLM client contract

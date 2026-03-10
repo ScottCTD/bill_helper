@@ -115,6 +115,9 @@
   - `execution.py`: agent execution-policy service (message intake/run lifecycle/context-token reads) plus benchmark/test execution facade methods.
   - `attachments.py`: attachment lifecycle helpers for upload persistence and thread-level directory cleanup.
   - `attachment_content.py`: attachment parsing, PDF text/OCR extraction, and vision payload helper functions.
+  - `message_history.py`: public thread-to-model message assembly seam.
+  - `message_history_content.py`: attachment-backed user-content shaping and entity-category prompt context helpers.
+  - `message_history_prefixes.py`: review-result and interruption-prefix history queries for the current turn.
   - `user_context.py`: account/user prompt-context normalization and truncation helpers.
   - `runtime.py`: public runtime facade and stable test/benchmark monkeypatch seams.
   - `runtime_support/`: grouped runtime internals split into run lifecycle and tool-turn preparation helpers.
