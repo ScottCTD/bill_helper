@@ -191,7 +191,6 @@ def test_agent_proposals_are_grouped_in_a_package() -> None:
         "catalog.py",
         "entries.py",
         "groups.py",
-        "group_memberships.py",
         "normalization.py",
         "normalization_catalog.py",
         "normalization_common.py",
@@ -200,6 +199,10 @@ def test_agent_proposals_are_grouped_in_a_package() -> None:
         "pending.py",
     ):
         assert (AGENT_PROPOSALS_PACKAGE / name).exists(), f"missing proposal module: {name}"
+    group_memberships_package = AGENT_PROPOSALS_PACKAGE / "group_memberships"
+    assert group_memberships_package.is_dir(), "group membership proposal helpers should stay grouped in a subpackage"
+    for name in ("__init__.py", "common.py", "validation.py", "handlers.py"):
+        assert (group_memberships_package / name).exists(), f"missing group membership proposal module: {name}"
 
 
 def test_agent_apply_handlers_are_grouped_in_a_package() -> None:
