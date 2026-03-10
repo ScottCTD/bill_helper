@@ -29,7 +29,7 @@
 - `backend/services/agent/session_tools/`
   - session-tool package: `progress.py` for `send_intermediate_update`, `memory.py` for add-only persistent memory appends, and `threads.py` for short thread-topic updates
 - `backend/services/agent/proposals/`
-  - proposal-family package: `common.py` for shared proposal/thread helpers, `catalog.py` for tag/entity/account proposals, `entries.py` for entry proposal handlers, `groups.py` for group CRUD proposal flows, `group_memberships.py` for membership proposal rules and handlers, family-owned normalization modules plus a small `normalization.py` registry for proposal payload canonicalization, and `pending.py` for pending-proposal edit/remove tools
+  - proposal-family package: `common.py` for shared proposal/thread helpers, `catalog.py` for tag/entity/account proposals, `entries.py` for entry proposal handlers, `groups.py` for group CRUD proposal flows, `group_memberships/` for membership canonicalization, validation, and handlers, family-owned normalization modules plus a small `normalization.py` registry for proposal payload canonicalization, and `pending.py` for pending-proposal edit/remove tools
 - `backend/services/agent/entry_references.py`
   - shared entry lookup helpers for `entry_id` aliases, selector fallback, and public entry snapshots
 - `backend/services/agent/group_references.py`
