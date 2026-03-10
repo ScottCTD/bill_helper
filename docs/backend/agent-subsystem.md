@@ -25,9 +25,9 @@
 - `backend/services/agent/tool_args/`
   - focused tool-input package: `read.py` for read filters, `shared.py` for progress/common args, `threads.py` for thread rename args, `memory.py` for add-only memory args, and `proposal_admin.py` for pending-proposal/group-membership tool inputs
 - `backend/services/agent/read_tools/`
-  - read-tool package: `entries.py` for entry lookup ranking, `catalog.py` for tag/entity/account lookup, `groups.py` for group lookup/detail formatting, `proposals.py` for proposal history inspection, `progress.py` for `send_intermediate_update`, and `common.py` for shared ranking/principal-scope formatting helpers
-- `backend/services/agent/tool_handlers_threads.py`
-  - `rename_thread` handler for short thread-topic updates
+  - read-tool package: `entries.py` for entry lookup ranking, `catalog.py` for tag/entity/account lookup, `groups.py` for group lookup/detail formatting, `proposals.py` for proposal history inspection, and `common.py` for shared ranking/principal-scope formatting helpers
+- `backend/services/agent/session_tools/`
+  - session-tool package: `progress.py` for `send_intermediate_update`, `memory.py` for add-only persistent memory appends, and `threads.py` for short thread-topic updates
 - `backend/services/agent/proposals/`
   - proposal-family package: `common.py` for shared proposal/thread helpers, `catalog.py` for tag/entity/account proposals, `entries.py` for entry proposal handlers, `groups.py` for group CRUD proposal flows, `group_memberships.py` for membership proposal rules and handlers, family-owned normalization modules plus a small `normalization.py` registry for proposal payload canonicalization, and `pending.py` for pending-proposal edit/remove tools
 - `backend/services/agent/entry_references.py`

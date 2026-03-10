@@ -43,7 +43,7 @@ Desloppify snapshot after forced rescan and forced batch review rerun:
 
 ### 1. Agent contract decomposition
 
-The next major backend batch should reduce the remaining proposal/runtime cleanup after the contract split, shared thread-proposal query cleanup, direct tool-arg ownership cleanup, payload-normalization split, reviewer-principal entry-scope fix, tool-result status contract cleanup, and the catalog-contract convergence pass:
+The next major backend batch should reduce the remaining proposal/runtime cleanup after the contract split, shared thread-proposal query cleanup, direct tool-arg ownership cleanup, payload-normalization split, reviewer-principal entry-scope fix, tool-result status contract cleanup, catalog-contract convergence, and the session-tool package split:
 
 - `review::.::holistic::convention_outlier::agent_tool_family_layout_drift::db535536`
 

@@ -47,8 +47,6 @@ from backend.services.agent.tool_args.shared import (
     SendIntermediateUpdateArgs,
 )
 from backend.services.agent.tool_args.threads import RenameThreadArgs
-from backend.services.agent.tool_handlers_memory import add_user_memory
-from backend.services.agent.tool_handlers_threads import rename_thread
 from backend.services.agent.read_tools.catalog import (
     list_accounts,
     list_entities,
@@ -56,8 +54,10 @@ from backend.services.agent.read_tools.catalog import (
 )
 from backend.services.agent.read_tools.entries import list_entries
 from backend.services.agent.read_tools.groups import list_groups
-from backend.services.agent.read_tools.progress import send_intermediate_update
 from backend.services.agent.read_tools.proposals import list_proposals
+from backend.services.agent.session_tools.memory import add_user_memory
+from backend.services.agent.session_tools.progress import send_intermediate_update
+from backend.services.agent.session_tools.threads import rename_thread
 from backend.services.agent.tool_results import error_result
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
 from backend.services.agent.proposals.catalog import (

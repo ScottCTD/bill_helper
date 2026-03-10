@@ -106,8 +106,7 @@
 - `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, including DB-backed ordered `user_memory` and `available_agent_models` support.
 - `agent/`: agent runtime, tool execution, prompt-size counting, serialization, prompt/model adapters, and review apply handlers.
   - `tool_args/`: focused tool-input package for read filters, progress/session commands, thread rename, and pending-proposal admin wrappers.
-  - `tool_handlers_memory.py`: add-only runtime memory append handler for explicit remember-this requests.
-  - `tool_handlers_threads.py`: thread rename tool handler for short topical thread labels.
+  - `session_tools/`: session-scoped non-proposal tool handlers for progress updates, add-only memory appends, and thread rename operations.
   - `threads.py`: thread lookup and rename persistence helpers used by the router and tool runtime.
   - `protocol_helpers.py`: shared helper contracts for tool-call decoding and usage-shape normalization.
   - `protocol.py`: compatibility facade re-exporting protocol helper APIs.
