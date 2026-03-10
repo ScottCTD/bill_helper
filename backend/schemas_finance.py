@@ -11,15 +11,19 @@ from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
 from backend.validation.contract_fields import NonEmptyPatchModel
 
 
-class TagRead(BaseModel):
+class TagSummaryRead(BaseModel):
     id: int
     name: str
     color: str | None = None
     description: str | None = None
     type: str | None = None
-    entry_count: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TagRead(TagSummaryRead):
+    entry_count: int
+
 
 
 class TagCreate(BaseModel):
@@ -243,7 +247,7 @@ class EntryRead(BaseModel):
     markdown_body: str | None = None
     created_at: datetime
     updated_at: datetime
-    tags: list[TagRead] = Field(default_factory=list)
+    tags: list[TagSummaryRead] = Field(default_factory=list)
     direct_group: EntryGroupRefRead | None = None
     direct_group_member_role: GroupMemberRole | None = None
     group_path: list[EntryGroupRefRead] = Field(default_factory=list)

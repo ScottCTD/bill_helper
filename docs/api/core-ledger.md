@@ -97,6 +97,7 @@ Behavior:
 - owner defaults to configured current user if omitted
 - ownership is scoped to the requesting principal
 - create flow can assign one direct group membership inline
+- embedded `tags` use the lightweight `TagSummaryRead` shape (`id`, `name`, `color`, `description`, `type`) and do not include catalog usage counts
 - read models include `from_entity_missing` / `to_entity_missing` when preserved labels remain after entity/account deletion
 - read models expose group context through `direct_group` and `group_path`
 - read models also expose `direct_group_member_role`
@@ -121,6 +122,7 @@ Behavior:
 - list results are principal-scoped by `owner_user_id`
 - each row includes `from_entity_missing` / `to_entity_missing`
 - each row includes `direct_group` and `group_path`
+- each row's `tags` list uses `TagSummaryRead`, not the `/tags` catalog contract
 
 ### `GET /entries/{entry_id}`
 
@@ -131,6 +133,7 @@ Behavior:
 - lookup is principal-scoped
 - response includes missing-entity flags
 - response includes `direct_group` and `group_path`
+- response `tags` remain lightweight summaries without `entry_count`
 - response no longer includes raw link rows
 
 ### `PATCH /entries/{entry_id}`

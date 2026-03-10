@@ -19,6 +19,14 @@ export interface Tag {
   entry_count?: number | null;
 }
 
+export interface EntryTag {
+  id: number;
+  name: string;
+  color: string | null;
+  description?: string | null;
+  type?: string | null;
+}
+
 export interface Entity {
   id: string;
   name: string;
@@ -120,7 +128,7 @@ export interface Entry {
   markdown_body: string | null;
   created_at: string;
   updated_at: string;
-  tags: Tag[];
+  tags: EntryTag[];
   direct_group: EntryGroupRef | null;
   direct_group_member_role: GroupMemberRole | null;
   group_path: EntryGroupRef[];
