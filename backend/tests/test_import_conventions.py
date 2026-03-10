@@ -49,6 +49,8 @@ REMOVED_AGENT_PROGRESS_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "re
 AGENT_SESSION_TOOLS_PACKAGE = BACKEND_DIR / "services" / "agent" / "session_tools"
 AGENT_MODEL_CLIENT_PATH = BACKEND_DIR / "services" / "agent" / "model_client.py"
 AGENT_MODEL_CLIENT_SUPPORT_PACKAGE = BACKEND_DIR / "services" / "agent" / "model_client_support"
+AGENT_ATTACHMENT_CONTENT_ASSEMBLY_PATH = BACKEND_DIR / "services" / "agent" / "attachment_content_assembly.py"
+AGENT_ATTACHMENT_CONTENT_PDF_PATH = BACKEND_DIR / "services" / "agent" / "attachment_content_pdf.py"
 AGENT_MESSAGE_HISTORY_CONTENT_PATH = BACKEND_DIR / "services" / "agent" / "message_history_content.py"
 AGENT_MESSAGE_HISTORY_PREFIXES_PATH = BACKEND_DIR / "services" / "agent" / "message_history_prefixes.py"
 AGENT_TOOL_RUNTIME_PATH = BACKEND_DIR / "services" / "agent" / "tool_runtime.py"
@@ -270,6 +272,11 @@ def test_agent_tool_runtime_uses_grouped_support_modules() -> None:
 def test_agent_message_history_helpers_are_split_by_concern() -> None:
     assert AGENT_MESSAGE_HISTORY_CONTENT_PATH.exists(), "message history content helpers should exist"
     assert AGENT_MESSAGE_HISTORY_PREFIXES_PATH.exists(), "message history prefix helpers should exist"
+
+
+def test_agent_attachment_content_helpers_are_split_by_concern() -> None:
+    assert AGENT_ATTACHMENT_CONTENT_ASSEMBLY_PATH.exists(), "attachment assembly helpers should exist"
+    assert AGENT_ATTACHMENT_CONTENT_PDF_PATH.exists(), "attachment PDF helpers should exist"
 
 
 def test_agent_runtime_uses_grouped_support_modules() -> None:

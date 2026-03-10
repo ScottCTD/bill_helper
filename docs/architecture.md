@@ -92,7 +92,9 @@ Contract notes:
 - `message_history.py`: public thread-to-model message assembly facade
 - `message_history_content.py`: attachment-backed user-content shaping and entity-category prompt context
 - `message_history_prefixes.py`: review-window queries and interruption-prefix composition
-- `attachment_content.py`: attachment parsing (PDF text/OCR, image payloads, vision capability checks)
+- `attachment_content.py`: public attachment-content seam plus vision capability checks
+- `attachment_content_pdf.py`: PDF text extraction, OCR fallback, and page rendering
+- `attachment_content_assembly.py`: attachment part assembly and display/data-url helpers
 - `user_context.py`: current-user/account context normalization and truncation for prompt assembly
 - `model_client.py`: thin public seam for the LiteLLM client contract
 - `model_client_support/`: grouped environment, streaming, usage-normalization, and retrying client internals behind the public model-client seam
