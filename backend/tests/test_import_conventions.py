@@ -47,6 +47,8 @@ REMOVED_AGENT_MEMORY_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "tool
 REMOVED_AGENT_THREAD_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "tool_handlers_threads.py"
 REMOVED_AGENT_PROGRESS_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "read_tools" / "progress.py"
 AGENT_SESSION_TOOLS_PACKAGE = BACKEND_DIR / "services" / "agent" / "session_tools"
+AGENT_MODEL_CLIENT_PATH = BACKEND_DIR / "services" / "agent" / "model_client.py"
+AGENT_MODEL_CLIENT_SUPPORT_PACKAGE = BACKEND_DIR / "services" / "agent" / "model_client_support"
 REMOVED_AGENT_CHANGE_CONTRACTS_MODULE = BACKEND_DIR / "services" / "agent" / "change_contracts.py"
 AGENT_CHANGE_CONTRACTS_PACKAGE = BACKEND_DIR / "services" / "agent" / "change_contracts"
 AGENT_ROUTER_PATH = BACKEND_DIR / "routers" / "agent.py"
@@ -90,6 +92,7 @@ def test_service_package_init_modules_are_marker_only() -> None:
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "read_tools" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "reviews" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "session_tools" / "__init__.py")
+    _assert_marker_module(BACKEND_DIR / "services" / "agent" / "model_client_support" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "validation" / "__init__.py")
 
 
@@ -233,6 +236,13 @@ def test_agent_session_tools_are_grouped_in_a_package() -> None:
     assert AGENT_SESSION_TOOLS_PACKAGE.is_dir(), "session_tools package should exist"
     for name in ("memory.py", "progress.py", "threads.py"):
         assert (AGENT_SESSION_TOOLS_PACKAGE / name).exists(), f"missing session tool module: {name}"
+
+
+def test_agent_model_client_uses_grouped_support_modules() -> None:
+    assert AGENT_MODEL_CLIENT_SUPPORT_PACKAGE.is_dir(), "model_client support package should exist"
+    for name in ("client.py", "environment.py", "streaming.py", "usage.py"):
+        assert (AGENT_MODEL_CLIENT_SUPPORT_PACKAGE / name).exists(), f"missing model client support module: {name}"
+    assert not _defined_class_names(AGENT_MODEL_CLIENT_PATH), "model_client.py should stay a thin public seam"
 
 
 def test_agent_change_contracts_are_grouped_by_domain() -> None:

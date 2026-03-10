@@ -19,7 +19,9 @@
 - `backend/services/agent/message_history.py`
   - persisted thread history to model-ready messages, including attachment ordering and interruption context
 - `backend/services/agent/model_client.py`
-  - LiteLLM adapter, retry policy, stream handling, and usage normalization
+  - thin public seam re-exporting the LiteLLM client contract
+- `backend/services/agent/model_client_support/`
+  - grouped model-client internals: `client.py` for the retrying LiteLLM adapter, `environment.py` for provider/env validation and prompt-cache support, `streaming.py` for streamed delta reconciliation, and `usage.py` for usage-shape normalization
 - `backend/services/agent/pricing.py`
   - LiteLLM-backed pricing helper
 - `backend/services/agent/tool_args/`

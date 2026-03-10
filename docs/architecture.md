@@ -91,8 +91,8 @@ Contract notes:
 - `message_history.py`: message-history query flow and turn-level review/interruption prefix composition
 - `attachment_content.py`: attachment parsing (PDF text/OCR, image payloads, vision capability checks)
 - `user_context.py`: current-user/account context normalization and truncation for prompt assembly
-- `model_client.py`: LiteLLM adapter and normalized model errors
-- `model_client.py`: tenacity retries for model completion calls
+- `model_client.py`: thin public seam for the LiteLLM client contract
+- `model_client_support/`: grouped environment, streaming, usage-normalization, and retrying client internals behind the public model-client seam
 - `apply/`: change-type apply package for review-time resource application
 - `reviews/`: approval/rejection transitions, dependency checks, override normalization, and audit writes
 - `benchmark_interface.py`: benchmark-facing case execution contract returning normalized predictions/trace payloads
