@@ -49,6 +49,8 @@ REMOVED_AGENT_PROGRESS_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "re
 AGENT_SESSION_TOOLS_PACKAGE = BACKEND_DIR / "services" / "agent" / "session_tools"
 AGENT_MODEL_CLIENT_PATH = BACKEND_DIR / "services" / "agent" / "model_client.py"
 AGENT_MODEL_CLIENT_SUPPORT_PACKAGE = BACKEND_DIR / "services" / "agent" / "model_client_support"
+AGENT_MESSAGE_HISTORY_CONTENT_PATH = BACKEND_DIR / "services" / "agent" / "message_history_content.py"
+AGENT_MESSAGE_HISTORY_PREFIXES_PATH = BACKEND_DIR / "services" / "agent" / "message_history_prefixes.py"
 AGENT_TOOL_RUNTIME_PATH = BACKEND_DIR / "services" / "agent" / "tool_runtime.py"
 AGENT_TOOL_RUNTIME_SUPPORT_PACKAGE = BACKEND_DIR / "services" / "agent" / "tool_runtime_support"
 AGENT_RUNTIME_SUPPORT_PACKAGE = BACKEND_DIR / "services" / "agent" / "runtime_support"
@@ -263,6 +265,11 @@ def test_agent_tool_runtime_uses_grouped_support_modules() -> None:
     ):
         assert (AGENT_TOOL_RUNTIME_SUPPORT_PACKAGE / name).exists(), f"missing tool runtime support module: {name}"
     assert not _defined_class_names(AGENT_TOOL_RUNTIME_PATH), "tool_runtime.py should stay a thin public seam"
+
+
+def test_agent_message_history_helpers_are_split_by_concern() -> None:
+    assert AGENT_MESSAGE_HISTORY_CONTENT_PATH.exists(), "message history content helpers should exist"
+    assert AGENT_MESSAGE_HISTORY_PREFIXES_PATH.exists(), "message history prefix helpers should exist"
 
 
 def test_agent_runtime_uses_grouped_support_modules() -> None:

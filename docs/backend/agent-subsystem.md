@@ -19,7 +19,11 @@
 - `backend/services/agent/prompts.py`
   - system prompt composition, tool-discipline policy, and response-surface guidance
 - `backend/services/agent/message_history.py`
-  - persisted thread history to model-ready messages, including attachment ordering and interruption context
+  - public message-history facade for thread-to-model message assembly
+- `backend/services/agent/message_history_content.py`
+  - attachment-backed user-content shaping plus entity-category prompt context
+- `backend/services/agent/message_history_prefixes.py`
+  - review-result and interruption-prefix query helpers for the current turn
 - `backend/services/agent/model_client.py`
   - thin public seam re-exporting the LiteLLM client contract
 - `backend/services/agent/model_client_support/`
@@ -166,7 +170,7 @@ Endpoints:
 - review apply uses the approving reviewer principal for principal-scoped entry lookup and for owner attribution on newly created entry/account/group resources; mutable runtime settings remain only as a non-request fallback
 - `update_pending_proposal` re-runs group conflict checks after normalization, so revised group create/update/delete/member proposals cannot be patched into duplicate or conflicting pending states
 - `backend/services/agent/apply/` owns the actual domain mutation after approval, including group create/rename/delete and group membership add/remove
-- `backend/services/agent/message_history.py` prepends compact review outcome lines before the next user feedback message and includes `review_override=...` when reviewer edits changed the applied payload
+- `backend/services/agent/message_history_prefixes.py` prepends compact review outcome lines before the next user feedback message and includes `review_override=...` when reviewer edits changed the applied payload
 - group-member proposal previews now carry enough entry fields, including `markdown_notes`, for the frontend to render a locked full-entry snapshot during review
 
 ## Related Docs
