@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
+import { EntryEditorModal, type EntryEditorSubmitPayload } from "../components/EntryEditorModal";
 import { GroupDetailModal } from "../components/GroupDetailModal";
 import { GroupEditorModal } from "../components/GroupEditorModal";
 import { GroupMemberEditorModal } from "../components/GroupMemberEditorModal";
@@ -15,12 +16,19 @@ import {
   createGroup,
   deleteGroup,
   deleteGroupMember,
+    getEntry,
   getGroup,
+    getRuntimeSettings,
+    listCurrencies,
+    listEntities,
   listEntries,
   listGroups,
+    listTags,
+    listUsers,
+    updateEntry,
   updateGroup
 } from "../lib/api";
-import { invalidateGroupReadModels } from "../lib/queryInvalidation";
+import { invalidateEntryReadModels, invalidateGroupReadModels } from "../lib/queryInvalidation";
 import { queryKeys } from "../lib/queryKeys";
 import type { GroupMemberCreatePayload, GroupSummary } from "../lib/types";
 import { cn } from "../lib/utils";
@@ -40,19 +48,12 @@ function groupRangeLabel(summary: GroupSummary): string {
   return `${summary.first_occurred_at} to ${summary.last_occurred_at}`;
 }
 
-function groupLevelLabel(summary: GroupSummary, groupsById: Map<string, GroupSummary>): string {
+function groupHierarchyLabel(summary: GroupSummary, groupsById: Map<string, GroupSummary>): string {
   if (!summary.parent_group_id) {
     return "Top level";
   }
   const parent = groupsById.get(summary.parent_group_id);
   return parent ? `Child of ${parent.name}` : "Child group";
-}
-
-function directStructureLabel(summary: GroupSummary): string {
-  if (summary.direct_member_count === 0) {
-    return "No direct members";
-  }
-  return `${summary.direct_entry_count} entries · ${summary.direct_child_group_count} child groups`;
 }
 
 function rowKeyDownHandler(event: React.KeyboardEvent<HTMLTableRowElement>, onOpen: () => void) {
@@ -71,6 +72,7 @@ export function GroupsPage() {
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [isRenameGroupOpen, setIsRenameGroupOpen] = useState(false);
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState("");
 
   const groupsQuery = useQuery({
     queryKey: queryKeys.groups.list,
@@ -86,6 +88,42 @@ export function GroupsPage() {
     queryKey: queryKeys.groups.detail(selectedGroupId),
     queryFn: () => getGroup(selectedGroupId),
     enabled: isDetailOpen && Boolean(selectedGroupId)
+  });
+
+  const currenciesQuery = useQuery({
+    queryKey: queryKeys.properties.currencies,
+    queryFn: listCurrencies,
+    enabled: Boolean(editingEntryId)
+  });
+
+  const runtimeSettingsQuery = useQuery({
+    queryKey: queryKeys.settings.runtime,
+    queryFn: getRuntimeSettings,
+    enabled: Boolean(editingEntryId)
+  });
+
+  const entitiesQuery = useQuery({
+    queryKey: queryKeys.properties.entities,
+    queryFn: listEntities,
+    enabled: Boolean(editingEntryId)
+  });
+
+  const usersQuery = useQuery({
+    queryKey: queryKeys.properties.users,
+    queryFn: listUsers,
+    enabled: Boolean(editingEntryId)
+  });
+
+  const tagsQuery = useQuery({
+    queryKey: queryKeys.properties.tags,
+    queryFn: listTags,
+    enabled: Boolean(editingEntryId)
+  });
+
+  const editingEntryQuery = useQuery({
+    queryKey: queryKeys.entries.detail(editingEntryId),
+    queryFn: () => getEntry(editingEntryId),
+    enabled: Boolean(editingEntryId)
   });
 
   useEffect(() => {
@@ -155,6 +193,14 @@ export function GroupsPage() {
     }
   });
 
+  const updateEntryMutation = useMutation({
+    mutationFn: ({ entryId, payload }: { entryId: string; payload: EntryEditorSubmitPayload }) => updateEntry(entryId, payload),
+    onSuccess: (_result, variables) => {
+      invalidateEntryReadModels(queryClient, variables.entryId);
+      setEditingEntryId("");
+    }
+  });
+
   const filteredGroups = useMemo(() => {
     const normalizedSearch = deferredGroupSearch.trim().toLowerCase();
     if (!normalizedSearch) {
@@ -184,6 +230,11 @@ export function GroupsPage() {
     }
     return groupsById.get(selectedGroupSummary.parent_group_id) ?? null;
   }, [groupsById, selectedGroupSummary]);
+
+  const currentUserId = useMemo(
+    () => usersQuery.data?.find((user) => user.is_current_user)?.id ?? "",
+    [usersQuery.data]
+  );
 
   const entryOptions = useMemo(() => {
     return (entryPickerQuery.data?.items ?? [])
@@ -217,10 +268,21 @@ export function GroupsPage() {
   const addMemberError = addGroupMemberMutation.isError ? (addGroupMemberMutation.error as Error).message : null;
   const deleteGroupError = deleteGroupMutation.isError ? (deleteGroupMutation.error as Error).message : null;
   const deleteMemberError = deleteGroupMemberMutation.isError ? (deleteGroupMemberMutation.error as Error).message : null;
+  const entryEditorLoadError = editingEntryQuery.isError ? (editingEntryQuery.error as Error).message : null;
+  const entryEditorSaveError = updateEntryMutation.isError ? (updateEntryMutation.error as Error).message : null;
 
   function openGroupDetail(groupId: string) {
     setSelectedGroupId(groupId);
+    setIsRenameGroupOpen(false);
+    setIsAddMemberOpen(false);
     setIsDetailOpen(true);
+  }
+
+  function handleEntryEditorSubmit(payload: EntryEditorSubmitPayload) {
+    if (!editingEntryId) {
+      return;
+    }
+    updateEntryMutation.mutate({ entryId: editingEntryId, payload });
   }
 
   return (
@@ -231,7 +293,7 @@ export function GroupsPage() {
             <div>
               <h2 className="table-shell-title">Entry Groups</h2>
               <p className="table-shell-subtitle">
-                Browse the full group catalog in one table, then open a focused detail modal to inspect the derived graph and manage direct members.
+                Browse the full group catalog in one table, then double-click a row or use View to inspect the derived graph and manage direct members.
               </p>
             </div>
           </div>
@@ -240,7 +302,7 @@ export function GroupsPage() {
             <div className="table-toolbar-filters">
               <label className="field min-w-[280px] grow">
                 <span>Search groups</span>
-                <Input value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder="Search by name, type, or id" />
+                <Input value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder="Search by name or type" />
               </label>
             </div>
             <div className="table-toolbar-action filter-action">
@@ -267,8 +329,7 @@ export function GroupsPage() {
                   <TableRow>
                     <TableHead className="groups-browser-group-column">Group</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Level</TableHead>
-                    <TableHead>Direct structure</TableHead>
+                    <TableHead>Hierarchy</TableHead>
                     <TableHead>Descendants</TableHead>
                     <TableHead>Date range</TableHead>
                     <TableHead className="groups-browser-action-column">
@@ -284,20 +345,18 @@ export function GroupsPage() {
                         key={group.id}
                         className={cn("groups-browser-row", isActive && "is-active")}
                         tabIndex={0}
-                        onClick={() => openGroupDetail(group.id)}
+                        onDoubleClick={() => openGroupDetail(group.id)}
                         onKeyDown={(event) => rowKeyDownHandler(event, () => openGroupDetail(group.id))}
                       >
                         <TableCell className="groups-browser-group-column">
                           <div className="groups-browser-group-cell">
                             <p className="groups-browser-group-name">{group.name}</p>
-                            <p className="groups-summary-id">{group.id.slice(0, 8)}</p>
                           </div>
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{group.group_type}</Badge>
                         </TableCell>
-                        <TableCell>{groupLevelLabel(group, groupsById)}</TableCell>
-                        <TableCell>{directStructureLabel(group)}</TableCell>
+                        <TableCell>{groupHierarchyLabel(group, groupsById)}</TableCell>
                         <TableCell>{group.descendant_entry_count} entries</TableCell>
                         <TableCell>{groupRangeLabel(group)}</TableCell>
                         <TableCell className="groups-browser-action-column">
@@ -342,6 +401,13 @@ export function GroupsPage() {
           }
         }}
         onAddMember={() => setIsAddMemberOpen(true)}
+        onOpenMember={(node) => {
+          if (node.node_type === "GROUP") {
+            openGroupDetail(node.subject_id);
+            return;
+          }
+          setEditingEntryId(node.subject_id);
+        }}
         onRemoveMember={(membershipId) => deleteGroupMemberMutation.mutate(membershipId)}
       />
 
@@ -378,6 +444,24 @@ export function GroupsPage() {
           onSubmit={(payload) => addGroupMemberMutation.mutate(payload)}
         />
       ) : null}
+
+      <EntryEditorModal
+        isOpen={Boolean(editingEntryId)}
+        mode="edit"
+        entry={editingEntryQuery.data ?? null}
+        currencies={currenciesQuery.data ?? []}
+        entities={entitiesQuery.data ?? []}
+        users={usersQuery.data ?? []}
+        groups={groupsQuery.data ?? []}
+        tags={tagsQuery.data ?? []}
+        currentUserId={currentUserId}
+        defaultCurrencyCode={(runtimeSettingsQuery.data?.default_currency_code ?? "CAD").toUpperCase()}
+        isSaving={updateEntryMutation.isPending}
+        loadError={entryEditorLoadError}
+        saveError={entryEditorSaveError}
+        onClose={() => setEditingEntryId("")}
+        onSubmit={handleEntryEditorSubmit}
+      />
     </div>
   );
 }

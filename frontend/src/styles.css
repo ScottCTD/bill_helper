@@ -902,6 +902,14 @@
     @apply overflow-x-auto;
   }
 
+  .groups-detail-member-row {
+    @apply cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+
+  .groups-detail-member-row:hover {
+    @apply bg-accent/35;
+  }
+
   .groups-detail-section-body .group-flow-container {
     height: 520px;
   }

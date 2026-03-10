@@ -6,7 +6,7 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { formatMinor } from "../lib/format";
+import { formatMinor, formatMinorCompact } from "../lib/format";
 import type { GroupGraph, GroupNode, GroupSummary } from "../lib/types";
 
 interface GroupDetailModalProps {
@@ -24,6 +24,7 @@ interface GroupDetailModalProps {
   onRename: () => void;
   onDelete: () => void;
   onAddMember: () => void;
+  onOpenMember: (node: GroupNode) => void;
   onRemoveMember: (membershipId: string) => void;
 }
 
@@ -66,6 +67,35 @@ function groupDetailMeta(summary: GroupSummary): string {
   return `${directMemberLabel} · ${descendantLabel} · ${groupRangeLabel(summary)}`;
 }
 
+function kindLabel(kind: GroupNode["kind"]): string {
+  if (kind === "INCOME") return "Income";
+  if (kind === "TRANSFER") return "Transfer";
+  return "Expense";
+}
+
+function kindSymbol(kind: GroupNode["kind"]): string {
+  if (kind === "INCOME") return "+";
+  if (kind === "TRANSFER") return "~";
+  return "-";
+}
+
+function kindToneClass(kind: GroupNode["kind"]): string {
+  if (kind === "INCOME") return "entries-amount-marker-income";
+  if (kind === "TRANSFER") return "entries-amount-marker-transfer";
+  return "entries-amount-marker-expense";
+}
+
+function normalizedCurrencyCode(currencyCode: string | null): string {
+  return currencyCode?.trim().toUpperCase() || "CAD";
+}
+
+function memberRowKeyDownHandler(event: React.KeyboardEvent<HTMLTableRowElement>, onOpen: () => void) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    onOpen();
+  }
+}
+
 interface GroupStat {
   label: string;
   value: string;
@@ -78,6 +108,23 @@ function isEntryNode(node: GroupNode): node is GroupNode & { node_type: "ENTRY";
 
 function hasNodeKind(node: GroupNode): node is GroupNode & { kind: NonNullable<GroupNode["kind"]> } {
   return node.kind !== null;
+}
+
+function renderMemberAmount(node: GroupNode) {
+  if (!isEntryNode(node)) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  return (
+    <span className="entries-amount-cell">
+      <span className={`entries-amount-marker ${kindToneClass(node.kind)}`} aria-hidden="true">
+        {kindSymbol(node.kind)}
+      </span>
+      <span className="sr-only">{kindLabel(node.kind)}</span>
+      <span className="entries-amount-value">{formatMinorCompact(node.amount_minor)}</span>
+      <span className="entries-amount-currency">{normalizedCurrencyCode(node.currency_code)}</span>
+    </span>
+  );
 }
 
 function amountStatLabel(nodes: GroupNode[], variant: "total" | "average"): string {
@@ -178,6 +225,7 @@ export function GroupDetailModal({
   onRename,
   onDelete,
   onAddMember,
+  onOpenMember,
   onRemoveMember
 }: GroupDetailModalProps) {
   const stats = groupSummary ? buildGroupStats(groupSummary, groupGraph) : [];
@@ -278,6 +326,7 @@ export function GroupDetailModal({
                           <TableHeader>
                             <TableRow>
                               <TableHead>Member</TableHead>
+                              <TableHead>Amount</TableHead>
                               <TableHead>Type</TableHead>
                               <TableHead>Role</TableHead>
                               <TableHead>Context</TableHead>
@@ -288,13 +337,17 @@ export function GroupDetailModal({
                           </TableHeader>
                           <TableBody>
                             {groupGraph.nodes.map((node) => (
-                              <TableRow key={node.membership_id}>
+                              <TableRow
+                                key={node.membership_id}
+                                className="groups-detail-member-row"
+                                tabIndex={0}
+                                onClick={() => onOpenMember(node)}
+                                onKeyDown={(event) => memberRowKeyDownHandler(event, () => onOpenMember(node))}
+                              >
                                 <TableCell>
-                                  <div className="space-y-1">
-                                    <p className="font-medium">{node.name}</p>
-                                    <p className="groups-summary-id">{node.subject_id.slice(0, 8)}</p>
-                                  </div>
+                                  <p className="font-medium">{node.name}</p>
                                 </TableCell>
+                                <TableCell>{renderMemberAmount(node)}</TableCell>
                                 <TableCell>
                                   <Badge variant="outline">{memberTypeLabel(node)}</Badge>
                                 </TableCell>
@@ -304,7 +357,11 @@ export function GroupDetailModal({
                                   <DeleteIconButton
                                     label={`Remove member ${node.name}`}
                                     disabled={isDeletingMember}
-                                    onClick={() => onRemoveMember(node.membership_id)}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      onRemoveMember(node.membership_id);
+                                    }}
+                                    onDoubleClick={(event) => event.stopPropagation()}
                                   />
                                 </TableCell>
                               </TableRow>

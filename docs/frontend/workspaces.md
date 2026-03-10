@@ -32,13 +32,13 @@
 ### `frontend/src/pages/GroupsPage.tsx`
 
 - dedicated first-class group workspace at `/groups`
-- organized around a broad searchable groups table first, with each row opening a dedicated group-detail modal
+- organized around a broad searchable groups table first, with each row opening a dedicated group-detail modal on double-click and a fallback `View` action
 - browser table data comes from `GET /groups`
 - group detail modal content comes from `GET /groups/{group_id}`
 - supports create, rename, delete, add-entry, add-child-group, and remove-member flows
 - child-group picking is limited to top-level groups that are not already attached elsewhere, matching the depth-1/no-sharing backend rules
 - group detail modal surfaces compact direct-entry stats above the member table and keeps the derived graph at the bottom of the modal
-- direct members table inside the modal shows both entries and child groups, along with group-type-specific metadata
+- direct members table inside the modal shows both entries and child groups, exposes entry amounts in the same signed compact format as the entries table, and lets a member click open the corresponding entry editor or child-group detail
 - `GroupGraphView.tsx` renders both entry nodes and child-group nodes, with layout rules per `group_type`
 - `GroupGraphView.tsx` locally filters React Flow warning `002` because it is a false positive for this graph
 
