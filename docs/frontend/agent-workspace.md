@@ -28,6 +28,8 @@ Supporting modules include:
 - `frontend/src/hooks/useResizablePanel.ts`
 - `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`
 - `frontend/src/features/agent/review/useAgentThreadReviewController.ts`
+- `frontend/src/features/agent/review/useAgentReviewEditorResources.ts`
+- `frontend/src/features/agent/review/useAgentReviewDraftState.ts`
 - `frontend/src/features/agent/review/ReviewEditors.tsx`
 - `frontend/src/features/agent/review/modalHelpers.ts`
 - `frontend/src/features/agent/review/drafts/*`
@@ -51,6 +53,7 @@ Supporting modules include:
 ## Thread Review Surface
 
 - review actions are coordinated by `frontend/src/features/agent/review/useAgentThreadReviewController.ts`, while `AgentThreadReviewModal.tsx` now stays focused on modal layout and card composition
+- `useAgentThreadReviewController.ts` now stays on item navigation plus review actions, while `useAgentReviewEditorResources.ts` owns catalog/settings queries and `useAgentReviewDraftState.ts` owns reviewer draft maps plus payload-override shaping
 - the header `Review` button is the only review entry point and opens one thread-scoped dialog for all proposal items across the selected thread
 - the dialog uses responsive width rules, lets reviewers collapse the left TOC, groups TOC rows by proposal domain (`Entries`, `Accounts`, `Groups`, `Entities`, `Tags`) within `Pending` and `Reviewed / Failed`, and surfaces batch plus per-item review controls in a full-width bar above the denser review surface
 - proposals render CRUD-aware field-level diffs, and reviewer overrides update the preview for create and update entry/account/tag/entity/group proposals plus add-member group proposals

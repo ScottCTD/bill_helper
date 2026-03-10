@@ -169,7 +169,7 @@
 - `agent/activity.ts`: extracted run/activity derivation helpers for agent timeline state.
 - `agent/review/model.ts`: review-item summaries, proposal-domain grouping, and shared change-type labels.
 - `agent/panel/*`: agent panel presentation layer (`AgentThreadList`, `AgentThreadPanel`, `AgentTimeline`, `AgentComposer`, `AgentThreadUsageBar`, `AgentAttachmentPreviewDialog`) plus the coordinator hooks (`useAgentPanelController`, `useAgentComposerRuntime`), composer-runtime support hooks (`useAgentComposerStreamState`, `useAgentComposerActions`), panel-local hooks (`useResizablePanel`, `useStickToBottom`, `useAgentDraftAttachments`), and type/format helpers.
-- `agent/review/*`: thread-review modal shell, controller hook, extracted editor/navigation components, draft packages (`drafts/common.ts`, `entries.ts`, `catalog.ts`, `memberships.ts`), and diff packages (`diff/core.ts`, `domains.ts`).
+- `agent/review/*`: thread-review modal shell, the review controller plus support hooks (`useAgentReviewEditorResources`, `useAgentReviewDraftState`), extracted editor/navigation components, draft packages (`drafts/common.ts`, `entries.ts`, `catalog.ts`, `memberships.ts`), and diff packages (`diff/core.ts`, `domains.ts`).
 
 #### Pages (`/frontend/src/pages`)
 
