@@ -43,6 +43,10 @@ REMOVED_AGENT_REVIEW_MODULE = BACKEND_DIR / "services" / "agent" / "review.py"
 AGENT_REVIEWS_PACKAGE = BACKEND_DIR / "services" / "agent" / "reviews"
 REMOVED_AGENT_READ_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "tool_handlers_read.py"
 AGENT_READ_TOOLS_PACKAGE = BACKEND_DIR / "services" / "agent" / "read_tools"
+REMOVED_AGENT_MEMORY_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "tool_handlers_memory.py"
+REMOVED_AGENT_THREAD_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "tool_handlers_threads.py"
+REMOVED_AGENT_PROGRESS_HANDLER_MODULE = BACKEND_DIR / "services" / "agent" / "read_tools" / "progress.py"
+AGENT_SESSION_TOOLS_PACKAGE = BACKEND_DIR / "services" / "agent" / "session_tools"
 REMOVED_AGENT_CHANGE_CONTRACTS_MODULE = BACKEND_DIR / "services" / "agent" / "change_contracts.py"
 AGENT_CHANGE_CONTRACTS_PACKAGE = BACKEND_DIR / "services" / "agent" / "change_contracts"
 AGENT_ROUTER_PATH = BACKEND_DIR / "routers" / "agent.py"
@@ -85,6 +89,7 @@ def test_service_package_init_modules_are_marker_only() -> None:
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "proposals" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "read_tools" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "services" / "agent" / "reviews" / "__init__.py")
+    _assert_marker_module(BACKEND_DIR / "services" / "agent" / "session_tools" / "__init__.py")
     _assert_marker_module(BACKEND_DIR / "validation" / "__init__.py")
 
 
@@ -214,8 +219,17 @@ def test_agent_review_workflow_is_grouped_in_a_package() -> None:
 def test_agent_read_tools_are_grouped_in_a_package() -> None:
     assert not REMOVED_AGENT_READ_HANDLER_MODULE.exists(), "read tools should stay split into the read_tools package"
     assert AGENT_READ_TOOLS_PACKAGE.is_dir(), "read_tools package should exist"
-    for name in ("catalog.py", "common.py", "entries.py", "groups.py", "progress.py", "proposals.py"):
+    for name in ("catalog.py", "common.py", "entries.py", "groups.py", "proposals.py"):
         assert (AGENT_READ_TOOLS_PACKAGE / name).exists(), f"missing read tool module: {name}"
+
+
+def test_agent_session_tools_are_grouped_in_a_package() -> None:
+    assert not REMOVED_AGENT_MEMORY_HANDLER_MODULE.exists(), "memory tool handler should stay in the session_tools package"
+    assert not REMOVED_AGENT_THREAD_HANDLER_MODULE.exists(), "thread tool handler should stay in the session_tools package"
+    assert not REMOVED_AGENT_PROGRESS_HANDLER_MODULE.exists(), "progress tool should stay in the session_tools package"
+    assert AGENT_SESSION_TOOLS_PACKAGE.is_dir(), "session_tools package should exist"
+    for name in ("memory.py", "progress.py", "threads.py"):
+        assert (AGENT_SESSION_TOOLS_PACKAGE / name).exists(), f"missing session tool module: {name}"
 
 
 def test_agent_change_contracts_are_grouped_by_domain() -> None:
