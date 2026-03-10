@@ -116,6 +116,8 @@
   - `attachments.py`: attachment lifecycle helpers for upload persistence and thread-level directory cleanup.
   - `attachment_content.py`: attachment parsing, PDF text/OCR extraction, and vision payload helper functions.
   - `user_context.py`: account/user prompt-context normalization and truncation helpers.
+  - `runtime.py`: public runtime facade and stable test/benchmark monkeypatch seams.
+  - `runtime_support/`: grouped runtime internals split into run lifecycle and tool-turn preparation helpers.
   - `runtime_state.py`: run-event/tool-call persistence helpers used by runtime coordinator.
   - `entry_references.py`: shared entry-id alias, selector lookup, and public entry snapshot helpers.
   - `group_references.py`: shared group-id alias lookup plus public group summary/detail formatting for group tools and review payloads.
