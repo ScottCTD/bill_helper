@@ -87,6 +87,9 @@ The thread review modal and panel controller split are now in place:
 - `frontend/src/features/agent/review/useAgentReviewEditorResources.ts` owns review-time settings/catalog queries and derived editor options
 - `frontend/src/features/agent/review/useAgentReviewDraftState.ts` owns reviewer draft maps plus payload-override shaping
 - `frontend/src/features/agent/review/ReviewEditors.tsx` is now the stable export seam for `ReviewTocSection.tsx`, `ReviewCatalogEditors.tsx`, and `ReviewGroupEditors.tsx`
+- `frontend/src/features/agent/panel/useAgentPanelController.ts` now stays on panel composition
+- `frontend/src/features/agent/panel/useAgentPanelQueries.ts` owns agent thread/runtime queries plus derived read models
+- `frontend/src/features/agent/panel/useAgentThreadActions.ts` owns thread lifecycle mutations, review actions, and panel cache reconciliation
 - `frontend/src/features/agent/panel/useAgentComposerRuntime.ts` now stays on composer UI state and panel coordination
 - `frontend/src/features/agent/panel/useAgentComposerStreamState.ts` owns optimistic stream and tool-call hydration state
 - `frontend/src/features/agent/panel/useAgentComposerActions.ts` owns bulk launch, stream send, and stop-run workflows
