@@ -1,0 +1,1 @@
+Oneline: Entities should be displayed in a table in a standalone page, just like Entries.
