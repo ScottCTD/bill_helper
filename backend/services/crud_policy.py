@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Iterable, TypeVar
 
-from fastapi import HTTPException
 from starlette import status
 
 
@@ -30,12 +29,6 @@ class PolicyViolation(Exception):
     @classmethod
     def not_found(cls, detail: str) -> PolicyViolation:
         return cls(detail=detail, status_code=status.HTTP_404_NOT_FOUND)
-
-
-def translate_policy_violation(error: PolicyViolation) -> HTTPException:
-    return HTTPException(status_code=error.status_code, detail=error.detail)
-
-
 def normalize_required_name(
     raw_name: str | None,
     *,

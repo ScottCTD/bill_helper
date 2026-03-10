@@ -69,14 +69,12 @@ Recommended direction:
 
 The router split landed, but the review still flags backend HTTP consistency debt:
 
-- `review::.::holistic::ai_generated_debt::router_policy_translation_boilerplate::48b86e1a`
 - `review::.::holistic::design_coherence::router_service_boundary_blur::...`
 - `review::.::holistic::error_consistency::*` items for accounts, groups, and taxonomy
 - `review::.::holistic::authorization_consistency::*` items around catalog/global usage exposure and auth drift
 
 Recommended direction:
 
-- add one shared `PolicyViolation` -> HTTP translation helper for CRUD routers
 - continue moving router-owned read aggregation into services
 - replace message-text HTTP mapping with typed domain exceptions
 - re-check agent and catalog read endpoints for owner scoping and authorization consistency

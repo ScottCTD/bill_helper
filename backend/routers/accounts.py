@@ -27,7 +27,6 @@ from backend.services.accounts import (
     delete_account_and_entity_root,
     update_account as update_account_service,
 )
-from backend.services.crud_policy import PolicyViolation, translate_policy_violation
 from backend.services.finance_contracts import AccountCreateCommand, AccountPatch
 from backend.services.finance import build_reconciliation
 
@@ -40,14 +39,11 @@ def create_account(
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> AccountRead:
-    try:
-        account = create_account_service(
-            db,
-            command=AccountCreateCommand.model_validate(payload.model_dump()),
-            principal=principal,
-        )
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    account = create_account_service(
+        db,
+        command=AccountCreateCommand.model_validate(payload.model_dump()),
+        principal=principal,
+    )
     db.commit()
     db.refresh(account)
     db.refresh(account, attribute_names=["entity"])
@@ -79,15 +75,12 @@ def update_account(
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> AccountRead:
     account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
-    try:
-        update_account_service(
-            db,
-            account=account,
-            patch=AccountPatch.model_validate(payload.model_dump(exclude_unset=True)),
-            principal=principal,
-        )
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    update_account_service(
+        db,
+        account=account,
+        patch=AccountPatch.model_validate(payload.model_dump(exclude_unset=True)),
+        principal=principal,
+    )
     db.commit()
     db.refresh(account)
     db.refresh(account, attribute_names=["entity"])

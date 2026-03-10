@@ -138,6 +138,7 @@ Router behavior:
 - `backend/routers/accounts.py`, `entities.py`, and `tags.py` translate HTTP write schemas into `backend/services/finance_contracts.py` commands before calling service workflows
 - `backend/routers/groups.py` and `users.py` now follow the same command/patch pattern through `backend/contracts_groups.py` and `backend/contracts_users.py`
 - `backend/routers/tags.py`, `taxonomies.py`, `users.py`, and `dashboard.py` delegate read/write orchestration to their service modules instead of assembling persistence queries inline
+- `backend/main.py` owns the shared FastAPI exception handler that turns `PolicyViolation` into JSON HTTP errors, so CRUD routers no longer repeat local translation blocks
 - non-admin principals are restricted to their own owned resources; admin access is checked from `RequestPrincipal.is_admin`, not by matching the user name string
 - `groups.py` exposes first-class group CRUD, membership mutation, and derived group graphs
 - empty PATCH payloads for account, entity, tag, group, and user mutations are rejected consistently during request validation

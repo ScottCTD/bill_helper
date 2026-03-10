@@ -7,10 +7,6 @@ from backend.auth.contracts import RequestPrincipal
 from backend.auth.dependencies import require_admin_principal
 from backend.database import get_db
 from backend.schemas_finance import TagCreate, TagRead, TagUpdate
-from backend.services.crud_policy import (
-    PolicyViolation,
-    translate_policy_violation,
-)
 from backend.services.finance_contracts import TagCreateCommand, TagPatch
 from backend.services.tags import (
     build_tag_read,
@@ -34,13 +30,10 @@ def create_tag(
     db: Session = Depends(get_db),
     _: RequestPrincipal = Depends(require_admin_principal),
 ) -> TagRead:
-    try:
-        tag = create_tag_service(
-            db,
-            command=TagCreateCommand.model_validate(payload.model_dump()),
-        )
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    tag = create_tag_service(
+        db,
+        command=TagCreateCommand.model_validate(payload.model_dump()),
+    )
 
     db.commit()
     db.refresh(tag)
@@ -54,15 +47,12 @@ def update_tag(
     db: Session = Depends(get_db),
     _: RequestPrincipal = Depends(require_admin_principal),
 ) -> TagRead:
-    try:
-        tag = load_tag(db, tag_id=tag_id)
-        update_tag_service(
-            db,
-            tag=tag,
-            patch=TagPatch.model_validate(payload.model_dump(exclude_unset=True)),
-        )
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    tag = load_tag(db, tag_id=tag_id)
+    update_tag_service(
+        db,
+        tag=tag,
+        patch=TagPatch.model_validate(payload.model_dump(exclude_unset=True)),
+    )
 
     db.commit()
     db.refresh(tag)
@@ -75,8 +65,5 @@ def delete_tag(
     db: Session = Depends(get_db),
     _: RequestPrincipal = Depends(require_admin_principal),
 ) -> None:
-    try:
-        delete_tag_service(db, tag=load_tag(db, tag_id=tag_id))
-    except PolicyViolation as exc:
-        raise translate_policy_violation(exc) from exc
+    delete_tag_service(db, tag=load_tag(db, tag_id=tag_id))
     db.commit()
