@@ -88,6 +88,7 @@ def test_entry_filters_and_tags(client):
     assert payload["total"] == 1
     assert payload["items"][0]["name"] == "Lunch"
     assert payload["items"][0]["tags"][0]["name"] == "food"
+    assert "entry_count" not in payload["items"][0]["tags"][0]
     assert "status" not in payload["items"][0]
 
 

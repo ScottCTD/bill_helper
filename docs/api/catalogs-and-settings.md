@@ -100,6 +100,7 @@ Behavior:
 
 - admin principals see global `entry_count`
 - non-admin `entry_count` reflects only the caller's visible non-deleted entries
+- this catalog contract is only used by `/tags`; entry payloads embed `TagSummaryRead` instead of repeating catalog counts
 
 ### `POST /tags`
 

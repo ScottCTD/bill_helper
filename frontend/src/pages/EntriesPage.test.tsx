@@ -93,7 +93,7 @@ const entryFixture: Entry = {
   direct_group: null,
   direct_group_member_role: null,
   group_path: [],
-  tags: [{ id: 1, name: "coffee", color: "#5f6caf", type: "Food", entry_count: 1 }]
+  tags: [{ id: 1, name: "coffee", color: "#5f6caf", type: "Food" }]
 };
 
 afterEach(() => {
@@ -150,7 +150,7 @@ describe("EntriesPage", () => {
       ...entryFixture,
       tags: [
         entryFixture.tags[0],
-        { id: 2, name: "travel", color: null, type: null, entry_count: 1 }
+        { id: 2, name: "travel", color: null, type: null }
       ]
     };
     mockEntriesPageData(entryWithFallbackTag);

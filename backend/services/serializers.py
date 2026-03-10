@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from backend.models_finance import Entry, EntryGroup, Tag
-from backend.schemas_finance import EntryDetailRead, EntryGroupRefRead, EntryRead, TagRead
+from backend.schemas_finance import EntryDetailRead, EntryGroupRefRead, EntryRead, TagSummaryRead
 
 
-def tag_to_schema(tag: Tag) -> TagRead:
-    return TagRead(id=tag.id, name=tag.name, color=tag.color, description=tag.description)
+def tag_to_summary(tag: Tag) -> TagSummaryRead:
+    return TagSummaryRead(id=tag.id, name=tag.name, color=tag.color, description=tag.description)
 
 
 def group_to_ref(group: EntryGroup) -> EntryGroupRefRead:
@@ -55,7 +55,7 @@ def entry_to_schema(entry: Entry) -> EntryRead:
         markdown_body=entry.markdown_body,
         created_at=entry.created_at,
         updated_at=entry.updated_at,
-        tags=[tag_to_schema(tag) for tag in entry.tags],
+        tags=[tag_to_summary(tag) for tag in entry.tags],
         direct_group=direct_group,
         direct_group_member_role=entry.group_membership.member_role if entry.group_membership is not None else None,
         group_path=group_path,
