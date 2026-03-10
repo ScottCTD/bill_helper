@@ -57,6 +57,8 @@ def test_thread_detail_includes_configured_model_name(client):
 
 
 def test_send_message_allows_explicit_model_selection(client, monkeypatch):
+    from backend.config import get_settings
+
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
     patch_model(
         monkeypatch,
@@ -88,7 +90,7 @@ def test_send_message_allows_explicit_model_selection(client, monkeypatch):
     detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
     detail_response.raise_for_status()
     detail = detail_response.json()
-    assert detail["configured_model_name"] == "bedrock/us.anthropic.claude-sonnet-4-6"
+    assert detail["configured_model_name"] == get_settings().agent_model
     assert detail["runs"][0]["model_name"] == "openai/gpt-4.1-mini"
 
 
@@ -398,10 +400,10 @@ def test_delete_thread_removes_uploaded_attachment_files(client, monkeypatch):
     assert all(not path.exists() for path in attachment_paths)
 
 
-def test_default_agent_model_is_bedrock_claude_sonnet_4_6():
-    from backend.config import get_settings
+def test_default_agent_model_matches_config_default():
+    from backend.config import DEFAULT_AGENT_MODEL, get_settings
 
-    assert get_settings().agent_model == "bedrock/us.anthropic.claude-sonnet-4-6"
+    assert get_settings().agent_model == DEFAULT_AGENT_MODEL
 
 
 def test_model_supports_vision_has_manual_override_for_openrouter_qwen_qwen3_5_27b(monkeypatch):
@@ -1555,6 +1557,7 @@ def test_stream_message_endpoint_emits_real_time_events(client, monkeypatch):
 
 
 def test_stream_message_allows_explicit_model_selection(client, monkeypatch):
+    from backend.config import get_settings
     from backend.services.agent import runtime
 
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
@@ -1606,7 +1609,7 @@ def test_stream_message_allows_explicit_model_selection(client, monkeypatch):
     detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
     detail_response.raise_for_status()
     detail = detail_response.json()
-    assert detail["configured_model_name"] == "bedrock/us.anthropic.claude-sonnet-4-6"
+    assert detail["configured_model_name"] == get_settings().agent_model
     assert detail["runs"][0]["status"] == "completed"
     assert detail["runs"][0]["model_name"] == "openai/gpt-4.1-mini"
 
@@ -2083,6 +2086,7 @@ def test_run_usage_fields_are_null_when_usage_unavailable(client, monkeypatch):
 
 
 def test_run_pricing_handles_missing_cache_usage_fields(client, monkeypatch):
+    from backend.config import get_settings
     from backend.services.agent.pricing import UsageCosts
 
     pricing_calls: list[dict[str, object]] = []
@@ -2128,7 +2132,7 @@ def test_run_pricing_handles_missing_cache_usage_fields(client, monkeypatch):
     assert any(
         call
         == {
-            "model_name": "bedrock/us.anthropic.claude-sonnet-4-6",
+            "model_name": get_settings().agent_model,
             "input_tokens": 10,
             "output_tokens": 5,
             "cache_read_tokens": None,
