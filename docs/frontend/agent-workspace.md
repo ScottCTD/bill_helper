@@ -5,13 +5,15 @@
 - `frontend/src/features/agent/AgentPanel.tsx`
 - used as the primary AI page via `frontend/src/pages/HomePage.tsx`
 - acts as a render shell that wires the header, timeline, composer, thread rail, review modal, and preview dialog together
-- stateful coordination now lives in `frontend/src/features/agent/panel/useAgentPanelController.ts` plus `frontend/src/features/agent/panel/useAgentComposerRuntime.ts`, while pure panel helpers live in `frontend/src/features/agent/panel/helpers.ts`
+- stateful coordination now lives in `frontend/src/features/agent/panel/useAgentPanelController.ts` plus `frontend/src/features/agent/panel/useAgentComposerRuntime.ts`, while stream hydration/state lives in `useAgentComposerStreamState.ts`, send-stop orchestration lives in `useAgentComposerActions.ts`, and pure panel helpers live in `frontend/src/features/agent/panel/helpers.ts`
 - page header uses the static title `Bill Assistant`; model selection stays in the composer dropdown instead of the title row
 
 Supporting modules include:
 
 - `frontend/src/features/agent/panel/useAgentPanelController.ts`
 - `frontend/src/features/agent/panel/useAgentComposerRuntime.ts`
+- `frontend/src/features/agent/panel/useAgentComposerStreamState.ts`
+- `frontend/src/features/agent/panel/useAgentComposerActions.ts`
 - `frontend/src/features/agent/panel/helpers.ts`
 - `frontend/src/features/agent/AgentRunBlock.tsx`
 - `frontend/src/features/agent/activity.ts`
@@ -44,6 +46,7 @@ Supporting modules include:
 - compact tool-call snapshots are hydrated on demand from `GET /agent/tool-calls/{tool_call_id}`
 - assistant activity and transient SSE text render in the same assistant/update bubble
 - optimistic user and assistant placeholders reconcile against persisted timeline messages
+- `useAgentComposerStreamState.ts` owns stream-event accumulation, tool-call hydration, rename-thread reconciliation, and the optimistic run timeline cache
 
 ## Thread Review Surface
 
@@ -79,6 +82,7 @@ Supporting modules include:
 - idle primary action is `Send`; active-run primary action is `Stop`
 - when Bulk mode is enabled, the primary action becomes `Start Bulk` and uses the existing non-stream send endpoint per created thread
 - agent messages stream over SSE from `POST /api/v1/agent/threads/{thread_id}/messages/stream`
+- `useAgentComposerRuntime.ts` now stays focused on composer UI state, while `useAgentComposerActions.ts` owns bulk launches, stream sends, and stop-run orchestration
 
 ## Usage And Activity
 
