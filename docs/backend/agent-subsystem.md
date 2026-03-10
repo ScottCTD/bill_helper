@@ -61,7 +61,11 @@
 - `backend/services/agent/attachments.py`
   - attachment file lifecycle helpers
 - `backend/services/agent/attachment_content.py`
-  - attachment parsing, PDF text or OCR, and model-content materialization
+  - public attachment-content seam for message-history callers and tests
+- `backend/services/agent/attachment_content_pdf.py`
+  - PDF text extraction, OCR fallback, page rendering, and recoverable parse logging
+- `backend/services/agent/attachment_content_assembly.py`
+  - attachment display-name, data-url, and model-content part assembly helpers
 - `backend/services/agent/user_context.py`
   - current-user and account-context normalization
 - `backend/services/agent/runtime_state.py`
