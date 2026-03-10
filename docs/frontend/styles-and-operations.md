@@ -19,6 +19,9 @@
 - `agent/review/useAgentReviewEditorResources.ts`
 - `agent/review/useAgentReviewDraftState.ts`
 - `agent/review/ReviewEditors.tsx`
+- `agent/review/ReviewTocSection.tsx`
+- `agent/review/ReviewCatalogEditors.tsx`
+- `agent/review/ReviewGroupEditors.tsx`
 - `agent/review/modalHelpers.ts`
 - `agent/review/drafts/*`
 - `agent/review/diff/*`
