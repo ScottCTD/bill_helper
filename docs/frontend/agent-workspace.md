@@ -28,9 +28,9 @@ Supporting modules include:
 - `frontend/src/features/agent/review/useAgentThreadReviewController.ts`
 - `frontend/src/features/agent/review/ReviewEditors.tsx`
 - `frontend/src/features/agent/review/modalHelpers.ts`
-- `frontend/src/features/agent/review/drafts.ts`
+- `frontend/src/features/agent/review/drafts/*`
 - `frontend/src/features/agent/review/model.ts`
-- `frontend/src/features/agent/review/diff.ts`
+- `frontend/src/features/agent/review/diff/*`
 
 ## Timeline Behavior
 
@@ -52,8 +52,10 @@ Supporting modules include:
 - the dialog uses responsive width rules, lets reviewers collapse the left TOC, groups TOC rows by proposal domain (`Entries`, `Accounts`, `Groups`, `Entities`, `Tags`) within `Pending` and `Reviewed / Failed`, and surfaces batch plus per-item review controls in a full-width bar above the denser review surface
 - proposals render CRUD-aware field-level diffs, and reviewer overrides update the preview for create and update entry/account/tag/entity/group proposals plus add-member group proposals
 - TOC navigation, edit forms, and dependency chips live in `frontend/src/features/agent/review/ReviewEditors.tsx`, while reusable selection/status helpers live in `frontend/src/features/agent/review/modalHelpers.ts`
-- entry create/update review uses the same field model as `EntryEditorModal` through `frontend/src/features/agent/review/drafts.ts`; account review edits `name`, `currency`, `active`, and `notes`; tag review edits only `name` and `type`; entity review edits only `name` and `category`; create/update group review edits `name` plus create-only `group_type`
+- draft normalization and override builders now live in `frontend/src/features/agent/review/drafts/`, split across shared coercion helpers plus `entries`, `catalog`, and `memberships` ownership modules
+- entry create/update review uses the same field model as `EntryEditorModal` through `frontend/src/features/agent/review/drafts/entries.ts`; account review edits `name`, `currency`, `active`, and `notes`; tag review edits only `name` and `type`; entity review edits only `name` and `category`; create/update group review edits `name` plus create-only `group_type`
 - create-group-member review shows the resolved parent group name plus a read-only full entry snapshot for entry members; the only editable field in v1 is split role, and the diff preview treats membership changes as a group assignment update so only the `group` field (and split role when relevant) changes instead of re-highlighting the whole entry payload
+- diff rendering and record-shaping helpers now live in `frontend/src/features/agent/review/diff/`, split between reusable diff primitives in `core.ts` and proposal-family record builders in `domains.ts`
 - proposal-backed group or entry dependencies show chips only while the referenced create proposal is still unresolved; once that dependency is `APPLIED`, the review surface falls back to the resolved group name and entry snapshot without a dependency banner
 - delete-group and delete-group-member proposals stay confirmation-only in v1
 - non-applied items remain reviewer-editable after rejection or apply failure, so reviewers can revise the payload, move it back to `PENDING_REVIEW`, or approve it directly from the reviewed section; `APPLIED` items stay read-only

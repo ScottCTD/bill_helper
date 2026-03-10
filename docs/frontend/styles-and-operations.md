@@ -18,8 +18,8 @@
 - `agent/review/useAgentThreadReviewController.ts`
 - `agent/review/ReviewEditors.tsx`
 - `agent/review/modalHelpers.ts`
-- `agent/review/drafts.ts`
-- `agent/review/diff.ts`
+- `agent/review/drafts/*`
+- `agent/review/diff/*`
 - `agent/panel/useAgentPanelController.ts`
 - `agent/panel/useAgentComposerRuntime.ts`
 - `components/ui/*` for shared primitives

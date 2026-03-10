@@ -64,7 +64,7 @@ This doc is the fast path for understanding how entries are created, edited, gro
 2. Proposal persisted as `agent_change_items` (`PENDING_REVIEW`).
 3. Human reviews from the thread-scoped frontend review UI opened by the agent header `Review` button:
    - `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`
-   - `frontend/src/features/agent/review/drafts.ts`
+   - `frontend/src/features/agent/review/drafts/entries.ts`
 4. Apply handler:
    - `backend/services/agent/reviews/workflow.py`
    - `backend/services/agent/apply/`

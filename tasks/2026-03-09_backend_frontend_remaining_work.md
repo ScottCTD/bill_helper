@@ -88,17 +88,17 @@ The thread review modal and panel controller split are now in place:
 - `frontend/src/features/agent/review/ReviewEditors.tsx` owns TOC navigation plus the proposal editor surfaces
 - `frontend/src/features/agent/panel/useAgentComposerRuntime.ts` now owns the optimistic send/stream/composer runtime
 
-The next frontend cleanup should target the remaining domain-heavy helpers and page orchestration:
+The next frontend cleanup should target the remaining page orchestration and any follow-on helper extraction after the review packages landed:
 
-- `frontend/src/features/agent/review/drafts.ts` (`829` lines)
-- `frontend/src/features/agent/review/diff.ts` (`732` lines)
-- `frontend/src/pages/SettingsPage.tsx` (`763` lines)
+- `frontend/src/pages/SettingsPage.tsx` (`763` lines before the next split)
+- `frontend/src/features/agent/review/drafts/` follow-up if the family modules accumulate more editor-only logic
+- `frontend/src/features/agent/review/diff/` follow-up if diff record builders need another domain split
 
 Recommended direction:
 
-- carve `review/drafts.ts` into draft state reducers and patch-format helpers
-- separate diff rendering primitives from finance/agent field-specific presenters
 - move settings page orchestration into feature hooks, like the other page models in the repo
+- keep review draft ownership split between shared coercion helpers and family modules
+- keep diff ownership split between reusable primitives and proposal-family record builders
 
 ### 5. Test-health and dependency cleanup
 
@@ -134,8 +134,8 @@ Recommended direction:
 
 1. Reduce pending-review normalization switchboards.
 2. Unify router `PolicyViolation` translation and typed error mapping across CRUD routers.
-3. Carve `frontend/src/features/agent/review/drafts.ts` into domain slices.
-4. Split `frontend/src/features/agent/review/diff.ts` by renderer/field-family concerns.
+3. Split `frontend/src/pages/SettingsPage.tsx` into feature-owned controller and section modules.
+4. Revisit any remaining frontend helpers that still combine rendering with normalization or transport concerns.
 5. Attack test-health items around the new service seams.
 
 ## Latest Major Commits From This Pass
