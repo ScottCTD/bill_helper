@@ -20,6 +20,8 @@ class ToolExecutionResult:
 
     def __post_init__(self) -> None:
         self.status = ToolExecutionStatus(self.status)
+        self.output_json = dict(self.output_json)
+        self.output_json["status"] = self.status.value
 
 
 @dataclass(slots=True)

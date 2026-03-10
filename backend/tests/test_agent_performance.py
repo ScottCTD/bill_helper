@@ -54,7 +54,7 @@ def _seed_tool_heavy_thread(
                         "filters": ["expense", "cad", "recent"] * 8,
                     },
                     output_json={
-                        "status": "OK",
+                        "status": "ok",
                         "rows": [
                             {
                                 "entry_id": f"entry-{row_index}",

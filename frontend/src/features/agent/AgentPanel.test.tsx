@@ -524,7 +524,7 @@ describe("AgentPanel", () => {
         run_id: "run-1",
         tool_name: "rename_thread",
         input_json: { title: "Budget Review" },
-        output_json: { status: "OK", title: "Budget Review" },
+        output_json: { status: "ok", title: "Budget Review" },
         output_text: "OK\nsummary: renamed thread to Budget Review",
         has_full_payload: true,
         status: "ok"

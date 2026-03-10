@@ -833,8 +833,8 @@ message: <update text>
 
 Each tool emits model-visible text plus structured `output_json`:
 
-- Success: `status: "OK"`, `summary`, optional `preview`, `item_status`
-- Failure: `status: "ERROR"`, `summary`, optional `details`
+- Success: `status: "ok"`, `summary`, optional `preview`, `item_status`
+- Failure: `status: "error"`, `summary`, optional `details`
 - Proposal tools additionally return `proposal_id` and `proposal_short_id`.
 - `list_proposals` returns `proposals` records with lifecycle status, payload, rationale, and review history for each matching proposal.
 

@@ -148,7 +148,7 @@ describe("activity helpers", () => {
           status: "running",
           has_full_payload: true,
           input_json: { entity_name: "ACME" },
-          output_json: { status: "OK", proposal_id: "proposal-1" },
+          output_json: { status: "ok", proposal_id: "proposal-1" },
           output_text: "OK\nproposal_id: proposal-1"
         })
       ],
@@ -170,7 +170,7 @@ describe("activity helpers", () => {
       status: "ok",
       has_full_payload: true,
       input_json: { entity_name: "ACME" },
-      output_json: { status: "OK", proposal_id: "proposal-1" },
+      output_json: { status: "ok", proposal_id: "proposal-1" },
       output_text: "OK\nproposal_id: proposal-1"
     });
   });
