@@ -29,6 +29,10 @@ Supporting modules include:
 - `frontend/src/features/agent/panel/useStickToBottom.ts`
 - `frontend/src/hooks/useResizablePanel.ts`
 - `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`
+- `frontend/src/features/agent/review/ReviewModalHeader.tsx`
+- `frontend/src/features/agent/review/ReviewModalControls.tsx`
+- `frontend/src/features/agent/review/ReviewActiveItemCard.tsx`
+- `frontend/src/features/agent/review/ReviewModalFooter.tsx`
 - `frontend/src/features/agent/review/useAgentThreadReviewController.ts`
 - `frontend/src/features/agent/review/useAgentReviewEditorResources.ts`
 - `frontend/src/features/agent/review/useAgentReviewDraftState.ts`
@@ -57,8 +61,9 @@ Supporting modules include:
 
 ## Thread Review Surface
 
-- review actions are coordinated by `frontend/src/features/agent/review/useAgentThreadReviewController.ts`, while `AgentThreadReviewModal.tsx` now stays focused on modal layout and card composition
+- review actions are coordinated by `frontend/src/features/agent/review/useAgentThreadReviewController.ts`, while `AgentThreadReviewModal.tsx` now stays focused on dialog shell/layout composition
 - `useAgentThreadReviewController.ts` now stays on item navigation plus review actions, while `useAgentReviewEditorResources.ts` owns catalog/settings queries and `useAgentReviewDraftState.ts` owns reviewer draft maps plus payload-override shaping
+- review modal presentation is split across `ReviewModalHeader.tsx`, `ReviewModalControls.tsx`, `ReviewActiveItemCard.tsx`, and `ReviewModalFooter.tsx` so card rendering, action chrome, and footer messaging do not regrow inside the modal shell
 - the header `Review` button is the only review entry point and opens one thread-scoped dialog for all proposal items across the selected thread
 - the dialog uses responsive width rules, lets reviewers collapse the left TOC, groups TOC rows by proposal domain (`Entries`, `Accounts`, `Groups`, `Entities`, `Tags`) within `Pending` and `Reviewed / Failed`, and surfaces batch plus per-item review controls in a full-width bar above the denser review surface
 - proposals render CRUD-aware field-level diffs, and reviewer overrides update the preview for create and update entry/account/tag/entity/group proposals plus add-member group proposals

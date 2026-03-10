@@ -336,3 +336,5 @@ export function useAgentThreadReviewController({
     handleReopenActive
   };
 }
+
+export type AgentThreadReviewController = ReturnType<typeof useAgentThreadReviewController>;
