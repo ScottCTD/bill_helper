@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from backend.enums_agent import AgentChangeType
@@ -9,6 +10,7 @@ from backend.models_agent import AgentChangeItem
 from backend.services.agent.change_contracts import ChangePayloadModel, parse_change_payload
 from backend.services.agent.proposals.normalization import normalize_payload_for_change_type
 from backend.services.agent.tool_types import ToolContext
+from backend.services.crud_policy import PolicyViolation
 
 
 EDITABLE_CHANGE_TYPES = {
@@ -76,7 +78,7 @@ def validate_payload_override_supported(item: AgentChangeItem, payload_override:
     if payload_override is None:
         return
     if item.change_type not in EDITABLE_CHANGE_TYPES:
-        raise ValueError(
+        raise PolicyViolation.bad_request(
             "payload_override is only supported for editable create/update entry, tag, entity, account, and group items"
         )
 
@@ -88,12 +90,17 @@ def normalized_payload_override(
     payload_override: dict[str, Any] | None,
 ) -> tuple[dict[str, Any], ChangePayloadModel]:
     validate_payload_override_supported(item, payload_override)
-    if payload_override is None:
-        payload_json = item.payload_json
-    else:
-        payload_json = normalize_payload_for_change_type(
-            ToolContext(db=db, run_id=item.run_id),
-            change_type=item.change_type,
-            payload=payload_override,
-        )
-    return payload_json, parse_change_payload(item.change_type, payload_json)
+    try:
+        if payload_override is None:
+            payload_json = item.payload_json
+        else:
+            payload_json = normalize_payload_for_change_type(
+                ToolContext(db=db, run_id=item.run_id),
+                change_type=item.change_type,
+                payload=payload_override,
+            )
+        return payload_json, parse_change_payload(item.change_type, payload_json)
+    except PolicyViolation:
+        raise
+    except (ValidationError, ValueError) as exc:
+        raise PolicyViolation.unprocessable_content(str(exc)) from exc

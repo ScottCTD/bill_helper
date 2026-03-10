@@ -154,6 +154,7 @@ Endpoints:
 
 - `backend/services/agent/reviews/` accepts reviewer `payload_override` for create/update entry, tag, entity, and group proposals across approve, reject, and reopen actions while leaving `APPLIED` items immutable
 - invalid reviewer overrides fail during payload normalization and leave the proposal unchanged instead of marking it `APPLY_FAILED`
+- review workflow failures now surface through typed `PolicyViolation` statuses instead of router-local `ValueError` string matching, so approve/reject/reopen keep one error contract for `400`, `409`, and `422` responses
 - group-member approvals that reference pending `create_group` / `create_entry` proposals are blocked until those dependencies are applied; rejected or failed dependencies leave the member proposal unapprovable until edited or removed
 - apply-time group-member resolution canonicalizes existing short `group_id` and `entry_id` aliases to full ids before scoped lookup and membership matching, so approval semantics match proposal-time alias handling
 - review apply uses the approving reviewer principal for principal-scoped entry lookup and for owner attribution on newly created entry/account/group resources; mutable runtime settings remain only as a non-request fallback

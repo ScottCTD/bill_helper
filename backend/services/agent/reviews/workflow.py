@@ -14,6 +14,7 @@ from backend.services.agent.reviews.overrides import (
     normalized_payload_override,
     summarize_payload_override_diff,
 )
+from backend.services.crud_policy import PolicyViolation
 
 
 def approve_change_item(
@@ -28,7 +29,7 @@ def approve_change_item(
     if item is None:
         return None
     if item.status == AgentChangeStatus.APPLIED:
-        raise ValueError("Applied items cannot be approved again")
+        raise PolicyViolation.conflict("Applied items cannot be approved again")
 
     payload_json, payload = normalized_payload_override(db, item=item, payload_override=payload_override)
     override_note = None
@@ -93,7 +94,7 @@ def reject_change_item(
     if item is None:
         return None
     if item.status == AgentChangeStatus.APPLIED:
-        raise ValueError("Applied items cannot be changed back to rejected")
+        raise PolicyViolation.conflict("Applied items cannot be changed back to rejected")
 
     payload_json, _ = normalized_payload_override(db, item=item, payload_override=payload_override)
     override_note = None
@@ -133,7 +134,7 @@ def reopen_change_item(
     if item is None:
         return None
     if item.status == AgentChangeStatus.APPLIED:
-        raise ValueError("Applied items cannot be reopened")
+        raise PolicyViolation.conflict("Applied items cannot be reopened")
 
     payload_json, _ = normalized_payload_override(db, item=item, payload_override=payload_override)
     override_note = None

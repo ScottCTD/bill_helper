@@ -32,6 +32,10 @@ class PolicyViolation(Exception):
     @classmethod
     def not_found(cls, detail: str) -> PolicyViolation:
         return cls(detail=detail, status_code=status.HTTP_404_NOT_FOUND)
+
+    @classmethod
+    def unprocessable_content(cls, detail: str) -> PolicyViolation:
+        return cls(detail=detail, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
 def normalize_required_name(
     raw_name: str | None,
     *,

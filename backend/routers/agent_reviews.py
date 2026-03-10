@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal
@@ -12,6 +12,7 @@ from backend.schemas_agent import (
     AgentChangeItemRejectRequest,
     AgentChangeItemReopenRequest,
 )
+from backend.services.crud_policy import PolicyViolation
 from backend.services.agent.reviews.workflow import (
     approve_change_item,
     reject_change_item,
@@ -26,15 +27,6 @@ router = APIRouter(
 )
 
 
-def _raise_review_http_error(exc: ValueError, *, conflict_suffix: str) -> None:
-    detail = str(exc)
-    if detail.endswith(conflict_suffix):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
-    if "payload_override" in detail:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
-    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
-
-
 @router.post("/change-items/{item_id}/approve", response_model=AgentChangeItemRead)
 def approve_item(
     item_id: str,
@@ -42,18 +34,15 @@ def approve_item(
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> AgentChangeItemRead:
-    try:
-        item = approve_change_item(
-            db,
-            item_id=item_id,
-            actor=principal.user_name,
-            note=payload.note,
-            payload_override=payload.payload_override,
-        )
-    except ValueError as exc:
-        _raise_review_http_error(exc, conflict_suffix="cannot be approved again")
+    item = approve_change_item(
+        db,
+        item_id=item_id,
+        actor=principal.user_name,
+        note=payload.note,
+        payload_override=payload.payload_override,
+    )
     if item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Change item not found")
+        raise PolicyViolation.not_found("Change item not found")
     return change_item_to_schema(item)
 
 
@@ -64,18 +53,15 @@ def reject_item(
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> AgentChangeItemRead:
-    try:
-        item = reject_change_item(
-            db,
-            item_id=item_id,
-            actor=principal.user_name,
-            note=payload.note,
-            payload_override=payload.payload_override,
-        )
-    except ValueError as exc:
-        _raise_review_http_error(exc, conflict_suffix="cannot be changed back to rejected")
+    item = reject_change_item(
+        db,
+        item_id=item_id,
+        actor=principal.user_name,
+        note=payload.note,
+        payload_override=payload.payload_override,
+    )
     if item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Change item not found")
+        raise PolicyViolation.not_found("Change item not found")
     return change_item_to_schema(item)
 
 
@@ -86,16 +72,13 @@ def reopen_item(
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> AgentChangeItemRead:
-    try:
-        item = reopen_change_item(
-            db,
-            item_id=item_id,
-            actor=principal.user_name,
-            note=payload.note,
-            payload_override=payload.payload_override,
-        )
-    except ValueError as exc:
-        _raise_review_http_error(exc, conflict_suffix="cannot be reopened")
+    item = reopen_change_item(
+        db,
+        item_id=item_id,
+        actor=principal.user_name,
+        note=payload.note,
+        payload_override=payload.payload_override,
+    )
     if item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Change item not found")
+        raise PolicyViolation.not_found("Change item not found")
     return change_item_to_schema(item)

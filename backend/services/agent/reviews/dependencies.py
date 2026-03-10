@@ -17,6 +17,7 @@ from backend.services.agent.change_contracts.groups import (
 )
 from backend.services.agent.reviews.common import get_change_item_or_none, thread_id_for_change_item
 from backend.services.entities import find_entity_by_name
+from backend.services.crud_policy import PolicyViolation
 from backend.validation.finance_names import normalize_entity_name
 
 
@@ -105,7 +106,7 @@ def validate_entry_dependencies_ready_for_approval(
     if item.change_type not in {AgentChangeType.CREATE_ENTRY, AgentChangeType.UPDATE_ENTRY}:
         return
     if not isinstance(payload, CreateEntryPayload | UpdateEntryPayload):
-        raise ValueError(f"Unexpected payload model for change type {item.change_type.value}")
+        raise RuntimeError(f"Unexpected payload model for change type {item.change_type.value}")
 
     entity_labels = _entry_entity_labels_for_payload(payload)
     if not entity_labels:
@@ -135,13 +136,13 @@ def validate_entry_dependencies_ready_for_approval(
     if pending_blockers:
         quoted = ", ".join(f"'{name}'" for name in pending_blockers)
         noun = "create proposal" if len(pending_blockers) == 1 else "create proposals"
-        raise ValueError(
+        raise PolicyViolation.unprocessable_content(
             f"Entry depends on pending {noun} for {quoted}. Approve or reject those proposals first."
         )
     if missing_entities:
         quoted = ", ".join(f"'{name}'" for name in missing_entities)
         noun = "entity" if len(missing_entities) == 1 else "entities"
-        raise ValueError(
+        raise PolicyViolation.unprocessable_content(
             f"Entry references missing {noun} {quoted}. Propose and approve create_entity or create_account first."
         )
 
@@ -168,7 +169,7 @@ def validate_group_dependencies_ready_for_approval(
     if item.change_type != AgentChangeType.CREATE_GROUP_MEMBER:
         return
     if not isinstance(payload, CreateGroupMemberPayload):
-        raise ValueError(f"Unexpected payload model for change type {item.change_type.value}")
+        raise RuntimeError(f"Unexpected payload model for change type {item.change_type.value}")
 
     dependency_ids = _group_dependency_proposal_ids(payload)
     if not dependency_ids:
@@ -189,16 +190,16 @@ def validate_group_dependencies_ready_for_approval(
             failed_blockers.append(f"{dependency_id[:8]}:{dependency_item.status.value}")
 
     if pending_blockers:
-        raise ValueError(
+        raise PolicyViolation.unprocessable_content(
             "Group proposal depends on pending create proposals. Approve and apply those proposals first: "
             + ", ".join(sorted(pending_blockers))
         )
     if failed_blockers:
-        raise ValueError(
+        raise PolicyViolation.unprocessable_content(
             "Group proposal depends on rejected or failed create proposals and cannot be approved until edited or removed: "
             + ", ".join(sorted(failed_blockers))
         )
     if missing_blockers:
-        raise ValueError(
+        raise PolicyViolation.unprocessable_content(
             "Group proposal references missing proposal dependencies: " + ", ".join(sorted(missing_blockers))
         )
