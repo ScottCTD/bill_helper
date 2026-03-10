@@ -24,7 +24,7 @@ This file is the API index. Use it to find the focused API docs under `docs/api/
 
 ## Related Docs
 
-- `docs/backend.md`
+- `docs/backend_index.md`
 - `docs/data-model.md`
-- `docs/feature-entry-lifecycle.md`
-- `docs/feature-dashboard-analytics.md`
+- `docs/features/entry-lifecycle.md`
+- `docs/features/dashboard-analytics.md`

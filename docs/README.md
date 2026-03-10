@@ -7,26 +7,29 @@ Use the docs in layers:
 1. `README.md` for onboarding and the dev loop.
 2. `docs/architecture.md` for the system mental model.
 3. `docs/repository-structure.md` for the filesystem map.
-4. `docs/backend.md`, `docs/frontend.md`, `docs/api.md`, and `docs/data-model.md` for subsystem entry points.
-5. `docs/backend/`, `docs/frontend/`, and `docs/api/` for focused subsystem docs.
+4. `docs/backend_index.md`, `docs/frontend_index.md`, `docs/ios_index.md`, `docs/telegram_index.md`, `docs/api.md`, and `docs/data-model.md` for subsystem entry points.
+5. `../backend/docs/`, `../frontend/docs/`, `../ios/docs/`, `../telegram/docs/`, `docs/api/`, and `docs/features/` for focused subsystem docs.
 6. `../tasks/` for active implementation tracking and `completed_tasks/` for archived task history.
 
 ## Stable Reference Docs
 
 - `architecture.md`: system topology, boundaries, and major design choices.
 - `repository-structure.md`: filesystem map and ownership boundaries.
-- `backend.md`: backend index linking to focused backend docs under `backend/`.
-- `backend/README.md`: backend topic map.
-- `frontend.md`: frontend index linking to focused frontend docs under `frontend/`.
-- `frontend/README.md`: frontend topic map.
+- `backend_index.md`: backend index linking to focused backend docs under `../backend/docs/`.
+- `../backend/docs/README.md`: backend topic map.
+- `frontend_index.md`: frontend index linking to focused frontend docs under `../frontend/docs/`.
+- `../frontend/docs/README.md`: frontend topic map.
+- `ios_index.md`: iOS index linking to `../ios/README.md` and `../ios/docs/`.
+- `telegram_index.md`: Telegram index linking to `../telegram/README.md` and `../telegram/docs/`.
 - `api.md`: API index for `/api/v1`.
 - `api/README.md`: API route-family topic map.
 - `data-model.md`: schema and domain-model rules.
 - `development.md`: setup, commands, and contributor workflow.
 - `documentation-system.md`: doc ownership rules and anti-drift process.
-- `feature-entry-lifecycle.md`: focused entry-domain flow map.
-- `feature-dashboard-analytics.md`: focused dashboard analytics flow map.
-- `feature-account-reconciliation.md`: focused account reconciliation flow map.
+- `features/README.md`: cross-cutting feature-doc index.
+- `features/entry-lifecycle.md`: focused entry-domain flow map.
+- `features/dashboard-analytics.md`: focused dashboard analytics flow map.
+- `features/account-reconciliation.md`: focused account reconciliation flow map.
 - `agent-billing-assistant.md`: billing assistant prompt/tool design notes.
 - `adr/README.md`: ADR index and process.
 
@@ -46,10 +49,15 @@ Active tasks and completed task archives are not source-of-truth for current beh
 ## Local Pointer Docs
 
 - `../backend/README.md`: backend-local navigation and change checklist.
+- `../backend/docs/README.md`: backend package-local canonical topic map.
 - `../frontend/README.md`: frontend-local navigation and change checklist.
+- `../frontend/docs/README.md`: frontend package-local canonical topic map.
+- `../ios/README.md`: iOS local overview, run loop, and verification commands.
+- `../ios/docs/README.md`: iOS package-local canonical topic map.
 - `../telegram/README.md`: Telegram transport local overview, run/config notes, and links to `telegram/docs/`.
+- `../telegram/docs/README.md`: Telegram package-local canonical topic map.
 
-These package-local READMEs stay close to the code and should point back to canonical docs instead of duplicating cross-repo architecture.
+The package-local `backend/docs/` and `frontend/docs/` directories are canonical for subsystem behavior. The package-root READMEs stay close to the code as thin navigators and should not duplicate cross-repo architecture.
 
 ## Naming Rule
 

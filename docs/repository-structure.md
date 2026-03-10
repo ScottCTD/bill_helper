@@ -73,6 +73,7 @@
 - `validation/`: neutral validation/normalization helpers plus shared contract field types used by schemas, services, and tool-input models.
 - `main.py`: FastAPI app creation, routing, CORS, health check.
 - `README.md`: thin backend-local navigation doc that points to canonical docs.
+- `docs/`: package-local backend subsystem docs (`README.md`, `runtime-and-config.md`, `domain-and-http.md`, `agent-subsystem.md`, `operations.md`).
 
 ### Backend Routers (`/backend/routers`)
 
@@ -154,6 +155,7 @@
 - `tsconfig.json`: TypeScript compiler settings.
 - `index.html`: Vite app shell.
 - `README.md`: thin frontend-local navigation doc that points to canonical docs.
+- `docs/`: package-local frontend subsystem docs (`README.md`, `app-shell-and-routing.md`, `client-and-state.md`, `workspaces.md`, `agent-workspace.md`, `styles-and-operations.md`).
 
 ### Frontend Source (`/frontend/src`)
 
@@ -235,13 +237,14 @@
 
 - `/docs`: architecture and engineering documentation.
   - `README.md`: canonical index for the docs tree.
-  - `backend.md`, `frontend.md`, `api.md`: subsystem index docs.
-  - `/backend`, `/frontend`, `/api`: focused subsystem topic docs.
+  - `backend_index.md`, `frontend_index.md`, `ios_index.md`, `telegram_index.md`, `api.md`: subsystem index docs.
+  - `/api`: focused API topic docs.
+  - `/features`: cross-cutting feature docs and feature index.
   - `documentation-system.md`: source-of-truth matrix + anti-drift workflow.
   - `/completed_tasks`: archived task docs, retrospectives, and fix logs.
-  - `feature-entry-lifecycle.md`: entry-domain flow map.
-  - `feature-dashboard-analytics.md`: dashboard flow map.
-  - `feature-account-reconciliation.md`: account workspace + snapshot/reconciliation flow map.
+  - `features/entry-lifecycle.md`: entry-domain flow map.
+  - `features/dashboard-analytics.md`: dashboard flow map.
+  - `features/account-reconciliation.md`: account workspace + snapshot/reconciliation flow map.
   - `/adr`: architecture decision records.
 - `/tasks`: active implementation plans, temporary caveats, and migration checklists.
 - `/skills/notion-grade-ui/SKILL.md`: project-local frontend UI quality skill for calm, tokenized, primitives-first design implementation.

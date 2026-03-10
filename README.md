@@ -185,16 +185,19 @@ Extended docs live in [`docs/`](docs/):
 - [Docs Index](docs/README.md)
 - [Architecture](docs/architecture.md)
 - [Repository Structure](docs/repository-structure.md)
-- [Backend](docs/backend.md)
-- [Frontend](docs/frontend.md)
+- [Backend](docs/backend_index.md)
+- [Frontend](docs/frontend_index.md)
 - [API](docs/api.md)
+- [iOS](docs/ios_index.md)
+- [Telegram](docs/telegram_index.md)
+- [Features](docs/features/README.md)
 - [Data Model](docs/data-model.md)
 - [Development Guide](docs/development.md)
 - [Documentation System](docs/documentation-system.md)
 - [Completed Tasks Archive](docs/completed_tasks/README.md)
 - [Agent Billing Assistant](docs/agent-billing-assistant.md)
 
-Package-local `backend/README.md` and `frontend/README.md` are intentionally thin navigation docs that point back to these canonical references.
+Focused backend and frontend subsystem docs now live in [`backend/docs/`](backend/docs/) and [`frontend/docs/`](frontend/docs/). The package-local [`backend/README.md`](backend/README.md) and [`frontend/README.md`](frontend/README.md) stay intentionally thin and point into those package-local docs plus the top-level subsystem indexes.
 
 Active implementation task docs live at the repository root under `tasks/`.
 

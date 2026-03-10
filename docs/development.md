@@ -551,11 +551,11 @@ Use the layered doc system:
 - `README.md` for onboarding and the dev loop.
 - `AGENTS.md` for short agent instructions and doc pointers.
 - `docs/*.md` for stable index docs and cross-cutting reference docs.
-- `docs/backend/*.md`, `docs/frontend/*.md`, and `docs/api/*.md` for focused subsystem reference docs.
+- `backend/docs/*.md`, `frontend/docs/*.md`, and `docs/api/*.md` for focused subsystem reference docs.
 - `tasks/*.md` for active implementation plans and temporary caveats.
 - `docs/completed_tasks/*.md` for archived plans and retrospectives.
 
-Any behavior, schema, API, tooling, or UI change must update the relevant stable docs in the canonical docs tree. Use task docs for work tracking, not as the final source of truth.
+Any behavior, schema, API, tooling, or UI change must update the relevant stable docs in the canonical docs tree, `docs/features/`, or the canonical package-local subsystem docs. Use task docs for work tracking, not as the final source of truth.
 
 Recommended before merging:
 

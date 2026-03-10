@@ -52,18 +52,18 @@ These rules apply to any coding agent working in this repository.
 - `README.md`: onboarding, setup, dev loop, and links only.
 - `docs/README.md`: canonical index into the human-facing docs tree.
 - `docs/*.md`: stable index docs and cross-cutting reference docs.
-- `docs/backend/*.md`, `docs/frontend/*.md`, and `docs/api/*.md`: focused subsystem source-of-truth docs.
+- `backend/docs/*.md`, `frontend/docs/*.md`, `ios/docs/*.md`, `telegram/docs/*.md`, and `docs/api/*.md`: focused subsystem source-of-truth docs.
 - `tasks/*.md`: active implementation plans, temporary caveats, and migration checklists.
 - `docs/completed_tasks/*.md`: completed plans and retrospectives kept for history.
-- `backend/README.md` and `frontend/README.md`: thin local pointer docs, not subsystem source-of-truth.
+- `backend/README.md` and `frontend/README.md`: thin local navigation docs that point to the package-local canonical docs plus the top-level indexes.
 - Add nested `AGENTS.md` files only when a subtree has genuinely different editing rules. Do not use nested agent files as architecture docs.
 
 ### Required Doc Updates
 
 - API contract changes: update the relevant `/docs/api/*.md` files and keep `/docs/api.md` current when the route-family map changes.
-- Data model or migration changes: update `/docs/data-model.md`, `/docs/backend.md`, the relevant `/docs/backend/*.md` files, and `/docs/repository-structure.md` when file maps or migration lists changed.
-- Backend behavior changes: update the relevant `/docs/backend/*.md` files and any affected `/docs/feature-*.md`.
-- Frontend behavior changes: update the relevant `/docs/frontend/*.md` files and any affected `/docs/feature-*.md`.
+- Data model or migration changes: update `/docs/data-model.md`, `/docs/backend_index.md`, the relevant `/backend/docs/*.md` files, and `/docs/repository-structure.md` when file maps or migration lists changed.
+- Backend behavior changes: update the relevant `/backend/docs/*.md` files and any affected `/docs/features/*.md`.
+- Frontend behavior changes: update the relevant `/frontend/docs/*.md` files and any affected `/docs/features/*.md`.
 - Cross-cutting workflow or tooling changes: update `/README.md`, `/docs/development.md`, and `/docs/documentation-system.md`.
 - Major architectural decisions: add or update an ADR under `/docs/adr/`.
 - When introducing or removing docs, keep `/docs/README.md` current.

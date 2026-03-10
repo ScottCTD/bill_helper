@@ -1,11 +1,11 @@
 # Backend Navigation
 
-This file is intentionally thin. Canonical backend documentation lives in `../docs/backend.md`.
+This file is intentionally thin. Canonical backend documentation lives in `./docs/` with `../docs/backend_index.md` as the cross-repo entry point.
 
 ## Canonical Docs
 
-- `../docs/backend.md`
-- `../docs/backend/README.md`
+- `../docs/backend_index.md`
+- `./docs/README.md`
 - `../docs/api.md`
 - `../docs/data-model.md`
 - `../docs/repository-structure.md`
@@ -21,7 +21,7 @@ This file is intentionally thin. Canonical backend documentation lives in `../do
 
 ## When You Change Backend Behavior
 
-- Update the relevant `../docs/backend/*.md` files and keep `../docs/backend.md` current when the topic map changes.
+- Update the relevant `./docs/*.md` files and keep `../docs/backend_index.md` current when the topic map changes.
 - Update the relevant `../docs/api/*.md` files for contract changes and keep `../docs/api.md` current when route-family navigation changes.
 - Update `../docs/data-model.md` and `../docs/repository-structure.md` for schema or migration changes.
 - Update the relevant `../docs/feature-*.md` when user-facing flows changed.

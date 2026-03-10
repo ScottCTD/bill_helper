@@ -24,7 +24,7 @@ Should this monorepo move backend and frontend subsystem docs out of the shared 
 ## Risks And Open Questions
 
 - avoid creating two competing documentation systems during migration
-- decide whether `docs/backend.md` and `docs/frontend.md` remain top-level indexes or become simple pointers into package-local docs
+- decide whether `docs/backend_index.md` and `docs/frontend_index.md` remain top-level indexes or become simple pointers into package-local docs
 - decide whether API docs stay centralized under `docs/api/` or move closer to backend docs
 - update `scripts/check_docs_sync.py`, `docs/README.md`, `docs/documentation-system.md`, and `docs/repository-structure.md` together
 - keep navigation simple for humans who start at the repo root
@@ -39,7 +39,7 @@ The safest version is a staged migration:
 
 1. Move focused backend docs from `docs/backend/*.md` to `backend/docs/*.md`.
 2. Move focused frontend docs from `docs/frontend/*.md` to `frontend/docs/*.md`.
-3. Keep top-level `docs/backend.md` and `docs/frontend.md` as cross-repo entry points that link into the package-local docs.
+3. Keep top-level `docs/backend_index.md` and `docs/frontend_index.md` as cross-repo entry points that link into the package-local docs.
 4. Keep cross-cutting docs such as `docs/architecture.md`, `docs/data-model.md`, and likely `docs/api/*.md` centralized unless there is a stronger ownership reason to move them later.
 
 ## Proposed End State
@@ -49,7 +49,7 @@ The safest version is a staged migration:
 - `ios/docs/*.md`: unchanged
 - `telegram/docs/*.md`: unchanged
 - `docs/*.md`: project-level and cross-cutting docs such as architecture, development workflow, repository structure, ADRs, feature maps, and completed task archives
-- `docs/backend.md` and `docs/frontend.md`: top-level indexes/pointers
+- `docs/backend_index.md` and `docs/frontend_index.md`: top-level indexes/pointers
 - `docs/api/*.md`: centralized unless a later refactor decides otherwise
 
 ## Implementation Outline

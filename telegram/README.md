@@ -71,7 +71,8 @@ The webhook module serves `GET /healthz` and accepts Telegram updates at `POST /
 
 ## Local docs
 
+- `../docs/telegram_index.md`: cross-repo Telegram entry point
 - `docs/README.md`: local Telegram docs index
 - `docs/implementation-notes.md`: PTB wiring, backend adapter flow, state handling, and shim notes
 - `../docs/development.md`: repo-wide Telegram run commands and verification commands
-- `../docs/backend/runtime-and-config.md`: backend and Telegram env/config reference
+- `../backend/docs/runtime-and-config.md`: backend and Telegram env/config reference

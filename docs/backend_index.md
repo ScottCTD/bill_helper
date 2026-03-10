@@ -1,14 +1,15 @@
 # Backend Documentation
 
-This file is the backend index. Use it to find the focused backend docs under `docs/backend/`.
+This file is the backend index. Use it to find the focused backend docs under `../backend/docs/`.
 
 ## Backend Doc Map
 
-- `backend/README.md`: topic map and fastest path to the right backend doc.
-- `backend/runtime-and-config.md`: runtime entrypoints, configuration, and database bootstrap.
-- `backend/domain-and-http.md`: models, schemas, core services, router boundaries, and non-agent HTTP behavior.
-- `backend/agent-subsystem.md`: agent runtime, tools, review flow, and agent API ownership.
-- `backend/operations.md`: migrations, test coverage, operational impact, and current constraints.
+- `../backend/README.md`: local package navigation and change checklist.
+- `../backend/docs/README.md`: topic map and fastest path to the right backend doc.
+- `../backend/docs/runtime-and-config.md`: runtime entrypoints, configuration, and database bootstrap.
+- `../backend/docs/domain-and-http.md`: models, schemas, core services, router boundaries, and non-agent HTTP behavior.
+- `../backend/docs/agent-subsystem.md`: agent runtime, tools, review flow, and agent API ownership.
+- `../backend/docs/operations.md`: migrations, test coverage, operational impact, and current constraints.
 
 ## Stable Boundaries
 

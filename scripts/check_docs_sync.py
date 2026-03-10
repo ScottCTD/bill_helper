@@ -7,6 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS_DIR = ROOT / "docs"
 TASKS_DIR = ROOT / "tasks"
 COMPLETED_TASKS_DIR = DOCS_DIR / "completed_tasks"
+BACKEND_DOCS_DIR = ROOT / "backend" / "docs"
+FRONTEND_DOCS_DIR = ROOT / "frontend" / "docs"
 
 
 def read_text(path: Path) -> str:
@@ -53,7 +55,7 @@ def assert_task_layout(errors: list[str]) -> None:
 
 def assert_latest_migration_referenced(latest_migration: str, errors: list[str]) -> None:
     required_reference_docs = [
-        DOCS_DIR / "backend.md",
+        DOCS_DIR / "backend_index.md",
         DOCS_DIR / "repository-structure.md",
     ]
     latest_revision_token = latest_migration.removesuffix(".py")
@@ -86,6 +88,8 @@ def assert_no_stale_terms(errors: list[str]) -> None:
         for path in DOCS_DIR.rglob("*.md")
         if "completed_tasks" not in path.parts and "adr" not in path.parts
     )
+    scan_paths.extend(BACKEND_DOCS_DIR.rglob("*.md"))
+    scan_paths.extend(FRONTEND_DOCS_DIR.rglob("*.md"))
     for path in scan_paths:
         contents = read_text(path)
         for term in stale_terms:
@@ -115,6 +119,8 @@ def assert_no_legacy_plan_refs(errors: list[str]) -> None:
         for path in DOCS_DIR.rglob("*.md")
         if "completed_tasks" not in path.parts
     )
+    scan_paths.extend(BACKEND_DOCS_DIR.rglob("*.md"))
+    scan_paths.extend(FRONTEND_DOCS_DIR.rglob("*.md"))
     scan_paths.extend(TASKS_DIR.glob("*.md"))
     for path in scan_paths:
         contents = read_text(path)
@@ -131,12 +137,21 @@ def assert_docs_index_links(errors: list[str]) -> None:
     required_mentions = [
         "../tasks/",
         "documentation-system.md",
-        "backend/README.md",
-        "frontend/README.md",
+        "backend_index.md",
+        "frontend_index.md",
+        "ios_index.md",
+        "telegram_index.md",
+        "../backend/README.md",
+        "../backend/docs/README.md",
+        "../frontend/README.md",
+        "../frontend/docs/README.md",
+        "../ios/README.md",
+        "../telegram/README.md",
         "api/README.md",
+        "features/README.md",
         "completed_tasks/README.md",
-        "feature-entry-lifecycle.md",
-        "feature-dashboard-analytics.md",
+        "features/entry-lifecycle.md",
+        "features/dashboard-analytics.md",
         "adr/README.md",
     ]
     for mention in required_mentions:
@@ -148,21 +163,26 @@ def assert_docs_index_links(errors: list[str]) -> None:
 
 def assert_pointer_docs_link_to_canonical_docs(errors: list[str]) -> None:
     pointer_expectations = {
-        ROOT / "backend" / "README.md": "../docs/backend.md",
-        ROOT / "frontend" / "README.md": "../docs/frontend.md",
+        ROOT / "backend" / "README.md": ["../docs/backend_index.md", "./docs/README.md"],
+        ROOT / "frontend" / "README.md": ["../docs/frontend_index.md", "./docs/README.md"],
+        ROOT / "ios" / "README.md": ["../docs/ios_index.md", "docs/README.md"],
+        ROOT / "telegram" / "README.md": ["../docs/telegram_index.md", "docs/README.md"],
     }
-    for path, expected_link in pointer_expectations.items():
+    for path, expected_links in pointer_expectations.items():
         contents = read_text(path)
-        if expected_link not in contents:
-            errors.append(
-                f"{path.relative_to(ROOT)} should link to canonical doc `{expected_link}`."
-            )
+        for expected_link in expected_links:
+            if expected_link not in contents:
+                errors.append(
+                    f"{path.relative_to(ROOT)} should link to canonical doc `{expected_link}`."
+                )
 
 
 def assert_subsystem_indexes_link_to_topic_maps(errors: list[str]) -> None:
     index_expectations = {
-        DOCS_DIR / "backend.md": "backend/README.md",
-        DOCS_DIR / "frontend.md": "frontend/README.md",
+        DOCS_DIR / "backend_index.md": "../backend/docs/README.md",
+        DOCS_DIR / "frontend_index.md": "../frontend/docs/README.md",
+        DOCS_DIR / "ios_index.md": "../ios/docs/README.md",
+        DOCS_DIR / "telegram_index.md": "../telegram/docs/README.md",
         DOCS_DIR / "api.md": "api/README.md",
     }
     for path, expected_link in index_expectations.items():
@@ -178,17 +198,24 @@ def main() -> int:
 
     required_paths = [
         ROOT / "backend" / "README.md",
+        ROOT / "backend" / "docs" / "README.md",
         ROOT / "frontend" / "README.md",
-        DOCS_DIR / "backend.md",
-        DOCS_DIR / "frontend.md",
+        ROOT / "frontend" / "docs" / "README.md",
+        ROOT / "ios" / "README.md",
+        ROOT / "ios" / "docs" / "README.md",
+        ROOT / "telegram" / "README.md",
+        ROOT / "telegram" / "docs" / "README.md",
+        DOCS_DIR / "backend_index.md",
+        DOCS_DIR / "frontend_index.md",
+        DOCS_DIR / "ios_index.md",
+        DOCS_DIR / "telegram_index.md",
         DOCS_DIR / "api.md",
         DOCS_DIR / "documentation-system.md",
-        DOCS_DIR / "backend" / "README.md",
-        DOCS_DIR / "frontend" / "README.md",
         DOCS_DIR / "api" / "README.md",
+        DOCS_DIR / "features" / "README.md",
         DOCS_DIR / "completed_tasks" / "README.md",
-        DOCS_DIR / "feature-entry-lifecycle.md",
-        DOCS_DIR / "feature-dashboard-analytics.md",
+        DOCS_DIR / "features" / "entry-lifecycle.md",
+        DOCS_DIR / "features" / "dashboard-analytics.md",
         DOCS_DIR / "adr" / "README.md",
     ]
     assert_exists(required_paths, errors)
