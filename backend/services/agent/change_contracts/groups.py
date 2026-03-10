@@ -20,20 +20,11 @@ def normalize_group_member_payload(value: Any) -> Any:
     normalized = dict(value)
     normalized["group_ref"] = normalize_object_json_string(normalized.get("group_ref"))
     target = normalize_object_json_string(normalized.get("target"))
-    if not isinstance(target, dict):
-        legacy_entry_ref = normalize_object_json_string(normalized.get("entry_ref"))
-        legacy_child_group_ref = normalize_object_json_string(normalized.get("child_group_ref"))
-        if legacy_entry_ref is not None and legacy_child_group_ref is None:
-            target = {"target_type": "entry", "entry_ref": legacy_entry_ref}
-        elif legacy_child_group_ref is not None and legacy_entry_ref is None:
-            target = {"target_type": "child_group", "group_ref": legacy_child_group_ref}
     if isinstance(target, dict):
         normalized_target = dict(target)
         normalized_target["entry_ref"] = normalize_object_json_string(normalized_target.get("entry_ref"))
         normalized_target["group_ref"] = normalize_object_json_string(normalized_target.get("group_ref"))
         normalized["target"] = normalized_target
-    normalized.pop("entry_ref", None)
-    normalized.pop("child_group_ref", None)
     return normalized
 
 

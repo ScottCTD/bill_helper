@@ -394,10 +394,12 @@ describe("review draft serialization", () => {
         group_ref: {
           create_group_proposal_id: "proposal-group-1234"
         },
-        entry_ref: {
-          entry_id: "entry-1234"
+        target: {
+          target_type: "entry",
+          entry_ref: {
+            entry_id: "entry-1234"
+          }
         },
-        child_group_ref: null,
         member_role: "CHILD",
         group_preview: {
           name: "Rent Timeline",
@@ -423,10 +425,12 @@ describe("review draft serialization", () => {
         group_ref: {
           create_group_proposal_id: "proposal-group-1234"
         },
-        entry_ref: {
-          entry_id: "entry-5678"
+        target: {
+          target_type: "entry",
+          entry_ref: {
+            entry_id: "entry-5678"
+          }
         },
-        child_group_ref: null,
         member_role: "PARENT"
       },
       validationError: null

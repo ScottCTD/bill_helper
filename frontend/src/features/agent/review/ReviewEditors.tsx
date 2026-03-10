@@ -437,11 +437,12 @@ export function ReviewGroupMembershipEditor({
 }) {
   const payload = item.payload_json;
   const groupRef = asRecord(payload.group_ref);
-  const entryRef = asRecord(payload.entry_ref);
-  const childGroupRef = asRecord(payload.child_group_ref);
+  const target = asRecord(payload.target);
+  const entryRef = target.target_type === "entry" ? asRecord(target.entry_ref) : {};
+  const childGroupRef = target.target_type === "child_group" ? asRecord(target.group_ref) : {};
   const groupPreview = asRecord(payload.group_preview);
   const memberPreview = asRecord(payload.member_preview);
-  const isEntryTarget = Object.keys(entryRef).length > 0;
+  const isEntryTarget = target.target_type === "entry";
   const groupDependency = resolveProposalItemByReference(items, proposalReferenceId(groupRef, "group_id", "create_group_proposal_id"));
   const memberDependency = isEntryTarget
     ? resolveProposalItemByReference(items, proposalReferenceId(entryRef, "entry_id", "create_entry_proposal_id"))

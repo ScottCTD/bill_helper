@@ -129,9 +129,9 @@ function buildChildGroupRecordFromMemberPreview(memberPreview: JsonRecord): Json
 }
 
 function buildGroupMembershipSubjectRecord(payload: JsonRecord): JsonRecord {
-  const entryRef = asRecord(payload.entry_ref);
+  const target = asRecord(payload.target);
   const memberPreview = asRecord(payload.member_preview);
-  if (Object.keys(entryRef).length > 0) {
+  if (target.target_type === "entry") {
     return buildEntryRecordFromMemberPreview(memberPreview);
   }
   return buildChildGroupRecordFromMemberPreview(memberPreview);

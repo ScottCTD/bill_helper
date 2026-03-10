@@ -88,3 +88,15 @@ def test_validate_change_payload_rejects_pending_refs_for_remove_group_member() 
                 "target": {"target_type": "entry", "entry_ref": {"entry_id": "entry-1234"}},
             },
         )
+
+
+def test_validate_change_payload_requires_group_member_target_object() -> None:
+    with pytest.raises(ValueError, match="target"):
+        validate_change_payload(
+            AgentChangeType.CREATE_GROUP_MEMBER,
+            {
+                "action": "add",
+                "group_ref": {"group_id": "group-1234"},
+                "entry_ref": {"entry_id": "entry-1234"},
+            },
+        )

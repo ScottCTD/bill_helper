@@ -147,8 +147,7 @@ describe("proposal diff", () => {
     const diff = buildProposalDiff("create_group_member", {
       action: "add",
       group_ref: { group_id: "group-1234" },
-      entry_ref: { entry_id: "entry-1111" },
-      child_group_ref: null,
+      target: { target_type: "entry", entry_ref: { entry_id: "entry-1111" } },
       member_role: "CHILD",
       group_preview: { name: "Rent Timeline", group_type: "SPLIT" },
       member_preview: {
@@ -179,8 +178,7 @@ describe("proposal diff", () => {
       {
         action: "add",
         group_ref: { group_id: "group-1234" },
-        entry_ref: { entry_id: "entry-1111" },
-        child_group_ref: null,
+        target: { target_type: "entry", entry_ref: { entry_id: "entry-1111" } },
         member_role: "CHILD",
         group_preview: { name: "Rent Timeline", group_type: "SPLIT" },
         member_preview: {
@@ -197,8 +195,7 @@ describe("proposal diff", () => {
       {
         action: "add",
         group_ref: { group_id: "group-1234" },
-        entry_ref: { entry_id: "entry-2222" },
-        child_group_ref: null,
+        target: { target_type: "entry", entry_ref: { entry_id: "entry-2222" } },
         member_role: "PARENT"
       }
     );
@@ -214,8 +211,7 @@ describe("proposal diff", () => {
     const diff = buildProposalDiff("delete_group_member", {
       action: "remove",
       group_ref: { group_id: "group-1234" },
-      entry_ref: { entry_id: "entry-1111" },
-      child_group_ref: null,
+      target: { target_type: "entry", entry_ref: { entry_id: "entry-1111" } },
       group_preview: { name: "Rent Timeline", group_type: "RECURRING" },
       member_preview: {
         date: "2026-03-01",
