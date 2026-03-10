@@ -61,6 +61,7 @@ Operational rules:
 
 - `id` (PK UUID string)
 - `name` (unique)
+- `is_admin` (persisted admin-role gate)
 - `created_at`, `updated_at`
 
 ## `runtime_settings`

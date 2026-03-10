@@ -330,7 +330,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "desloppify", extras = ["full"], editable = "../desloppify" },
+    { name = "desloppify", extras = ["full"] },
     { name = "pytest", specifier = ">=8.3.4" },
 ]
 
@@ -542,7 +542,11 @@ wheels = [
 [[package]]
 name = "desloppify"
 version = "0.9.2"
-source = { editable = "../desloppify" }
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/36/bf/024a53ece9520e858f9f1e478ab1d5053536bc05d16d32998451a8289237/desloppify-0.9.2.tar.gz", hash = "sha256:322fceab55291ece6a6b1405d2aa940ad915699a4948fc19b57e67960eacc3f5", size = 860237, upload-time = "2026-03-08T23:10:36.341Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/71/c0/464f7a09ebcf23b80c0bb1ee526d9a9571f4cba0def3a77c004a73efcd21/desloppify-0.9.2-py3-none-any.whl", hash = "sha256:4452bc47e48e6063e8b9be1e89acd91bf635446a52fac82b50922763e8827a40", size = 1235463, upload-time = "2026-03-08T23:10:34.561Z" },
+]
 
 [package.optional-dependencies]
 full = [
@@ -551,18 +555,6 @@ full = [
     { name = "pillow" },
     { name = "tree-sitter-language-pack" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "bandit", marker = "extra == 'full'", specifier = ">=1.7.8" },
-    { name = "bandit", marker = "extra == 'python-security'", specifier = ">=1.7.8" },
-    { name = "defusedxml", marker = "extra == 'full'", specifier = ">=0.7.0" },
-    { name = "pillow", marker = "extra == 'full'", specifier = ">=9.0.0" },
-    { name = "pillow", marker = "extra == 'scorecard'", specifier = ">=9.0.0" },
-    { name = "tree-sitter-language-pack", marker = "extra == 'full'", specifier = ">=0.3" },
-    { name = "tree-sitter-language-pack", marker = "extra == 'treesitter'", specifier = ">=0.3" },
-]
-provides-extras = ["treesitter", "python-security", "scorecard", "full"]
 
 [[package]]
 name = "distro"

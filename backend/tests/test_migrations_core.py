@@ -293,6 +293,44 @@ def test_migration_0026_converts_legacy_links_to_typed_groups(tmp_path):
         assert roles[split_child_two_id] == "CHILD"
 
 
+def test_migration_0031_adds_users_is_admin_column(tmp_path):
+    database_url = _sqlite_url(tmp_path, "migration_0031.sqlite")
+    cfg = _build_alembic_config(database_url)
+    command.upgrade(cfg, "0030_add_account_agent_change_types")
+
+    engine = create_engine(database_url, future=True)
+    now = datetime.now(timezone.utc)
+    user_id = str(uuid4())
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                INSERT INTO users (id, name, created_at, updated_at)
+                VALUES (:id, :name, :created_at, :updated_at)
+                """
+            ),
+            {
+                "id": user_id,
+                "name": "alice",
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+
+    command.upgrade(cfg, "head")
+
+    inspector = inspect(engine)
+    user_columns = {column["name"] for column in inspector.get_columns("users")}
+    assert "is_admin" in user_columns
+
+    with engine.begin() as connection:
+        stored_is_admin = connection.execute(
+            text("SELECT is_admin FROM users WHERE id = :user_id"),
+            {"user_id": user_id},
+        ).scalar_one()
+    assert int(stored_is_admin) == 0
+
+
 def test_migration_0017_renames_old_tag_taxonomy_when_new_key_missing(tmp_path):
     database_url = _sqlite_url(tmp_path, "migration_0017.sqlite")
     cfg = _build_alembic_config(database_url)
