@@ -24,15 +24,20 @@ export function useAgentComposerStreamState({
   threadDetail
 }: UseAgentComposerStreamStateArgs) {
   const queryClient = useQueryClient();
-  const [activeStreamRunId, setActiveStreamRunId] = useState<string | null>(null);
+  const [activeStreamRunIdsByThreadId, setActiveStreamRunIdsByThreadId] = useState<Record<string, string>>({});
   const [streamedReasoningTextByRunId, setStreamedReasoningTextByRunId] = useState<Record<string, string>>({});
   const [streamedTextByRunId, setStreamedTextByRunId] = useState<Record<string, string>>({});
   const [optimisticRunEventsByRunId, setOptimisticRunEventsByRunId] = useState<Record<string, AgentRunEvent[]>>({});
   const [optimisticToolCallsByRunId, setOptimisticToolCallsByRunId] = useState<Record<string, AgentToolCall[]>>({});
   const [hydratingToolCallIds, setHydratingToolCallIds] = useState<Set<string>>(new Set());
+  const activeStreamRunIdsRef = useRef<Record<string, string>>({});
   const threadRunsRef = useRef<AgentRun[]>([]);
   const optimisticToolCallsRef = useRef<Record<string, AgentToolCall[]>>({});
   const hydratingToolCallIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    activeStreamRunIdsRef.current = activeStreamRunIdsByThreadId;
+  }, [activeStreamRunIdsByThreadId]);
 
   useEffect(() => {
     threadRunsRef.current = threadDetail?.runs ?? [];
@@ -43,6 +48,7 @@ export function useAgentComposerStreamState({
   }, [optimisticToolCallsByRunId]);
 
   const pendingAssistantRuns = useMemo(() => runsWithoutAssistantMessage(threadDetail), [threadDetail]);
+  const activeStreamRunId = selectedThreadId ? (activeStreamRunIdsByThreadId[selectedThreadId] ?? null) : null;
   const pendingRunAttachedToOptimisticMessage = useMemo(() => {
     if (!pendingAssistantMessage || pendingAssistantMessage.threadId !== selectedThreadId) {
       return null;
@@ -73,15 +79,70 @@ export function useAgentComposerStreamState({
     [activeStreamRunId, optimisticToolCallsByRunId]
   );
 
-  const resetOptimisticRunState = useCallback(() => {
-    setActiveStreamRunId(null);
-    setStreamedReasoningTextByRunId({});
-    setStreamedTextByRunId({});
-    setOptimisticRunEventsByRunId({});
-    setOptimisticToolCallsByRunId({});
-    setHydratingToolCallIds(new Set());
-    hydratingToolCallIdsRef.current.clear();
+  const clearRunState = useCallback((runId: string) => {
+    setStreamedReasoningTextByRunId((current) => {
+      if (!(runId in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[runId];
+      return next;
+    });
+    setStreamedTextByRunId((current) => {
+      if (!(runId in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[runId];
+      return next;
+    });
+    setOptimisticRunEventsByRunId((current) => {
+      if (!(runId in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[runId];
+      return next;
+    });
+    setOptimisticToolCallsByRunId((current) => {
+      if (!(runId in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[runId];
+      return next;
+    });
   }, []);
+
+  const resetOptimisticRunState = useCallback(
+    (threadId?: string) => {
+      if (!threadId) {
+        setActiveStreamRunIdsByThreadId({});
+        setStreamedReasoningTextByRunId({});
+        setStreamedTextByRunId({});
+        setOptimisticRunEventsByRunId({});
+        setOptimisticToolCallsByRunId({});
+        setHydratingToolCallIds(new Set());
+        hydratingToolCallIdsRef.current.clear();
+        return;
+      }
+
+      const runId = activeStreamRunIdsRef.current[threadId];
+      if (!runId) {
+        return;
+      }
+      setActiveStreamRunIdsByThreadId((current) => {
+        if (!(threadId in current)) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[threadId];
+        return next;
+      });
+      clearRunState(runId);
+    },
+    [clearRunState]
+  );
 
   const hydrateToolCallDetails = useCallback(
     async (threadId: string, runId: string, toolCallId: string, force = false) => {
@@ -163,7 +224,9 @@ export function useAgentComposerStreamState({
   const handleAgentStreamEvent = useCallback(
     (threadId: string, event: AgentStreamEvent) => {
       if (event.type === "run_event") {
-        setActiveStreamRunId((current) => current || event.run_id);
+        setActiveStreamRunIdsByThreadId((current) =>
+          current[threadId] === event.run_id ? current : { ...current, [threadId]: event.run_id }
+        );
         const toolCall = event.tool_call;
         if (toolCall) {
           setOptimisticToolCallsByRunId((current) => ({
@@ -220,7 +283,9 @@ export function useAgentComposerStreamState({
         return;
       }
       if (event.type === "reasoning_delta") {
-        setActiveStreamRunId((current) => current || event.run_id);
+        setActiveStreamRunIdsByThreadId((current) =>
+          current[threadId] === event.run_id ? current : { ...current, [threadId]: event.run_id }
+        );
         setStreamedReasoningTextByRunId((current) => ({
           ...current,
           [event.run_id]: `${current[event.run_id] ?? ""}${event.delta}`
@@ -228,7 +293,9 @@ export function useAgentComposerStreamState({
         return;
       }
       if (event.type === "text_delta") {
-        setActiveStreamRunId((current) => current || event.run_id);
+        setActiveStreamRunIdsByThreadId((current) =>
+          current[threadId] === event.run_id ? current : { ...current, [threadId]: event.run_id }
+        );
         setStreamedTextByRunId((current) => ({
           ...current,
           [event.run_id]: `${current[event.run_id] ?? ""}${event.delta}`

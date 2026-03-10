@@ -24,7 +24,7 @@ interface UseAgentComposerRuntimeArgs {
   availableComposerModels: string[];
   clearOptimisticThreadTitle: (threadId: string) => void;
   ensureThreadId: () => Promise<string>;
-  interruptRun: (runId: string) => Promise<void>;
+  interruptRun: (payload: { runId: string; threadId: string }) => Promise<void>;
   isBulkLaunching: boolean;
   isInterruptPending: boolean;
   isMutating: boolean;
@@ -33,7 +33,7 @@ interface UseAgentComposerRuntimeArgs {
   selectedThreadId: string;
   setActionError: (message: string | null) => void;
   setIsBulkLaunching: (value: boolean) => void;
-  setIsStreamHealthy: (value: boolean) => void;
+  setThreadStreamHealthy: (threadId: string, isHealthy: boolean) => void;
   threadDetail: AgentThreadDetail | undefined;
   upsertThreadSummary: (thread: AgentThreadSummary) => void;
 }
@@ -54,18 +54,21 @@ export function useAgentComposerRuntime({
   selectedThreadId,
   setActionError,
   setIsBulkLaunching,
-  setIsStreamHealthy,
+  setThreadStreamHealthy,
   threadDetail,
   upsertThreadSummary
 }: UseAgentComposerRuntimeArgs) {
   const [draftMessage, setDraftMessage] = useState("");
   const [isBulkMode, setIsBulkMode] = useState(false);
-  const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null);
-  const [pendingAssistantMessage, setPendingAssistantMessage] = useState<PendingAssistantMessage | null>(null);
+  const [pendingUserMessagesByThreadId, setPendingUserMessagesByThreadId] = useState<Record<string, PendingUserMessage>>({});
+  const [pendingAssistantMessagesByThreadId, setPendingAssistantMessagesByThreadId] = useState<
+    Record<string, PendingAssistantMessage>
+  >({});
   const { containerRef: timelineScrollRef, isAtBottom, scrollToBottom, snapToBottom } = useStickToBottom<HTMLDivElement>();
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [composerModelOverride, setComposerModelOverride] = useState<string | null>(null);
   const lastSnappedThreadRef = useRef("");
+  const pendingUserMessagesRef = useRef<Record<string, PendingUserMessage>>({});
   const attachmentState = useAgentDraftAttachments({ setActionError });
   const {
     draftFiles,
@@ -105,6 +108,55 @@ export function useAgentComposerRuntime({
     }
     return null;
   }, [threadDetail?.runs]);
+  const pendingUserMessage = selectedThreadId ? (pendingUserMessagesByThreadId[selectedThreadId] ?? null) : null;
+  const pendingAssistantMessage = selectedThreadId ? (pendingAssistantMessagesByThreadId[selectedThreadId] ?? null) : null;
+
+  function setPendingUserMessage(threadId: string, message: PendingUserMessage | null) {
+    setPendingUserMessagesByThreadId((current) => {
+      const existing = current[threadId];
+      if (!message) {
+        if (!existing) {
+          return current;
+        }
+        existing.attachments.forEach((attachment) => {
+          URL.revokeObjectURL(attachment.url);
+        });
+        const next = { ...current };
+        delete next[threadId];
+        return next;
+      }
+      if (existing && existing.id !== message.id) {
+        existing.attachments.forEach((attachment) => {
+          URL.revokeObjectURL(attachment.url);
+        });
+      }
+      return {
+        ...current,
+        [threadId]: message
+      };
+    });
+  }
+
+  function setPendingAssistantMessage(threadId: string, message: PendingAssistantMessage | null) {
+    setPendingAssistantMessagesByThreadId((current) => {
+      if (!message) {
+        if (!(threadId in current)) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[threadId];
+        return next;
+      }
+      return {
+        ...current,
+        [threadId]: message
+      };
+    });
+  }
+
+  useEffect(() => {
+    pendingUserMessagesRef.current = pendingUserMessagesByThreadId;
+  }, [pendingUserMessagesByThreadId]);
 
   const streamState = useAgentComposerStreamState({
     applyThreadTitleToCaches,
@@ -148,15 +200,16 @@ export function useAgentComposerRuntime({
     setDraftFiles,
     setDraftMessage,
     setIsBulkLaunching,
-    setIsStreamHealthy,
     setPendingAssistantMessage,
     setPendingUserMessage,
     setPreviewAttachmentId,
+    setThreadStreamHealthy,
     snapToBottom,
     threadDetail,
     upsertThreadSummary
   });
-  const isRunInFlight = actions.isSendingMessage || hasActiveRun;
+  const isSendingMessage = selectedThreadId ? actions.sendingThreadIds.includes(selectedThreadId) : false;
+  const isRunInFlight = isSendingMessage || hasActiveRun;
 
   function autoSizeComposerTextarea(target?: HTMLTextAreaElement | null) {
     const textarea = target ?? composerTextareaRef.current;
@@ -192,15 +245,14 @@ export function useAgentComposerRuntime({
   }, [draftMessage]);
 
   useEffect(() => {
-    if (!pendingUserMessage) {
-      return;
-    }
     return () => {
-      pendingUserMessage.attachments.forEach((attachment) => {
-        URL.revokeObjectURL(attachment.url);
+      Object.values(pendingUserMessagesRef.current).forEach((message) => {
+        message.attachments.forEach((attachment) => {
+          URL.revokeObjectURL(attachment.url);
+        });
       });
     };
-  }, [pendingUserMessage]);
+  }, []);
 
   useEffect(() => {
     if (!pendingUserMessage || pendingUserMessage.threadId !== selectedThreadId) {
@@ -212,7 +264,7 @@ export function useAgentComposerRuntime({
     if (!latestPersistedUserMessage || latestPersistedUserMessage.id === pendingUserMessage.baselineLastUserMessageId) {
       return;
     }
-    setPendingUserMessage(null);
+    setPendingUserMessage(selectedThreadId, null);
   }, [pendingUserMessage, selectedThreadId, threadDetail?.messages]);
 
   useEffect(() => {
@@ -228,16 +280,10 @@ export function useAgentComposerRuntime({
     ) {
       return;
     }
-    setPendingAssistantMessage(null);
-    resetOptimisticRunState();
-    setIsStreamHealthy(false);
-  }, [pendingAssistantMessage, resetOptimisticRunState, selectedThreadId, setIsStreamHealthy, threadDetail?.messages]);
-
-  useEffect(() => {
-    setPendingAssistantMessage(null);
-    resetOptimisticRunState();
-    setIsStreamHealthy(false);
-  }, [resetOptimisticRunState, selectedThreadId, setIsStreamHealthy]);
+    setPendingAssistantMessage(selectedThreadId, null);
+    resetOptimisticRunState(selectedThreadId);
+    setThreadStreamHealthy(selectedThreadId, false);
+  }, [pendingAssistantMessage, resetOptimisticRunState, selectedThreadId, setThreadStreamHealthy, threadDetail?.messages]);
 
   useEffect(() => {
     if (
@@ -248,16 +294,16 @@ export function useAgentComposerRuntime({
     ) {
       return;
     }
-    setPendingAssistantMessage(null);
-    resetOptimisticRunState();
-    setIsStreamHealthy(false);
+    setPendingAssistantMessage(selectedThreadId, null);
+    resetOptimisticRunState(selectedThreadId);
+    setThreadStreamHealthy(selectedThreadId, false);
   }, [
     isRunInFlight,
     pendingAssistantMessage,
     pendingUserMessage,
     resetOptimisticRunState,
     selectedThreadId,
-    setIsStreamHealthy
+    setThreadStreamHealthy
   ]);
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -309,7 +355,7 @@ export function useAgentComposerRuntime({
       isModelPickerDisabled: isMutating || isBulkLaunching,
       isMutating,
       isRunInFlight,
-      isSendingMessage: actions.isSendingMessage,
+      isSendingMessage,
       onBulkModeChange: handleBulkModeChange,
       onComposerKeyDown: handleComposerKeyDown,
       onComposerPaste: handleComposerPaste,

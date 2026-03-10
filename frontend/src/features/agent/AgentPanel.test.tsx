@@ -42,13 +42,21 @@ function buildThreadSummary(overrides: Partial<Awaited<ReturnType<typeof api.lis
   };
 }
 
-function buildThreadDetail(runs: ReturnType<typeof buildRun>[]) {
+function buildThreadDetail(
+  runs: ReturnType<typeof buildRun>[],
+  overrides: Partial<{
+    id: string;
+    title: string | null;
+    created_at: string;
+    updated_at: string;
+  }> = {}
+) {
   return {
     thread: {
-      id: "thread-1",
-      title: "Review thread",
-      created_at: "2026-03-06T10:00:00Z",
-      updated_at: "2026-03-06T10:05:00Z"
+      id: overrides.id ?? "thread-1",
+      title: overrides.title ?? "Review thread",
+      created_at: overrides.created_at ?? "2026-03-06T10:00:00Z",
+      updated_at: overrides.updated_at ?? "2026-03-06T10:05:00Z"
     },
     messages: [],
     runs,
@@ -509,6 +517,123 @@ describe("AgentPanel", () => {
     expect(screen.queryByText("statement-ok.pdf")).not.toBeInTheDocument();
     expect(screen.getByText("statement-fail.pdf")).toBeInTheDocument();
     expect(api.deleteAgentThread).toHaveBeenCalledWith("thread-created-2");
+  });
+
+  it("switches back to Send on an idle thread while another thread is still streaming", async () => {
+    let activeStreams = 0;
+    let maxActiveStreams = 0;
+    const streamResolvers: Record<string, () => void> = {};
+
+    vi.mocked(api.listAgentThreads).mockResolvedValue([
+      buildThreadSummary({ id: "thread-1", title: "Thread 1" }),
+      buildThreadSummary({ id: "thread-2", title: "Thread 2", updated_at: "2026-03-06T10:04:00Z" })
+    ]);
+    vi.mocked(api.getAgentThread).mockImplementation(async (threadId) =>
+      buildThreadDetail([], { id: threadId, title: threadId === "thread-1" ? "Thread 1" : "Thread 2" })
+    );
+    vi.mocked(api.streamAgentMessage).mockImplementation(async ({ threadId, onEvent }) => {
+      activeStreams += 1;
+      maxActiveStreams = Math.max(maxActiveStreams, activeStreams);
+      onEvent({
+        type: "run_event",
+        run_id: `run-${threadId}`,
+        event: buildRunEvent({
+          id: `event-${threadId}`,
+          run_id: `run-${threadId}`,
+          event_type: "run_started"
+        })
+      });
+      await new Promise<void>((resolve) => {
+        streamResolvers[threadId] = () => {
+          activeStreams -= 1;
+          resolve();
+        };
+      });
+    });
+
+    renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Thread 1" });
+    await userEvent.type(screen.getByRole("textbox"), "First thread message");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: "Thread 2" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByRole("textbox"), "Second thread message");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(api.streamAgentMessage).toHaveBeenCalledTimes(2));
+    expect(maxActiveStreams).toBe(2);
+    expect(vi.mocked(api.streamAgentMessage).mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ threadId: "thread-1", content: "First thread message" })
+    );
+    expect(vi.mocked(api.streamAgentMessage).mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ threadId: "thread-2", content: "Second thread message" })
+    );
+
+    await act(async () => {
+      streamResolvers["thread-2"]?.();
+      streamResolvers["thread-1"]?.();
+    });
+  });
+
+  it("stops only the selected thread after switching during parallel streams", async () => {
+    const streamResolvers: Record<string, () => void> = {};
+
+    vi.mocked(api.listAgentThreads).mockResolvedValue([
+      buildThreadSummary({ id: "thread-1", title: "Thread 1" }),
+      buildThreadSummary({ id: "thread-2", title: "Thread 2", updated_at: "2026-03-06T10:04:00Z" })
+    ]);
+    vi.mocked(api.getAgentThread).mockImplementation(async (threadId) =>
+      buildThreadDetail([], { id: threadId, title: threadId === "thread-1" ? "Thread 1" : "Thread 2" })
+    );
+    vi.mocked(api.streamAgentMessage).mockImplementation(({ threadId, signal, onEvent }) => {
+      onEvent({
+        type: "run_event",
+        run_id: `run-${threadId}`,
+        event: buildRunEvent({
+          id: `event-${threadId}`,
+          run_id: `run-${threadId}`,
+          event_type: "run_started"
+        })
+      });
+      return new Promise<void>((resolve, reject) => {
+        const abortHandler = () => reject(new DOMException("The operation was aborted.", "AbortError"));
+        signal?.addEventListener("abort", abortHandler, { once: true });
+        streamResolvers[threadId] = () => {
+          signal?.removeEventListener("abort", abortHandler);
+          resolve();
+        };
+      });
+    });
+
+    renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Thread 1" });
+    await userEvent.type(screen.getByRole("textbox"), "First thread message");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: "Thread 2" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument());
+
+    await userEvent.type(screen.getByRole("textbox"), "Second thread message");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+    await waitFor(() => expect(api.interruptAgentRun).toHaveBeenCalledWith("run-thread-2"));
+    expect(api.interruptAgentRun).not.toHaveBeenCalledWith("run-thread-1");
+
+    await act(async () => {
+      streamResolvers["thread-1"]?.();
+    });
   });
 
   it("updates the thread title immediately when rename_thread streams", async () => {

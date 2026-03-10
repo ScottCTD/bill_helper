@@ -14,8 +14,8 @@ interface AgentThreadListProps {
   onDeleteThread: (threadId: string) => void;
   renamingThreadId: string | null;
   deletingThreadId: string | null;
-  isDeleteDisabled: boolean;
-  isRenameDisabled: boolean;
+  deleteDisabledThreadIds: string[];
+  renameDisabledThreadIds: string[];
   optimisticRunningThreadIds: string[];
 }
 
@@ -34,8 +34,8 @@ export function AgentThreadList(props: AgentThreadListProps) {
     onDeleteThread,
     renamingThreadId,
     deletingThreadId,
-    isDeleteDisabled,
-    isRenameDisabled,
+    deleteDisabledThreadIds,
+    renameDisabledThreadIds,
     optimisticRunningThreadIds
   } = props;
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
@@ -43,6 +43,8 @@ export function AgentThreadList(props: AgentThreadListProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const committingThreadIdRef = useRef<string | null>(null);
   const optimisticRunningThreadIdSet = new Set(optimisticRunningThreadIds);
+  const deleteDisabledThreadIdSet = new Set(deleteDisabledThreadIds);
+  const renameDisabledThreadIdSet = new Set(renameDisabledThreadIds);
 
   useEffect(() => {
     if (!editingThreadId) {
@@ -58,7 +60,7 @@ export function AgentThreadList(props: AgentThreadListProps) {
   }, [editingThreadId]);
 
   function beginRename(thread: AgentThreadSummary) {
-    if (isRenameDisabled) {
+    if (renameDisabledThreadIdSet.has(thread.id)) {
       return;
     }
     setDraftTitle(thread.title ?? "");
@@ -100,7 +102,7 @@ export function AgentThreadList(props: AgentThreadListProps) {
             const isRunning = thread.has_running_run || optimisticRunningThreadIdSet.has(thread.id);
             const isEditing = editingThreadId === thread.id;
             const threadName = displayThreadName(thread);
-            const showDeleteButton = !isDeleteDisabled && !isEditing;
+            const showDeleteButton = !deleteDisabledThreadIdSet.has(thread.id) && !isEditing;
             const hasActionSlot = isRunning || showDeleteButton;
             const rowClassName = [
               "agent-thread-row group",

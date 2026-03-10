@@ -110,8 +110,8 @@ export function AgentPanel({ isOpen }: AgentPanelProps) {
               onDeleteThread={controller.threadPanel.onDeleteThread}
               renamingThreadId={controller.threadPanel.renamingThreadId}
               deletingThreadId={controller.threadPanel.deletingThreadId}
-              isDeleteDisabled={controller.threadPanel.isDeleteDisabled}
-              isRenameDisabled={controller.threadPanel.isRenameDisabled}
+              deleteDisabledThreadIds={controller.threadPanel.deleteDisabledThreadIds}
+              renameDisabledThreadIds={controller.threadPanel.renameDisabledThreadIds}
               isOpen={controller.threadPanel.isOpen}
               optimisticRunningThreadIds={controller.threadPanel.optimisticRunningThreadIds}
             />

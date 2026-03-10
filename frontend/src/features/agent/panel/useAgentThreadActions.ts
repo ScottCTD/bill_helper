@@ -133,9 +133,9 @@ export function useAgentThreadActions({
   });
 
   const interruptRunMutation = useMutation({
-    mutationFn: interruptAgentRun,
-    onSuccess: () => {
-      invalidateAgentThreadData(queryClient, selectedThreadId || undefined);
+    mutationFn: (payload: { runId: string; threadId: string }) => interruptAgentRun(payload.runId),
+    onSuccess: (_, payload) => {
+      invalidateAgentThreadData(queryClient, payload.threadId || undefined);
       setActionError(null);
     }
   });
@@ -169,7 +169,6 @@ export function useAgentThreadActions({
     createThreadMutation.isPending ||
     deleteThreadMutation.isPending ||
     renameThreadMutation.isPending ||
-    interruptRunMutation.isPending ||
     approveMutation.isPending ||
     rejectMutation.isPending ||
     reopenMutation.isPending;

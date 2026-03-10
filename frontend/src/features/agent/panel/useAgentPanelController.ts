@@ -14,7 +14,7 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
   const [isThreadReviewOpen, setIsThreadReviewOpen] = useState(false);
   const [isThreadPanelOpen, setIsThreadPanelOpen] = useState(true);
   const [isBulkLaunching, setIsBulkLaunching] = useState(false);
-  const [isStreamHealthy, setIsStreamHealthy] = useState(false);
+  const [streamHealthyThreadIds, setStreamHealthyThreadIds] = useState<string[]>([]);
   const { panelWidth, handleMouseDown: handleResizeMouseDown } = useResizablePanel({
     storageKey: "agent-thread-panel-width",
     defaultWidth: 300,
@@ -23,6 +23,14 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     edge: "right"
   });
   const toggleThreadPanel = useCallback(() => setIsThreadPanelOpen((value) => !value), []);
+  const setThreadStreamHealthy = useCallback((threadId: string, isHealthy: boolean) => {
+    setStreamHealthyThreadIds((current) => {
+      if (isHealthy) {
+        return current.includes(threadId) ? current : [...current, threadId];
+      }
+      return current.filter((item) => item !== threadId);
+    });
+  }, []);
 
   const actions = useAgentThreadActions({
     selectedThreadId,
@@ -35,7 +43,7 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     optimisticRunningThreadIds: actions.optimisticRunningThreadIds,
     optimisticThreadTitlesById: actions.optimisticThreadTitlesById,
     isBulkLaunching,
-    isStreamHealthy,
+    isStreamHealthy: selectedThreadId ? streamHealthyThreadIds.includes(selectedThreadId) : false,
     pruneOptimisticRunningThreadIds: actions.pruneOptimisticRunningThreadIds
   });
 
@@ -46,18 +54,19 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     availableComposerModels: data.runtimeSettingsQuery.data?.available_agent_models ?? [],
     clearOptimisticThreadTitle: actions.clearOptimisticThreadTitle,
     ensureThreadId: actions.ensureThreadId,
-    async interruptRun(runId: string) {
-      await actions.interruptRunMutation.mutateAsync(runId);
+    async interruptRun(payload: { runId: string; threadId: string }) {
+      await actions.interruptRunMutation.mutateAsync(payload);
     },
     isBulkLaunching,
-    isInterruptPending: actions.interruptRunMutation.isPending,
+    isInterruptPending:
+      actions.interruptRunMutation.isPending && actions.interruptRunMutation.variables?.threadId === selectedThreadId,
     isMutating: actions.isMutating,
     removeOptimisticRunningThreadId: actions.removeOptimisticRunningThreadId,
     runtimeSettings: data.runtimeSettingsQuery.data,
     selectedThreadId,
     setActionError: actions.setActionError,
     setIsBulkLaunching,
-    setIsStreamHealthy,
+    setThreadStreamHealthy,
     threadDetail: data.threadQuery.data,
     upsertThreadSummary: actions.upsertThreadSummary
   });
@@ -83,6 +92,11 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
       actions.setActionError((error as Error).message);
     }
   }
+
+  const runningThreadIds = new Set([
+    ...actions.optimisticRunningThreadIds,
+    ...(data.displayedThreads ?? []).filter((thread) => thread.has_running_run).map((thread) => thread.id)
+  ]);
 
   return {
     header: {
@@ -129,12 +143,16 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     },
     threadPanel: {
       deletingThreadId: actions.deleteThreadMutation.isPending ? (actions.deleteThreadMutation.variables ?? null) : null,
+      deleteDisabledThreadIds: [
+        ...(actions.deleteThreadMutation.isPending && actions.deleteThreadMutation.variables
+          ? [actions.deleteThreadMutation.variables]
+          : []),
+        ...runningThreadIds
+      ],
       errorMessage: data.threadsQuery.isError ? (data.threadsQuery.error as Error).message : null,
       handleResizeMouseDown,
-      isDeleteDisabled: actions.isMutating || runtime.composer.isRunInFlight || isBulkLaunching,
       isLoading: data.threadsQuery.isLoading,
       isOpen: isThreadPanelOpen,
-      isRenameDisabled: actions.isMutating || runtime.composer.isRunInFlight || isBulkLaunching,
       onDeleteThread(threadId: string) {
         void handleDeleteThread(threadId);
       },
@@ -143,6 +161,10 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
       optimisticRunningThreadIds: actions.optimisticRunningThreadIds,
       panelWidth,
       renamingThreadId: actions.renameThreadMutation.isPending ? (actions.renameThreadMutation.variables?.threadId ?? null) : null,
+      renameDisabledThreadIds:
+        actions.renameThreadMutation.isPending && actions.renameThreadMutation.variables?.threadId
+          ? [actions.renameThreadMutation.variables.threadId]
+          : [],
       selectedThreadId,
       slotClassName: isThreadPanelOpen
         ? "agent-thread-panel-slot"

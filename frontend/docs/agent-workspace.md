@@ -49,6 +49,9 @@ Supporting modules include:
 
 - thread rail is on the right, collapsible, resizable, and independently scrollable
 - thread rows expose hover/focus delete controls, support double-click inline rename with a visible active single-line field that preserves native selection and horizontal scrolling for long titles, render the full normalized title text before CSS truncation, and reuse one trailing action slot so hover/focus swaps delete in over the running spinner instead of reserving separate dead space
+- running state is thread-scoped rather than panel-global, so a background stream keeps its spinner in the rail without forcing other selected idle threads into a stop-oriented composer state
+- delete stays unavailable only for the specific running or deleting thread; idle sibling threads keep their delete affordance even while another thread is active
+- inline rename remains available per thread unless that same thread already has a rename mutation in flight
 - timeline is event-driven from persisted `run.events`
 - tool rows appear as queued, then update in place through running, completed, failed, or cancelled
 - live SSE `run_event` payloads can include a compact `tool_call` snapshot so tool rows show their real name before full hydration
@@ -93,6 +96,8 @@ Supporting modules include:
 - Bulk launches report transient started/failed toast notifications; failed files stay attached for retry while successful files clear
 - `Cmd/Ctrl+Enter` always submits; plain `Enter` submits only for a single-line draft
 - idle primary action is `Send`; active-run primary action is `Stop`
+- switching to an idle thread restores that thread's own composer state immediately, even if another thread continues streaming in the background
+- stop actions are selected-thread scoped: the composer only shows `Stop` when the selected thread itself is running, and interrupt requests target that selected thread's current run only
 - when Bulk mode is enabled, the primary action becomes `Start Bulk` and uses the existing non-stream send endpoint per created thread
 - agent messages stream over SSE from `POST /api/v1/agent/threads/{thread_id}/messages/stream`
 - `useAgentPanelController.ts` now stays on panel composition, while `useAgentPanelQueries.ts` owns query polling/derived read models and `useAgentThreadActions.ts` owns thread lifecycle mutations plus cache reconciliation

@@ -25,20 +25,20 @@ interface UseAgentComposerActionsArgs {
   draftMessage: string;
   ensureThreadId: () => Promise<string>;
   handleAgentStreamEvent: (threadId: string, event: AgentStreamEvent) => void;
-  interruptRun: (runId: string) => Promise<void>;
+  interruptRun: (payload: { runId: string; threadId: string }) => Promise<void>;
   isBulkMode: boolean;
   removeOptimisticRunningThreadId: (threadId: string) => void;
-  resetOptimisticRunState: () => void;
+  resetOptimisticRunState: (threadId?: string) => void;
   selectedComposerModel: string;
   selectedThreadId: string;
   setActionError: (message: string | null) => void;
   setDraftFiles: Dispatch<SetStateAction<DraftAttachment[]>>;
   setDraftMessage: (message: string) => void;
   setIsBulkLaunching: (value: boolean) => void;
-  setIsStreamHealthy: (value: boolean) => void;
-  setPendingAssistantMessage: Dispatch<SetStateAction<PendingAssistantMessage | null>>;
-  setPendingUserMessage: Dispatch<SetStateAction<PendingUserMessage | null>>;
+  setPendingAssistantMessage: (threadId: string, message: PendingAssistantMessage | null) => void;
+  setPendingUserMessage: (threadId: string, message: PendingUserMessage | null) => void;
   setPreviewAttachmentId: (id: string | null) => void;
+  setThreadStreamHealthy: (threadId: string, isHealthy: boolean) => void;
   snapToBottom: () => void;
   threadDetail: AgentThreadDetail | undefined;
   upsertThreadSummary: (thread: AgentThreadSummary) => void;
@@ -64,25 +64,23 @@ export function useAgentComposerActions({
   setDraftFiles,
   setDraftMessage,
   setIsBulkLaunching,
-  setIsStreamHealthy,
   setPendingAssistantMessage,
   setPendingUserMessage,
   setPreviewAttachmentId,
+  setThreadStreamHealthy,
   snapToBottom,
   threadDetail,
   upsertThreadSummary
 }: UseAgentComposerActionsArgs) {
   const queryClient = useQueryClient();
   const { notify } = useNotifications();
-  const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const sendAbortControllerRef = useRef<AbortController | null>(null);
+  const [sendingThreadIds, setSendingThreadIds] = useState<string[]>([]);
+  const sendAbortControllersRef = useRef<Record<string, AbortController>>({});
 
   useEffect(() => {
     return () => {
-      if (sendAbortControllerRef.current) {
-        sendAbortControllerRef.current.abort();
-        sendAbortControllerRef.current = null;
-      }
+      Object.values(sendAbortControllersRef.current).forEach((controller) => controller.abort());
+      sendAbortControllersRef.current = {};
     };
   }, []);
 
@@ -183,11 +181,11 @@ export function useAgentComposerActions({
       threadId = await ensureThreadId();
       const activeThreadId = threadId;
       const sendAbortController = new AbortController();
-      sendAbortControllerRef.current = sendAbortController;
-      setIsSendingMessage(true);
+      sendAbortControllersRef.current[activeThreadId] = sendAbortController;
+      setSendingThreadIds((current) => (current.includes(activeThreadId) ? current : [...current, activeThreadId]));
       addOptimisticRunningThreadId(activeThreadId);
-      setIsStreamHealthy(true);
-      resetOptimisticRunState();
+      setThreadStreamHealthy(activeThreadId, true);
+      resetOptimisticRunState(activeThreadId);
       invalidateAgentThreadData(queryClient, activeThreadId);
       const baselineLastUserMessageId =
         [...(threadDetail?.messages ?? [])]
@@ -213,8 +211,8 @@ export function useAgentComposerActions({
           kind: detectDraftAttachmentKind(item.file)
         }))
       };
-      setPendingUserMessage(optimisticMessage);
-      setPendingAssistantMessage({
+      setPendingUserMessage(activeThreadId, optimisticMessage);
+      setPendingAssistantMessage(activeThreadId, {
         id: `pending-assistant-${Date.now()}`,
         threadId: activeThreadId,
         createdAt: new Date().toISOString(),
@@ -233,21 +231,27 @@ export function useAgentComposerActions({
         signal: sendAbortController.signal,
         onEvent: (streamEvent) => handleAgentStreamEvent(activeThreadId, streamEvent)
       });
-      sendAbortControllerRef.current = null;
-      setIsStreamHealthy(false);
+      delete sendAbortControllersRef.current[activeThreadId];
+      setThreadStreamHealthy(activeThreadId, false);
       const detail = await getAgentThread(activeThreadId);
       queryClient.setQueryData(queryKeys.agent.thread(activeThreadId), detail);
       clearOptimisticThreadTitle(activeThreadId);
       invalidateAgentThreadData(queryClient, activeThreadId);
-      setPendingUserMessage((current) => (current && current.threadId === activeThreadId ? null : current));
-      setPendingAssistantMessage((current) => (current && current.threadId === activeThreadId ? null : current));
+      setPendingUserMessage(activeThreadId, null);
+      setPendingAssistantMessage(activeThreadId, null);
       removeOptimisticRunningThreadId(activeThreadId);
-      resetOptimisticRunState();
+      resetOptimisticRunState(activeThreadId);
     } catch (error) {
-      sendAbortControllerRef.current = null;
-      setIsStreamHealthy(false);
+      if (threadId) {
+        delete sendAbortControllersRef.current[threadId];
+        setThreadStreamHealthy(threadId, false);
+      }
       if ((error as Error).name === "AbortError") {
-        setPendingUserMessage((current) => (current ? null : current));
+        if (threadId) {
+          setPendingUserMessage(threadId, null);
+          setPendingAssistantMessage(threadId, null);
+          resetOptimisticRunState(threadId);
+        }
         setActionError(null);
       } else {
         setActionError((error as Error).message);
@@ -256,7 +260,9 @@ export function useAgentComposerActions({
       if (threadId) {
         removeOptimisticRunningThreadId(threadId);
       }
-      setIsSendingMessage(false);
+      if (threadId) {
+        setSendingThreadIds((current) => current.filter((item) => item !== threadId));
+      }
     }
   }
 
@@ -276,20 +282,23 @@ export function useAgentComposerActions({
   }
 
   async function handleStopRun() {
-    setActionError(null);
-    setIsSendingMessage(false);
-    setIsStreamHealthy(false);
-    if (selectedThreadId) {
-      removeOptimisticRunningThreadId(selectedThreadId);
+    if (!selectedThreadId) {
+      return;
     }
-    setPendingAssistantMessage(null);
-    resetOptimisticRunState();
-    if (sendAbortControllerRef.current) {
-      sendAbortControllerRef.current.abort();
-      sendAbortControllerRef.current = null;
+    setActionError(null);
+    setThreadStreamHealthy(selectedThreadId, false);
+    removeOptimisticRunningThreadId(selectedThreadId);
+    setPendingAssistantMessage(selectedThreadId, null);
+    setPendingUserMessage(selectedThreadId, null);
+    resetOptimisticRunState(selectedThreadId);
+    setSendingThreadIds((current) => current.filter((threadId) => threadId !== selectedThreadId));
+    const abortController = sendAbortControllersRef.current[selectedThreadId];
+    if (abortController) {
+      abortController.abort();
+      delete sendAbortControllersRef.current[selectedThreadId];
     }
     let runIdToInterrupt = activeRunId || activeStreamRunId || null;
-    if (!runIdToInterrupt && selectedThreadId) {
+    if (!runIdToInterrupt) {
       try {
         const detail = await getAgentThread(selectedThreadId);
         const latestRunningRun = sortRunsByCreatedAt(detail.runs)
@@ -304,7 +313,7 @@ export function useAgentComposerActions({
       return;
     }
     try {
-      await interruptRun(runIdToInterrupt);
+      await interruptRun({ runId: runIdToInterrupt, threadId: selectedThreadId });
     } catch (error) {
       setActionError((error as Error).message);
     }
@@ -313,6 +322,6 @@ export function useAgentComposerActions({
   return {
     handleStopRun,
     handleSubmitMessage,
-    isSendingMessage
+    sendingThreadIds
   };
 }

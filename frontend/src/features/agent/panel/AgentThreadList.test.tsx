@@ -43,8 +43,8 @@ describe("AgentThreadList", () => {
         onDeleteThread={onDeleteThread}
         renamingThreadId={null}
         deletingThreadId={null}
-        isDeleteDisabled={false}
-        isRenameDisabled={false}
+        deleteDisabledThreadIds={[]}
+        renameDisabledThreadIds={[]}
         optimisticRunningThreadIds={[]}
       />
     );
@@ -71,8 +71,8 @@ describe("AgentThreadList", () => {
         onDeleteThread={() => undefined}
         renamingThreadId={null}
         deletingThreadId={null}
-        isDeleteDisabled={false}
-        isRenameDisabled={false}
+        deleteDisabledThreadIds={[]}
+        renameDisabledThreadIds={[]}
         optimisticRunningThreadIds={[]}
       />
     );
@@ -98,8 +98,8 @@ describe("AgentThreadList", () => {
         onDeleteThread={() => undefined}
         renamingThreadId={null}
         deletingThreadId="thread-1"
-        isDeleteDisabled={false}
-        isRenameDisabled={false}
+        deleteDisabledThreadIds={[]}
+        renameDisabledThreadIds={[]}
         optimisticRunningThreadIds={[]}
       />
     );
@@ -107,7 +107,7 @@ describe("AgentThreadList", () => {
     expect(screen.getByRole("button", { name: "Delete thread Groceries" })).toBeDisabled();
   });
 
-  it("hides delete controls when thread deletion is globally disabled", () => {
+  it("hides delete controls only for threads whose delete action is disabled", () => {
     render(
       <AgentThreadList
         threads={THREADS}
@@ -119,8 +119,8 @@ describe("AgentThreadList", () => {
         onDeleteThread={() => undefined}
         renamingThreadId={null}
         deletingThreadId={null}
-        isDeleteDisabled={true}
-        isRenameDisabled={false}
+        deleteDisabledThreadIds={["thread-1", "thread-2"]}
+        renameDisabledThreadIds={[]}
         optimisticRunningThreadIds={[]}
       />
     );
@@ -141,8 +141,8 @@ describe("AgentThreadList", () => {
         onDeleteThread={() => undefined}
         renamingThreadId={null}
         deletingThreadId={null}
-        isDeleteDisabled={false}
-        isRenameDisabled={false}
+        deleteDisabledThreadIds={[]}
+        renameDisabledThreadIds={[]}
         optimisticRunningThreadIds={[]}
       />
     );
@@ -167,8 +167,8 @@ describe("AgentThreadList", () => {
         onDeleteThread={() => undefined}
         renamingThreadId={null}
         deletingThreadId={null}
-        isDeleteDisabled={false}
-        isRenameDisabled={false}
+        deleteDisabledThreadIds={[]}
+        renameDisabledThreadIds={[]}
         optimisticRunningThreadIds={[]}
       />
     );
@@ -198,8 +198,8 @@ describe("AgentThreadList", () => {
         onDeleteThread={() => undefined}
         renamingThreadId={null}
         deletingThreadId={null}
-        isDeleteDisabled={false}
-        isRenameDisabled={false}
+        deleteDisabledThreadIds={[]}
+        renameDisabledThreadIds={[]}
         optimisticRunningThreadIds={[]}
       />
     );
@@ -227,12 +227,34 @@ describe("AgentThreadList", () => {
         onDeleteThread={() => undefined}
         renamingThreadId={null}
         deletingThreadId={null}
-        isDeleteDisabled={false}
-        isRenameDisabled={false}
+        deleteDisabledThreadIds={[]}
+        renameDisabledThreadIds={[]}
         optimisticRunningThreadIds={["thread-1", "thread-2"]}
       />
     );
 
     expect(screen.getAllByLabelText("Thread is processing")).toHaveLength(2);
+  });
+
+  it("keeps idle thread delete controls available while another thread is running", () => {
+    render(
+      <AgentThreadList
+        threads={THREADS}
+        selectedThreadId="thread-1"
+        isLoading={false}
+        errorMessage={null}
+        onSelectThread={() => undefined}
+        onRenameThread={vi.fn().mockResolvedValue(undefined)}
+        onDeleteThread={() => undefined}
+        renamingThreadId={null}
+        deletingThreadId={null}
+        deleteDisabledThreadIds={["thread-1"]}
+        renameDisabledThreadIds={[]}
+        optimisticRunningThreadIds={["thread-1"]}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "Delete thread Groceries" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete thread Utilities" })).toBeInTheDocument();
   });
 });
