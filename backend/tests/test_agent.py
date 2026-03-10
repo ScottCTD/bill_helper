@@ -5270,7 +5270,10 @@ def test_group_membership_remove_apply_resolves_existing_short_ids(client, monke
     entry = create_entry(client, account_id, "OpenAI ChatGPT Subscription", occurred_at="2026-03-06")
     group = create_group(client, "OpenAI ChatGPT Plus Subscription", "RECURRING")
 
-    add_membership = client.post(f"/api/v1/groups/{group['id']}/members", json={"entry_id": entry["id"]})
+    add_membership = client.post(
+        f"/api/v1/groups/{group['id']}/members",
+        json={"target": {"target_type": "entry", "entry_id": entry["id"]}},
+    )
     add_membership.raise_for_status()
 
     thread = create_thread(client)

@@ -22,7 +22,7 @@ import {
 } from "../lib/api";
 import { invalidateGroupReadModels } from "../lib/queryInvalidation";
 import { queryKeys } from "../lib/queryKeys";
-import type { GroupMemberRole, GroupSummary } from "../lib/types";
+import type { GroupMemberCreatePayload, GroupSummary } from "../lib/types";
 import { cn } from "../lib/utils";
 
 const ENTRY_PICKER_FILTERS = {
@@ -141,8 +141,7 @@ export function GroupsPage() {
   });
 
   const addGroupMemberMutation = useMutation({
-    mutationFn: (payload: { entry_id?: string; child_group_id?: string; member_role?: GroupMemberRole }) =>
-      addGroupMember(selectedGroupId, payload),
+    mutationFn: (payload: GroupMemberCreatePayload) => addGroupMember(selectedGroupId, payload),
     onSuccess: () => {
       invalidateGroupReadModels(queryClient, undefined, selectedGroupId);
       setIsAddMemberOpen(false);

@@ -5,6 +5,8 @@
 - `backend/models_finance.py`: ledger, account, entity, tag, taxonomy, and entry models
 - `backend/models_agent.py`: thread, run, tool-call, change-item, and review models
 - `backend/models_settings.py`: runtime settings override model
+- `backend/contracts_groups.py`: shared group write contracts and typed group-member target payloads
+- `backend/contracts_users.py`: shared user write contracts
 - `backend/models_shared.py`: shared timestamp and UUID defaults
 
 Core ledger models:
@@ -60,6 +62,10 @@ Important read models:
 - `backend/services/entities.py`
 - `backend/services/users.py`
 - `backend/services/groups.py`
+- `backend/contracts_groups.py`
+  - shared group create/update contracts plus the typed `target` union used by `/groups/{group_id}/members`
+- `backend/contracts_users.py`
+  - shared user create/update contracts reused by schemas, routers, and services
 - `backend/services/finance.py`
   - owns reconciliation math and dashboard analytics sections:
     - configured-currency monthly KPIs
@@ -130,9 +136,12 @@ Router behavior:
 - `backend/routers/entries.py` stays at HTTP parsing/translation while `backend/services/entries.py` owns entry create/update orchestration
 - `backend/routers/entries.py` translates flat HTTP payload pairs (`from_entity_id` + `from_entity`, `owner_user_id` + `owner`, etc.) into typed service refs before calling `backend/services/entries.py`
 - `backend/routers/accounts.py`, `entities.py`, and `tags.py` translate HTTP write schemas into `backend/services/finance_contracts.py` commands before calling service workflows
+- `backend/routers/groups.py` and `users.py` now follow the same command/patch pattern through `backend/contracts_groups.py` and `backend/contracts_users.py`
 - `backend/routers/tags.py`, `taxonomies.py`, `users.py`, and `dashboard.py` delegate read/write orchestration to their service modules instead of assembling persistence queries inline
 - non-admin principals are restricted to their own owned resources; admin access is checked from `RequestPrincipal.is_admin`, not by matching the user name string
 - `groups.py` exposes first-class group CRUD, membership mutation, and derived group graphs
+- empty PATCH payloads for account, entity, tag, group, and user mutations are rejected consistently during request validation
+- `POST /groups/{group_id}/members` accepts one typed `target` object (`entry` vs `child_group`) instead of sibling mutually-exclusive top-level ids
 - `dashboard.py` is principal-scoped by visible accounts and entries
 - `accounts.py` includes principal-scoped delete in addition to create, update, snapshots, and reconciliation
 - `entities.py` includes admin-only delete for non-account entities and returns `409` for account-backed roots

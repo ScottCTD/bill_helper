@@ -12,6 +12,7 @@ import type {
   Entity,
   EntryDetail,
   EntryListResponse,
+  GroupMemberCreatePayload,
   GroupMemberRole,
   GroupGraph,
   GroupSummary,
@@ -386,7 +387,7 @@ export function deleteGroup(groupId: string): Promise<void> {
 
 export function addGroupMember(
   groupId: string,
-  payload: { entry_id?: string; child_group_id?: string; member_role?: GroupMemberRole }
+  payload: GroupMemberCreatePayload
 ): Promise<GroupGraph> {
   return request<GroupGraph>(`/api/v1/groups/${groupId}/members`, {
     method: "POST",

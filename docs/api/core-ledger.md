@@ -44,6 +44,10 @@ Response: `AccountRead`
 
 Behavior: account lookup and update are principal-scoped.
 
+Errors:
+
+- `422` when no updatable fields are provided
+
 ### `DELETE /accounts/{account_id}`
 
 Delete an account root. Response: `204`
@@ -200,7 +204,10 @@ Body fields:
 
 Response: `GroupSummaryRead`
 
-Behavior: only rename is supported in v1.
+Behavior:
+
+- only rename is supported in v1
+- `422` when no updatable fields are provided
 
 ### `DELETE /groups/{group_id}`
 
@@ -217,7 +224,9 @@ Add one direct member to a group.
 
 Body:
 
-- exactly one of `entry_id` or `child_group_id`
+- `target`
+  - `{"target_type":"entry","entry_id":"..."}` for direct entries
+  - `{"target_type":"child_group","group_id":"..."}` for child groups
 - `member_role` (`PARENT` | `CHILD`) is required for `SPLIT` groups and rejected for other group types
 
 Response: `GroupGraphRead`

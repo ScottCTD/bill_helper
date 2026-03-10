@@ -7,6 +7,13 @@ from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal
 from backend.auth.dependencies import get_or_create_current_principal
+from backend.contracts_groups import (
+    ChildGroupMemberTarget,
+    EntryGroupMemberTarget,
+    GroupCreateCommand,
+    GroupMemberCreateCommand,
+    GroupPatch,
+)
 from backend.database import get_db
 from backend.models_finance import EntryGroup
 from backend.schemas_finance import (
@@ -30,7 +37,7 @@ from backend.services.groups import (
     group_tree_options,
     load_group_tree,
     remove_group_member as remove_group_member_service,
-    rename_group,
+    update_group as update_group_service,
 )
 
 router = APIRouter(prefix="/groups", tags=["groups"])
@@ -59,8 +66,7 @@ def create_group(
     try:
         group = create_group_service(
             db,
-            name=payload.name,
-            group_type=payload.group_type,
+            command=GroupCreateCommand.model_validate(payload.model_dump()),
             owner_user_id=principal.user_id,
         )
     except ValueError as exc:
@@ -114,11 +120,12 @@ def update_group(
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> GroupSummaryRead:
     group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
-    if payload.name is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No group fields were provided.")
-
     try:
-        updated_group = rename_group(db, group=group, name=payload.name)
+        updated_group = update_group_service(
+            db,
+            group=group,
+            patch=GroupPatch.model_validate(payload.model_dump(exclude_unset=True)),
+        )
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -150,21 +157,13 @@ def add_group_member(
     principal: RequestPrincipal = Depends(get_or_create_current_principal),
 ) -> GroupGraphRead:
     group = _get_group_tree_or_404(db, group_id=group_id, principal=principal)
-
-    entry = None
-    child_group = None
-    if payload.entry_id is not None:
-        entry = get_entry_for_principal_or_404(db, entry_id=payload.entry_id, principal=principal)
-    if payload.child_group_id is not None:
-        child_group = _get_group_tree_or_404(db, group_id=payload.child_group_id, principal=principal)
+    command = _group_member_command_for_principal(db, payload=payload, principal=principal)
 
     try:
         add_group_member_service(
             db,
             group=group,
-            entry=entry,
-            child_group=child_group,
-            member_role=payload.member_role,
+            command=command,
         )
     except ValueError as exc:
         db.rollback()
@@ -194,3 +193,23 @@ def delete_group_member(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     db.commit()
+
+
+def _group_member_command_for_principal(
+    db: Session,
+    *,
+    payload: GroupMemberCreate,
+    principal: RequestPrincipal,
+) -> GroupMemberCreateCommand:
+    if payload.target.target_type == "entry":
+        entry = get_entry_for_principal_or_404(db, entry_id=payload.target.entry_id, principal=principal)
+        return GroupMemberCreateCommand(
+            target=EntryGroupMemberTarget(entry_id=entry.id),
+            member_role=payload.member_role,
+        )
+
+    child_group = _get_group_tree_or_404(db, group_id=payload.target.group_id, principal=principal)
+    return GroupMemberCreateCommand(
+        target=ChildGroupMemberTarget(group_id=child_group.id),
+        member_role=payload.member_role,
+    )

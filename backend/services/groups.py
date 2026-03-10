@@ -5,13 +5,16 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from backend.contracts_groups import (
+    ChildGroupMemberTarget,
+    EntryGroupMemberTarget,
+    GroupCreateCommand,
+    GroupMemberCreateCommand,
+    GroupPatch,
+)
 from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
 from backend.models_finance import Entry, EntryGroup, EntryGroupMember
 from backend.schemas_finance import GroupEdge, GroupGraphRead, GroupNode, GroupSummaryRead
-
-
-def normalize_group_name(name: str) -> str:
-    return " ".join(name.split()).strip()
 
 
 def entry_group_options():
@@ -46,18 +49,13 @@ def load_group_tree(db: Session, group_id: str) -> EntryGroup | None:
 def create_group(
     db: Session,
     *,
-    name: str,
-    group_type: GroupType,
+    command: GroupCreateCommand,
     owner_user_id: str,
 ) -> EntryGroup:
-    normalized_name = normalize_group_name(name)
-    if not normalized_name:
-        raise ValueError("Group name cannot be empty.")
-
     group = EntryGroup(
         owner_user_id=owner_user_id,
-        name=normalized_name,
-        group_type=group_type,
+        name=command.name,
+        group_type=command.group_type,
     )
     db.add(group)
     db.flush()
@@ -67,17 +65,14 @@ def create_group(
     return loaded
 
 
-def rename_group(
+def update_group(
     db: Session,
     *,
     group: EntryGroup,
-    name: str,
+    patch: GroupPatch,
 ) -> EntryGroup:
-    normalized_name = normalize_group_name(name)
-    if not normalized_name:
-        raise ValueError("Group name cannot be empty.")
-
-    group.name = normalized_name
+    if "name" in patch.model_fields_set and patch.name is not None:
+        group.name = patch.name
     db.add(group)
     db.flush()
     loaded = load_group_tree(db, group.id)
@@ -99,20 +94,22 @@ def add_group_member(
     db: Session,
     *,
     group: EntryGroup,
-    entry: Entry | None = None,
-    child_group: EntryGroup | None = None,
-    member_role: GroupMemberRole | None = None,
+    command: GroupMemberCreateCommand,
 ) -> EntryGroupMember:
-    if (entry is None) == (child_group is None):
-        raise ValueError("Provide exactly one of entry or child_group.")
-
-    _validate_member_target(db, group=group, entry=entry, child_group=child_group, member_role=member_role)
+    entry, child_group = _resolve_member_target(db, target=command.target)
+    _validate_member_target(
+        db,
+        group=group,
+        entry=entry,
+        child_group=child_group,
+        member_role=command.member_role,
+    )
 
     member = EntryGroupMember(
         group_id=group.id,
         entry_id=entry.id if entry is not None else None,
         child_group_id=child_group.id if child_group is not None else None,
-        member_role=member_role,
+        member_role=command.member_role,
         position=_next_member_position(group),
     )
     db.add(member)
@@ -179,8 +176,10 @@ def set_entry_direct_group(
     add_group_member(
         db,
         group=group,
-        entry=entry,
-        member_role=member_role,
+        command=GroupMemberCreateCommand(
+            target=EntryGroupMemberTarget(entry_id=entry.id),
+            member_role=member_role,
+        ),
     )
 
 
@@ -310,6 +309,23 @@ def _validate_member_target(
 
     if any(member.child_group_id is not None for member in _sorted_memberships(child_group)):
         raise ValueError("Child groups cannot themselves contain child groups.")
+
+
+def _resolve_member_target(
+    db: Session,
+    *,
+    target: EntryGroupMemberTarget | ChildGroupMemberTarget,
+) -> tuple[Entry | None, EntryGroup | None]:
+    if isinstance(target, EntryGroupMemberTarget):
+        entry = db.get(Entry, target.entry_id)
+        if entry is None:
+            raise ValueError("Entry not found.")
+        return entry, None
+
+    child_group = db.get(EntryGroup, target.group_id)
+    if child_group is None:
+        raise ValueError("Child group not found.")
+    return None, child_group
 
 
 def _next_member_position(group: EntryGroup) -> int:

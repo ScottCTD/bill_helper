@@ -61,6 +61,8 @@
 - `models_finance.py`: ledger/account/entity/tag/taxonomy/entry ORM models.
 - `models_agent.py`: agent thread/run/tool-call/change/review ORM models.
 - `models_settings.py`: runtime settings ORM model and table mapping.
+- `contracts_groups.py`: shared group create/update contracts and the typed group-member target payload used by schemas, routers, services, and group-member apply flows.
+- `contracts_users.py`: shared user create/update contracts reused by schemas, routers, and services.
 - `contracts_settings.py`: shared runtime-settings write contract used by both schema and service layers.
 - `models_shared.py`: shared model defaults (`utc_now`, `uuid_str`) used by both model domains.
 - `schemas_finance.py`: ledger/dashboard request/response schemas.
@@ -80,7 +82,7 @@
 - `tags.py`: tag list/create/update/delete endpoints for property/tag selectors.
 - `taxonomies.py`: taxonomy/term list and term create/rename endpoints.
 - `currencies.py`: currency catalog placeholder endpoint for selector/property tables.
-- `groups.py`: first-class group CRUD, membership mutation, and derived direct-member graph reads.
+- `groups.py`: first-class group CRUD, typed membership mutation, and derived direct-member graph reads.
 - `dashboard.py`: monthly analytics endpoint.
 - `agent.py`: append-only agent thread/message/run/review endpoints.
 - `settings.py`: runtime settings read/update endpoints backed by `models_settings.py` / `schemas_settings.py`, with env fallback where applicable and DB-backed list-form `user_memory`.
@@ -96,7 +98,7 @@
 - `entities.py`: entity normalization, account-backed guards, and preserve-label delete helpers.
 - `users.py`: user normalization, lookup, and current-user helpers.
 - `principals.py`: explicit request-principal materialization from the development-session header and persisted user role.
-- `groups.py`: group CRUD, membership validation, depth-1 nesting enforcement, and derived graph generation.
+- `groups.py`: group CRUD, typed membership validation, depth-1 nesting enforcement, and derived graph generation.
 - `finance.py`: reconciliation, CAD dashboard analytics, projections, and chart-ready breakdown aggregations.
 - `crud_policy.py`: shared CRUD validation/conflict policy primitives and standardized error-translation helpers.
 - `serializers.py`: ORM-to-schema mapping helpers.
@@ -159,7 +161,7 @@
 - `GroupGraphView.tsx`: React Flow-based graph rendering for entry groups.
 - `GroupEditorModal.tsx`: create/rename dialog for named typed groups.
 - `GroupDetailModal.tsx`: wide group-detail modal for derived graph inspection and direct-member management.
-- `GroupMemberEditorModal.tsx`: add-member dialog for entries and child groups.
+- `GroupMemberEditorModal.tsx`: add-member dialog that submits the typed group-member target payload shared with the backend.
 - `TagMultiSelect.tsx`: Notion-style chip/dropdown multi-select for entry tags.
 - `DeleteConfirmDialog.tsx`: shared destructive confirmation dialog for account, entity, and tag deletes.
 - `EntryEditorModal.tsx`: shared popup for entry create/edit, including direct-group assignment and split-role selection when needed.
@@ -209,7 +211,7 @@
 #### Frontend Lib (`/frontend/src/lib`)
 
 - `types.ts`: shared TS API/data types.
-- `api.ts`: fetch wrappers and API request functions, including shared principal-header injection plus group CRUD and membership helpers.
+- `api.ts`: fetch wrappers and API request functions, including shared principal-header injection plus typed group-member target payload helpers.
 - `format.ts`: money formatting and date helpers.
 - `queryKeys.ts`: centralized TanStack Query key factory for all domains.
 - `queryInvalidation.ts`: shared cache invalidation rules after mutations/review actions, including group-driven entry/group refresh.
