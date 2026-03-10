@@ -31,6 +31,9 @@ Supporting modules include:
 - `frontend/src/features/agent/review/useAgentReviewEditorResources.ts`
 - `frontend/src/features/agent/review/useAgentReviewDraftState.ts`
 - `frontend/src/features/agent/review/ReviewEditors.tsx`
+- `frontend/src/features/agent/review/ReviewTocSection.tsx`
+- `frontend/src/features/agent/review/ReviewCatalogEditors.tsx`
+- `frontend/src/features/agent/review/ReviewGroupEditors.tsx`
 - `frontend/src/features/agent/review/modalHelpers.ts`
 - `frontend/src/features/agent/review/drafts/*`
 - `frontend/src/features/agent/review/model.ts`
@@ -57,7 +60,7 @@ Supporting modules include:
 - the header `Review` button is the only review entry point and opens one thread-scoped dialog for all proposal items across the selected thread
 - the dialog uses responsive width rules, lets reviewers collapse the left TOC, groups TOC rows by proposal domain (`Entries`, `Accounts`, `Groups`, `Entities`, `Tags`) within `Pending` and `Reviewed / Failed`, and surfaces batch plus per-item review controls in a full-width bar above the denser review surface
 - proposals render CRUD-aware field-level diffs, and reviewer overrides update the preview for create and update entry/account/tag/entity/group proposals plus add-member group proposals
-- TOC navigation, edit forms, and dependency chips live in `frontend/src/features/agent/review/ReviewEditors.tsx`, while reusable selection/status helpers live in `frontend/src/features/agent/review/modalHelpers.ts`
+- `ReviewEditors.tsx` is now the stable export seam; `ReviewTocSection.tsx` owns TOC navigation, `ReviewCatalogEditors.tsx` owns entry/account/entity/tag editors, `ReviewGroupEditors.tsx` owns group and membership editors plus dependency chips, and reusable selection/status helpers live in `frontend/src/features/agent/review/modalHelpers.ts`
 - draft normalization and override builders now live in `frontend/src/features/agent/review/drafts/`, split across shared coercion helpers plus `entries`, `catalog`, and `memberships` ownership modules
 - entry create/update review uses the same field model as `EntryEditorModal` through `frontend/src/features/agent/review/drafts/entries.ts`; account review edits `name`, `currency`, `active`, and `notes`; tag review edits only `name` and `type`; entity review edits only `name` and `category`; create/update group review edits `name` plus create-only `group_type`
 - create-group-member review shows the resolved parent group name plus a read-only full entry snapshot for entry members; the only editable field in v1 is split role, and the diff preview treats membership changes as a group assignment update so only the `group` field (and split role when relevant) changes instead of re-highlighting the whole entry payload
