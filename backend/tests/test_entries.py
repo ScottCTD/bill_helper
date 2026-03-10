@@ -998,3 +998,95 @@ def test_catalog_reads_are_scoped_by_principal(client):
     alice_tags_response.raise_for_status()
     alice_food = next(tag for tag in alice_tags_response.json() if tag["name"] == "food")
     assert alice_food["entry_count"] == 1
+
+
+def test_entities_list_includes_same_currency_net_amounts(client):
+    account_id = create_account(client)
+    cafe = create_entity(client, "Cafe")
+
+    expense_response = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-10",
+            "name": "Coffee run",
+            "amount_minor": 1200,
+            "currency_code": "USD",
+            "from_entity": "Main Checking",
+            "to_entity_id": cafe["id"],
+            "tags": [],
+        },
+    )
+    expense_response.raise_for_status()
+
+    income_response = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": account_id,
+            "kind": "INCOME",
+            "occurred_at": "2026-01-11",
+            "name": "Refund",
+            "amount_minor": 300,
+            "currency_code": "USD",
+            "from_entity_id": cafe["id"],
+            "to_entity": "Main Checking",
+            "tags": [],
+        },
+    )
+    income_response.raise_for_status()
+
+    entities_response = client.get("/api/v1/entities")
+    entities_response.raise_for_status()
+    cafe_row = next(entity for entity in entities_response.json() if entity["id"] == cafe["id"])
+
+    assert cafe_row["entry_count"] == 2
+    assert cafe_row["net_amount_minor"] == -900
+    assert cafe_row["net_amount_currency_code"] == "USD"
+    assert cafe_row["net_amount_mixed_currencies"] is False
+
+
+def test_entities_list_marks_mixed_currency_net_amounts(client):
+    account_id = create_account(client)
+    airline = create_entity(client, "Airline")
+
+    usd_response = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-10",
+            "name": "Seat upgrade",
+            "amount_minor": 1200,
+            "currency_code": "USD",
+            "from_entity": "Main Checking",
+            "to_entity_id": airline["id"],
+            "tags": [],
+        },
+    )
+    usd_response.raise_for_status()
+
+    eur_response = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-11",
+            "name": "Airport snack",
+            "amount_minor": 600,
+            "currency_code": "EUR",
+            "from_entity": "Main Checking",
+            "to_entity_id": airline["id"],
+            "tags": [],
+        },
+    )
+    eur_response.raise_for_status()
+
+    entities_response = client.get("/api/v1/entities")
+    entities_response.raise_for_status()
+    airline_row = next(entity for entity in entities_response.json() if entity["id"] == airline["id"])
+
+    assert airline_row["entry_count"] == 2
+    assert airline_row["net_amount_minor"] is None
+    assert airline_row["net_amount_currency_code"] is None
+    assert airline_row["net_amount_mixed_currencies"] is True

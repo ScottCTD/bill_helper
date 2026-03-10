@@ -266,7 +266,7 @@ function mockGroupsPageData() {
     { id: "entity-1", name: "Scotiabank Credit", category: null, is_account: true, from_count: 1, to_count: 0, account_count: 1, entry_count: 1 },
     { id: "entity-2", name: "OpenAI", category: "Software", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }
   ]);
-  vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_current_user: true }]);
+  vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true }]);
   vi.mocked(listTags).mockResolvedValue([]);
   vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
   vi.mocked(updateEntry).mockResolvedValue(entryFixture);

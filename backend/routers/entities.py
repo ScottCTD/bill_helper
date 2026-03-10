@@ -30,6 +30,9 @@ class _EntityUsageCounts:
     to_count: int | None = None
     account_count: int | None = None
     entry_count: int | None = None
+    net_amount_minor: int | None = None
+    net_amount_currency_code: str | None = None
+    net_amount_mixed_currencies: bool = False
 
 
 def _to_schema(
@@ -48,6 +51,9 @@ def _to_schema(
         to_count=usage_counts.to_count,
         account_count=usage_counts.account_count,
         entry_count=usage_counts.entry_count,
+        net_amount_minor=usage_counts.net_amount_minor,
+        net_amount_currency_code=usage_counts.net_amount_currency_code,
+        net_amount_mixed_currencies=usage_counts.net_amount_mixed_currencies,
     )
 
 
@@ -73,6 +79,9 @@ def list_entities(
                 to_count=row.to_count,
                 account_count=row.account_count,
                 entry_count=row.entry_count,
+                net_amount_minor=row.net_amount_minor,
+                net_amount_currency_code=row.net_amount_currency_code,
+                net_amount_mixed_currencies=row.net_amount_mixed_currencies,
             ),
         )
         for row in rows

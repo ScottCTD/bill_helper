@@ -49,6 +49,9 @@ class EntityRead(BaseModel):
     to_count: int | None = None
     account_count: int | None = None
     entry_count: int | None = None
+    net_amount_minor: int | None = None
+    net_amount_currency_code: str | None = None
+    net_amount_mixed_currencies: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

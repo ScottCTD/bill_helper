@@ -14,7 +14,7 @@ Defines typed API models for:
 Current contract highlights:
 
 - `Account` no longer exposes `entity_id`
-- `Entity` includes `is_account`
+- `Entity` includes `is_account` plus single-currency net aggregate fields for the standalone entities table
 - `User` includes persisted `is_admin` and `is_current_user`
 - `Entry` and `EntryDetail` include `from_entity_missing` and `to_entity_missing`
 - runtime settings include both `agent_model` and ordered `available_agent_models`

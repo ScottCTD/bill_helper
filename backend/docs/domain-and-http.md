@@ -51,6 +51,7 @@ Important read models:
 
 - `GroupSummaryRead` for `GET /groups`
 - `GroupGraphRead` for `GET /groups/{group_id}` with entry-node `amount_minor` and `currency_code` for UI stats
+- `EntityRead` for `/entities` with usage counters plus a same-currency net aggregate (`net_amount_minor`, `net_amount_currency_code`) and a mixed-currency fallback flag
 - `TagSummaryRead` for embedded entry-tag payloads, with `TagRead` reserved for `/tags` catalog responses that include `entry_count`
 - `EntryRead` / `EntryDetailRead` for entry list/detail reads with `direct_group`, `direct_group_member_role`, `group_path`, and `TagSummaryRead[]` tags
 - `RuntimeSettingsRead` for `/settings`

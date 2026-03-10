@@ -1,13 +1,12 @@
 import { useMemo } from "react";
 
-import type { Currency, Entity, Tag, TaxonomyTerm, User } from "../../lib/types";
-import { includesFilter } from "./helpers";
+import type { Currency, Tag, TaxonomyTerm, User } from "../../lib/types";
+import { includesFilter } from "../../lib/catalogs";
 import type { PropertiesSectionId } from "./types";
 
 interface PropertiesFilteredDataArgs {
   sectionSearch: Record<PropertiesSectionId, string>;
   users: User[] | undefined;
-  entities: Entity[] | undefined;
   tags: Tag[] | undefined;
   currencies: Currency[] | undefined;
   entityCategoryTerms: TaxonomyTerm[] | undefined;
@@ -18,7 +17,6 @@ export function usePropertiesFilteredData(args: PropertiesFilteredDataArgs) {
   const {
     sectionSearch,
     users,
-    entities,
     tags,
     currencies,
     entityCategoryTerms,
@@ -28,14 +26,6 @@ export function usePropertiesFilteredData(args: PropertiesFilteredDataArgs) {
   const filteredUsers = useMemo(() => {
     return (users ?? []).filter((user) => includesFilter(user.name, sectionSearch.users));
   }, [sectionSearch.users, users]);
-
-  const filteredEntities = useMemo(() => {
-    return (entities ?? []).filter(
-      (entity) =>
-        !entity.is_account &&
-        (includesFilter(entity.name, sectionSearch.entities) || includesFilter(entity.category, sectionSearch.entities))
-    );
-  }, [entities, sectionSearch.entities]);
 
   const filteredTags = useMemo(() => {
     return (tags ?? []).filter(
@@ -64,7 +54,6 @@ export function usePropertiesFilteredData(args: PropertiesFilteredDataArgs) {
 
   return {
     users: filteredUsers,
-    entities: filteredEntities,
     tags: filteredTags,
     currencies: filteredCurrencies,
     entityCategoryTerms: filteredEntityCategoryTerms,

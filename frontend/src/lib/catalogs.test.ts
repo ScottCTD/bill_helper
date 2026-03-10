@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { includesFilter, normalizeFilterValue, taxonomyTermNames, uniqueOptionValues } from "./helpers";
+import { includesFilter, normalizeFilterValue, taxonomyTermNames, uniqueOptionValues } from "./catalogs";
 
-describe("properties helpers", () => {
+describe("catalog helpers", () => {
   it("normalizes filter text", () => {
     expect(normalizeFilterValue("  HeLLo ")).toBe("hello");
   });

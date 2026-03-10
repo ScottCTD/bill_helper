@@ -1,4 +1,7 @@
-import type { TaxonomyTerm } from "../../lib/types";
+import type { TaxonomyTerm } from "./types";
+
+export const ENTITY_CATEGORY_TAXONOMY_KEY = "entity_category";
+export const TAG_TYPE_TAXONOMY_KEY = "tag_type";
 
 export function normalizeFilterValue(value: string) {
   return value.trim().toLowerCase();

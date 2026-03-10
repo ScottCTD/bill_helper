@@ -1,5 +1,4 @@
 import { CurrenciesSection } from "./sections/CurrenciesSection";
-import { EntitiesSection } from "./sections/EntitiesSection";
 import { TagsSection } from "./sections/TagsSection";
 import { TaxonomyTermsSection } from "./sections/TaxonomyTermsSection";
 import { UsersSection } from "./sections/UsersSection";
@@ -41,45 +40,6 @@ export function PropertiesSectionContent({ model }: PropertiesSectionContentProp
           updateErrorMessage={queryErrorMessage(model.mutations.updateUserMutation.error)}
           isCreating={model.mutations.createUserMutation.isPending}
           isUpdating={model.mutations.updateUserMutation.isPending}
-        />
-      );
-    case "entities":
-      return (
-        <EntitiesSection
-          search={model.sectionSearch.entities}
-          onSearchChange={(value) => model.actions.setSectionSearchValue("entities", value)}
-          createPanelOpen={model.createPanelOpen.entities}
-          onToggleCreatePanel={() => model.actions.toggleCreatePanel("entities")}
-          onCloseCreatePanel={() => model.actions.closeCreatePanel("entities")}
-          newEntityName={model.forms.newEntityName}
-          onNewEntityNameChange={model.forms.setNewEntityName}
-          newEntityCategory={model.forms.newEntityCategory}
-          onNewEntityCategoryChange={model.forms.setNewEntityCategory}
-          editingEntityId={model.forms.editingEntityId}
-          editingEntityName={model.forms.editingEntityName}
-          onEditingEntityNameChange={model.forms.setEditingEntityName}
-          editingEntityCategory={model.forms.editingEntityCategory}
-          onEditingEntityCategoryChange={model.forms.setEditingEntityCategory}
-          onStartEditEntity={model.actions.startEditEntity}
-          onCancelEditEntity={model.actions.cancelEditEntity}
-          onSaveEntity={model.actions.saveEntity}
-          onStartDeleteEntity={model.actions.startDeleteEntity}
-          onCancelDeleteEntity={model.actions.cancelDeleteEntity}
-          onConfirmDeleteEntity={model.actions.confirmDeleteEntity}
-          onCreateEntitySubmit={model.actions.onCreateEntity}
-          entities={model.filtered.entities}
-          deletingEntity={model.deleteTargets.entity}
-          hasAnyEntities={(model.queries.entitiesQuery.data ?? []).some((entity) => !entity.is_account)}
-          entityCategoryOptions={model.options.entityCategoryOptions}
-          isLoading={model.queries.entitiesQuery.isLoading}
-          isError={model.queries.entitiesQuery.isError}
-          queryErrorMessage={queryErrorMessage(model.queries.entitiesQuery.error)}
-          createErrorMessage={queryErrorMessage(model.mutations.createEntityMutation.error)}
-          updateErrorMessage={queryErrorMessage(model.mutations.updateEntityMutation.error)}
-          deleteErrorMessage={queryErrorMessage(model.mutations.deleteEntityMutation.error)}
-          isCreating={model.mutations.createEntityMutation.isPending}
-          isUpdating={model.mutations.updateEntityMutation.isPending}
-          isDeleting={model.mutations.deleteEntityMutation.isPending}
         />
       );
     case "tags":

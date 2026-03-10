@@ -1,9 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { ENTITY_CATEGORY_TAXONOMY_KEY, TAG_TYPE_TAXONOMY_KEY } from "./catalogs";
 import { queryKeys } from "./queryKeys";
-
-const ENTITY_CATEGORY_TAXONOMY_KEY = "entity_category";
-const TAG_TYPE_TAXONOMY_KEY = "tag_type";
 
 export function invalidateEntryReadModels(queryClient: QueryClient, entryId?: string): void {
   queryClient.invalidateQueries({ queryKey: queryKeys.entries.all });

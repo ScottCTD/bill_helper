@@ -43,7 +43,9 @@ Behavior:
 - each row includes `is_account`
 - admin principals see every entity plus global usage counters
 - non-admin principals still see shared non-account entities, but account-backed entities are limited to the caller's own visible accounts
-- non-admin usage counters (`from_count`, `to_count`, `account_count`, `entry_count`) follow the same owner scope as `/entries` and `/accounts`
+- non-admin usage counters (`from_count`, `to_count`, `account_count`, `entry_count`) and entity net aggregates follow the same owner scope as `/entries` and `/accounts`
+- `net_amount_minor` and `net_amount_currency_code` are populated only when the visible referenced entries all share one currency
+- `net_amount_mixed_currencies=true` means the entity has visible entries across multiple currencies, so no single aggregate amount is returned
 - account-backed entities must be managed through `/accounts`
 
 ### `POST /entities`

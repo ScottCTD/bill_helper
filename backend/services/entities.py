@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import case, distinct, func, or_, select, update
 from sqlalchemy.orm import Session, aliased
 
 from backend.auth.contracts import RequestPrincipal, is_admin_principal
+from backend.enums_finance import EntryKind
 from backend.models_finance import Account, Entity, Entry
 from backend.services.access_scope import owner_user_filter
 from backend.services.crud_policy import (
@@ -33,6 +34,27 @@ class EntityUsageRow:
     to_count: int
     account_count: int
     entry_count: int
+    net_amount_minor: int | None
+    net_amount_currency_code: str | None
+    net_amount_mixed_currencies: bool
+
+
+def _entry_signed_amount_expression():
+    return case(
+        (Entry.kind == EntryKind.INCOME, Entry.amount_minor),
+        else_=-Entry.amount_minor,
+    )
+
+
+def _entity_entry_scope(principal: RequestPrincipal):
+    return (
+        Entry.is_deleted.is_(False),
+        owner_user_filter(Entry.owner_user_id, principal),
+        or_(
+            Entry.from_entity_id == Entity.id,
+            Entry.to_entity_id == Entity.id,
+        ),
+    )
 
 def ensure_entity_category_is_not_account(category: str | None) -> None:
     if normalize_entity_category(category) == "account":
@@ -116,6 +138,7 @@ def ensure_entity_is_not_account_backed(entity: Entity) -> None:
 
 
 def list_entities_with_usage(db: Session, *, principal: RequestPrincipal) -> list[EntityUsageRow]:
+    entry_scope = _entity_entry_scope(principal)
     from_count_subquery = (
         select(func.count(Entry.id))
         .where(
@@ -144,14 +167,42 @@ def list_entities_with_usage(db: Session, *, principal: RequestPrincipal) -> lis
     )
     entry_count_subquery = (
         select(func.count(Entry.id))
-        .where(
-            Entry.is_deleted.is_(False),
-            owner_user_filter(Entry.owner_user_id, principal),
-            or_(
-                Entry.from_entity_id == Entity.id,
-                Entry.to_entity_id == Entity.id,
-            ),
+        .where(*entry_scope)
+        .scalar_subquery()
+    )
+    distinct_currency_count_subquery = (
+        select(func.count(distinct(Entry.currency_code)))
+        .where(*entry_scope)
+        .scalar_subquery()
+    )
+    net_amount_minor_subquery = (
+        select(
+            case(
+                (
+                    distinct_currency_count_subquery == 1,
+                    func.coalesce(func.sum(_entry_signed_amount_expression()), 0),
+                ),
+                else_=None,
+            )
         )
+        .where(*entry_scope)
+        .scalar_subquery()
+    )
+    net_amount_currency_code_subquery = (
+        select(
+            case(
+                (
+                    distinct_currency_count_subquery == 1,
+                    func.min(Entry.currency_code),
+                ),
+                else_=None,
+            )
+        )
+        .where(*entry_scope)
+        .scalar_subquery()
+    )
+    net_amount_mixed_currencies_subquery = (
+        select(distinct_currency_count_subquery > 1)
         .scalar_subquery()
     )
     account_alias = aliased(Account)
@@ -162,6 +213,9 @@ def list_entities_with_usage(db: Session, *, principal: RequestPrincipal) -> lis
             to_count_subquery.label("to_count"),
             account_count_subquery.label("account_count"),
             entry_count_subquery.label("entry_count"),
+            net_amount_minor_subquery.label("net_amount_minor"),
+            net_amount_currency_code_subquery.label("net_amount_currency_code"),
+            net_amount_mixed_currencies_subquery.label("net_amount_mixed_currencies"),
         )
         .outerjoin(account_alias, account_alias.id == Entity.id)
         .order_by(func.lower(Entity.name).asc())
@@ -182,8 +236,20 @@ def list_entities_with_usage(db: Session, *, principal: RequestPrincipal) -> lis
             to_count=int(to_count or 0),
             account_count=int(account_count or 0),
             entry_count=int(entry_count or 0),
+            net_amount_minor=int(net_amount_minor) if net_amount_minor is not None else None,
+            net_amount_currency_code=str(net_amount_currency_code) if net_amount_currency_code is not None else None,
+            net_amount_mixed_currencies=bool(net_amount_mixed_currencies),
         )
-        for entity, from_count, to_count, account_count, entry_count in rows
+        for (
+            entity,
+            from_count,
+            to_count,
+            account_count,
+            entry_count,
+            net_amount_minor,
+            net_amount_currency_code,
+            net_amount_mixed_currencies,
+        ) in rows
     ]
 
 

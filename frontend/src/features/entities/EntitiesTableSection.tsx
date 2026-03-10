@@ -1,11 +1,10 @@
 import type { FormEvent } from "react";
 import { Plus } from "lucide-react";
 
-import { DeleteIconButton } from "../../../components/DeleteIconButton";
-import type { Entity } from "../../../lib/types";
-import { DeleteConfirmDialog } from "../../../components/DeleteConfirmDialog";
-import { CreatableSingleSelect } from "../../../components/CreatableSingleSelect";
-import { Button } from "../../../components/ui/button";
+import { DeleteConfirmDialog } from "../../components/DeleteConfirmDialog";
+import { DeleteIconButton } from "../../components/DeleteIconButton";
+import { CreatableSingleSelect } from "../../components/CreatableSingleSelect";
+import { Button } from "../../components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -13,12 +12,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "../../../components/ui/dialog";
-import { FormField } from "../../../components/ui/form-field";
-import { Input } from "../../../components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
+} from "../../components/ui/dialog";
+import { FormField } from "../../components/ui/form-field";
+import { Input } from "../../components/ui/input";
+import { formatMinor } from "../../lib/format";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
+import type { Entity } from "../../lib/types";
 
-interface EntitiesSectionProps {
+interface EntitiesTableSectionProps {
   search: string;
   onSearchChange: (value: string) => void;
   createPanelOpen: boolean;
@@ -55,7 +56,7 @@ interface EntitiesSectionProps {
   isDeleting: boolean;
 }
 
-export function EntitiesSection(props: EntitiesSectionProps) {
+export function EntitiesTableSection(props: EntitiesTableSectionProps) {
   const {
     search,
     onSearchChange,
@@ -93,11 +94,21 @@ export function EntitiesSection(props: EntitiesSectionProps) {
     isDeleting
   } = props;
 
+  function netAmountLabel(entity: Entity): string {
+    if (entity.net_amount_mixed_currencies) {
+      return "Mixed currencies";
+    }
+    if (entity.net_amount_minor === null || entity.net_amount_minor === undefined || !entity.net_amount_currency_code) {
+      return "-";
+    }
+    return formatMinor(entity.net_amount_minor, entity.net_amount_currency_code);
+  }
+
   return (
     <div className="table-shell">
       <div className="table-shell-header">
         <div>
-          <h3 className="table-shell-title">Entities</h3>
+          <h2 className="table-shell-title">Entities</h2>
           <p className="table-shell-subtitle">Manage counterparties and assign taxonomy-backed categories.</p>
         </div>
       </div>
@@ -125,6 +136,7 @@ export function EntitiesSection(props: EntitiesSectionProps) {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead className="text-right">Net</TableHead>
                 <TableHead className="icon-action-column">
                   <span className="sr-only">Actions</span>
                 </TableHead>
@@ -135,6 +147,7 @@ export function EntitiesSection(props: EntitiesSectionProps) {
                 <TableRow key={entity.id} className="cursor-pointer" onDoubleClick={() => onStartEditEntity(entity)}>
                   <TableCell>{entity.name}</TableCell>
                   <TableCell>{entity.category || "(none)"}</TableCell>
+                  <TableCell className="text-right whitespace-nowrap">{netAmountLabel(entity)}</TableCell>
                   <TableCell className="icon-action-column">
                     <div className="table-actions">
                       <DeleteIconButton

@@ -19,6 +19,7 @@
 - Frontend tests: `npm run test`
 - Production build: `npm run build`
 - API base override: `VITE_API_BASE_URL` (optional)
+- Vite forces a fresh dep-optimization pass on each dev-server start so local restarts do not leave stale `.vite/deps` chunk references for the markdown editor
 
 ## App Shell And Routing
 
@@ -27,12 +28,13 @@ Defined in `frontend/src/App.tsx`.
 Current shell behavior:
 
 - startup session gate blocks route rendering until a local principal is selected or prefilled
-- collapsible left sidebar (`Sidebar.tsx`) with navigation links for `Agent`, `Dashboard`, `Entries`, `Groups`, `Accounts`, `Properties`, and `Settings`
+- collapsible left sidebar (`Sidebar.tsx`) with navigation links for `Agent`, `Dashboard`, `Entries`, `Entities`, `Groups`, `Accounts`, `Properties`, and `Settings`
 - sidebar footer includes the active-principal switcher used by the frontend-owned development session
 - desktop sidebar is resizable and persists width in localStorage
 - content canvas is route-driven
 - home route is AI-native and renders the agent experience as full-height primary content
 - route pages are lazy-loaded via `React.lazy` and `Suspense`
+- the rich markdown editor bundle is loaded only when an editor dialog opens; development builds surface the exact runtime error above the textarea fallback, while production keeps the fallback generic
 - on small screens the sidebar starts collapsed and can slide open
 
 Route map:
@@ -40,6 +42,7 @@ Route map:
 - `/` -> AI home chat
 - `/dashboard` -> dashboard analytics
 - `/entries` -> entry list
+- `/entities` -> entity list
 - `/entries/:entryId` -> entry detail
 - `/groups` -> derived group workspace
 - `/accounts` -> accounts workspace

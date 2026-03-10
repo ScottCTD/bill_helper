@@ -36,6 +36,9 @@ export interface Entity {
   to_count?: number | null;
   account_count?: number | null;
   entry_count?: number | null;
+  net_amount_minor?: number | null;
+  net_amount_currency_code?: string | null;
+  net_amount_mixed_currencies?: boolean;
 }
 
 export interface User {

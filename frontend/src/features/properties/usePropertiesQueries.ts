@@ -3,18 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   listCurrencies,
-  listEntities,
   listTags,
   listTaxonomies,
   listTaxonomyTerms,
   listUsers
 } from "../../lib/api";
+import { ENTITY_CATEGORY_TAXONOMY_KEY, TAG_TYPE_TAXONOMY_KEY, taxonomyTermNames, uniqueOptionValues } from "../../lib/catalogs";
 import { queryKeys } from "../../lib/queryKeys";
-import { taxonomyTermNames, uniqueOptionValues } from "./helpers";
-import { ENTITY_CATEGORY_TAXONOMY_KEY, TAG_TYPE_TAXONOMY_KEY } from "./types";
 
 export function usePropertiesQueries() {
-  const entitiesQuery = useQuery({ queryKey: queryKeys.properties.entities, queryFn: listEntities });
   const usersQuery = useQuery({ queryKey: queryKeys.properties.users, queryFn: listUsers });
   const tagsQuery = useQuery({ queryKey: queryKeys.properties.tags, queryFn: listTags });
   const currenciesQuery = useQuery({ queryKey: queryKeys.properties.currencies, queryFn: listCurrencies });
@@ -27,15 +24,6 @@ export function usePropertiesQueries() {
     queryKey: queryKeys.properties.taxonomyTerms(TAG_TYPE_TAXONOMY_KEY),
     queryFn: () => listTaxonomyTerms(TAG_TYPE_TAXONOMY_KEY)
   });
-
-  const entityCategoryOptions = useMemo(
-    () =>
-      uniqueOptionValues([
-        ...taxonomyTermNames(entityCategoryTermsQuery.data),
-        ...(entitiesQuery.data ?? []).map((entity) => entity.category)
-      ]),
-    [entitiesQuery.data, entityCategoryTermsQuery.data]
-  );
 
   const tagTypeOptions = useMemo(
     () =>
@@ -59,14 +47,12 @@ export function usePropertiesQueries() {
     queries: {
       taxonomiesQuery,
       usersQuery,
-      entitiesQuery,
       tagsQuery,
       currenciesQuery,
       entityCategoryTermsQuery,
       tagTypeTermsQuery
     },
     options: {
-      entityCategoryOptions,
       tagTypeOptions
     },
     labels: {

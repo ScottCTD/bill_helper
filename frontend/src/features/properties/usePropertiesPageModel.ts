@@ -2,25 +2,17 @@ import { type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
-  createEntity,
   createTag,
   createTaxonomyTerm,
   createUser,
-  deleteEntity,
   deleteTag,
-  updateEntity,
   updateTag,
   updateTaxonomyTerm,
   updateUser
 } from "../../lib/api";
-import {
-  invalidateEntityReadModels,
-  invalidateTagReadModels,
-  invalidateTaxonomyReadModels,
-  invalidateUserReadModels
-} from "../../lib/queryInvalidation";
-import type { Entity, Tag, TaxonomyTerm, User } from "../../lib/types";
-import { ENTITY_CATEGORY_TAXONOMY_KEY, TAG_TYPE_TAXONOMY_KEY } from "./types";
+import { ENTITY_CATEGORY_TAXONOMY_KEY, TAG_TYPE_TAXONOMY_KEY } from "../../lib/catalogs";
+import { invalidateTagReadModels, invalidateTaxonomyReadModels, invalidateUserReadModels } from "../../lib/queryInvalidation";
+import type { Tag, TaxonomyTerm, User } from "../../lib/types";
 import { usePropertiesFilteredData } from "./usePropertiesFilteredData";
 import { usePropertiesFormState } from "./usePropertiesFormState";
 import { usePropertiesQueries } from "./usePropertiesQueries";
@@ -34,51 +26,15 @@ export function usePropertiesPageModel() {
 
   const { queries, options } = queryState;
   const { entityCategoriesLabel, tagTypesLabel } = queryState.labels;
-  const deletingEntity = (queries.entitiesQuery.data ?? []).find((entity) => entity.id === forms.deletingEntityId) ?? null;
   const deletingTag = (queries.tagsQuery.data ?? []).find((tag) => tag.id === forms.deletingTagId) ?? null;
 
   const filtered = usePropertiesFilteredData({
     sectionSearch: sectionState.sectionSearch,
     users: queries.usersQuery.data,
-    entities: queries.entitiesQuery.data,
     tags: queries.tagsQuery.data,
     currencies: queries.currenciesQuery.data,
     entityCategoryTerms: queries.entityCategoryTermsQuery.data,
     tagTypeTerms: queries.tagTypeTermsQuery.data
-  });
-
-  const createEntityMutation = useMutation({
-    mutationFn: createEntity,
-    onSuccess: () => {
-      forms.setNewEntityName("");
-      forms.setNewEntityCategory("");
-      sectionState.actions.closeCreatePanel("entities");
-      invalidateEntityReadModels(queryClient);
-    }
-  });
-
-  const updateEntityMutation = useMutation({
-    mutationFn: ({ entityId, name, category }: { entityId: string; name: string; category: string }) =>
-      updateEntity(entityId, { name, category: category || null }),
-    onSuccess: () => {
-      forms.setEditingEntityId("");
-      forms.setEditingEntityName("");
-      forms.setEditingEntityCategory("");
-      invalidateEntityReadModels(queryClient);
-    }
-  });
-
-  const deleteEntityMutation = useMutation({
-    mutationFn: deleteEntity,
-    onSuccess: (_data, deletedEntityId) => {
-      if (forms.editingEntityId === deletedEntityId) {
-        forms.setEditingEntityId("");
-        forms.setEditingEntityName("");
-        forms.setEditingEntityCategory("");
-      }
-      forms.setDeletingEntityId("");
-      invalidateEntityReadModels(queryClient);
-    }
   });
 
   const createTagMutation = useMutation({
@@ -194,15 +150,6 @@ export function usePropertiesPageModel() {
     }
   });
 
-  function onCreateEntity(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const name = forms.newEntityName.trim();
-    if (!name) {
-      return;
-    }
-    createEntityMutation.mutate({ name, category: forms.newEntityCategory.trim() || null });
-  }
-
   function onCreateTag(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = forms.newTagName.trim();
@@ -266,47 +213,6 @@ export function usePropertiesPageModel() {
   function cancelEditUser() {
     forms.setEditingUserId("");
     forms.setEditingUserName("");
-  }
-
-  function saveEntity(entityId: string) {
-    const name = forms.editingEntityName.trim();
-    if (!name) {
-      return;
-    }
-    updateEntityMutation.mutate({
-      entityId,
-      name,
-      category: forms.editingEntityCategory.trim()
-    });
-  }
-
-  function startEditEntity(entity: Entity) {
-    forms.setEditingEntityId(entity.id);
-    forms.setEditingEntityName(entity.name);
-    forms.setEditingEntityCategory(entity.category ?? "");
-  }
-
-  function cancelEditEntity() {
-    forms.setEditingEntityId("");
-    forms.setEditingEntityName("");
-    forms.setEditingEntityCategory("");
-  }
-
-  function startDeleteEntity(entity: Entity) {
-    forms.setDeletingEntityId(entity.id);
-    deleteEntityMutation.reset();
-  }
-
-  function cancelDeleteEntity() {
-    forms.setDeletingEntityId("");
-    deleteEntityMutation.reset();
-  }
-
-  function confirmDeleteEntity() {
-    if (!forms.deletingEntityId) {
-      return;
-    }
-    deleteEntityMutation.mutate(forms.deletingEntityId);
   }
 
   function saveTag(tagId: number) {
@@ -406,7 +312,6 @@ export function usePropertiesPageModel() {
 
   const coreSections = [
     { id: "users" as const, label: "Users" },
-    { id: "entities" as const, label: "Entities" },
     { id: "tags" as const, label: "Tags" },
     { id: "currencies" as const, label: "Currencies" }
   ];
@@ -429,16 +334,6 @@ export function usePropertiesPageModel() {
     filtered,
     options,
     forms: {
-      newEntityName: forms.newEntityName,
-      setNewEntityName: forms.setNewEntityName,
-      newEntityCategory: forms.newEntityCategory,
-      setNewEntityCategory: forms.setNewEntityCategory,
-      editingEntityId: forms.editingEntityId,
-      editingEntityName: forms.editingEntityName,
-      setEditingEntityName: forms.setEditingEntityName,
-      editingEntityCategory: forms.editingEntityCategory,
-      setEditingEntityCategory: forms.setEditingEntityCategory,
-      deletingEntityId: forms.deletingEntityId,
       newTagName: forms.newTagName,
       setNewTagName: forms.setNewTagName,
       newTagType: forms.newTagType,
@@ -485,7 +380,6 @@ export function usePropertiesPageModel() {
       setSectionSearchValue: sectionState.actions.setSectionSearchValue,
       toggleCreatePanel: sectionState.actions.toggleCreatePanel,
       closeCreatePanel: sectionState.actions.closeCreatePanel,
-      onCreateEntity,
       onCreateTag,
       onCreateUser,
       onCreateEntityCategoryTerm,
@@ -493,12 +387,6 @@ export function usePropertiesPageModel() {
       saveUser,
       startEditUser,
       cancelEditUser,
-      saveEntity,
-      startEditEntity,
-      cancelEditEntity,
-      startDeleteEntity,
-      cancelDeleteEntity,
-      confirmDeleteEntity,
       saveTag,
       startEditTag,
       cancelEditTag,
@@ -513,9 +401,6 @@ export function usePropertiesPageModel() {
       cancelEditTagTypeTerm
     },
     mutations: {
-      createEntityMutation,
-      updateEntityMutation,
-      deleteEntityMutation,
       createTagMutation,
       updateTagMutation,
       deleteTagMutation,
@@ -527,7 +412,6 @@ export function usePropertiesPageModel() {
       updateTagTypeTermMutation
     },
     deleteTargets: {
-      entity: deletingEntity,
       tag: deletingTag
     }
   };

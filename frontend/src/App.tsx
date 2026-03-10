@@ -21,6 +21,11 @@ const EntriesPage = lazy(async () => {
   return { default: module.EntriesPage };
 });
 
+const EntitiesPage = lazy(async () => {
+  const module = await import("./pages/EntitiesPage");
+  return { default: module.EntitiesPage };
+});
+
 const EntryDetailPage = lazy(async () => {
   const module = await import("./pages/EntryDetailPage");
   return { default: module.EntryDetailPage };
@@ -87,6 +92,7 @@ export function App() {
               <Route path="/" element={<HomePage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/entries" element={<EntriesPage />} />
+              <Route path="/entities" element={<EntitiesPage />} />
               <Route path="/entries/:entryId" element={<EntryDetailPage />} />
               <Route path="/groups" element={<GroupsPage />} />
               <Route path="/accounts" element={<AccountsPage />} />

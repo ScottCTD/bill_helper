@@ -27,6 +27,19 @@
 - editing uses the shared popup editor and the same runtime-settings defaults as create flow
 - detail cards show `Missing entity` badges when preserved `from` or `to` labels no longer have linked entity records
 
+## Entities
+
+### `frontend/src/pages/EntitiesPage.tsx`
+
+- dedicated first-class entity workspace at `/entities`
+- page is a thin orchestrator over `frontend/src/features/entities/*`
+- generic entity management stays focused on non-account counterparties; account-backed entity roots remain managed from `Accounts`
+- table shows `Name`, `Category`, a net-money aggregate column, and icon-only row actions
+- rows open the edit dialog on double-click and keep delete isolated behind the compact trash action
+- create and edit dialogs reuse entity-category taxonomy terms plus existing category values as suggestions
+- net-money values only render as an amount when the entity's visible entries share one currency; mixed-currency entities show a fallback label instead of a misleading sum
+- delete confirmation warns when preserved entry labels will show a missing-entity marker
+
 ## Groups
 
 ### `frontend/src/pages/GroupsPage.tsx`
@@ -64,13 +77,10 @@
 - section navigation and content rendering are split into dedicated components
 - section state, form state, queries, and filtered data live in focused hooks
 - editable sections use modal-driven create and edit flows
-- users, entities, and tags open edit modals on row double-click instead of explicit row Edit buttons
+- users and tags open edit modals on row double-click instead of explicit row Edit buttons
 - taxonomy term tables expose `Entity Categories` and `Tag Types`
-- account-backed entities are hidden from the generic `Entities` table
-- the generic `Entities` table now stays compact and shows only `Name`, `Category`, and row actions
-- entities and tags have destructive confirmation dialogs
-- account, entity, and tag row delete controls use compact icon buttons with subdued shared table action styling; destructive emphasis is reserved for confirmation
-- entity delete warns when preserved entry labels will become missing markers
+- tags have destructive confirmation dialogs
+- tag row delete controls use compact icon buttons with subdued shared table action styling; destructive emphasis is reserved for confirmation
 - tag delete warns when existing entry-tag associations will be removed
 - currencies remain read-only
 

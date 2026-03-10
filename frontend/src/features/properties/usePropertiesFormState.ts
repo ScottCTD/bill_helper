@@ -1,13 +1,6 @@
 import { useState } from "react";
 
 export function usePropertiesFormState() {
-  const [newEntityName, setNewEntityName] = useState("");
-  const [newEntityCategory, setNewEntityCategory] = useState("");
-  const [editingEntityId, setEditingEntityId] = useState("");
-  const [editingEntityName, setEditingEntityName] = useState("");
-  const [editingEntityCategory, setEditingEntityCategory] = useState("");
-  const [deletingEntityId, setDeletingEntityId] = useState("");
-
   const [newTagName, setNewTagName] = useState("");
   const [newTagType, setNewTagType] = useState("");
   const [newTagColor, setNewTagColor] = useState("");
@@ -36,18 +29,6 @@ export function usePropertiesFormState() {
   const [editingTagTypeTermDescription, setEditingTagTypeTermDescription] = useState("");
 
   return {
-    newEntityName,
-    setNewEntityName,
-    newEntityCategory,
-    setNewEntityCategory,
-    editingEntityId,
-    setEditingEntityId,
-    editingEntityName,
-    setEditingEntityName,
-    editingEntityCategory,
-    setEditingEntityCategory,
-    deletingEntityId,
-    setDeletingEntityId,
     newTagName,
     setNewTagName,
     newTagType,
