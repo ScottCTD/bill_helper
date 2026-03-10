@@ -47,6 +47,7 @@
 - `versions/0028_add_available_agent_models_to_runtime_settings.py`: adds persisted ordered runtime model-list overrides (`runtime_settings.available_agent_models`).
 - `versions/0029_add_agent_run_surface.py`: adds persisted run surface hints for Telegram-aware agent execution and reply reads.
 - `versions/0030_add_account_agent_change_types.py`: expands the agent review enum to persist account create/update/delete proposal types.
+- `versions/0031_add_user_is_admin.py`: adds the persisted `users.is_admin` role gate used by principal resolution and admin-only route checks.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)

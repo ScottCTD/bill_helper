@@ -25,6 +25,7 @@ This file is the backend index. Use it to find the focused backend docs under `d
 - `0028_add_available_agent_models_to_runtime_settings`
 - `0029_add_agent_run_surface`
 - `0030_add_account_agent_change_types`
+- `0031_add_user_is_admin`
 
 ## Related Docs
 

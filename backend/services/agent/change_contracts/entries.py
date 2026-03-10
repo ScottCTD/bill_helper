@@ -20,13 +20,28 @@ from backend.validation.contract_fields import (
 )
 
 
+def _is_complete_entry_selector_payload(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    if value.get("date") is None or value.get("amount_minor") is None:
+        return False
+    return all(
+        normalize_optional_reference_id(value.get(field)) is not None
+        for field in ("from_entity", "to_entity", "name")
+    )
+
+
 def normalize_entry_reference_payload(value: Any) -> Any:
     if not isinstance(value, dict):
         return value
     normalized = dict(value)
     if "entry_id" in normalized:
         normalized["entry_id"] = normalize_optional_reference_id(normalized.get("entry_id"))
-    normalized["selector"] = normalize_object_json_string(normalized.get("selector"))
+    selector = normalize_object_json_string(normalized.get("selector"))
+    if normalized.get("entry_id") is not None and not _is_complete_entry_selector_payload(selector):
+        normalized["selector"] = None
+    else:
+        normalized["selector"] = selector
     return normalized
 
 

@@ -78,6 +78,27 @@ def test_validate_change_payload_normalizes_group_payloads() -> None:
     assert create_member.member_role.value == "CHILD"
 
 
+def test_validate_change_payload_drops_incomplete_selector_when_entry_id_present() -> None:
+    parsed = validate_change_payload(
+        AgentChangeType.UPDATE_ENTRY,
+        {
+            "entry_id": "entry-1234",
+            "selector": {
+                "date": "2026-03-01",
+                "amount_minor": 1200,
+                "from_entity": None,
+                "to_entity": None,
+                "name": "Lunch",
+            },
+            "patch": {
+                "name": "Lunch (fixed)",
+            },
+        },
+    )
+    assert parsed.entry_id == "entry-1234"
+    assert parsed.selector is None
+
+
 def test_validate_change_payload_rejects_pending_refs_for_remove_group_member() -> None:
     with pytest.raises(ValueError, match="existing group_id references"):
         validate_change_payload(
