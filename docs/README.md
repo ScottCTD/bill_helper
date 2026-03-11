@@ -39,6 +39,7 @@ Use the docs in layers:
 - `../tasks/2026-03-09_agent_surface_followup.md`: deferred cleanup task for agent surface policy and ownership boundaries.
 - `completed_tasks/README.md`: archive conventions for completed task docs.
 - `completed_tasks/*.md`: archived implementation tasks, retrospectives, and fix logs.
+- `completed_tasks/2026-03-11_ios_full_app.md`: archived task for the full iOS app-shell expansion, native workspaces, and backend-backed manage/settings coverage.
 - `completed_tasks/2026-03-09_parallel_agent_thread.md`: archived task for thread-scoped agent composer controls and parallel thread activity UX.
 - `completed_tasks/2026-03-09_entry_entity_label_repair_and_agent_selector_fix.md`: archived fix log for entry entity-label repair, agent selector hardening, and local data cleanup.
 - `completed_tasks/2026-03-10_markdown_editor_vite_fix_log.md`: archived fix log for the BlockNote markdown editor fallback, Vite dep-cache restart bug, and dev-mode diagnostics.

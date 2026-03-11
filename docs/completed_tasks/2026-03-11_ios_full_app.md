@@ -1,5 +1,7 @@
 # iOS Full App — Gap Analysis & Implementation Plan
 
+Status: implemented and verified locally on 2026-03-11. This task doc is archived under `docs/completed_tasks/`.
+
 ## Problem Statement
 
 The iOS app ships a Wave 2 MVP with three tabs (Dashboard, Entries, Agent). The backend
