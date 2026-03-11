@@ -92,6 +92,59 @@ def test_entry_filters_and_tags(client):
     assert "status" not in payload["items"][0]
 
 
+def test_entry_filters_by_filter_group(client):
+    account_id = create_account(client)
+    coffee = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-04",
+            "name": "Coffee",
+            "amount_minor": 500,
+            "currency_code": "USD",
+            "tags": ["coffee_snacks"],
+        },
+    )
+    coffee.raise_for_status()
+    rent = client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-05",
+            "name": "Rent",
+            "amount_minor": 120000,
+            "currency_code": "USD",
+            "tags": ["housing"],
+        },
+    )
+    rent.raise_for_status()
+
+    filter_groups_response = client.get("/api/v1/filter-groups")
+    filter_groups_response.raise_for_status()
+    day_to_day_group = next(
+        group for group in filter_groups_response.json() if group["key"] == "day_to_day"
+    )
+    fixed_group = next(
+        group for group in filter_groups_response.json() if group["key"] == "fixed"
+    )
+
+    day_to_day_entries = client.get(
+        "/api/v1/entries",
+        params={"filter_group_id": day_to_day_group["id"]},
+    )
+    day_to_day_entries.raise_for_status()
+    assert [item["name"] for item in day_to_day_entries.json()["items"]] == ["Coffee"]
+
+    fixed_entries = client.get(
+        "/api/v1/entries",
+        params={"filter_group_id": fixed_group["id"]},
+    )
+    fixed_entries.raise_for_status()
+    assert [item["name"] for item in fixed_entries.json()["items"]] == ["Rent"]
+
+
 def test_group_membership_updates_entry_context_and_allows_group_delete_after_unassign(client):
     account_id = create_account(client)
     entry = create_entry(client, account_id, "Entry 1")

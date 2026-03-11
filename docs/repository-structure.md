@@ -48,6 +48,7 @@
 - `versions/0029_add_agent_run_surface.py`: adds persisted run surface hints for Telegram-aware agent execution and reply reads.
 - `versions/0030_add_account_agent_change_types.py`: expands the agent review enum to persist account create/update/delete proposal types.
 - `versions/0031_add_user_is_admin.py`: adds the persisted `users.is_admin` role gate used by principal resolution and admin-only route checks.
+- `versions/0032_add_filter_groups.py`: adds principal-owned saved filter-group definitions for dashboard classification and analytics slices.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
@@ -59,14 +60,14 @@
 - `database.py`: explicit SQLAlchemy engine/session factories plus cached runtime accessors/dependencies.
 - `enums_finance.py`: ledger enums (`EntryKind`, `GroupType`, `GroupMemberRole`, plus legacy migration-only `LinkType`).
 - `enums_agent.py`: agent run/review/message enums.
-- `models_finance.py`: ledger/account/entity/tag/taxonomy/entry ORM models.
+- `models_finance.py`: ledger/account/entity/tag/taxonomy/filter-group/entry ORM models.
 - `models_agent.py`: agent thread/run/tool-call/change/review ORM models.
 - `models_settings.py`: runtime settings ORM model and table mapping.
 - `contracts_groups.py`: shared group create/update contracts and the typed group-member target payload used by schemas, routers, services, and group-member apply flows.
 - `contracts_users.py`: shared user create/update contracts reused by schemas, routers, and services.
 - `contracts_settings.py`: shared runtime-settings write contract used by both schema and service layers.
 - `models_shared.py`: shared model defaults (`utc_now`, `uuid_str`) used by both model domains.
-- `schemas_finance.py`: ledger/dashboard request/response schemas.
+- `schemas_finance.py`: ledger, filter-group, and dashboard request/response schemas.
 - `schemas_agent.py`: agent thread/message/run/review request/response schemas.
 - `schemas_settings.py`: runtime settings request/response schemas.
 - `auth/`: request-principal contracts, explicit dev-session header parsing, and FastAPI auth dependencies.
@@ -85,6 +86,7 @@
 - `taxonomies.py`: taxonomy/term list and term create/rename endpoints.
 - `currencies.py`: currency catalog placeholder endpoint for selector/property tables.
 - `groups.py`: first-class group CRUD, typed membership mutation, and derived direct-member graph reads.
+- `filter_groups.py`: principal-owned saved filter-group CRUD for dashboard analytics classification.
 - `dashboard.py`: monthly analytics endpoint.
 - `agent.py`: append-only agent thread/message/run/review endpoints.
 - `settings.py`: runtime settings read/update endpoints backed by `models_settings.py` / `schemas_settings.py`, with env fallback where applicable and DB-backed list-form `user_memory`.
@@ -95,13 +97,15 @@
 
 - `accounts.py`: account create/update/delete workflows for shared account/entity roots.
 - `entries.py`: typed entry create/update workflows, typed entity/user refs, tag handling, and entry soft-delete helper.
+- `filter_group_rules.py`: recursive rule evaluation and plain-language summaries for saved filter groups.
+- `filter_groups.py`: default filter-group provisioning plus principal-scoped filter-group CRUD and rule persistence.
 - `finance_contracts.py`: service-owned account/entity/tag write commands shared across routers and agent apply flows.
 - `tags.py`: tag CRUD helpers, taxonomy cleanup, and random default color generation.
 - `entities.py`: entity normalization, account-backed guards, and preserve-label delete helpers.
 - `users.py`: user normalization, lookup, and current-user helpers.
 - `principals.py`: explicit request-principal materialization from the development-session header and persisted user role.
 - `groups.py`: group CRUD, typed membership validation, depth-1 nesting enforcement, and derived graph generation.
-- `finance.py`: reconciliation, CAD dashboard analytics, projections, and chart-ready breakdown aggregations.
+- `finance.py`: reconciliation, runtime-currency dashboard analytics, filter-group-powered classification rollups, projections, and chart-ready breakdown aggregations.
 - `crud_policy.py`: shared CRUD validation/conflict policy primitives and standardized error-translation helpers.
 - `serializers.py`: ORM-to-schema mapping helpers.
 - `taxonomy.py`: shared taxonomy normalization, term assignment, and usage-count helpers.

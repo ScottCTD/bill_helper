@@ -17,6 +17,7 @@ Current contract highlights:
 - `Entity` includes `is_account` plus single-currency net aggregate fields for the standalone entities table
 - `User` includes persisted `is_admin` and `is_current_user`
 - `Entry` and `EntryDetail` include `from_entity_missing` and `to_entity_missing`
+- `FilterGroup` includes recursive include/exclude rules and a plain-language `rule_summary`
 - runtime settings include both `agent_model` and ordered `available_agent_models`
 
 ### `frontend/src/lib/api.ts`
@@ -43,6 +44,11 @@ Responsibilities:
 - group client methods:
   - `listGroups`
   - `getGroup`
+- filter-group client methods:
+  - `listFilterGroups`
+  - `createFilterGroup`
+  - `updateFilterGroup`
+  - `deleteFilterGroup`
 
 ### `frontend/src/lib/queryKeys.ts`
 
@@ -51,6 +57,9 @@ Responsibilities:
 - centralized TanStack Query key factory by domain
 - stable key shapes for list, detail, thread, and derived queries
 - groups keys include `groups.list` and `groups.detail(groupId)`
+- dashboard keys include month-scoped analytics
+- filter-group keys live under `filterGroups.all` and `filterGroups.list`
+- dashboard month keys are also reused by the dashboard page's month timeline and yearly comparisons, which hydrate multiple month snapshots in parallel
 - properties keys include taxonomy-specific keys
 - settings keys include `settings.runtime`
 
@@ -63,6 +72,7 @@ Responsibilities:
 - runtime settings invalidation refreshes dependent surfaces after settings writes
 - taxonomy invalidation refreshes term usage and dependent lists
 - account, entity, and tag delete invalidation refreshes accounts, properties, entries, and dashboard surfaces that depend on preserved labels or cascaded tag detaches
+- filter-group invalidation refreshes the saved filter-group list, dashboard analytics views, and entry list queries that depend on `filter_group_id`
 
 ## State Strategy
 

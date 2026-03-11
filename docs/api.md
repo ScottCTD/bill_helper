@@ -18,7 +18,7 @@ This file is the API index. Use it to find the focused API docs under `docs/api/
 ## API Doc Map
 
 - `api/README.md`: topic map for route families.
-- `api/core-ledger.md`: accounts, entries, groups, and dashboard endpoints.
+- `api/core-ledger.md`: accounts, entries, groups, filter-groups, and dashboard endpoints.
 - `api/catalogs-and-settings.md`: users, entities, tags, taxonomies, currencies, and runtime settings endpoints.
 - `api/agent.md`: thread, message, run, tool-call, review, and attachment endpoints.
 

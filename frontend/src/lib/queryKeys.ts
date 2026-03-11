@@ -6,6 +6,7 @@ export type EntryListFiltersKey = {
   currency?: string;
   source?: string;
   account_id?: string;
+  filter_group_id?: string;
   limit?: number;
   offset?: number;
 };
@@ -30,8 +31,13 @@ export const queryKeys = {
     detailRoot: ["entry"] as const,
     detail: (entryId: string) => ["entry", entryId] as const
   },
+  filterGroups: {
+    all: ["filter-groups"] as const,
+    list: ["filter-groups", "list"] as const
+  },
   dashboard: {
     all: ["dashboard"] as const,
+    timeline: ["dashboard", "timeline"] as const,
     month: (month: string) => ["dashboard", month] as const
   },
   settings: {

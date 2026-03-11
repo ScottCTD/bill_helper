@@ -1,5 +1,6 @@
 import { screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 
 import { EntriesPage } from "./EntriesPage";
 import { formatMinorCompact } from "../lib/format";
@@ -13,6 +14,7 @@ import {
   listCurrencies,
   listEntities,
   listEntries,
+  listFilterGroups,
   listTags,
   listUsers,
   updateEntry
@@ -25,6 +27,7 @@ vi.mock("../lib/api", async () => {
     listEntries: vi.fn(),
     listCurrencies: vi.fn(),
     listEntities: vi.fn(),
+    listFilterGroups: vi.fn(),
     listUsers: vi.fn(),
     listTags: vi.fn(),
     getRuntimeSettings: vi.fn(),
@@ -117,6 +120,7 @@ function mockEntriesPageData(entry: Entry) {
   vi.mocked(listEntities).mockResolvedValue([
     { id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }
   ]);
+  vi.mocked(listFilterGroups).mockResolvedValue([]);
   vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true }]);
   vi.mocked(listTags).mockResolvedValue(entry.tags.map((tag) => ({ ...tag })));
   vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
@@ -129,7 +133,11 @@ describe("EntriesPage", () => {
   it("shows a missing-entity badge for preserved labels in the entries table", async () => {
     mockEntriesPageData(entryFixture);
 
-    renderWithQueryClient(<EntriesPage />);
+    renderWithQueryClient(
+      <MemoryRouter>
+        <EntriesPage />
+      </MemoryRouter>
+    );
 
     await screen.findByText("Coffee");
     expect(screen.getByText("Missing entity")).toBeInTheDocument();
@@ -155,7 +163,11 @@ describe("EntriesPage", () => {
     };
     mockEntriesPageData(entryWithFallbackTag);
 
-    renderWithQueryClient(<EntriesPage />);
+    renderWithQueryClient(
+      <MemoryRouter>
+        <EntriesPage />
+      </MemoryRouter>
+    );
 
     await screen.findByText("travel");
 
@@ -179,7 +191,11 @@ describe("EntriesPage", () => {
   it("gives the tags column a constrained width so the name column keeps more space", async () => {
     mockEntriesPageData(entryFixture);
 
-    renderWithQueryClient(<EntriesPage />);
+    renderWithQueryClient(
+      <MemoryRouter>
+        <EntriesPage />
+      </MemoryRouter>
+    );
 
     await screen.findByText("Coffee");
 
@@ -190,5 +206,44 @@ describe("EntriesPage", () => {
     expect(screen.getByRole("columnheader", { name: "Actions" })).toHaveClass("entries-actions-column");
     expect(screen.queryByRole("columnheader", { name: "Kind" })).not.toBeInTheDocument();
     expect(screen.getByText("coffee")).toHaveClass("entries-tag-pill-label");
+  });
+
+  it("passes the selected filter group through to the entries query", async () => {
+    mockEntriesPageData(entryFixture);
+    vi.mocked(listFilterGroups).mockResolvedValue([
+      {
+        id: "fg-1",
+        key: "day_to_day",
+        name: "day-to-day",
+        description: null,
+        color: "#0f766e",
+        is_default: true,
+        position: 0,
+        rule: {
+          include: {
+            type: "group",
+            operator: "AND",
+            children: [{ type: "condition", field: "entry_kind", operator: "is", value: "EXPENSE" }]
+          },
+          exclude: null
+        },
+        rule_summary: "kind is expense",
+        created_at: "2026-03-05T00:00:00Z",
+        updated_at: "2026-03-05T00:00:00Z"
+      }
+    ]);
+
+    renderWithQueryClient(
+      <MemoryRouter initialEntries={["/entries?filter_group_id=fg-1"]}>
+        <EntriesPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByText("Coffee");
+    expect(listEntries).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter_group_id: "fg-1"
+      })
+    );
   });
 });

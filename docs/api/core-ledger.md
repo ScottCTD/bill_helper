@@ -118,6 +118,7 @@ Query params:
 - `kind`, `tag`, `currency`
 - `source`
 - `account_id`
+- `filter_group_id`
 - `limit` (default `50`, max `200`)
 - `offset`
 
@@ -126,6 +127,7 @@ Response: `EntryListResponse`
 Behavior:
 
 - list results are principal-scoped by `owner_user_id`
+- when `filter_group_id` is provided, results are further reduced to entries matching the caller's saved filter-group rule
 - each row includes `from_entity_missing` / `to_entity_missing`
 - each row includes `direct_group` and `group_path`
 - each row's `tags` list uses `TagSummaryRead`, not the `/tags` catalog contract
@@ -259,7 +261,63 @@ Remove one direct member. Response: `204`
 - `SPLIT` allows at most one direct `PARENT`; descendant entries under the parent must be `EXPENSE` and descendant entries under children must be `INCOME`
 - `RECURRING` requires all descendant entries to share one `EntryKind` and derives a chronological chain from representative dates
 
+## Filter Groups
+
+### `GET /filter-groups`
+
+List the caller's saved filter groups. Response: `FilterGroupRead[]`
+
+Behavior:
+
+- provisions and persists the built-in default groups on first read
+- results are always scoped to the requesting principal
+- each row includes the recursive `rule` tree plus `rule_summary`
+
+### `POST /filter-groups`
+
+Create a custom filter group.
+
+Body:
+
+- `name`
+- `description` (optional)
+- `color` (optional)
+- `rule`
+  - `include` (`group`)
+  - `exclude` (`group`, optional)
+
+Response: `FilterGroupRead`
+
+### `PATCH /filter-groups/{filter_group_id}`
+
+Update one saved filter group. Response: `FilterGroupRead`
+
+Behavior:
+
+- default groups may update `description`, `color`, and `rule`
+- default groups cannot be renamed
+- custom groups may be renamed
+- `422` when no updatable fields are provided
+
+### `DELETE /filter-groups/{filter_group_id}`
+
+Delete one custom filter group. Response: `204`
+
+Behavior:
+
+- default groups cannot be deleted
+
 ## Dashboard
+
+### `GET /dashboard/timeline`
+
+Response: `{ months: string[] }`
+
+Behavior:
+
+- returns the ascending list of visible `YYYY-MM` periods that have expense activity in the dashboard currency
+- excludes internal account-to-account transfers using the same rules as the main dashboard analytics
+- results are principal-scoped and drive the frontend's discrete month/year timeline picker
 
 ### `GET /dashboard`
 
@@ -274,6 +332,7 @@ Current sections include:
 - `month`
 - `currency_code`
 - `kpis`
+- `filter_groups[]`
 - `daily_spending[]`
 - `monthly_trend[]`
 - `spending_by_from[]`
@@ -286,6 +345,8 @@ Current sections include:
 
 Behavior:
 
-- daily classification uses `daily` vs `non-daily` tags
+- dashboard expense classification uses saved filter groups instead of hard-coded daily/non-daily tags
+- built-in filter groups are provisioned and persisted on first dashboard read
 - totals and reconciliation are principal-scoped
 - analytics exclude internal transfers when both endpoints resolve to account-backed entity roots
+- `monthly_trend[]` continues to include `income_total_minor` plus per-filter-group expense buckets, which the frontend now renders as stacked expense segments in the trend bar charts

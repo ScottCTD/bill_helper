@@ -123,7 +123,7 @@ def test_dashboard_monthly_aggregations(client):
         1200,
         "2026-01-02",
         name="Coffee",
-        tags=["daily", "food"],
+        tags=["coffee_snacks"],
         from_entity="Main Checking",
         to_entity="Coffee Shop",
     )
@@ -134,7 +134,7 @@ def test_dashboard_monthly_aggregations(client):
         500,
         "2026-01-03",
         name="Tuition",
-        tags=["non-daily", "education"],
+        tags=["education", "one_time"],
         from_entity="Main Checking",
         to_entity="University",
     )
@@ -156,7 +156,7 @@ def test_dashboard_monthly_aggregations(client):
         700,
         "2026-01-04",
         name="Move to card",
-        tags=["daily", "transfer"],
+        tags=["e_transfer"],
         from_entity="Checking",
         to_entity="Travel Card",
     )
@@ -178,7 +178,7 @@ def test_dashboard_monthly_aggregations(client):
         900,
         "2026-01-04",
         currency_code="USD",
-        tags=["daily", "travel"],
+        tags=["travel"],
         name="Flight snack",
     )
     create_entry(
@@ -187,7 +187,7 @@ def test_dashboard_monthly_aggregations(client):
         "EXPENSE",
         800,
         "2025-12-28",
-        tags=["daily", "food"],
+        tags=["grocery"],
         name="December groceries",
     )
 
@@ -198,28 +198,35 @@ def test_dashboard_monthly_aggregations(client):
     assert payload["currency_code"] == "CAD"
     assert payload["kpis"]["expense_total_minor"] == 1700
     assert payload["kpis"]["income_total_minor"] == 10000
-    assert payload["kpis"]["daily_expense_total_minor"] == 1200
-    assert payload["kpis"]["non_daily_expense_total_minor"] == 500
-    assert payload["kpis"]["average_daily_expense_minor"] == 1200
-    assert payload["kpis"]["median_daily_expense_minor"] == 1200
+    assert payload["kpis"]["average_expense_day_minor"] == 850
+    assert payload["kpis"]["median_expense_day_minor"] == 850
+    assert payload["kpis"]["spending_days"] == 2
+
+    filter_groups = {item["key"]: item for item in payload["filter_groups"]}
+    assert filter_groups["day_to_day"]["total_minor"] == 1200
+    assert filter_groups["one_time"]["total_minor"] == 500
+    assert filter_groups["fixed"]["total_minor"] == 0
+    assert filter_groups["untagged"]["total_minor"] == 0
 
     jan_second = next(point for point in payload["daily_spending"] if point["date"] == "2026-01-02")
     jan_third = next(point for point in payload["daily_spending"] if point["date"] == "2026-01-03")
-    assert jan_second["daily_expense_minor"] == 1200
-    assert jan_third["non_daily_expense_minor"] == 500
+    assert jan_second["filter_group_totals"]["day_to_day"] == 1200
+    assert jan_third["filter_group_totals"]["one_time"] == 500
 
     january = next(point for point in payload["monthly_trend"] if point["month"] == "2026-01")
     assert january["expense_total_minor"] == 1700
     assert january["income_total_minor"] == 10000
+    assert january["filter_group_totals"]["day_to_day"] == 1200
+    assert january["filter_group_totals"]["one_time"] == 500
 
     assert any(item["label"] == "Main Checking" and item["total_minor"] == 1700 for item in payload["spending_by_from"])
     assert any(item["label"] == "Coffee Shop" and item["total_minor"] == 1200 for item in payload["spending_by_to"])
     assert not any(item["label"] == "Travel Card" for item in payload["spending_by_to"])
-    assert any(item["label"] == "daily" and item["total_minor"] == 1200 for item in payload["spending_by_tag"])
+    assert any(item["label"] == "coffee_snacks" and item["total_minor"] == 1200 for item in payload["spending_by_tag"])
     assert payload["projection"]["is_current_month"] is False
     assert payload["projection"]["projected_total_minor"] is None
     assert payload["largest_expenses"][0]["name"] == "Coffee"
-    assert payload["largest_expenses"][0]["is_daily"] is True
+    assert payload["largest_expenses"][0]["matching_filter_group_keys"] == ["day_to_day"]
 
 
 def test_dashboard_keeps_generic_entities_even_when_categorized_as_account(client):
@@ -245,6 +252,78 @@ def test_dashboard_keeps_generic_entities_even_when_categorized_as_account(clien
 
     assert payload["kpis"]["expense_total_minor"] == 500
     assert any(item["label"] == "Legacy Credit" and item["total_minor"] == 500 for item in payload["spending_by_to"])
+
+
+def test_dashboard_timeline_only_lists_months_with_visible_expenses(client):
+    account = create_account(client, name="Checking")
+    travel_account = create_account(client, name="Travel Card")
+
+    create_entry(
+        client,
+        account["id"],
+        "EXPENSE",
+        1200,
+        "2025-11-03",
+        name="Groceries",
+        from_entity="Checking",
+        to_entity="Market",
+    )
+    create_entry(
+        client,
+        account["id"],
+        "INCOME",
+        5000,
+        "2025-12-01",
+        name="Salary",
+        from_entity="Employer",
+        to_entity="Checking",
+    )
+    create_entry(
+        client,
+        account["id"],
+        "EXPENSE",
+        900,
+        "2026-01-07",
+        name="Dinner",
+        from_entity="Checking",
+        to_entity="Restaurant",
+    )
+    create_entry(
+        client,
+        account["id"],
+        "EXPENSE",
+        700,
+        "2026-02-09",
+        name="Card transfer out",
+        from_entity="Checking",
+        to_entity="Travel Card",
+    )
+    create_entry(
+        client,
+        travel_account["id"],
+        "INCOME",
+        700,
+        "2026-02-09",
+        name="Card transfer in",
+        from_entity="Checking",
+        to_entity="Travel Card",
+    )
+    create_entry(
+        client,
+        account["id"],
+        "EXPENSE",
+        400,
+        "2026-03-11",
+        name="Taxi",
+        currency_code="USD",
+        from_entity="Checking",
+        to_entity="Transit",
+    )
+
+    response = client.get("/api/v1/dashboard/timeline")
+    response.raise_for_status()
+
+    assert response.json() == {"months": ["2025-11", "2026-01"]}
 
 
 def test_account_routes_are_scoped_by_principal(client):
@@ -329,3 +408,67 @@ def test_dashboard_is_scoped_by_principal(client):
 
     assert payload["kpis"]["expense_total_minor"] == 700
     assert all(item["name"] != "Admin-only expense" for item in payload["largest_expenses"])
+
+
+def test_filter_groups_support_default_provisioning_and_custom_overlap(client):
+    account = create_account(client)
+    create_entry(
+        client,
+        account["id"],
+        "EXPENSE",
+        1500,
+        "2026-01-15",
+        name="Course fee",
+        tags=["education", "one_time"],
+    )
+
+    list_response = client.get("/api/v1/filter-groups")
+    list_response.raise_for_status()
+    payload = list_response.json()
+
+    assert [item["key"] for item in payload[:5]] == [
+        "day_to_day",
+        "one_time",
+        "fixed",
+        "transfers",
+        "untagged",
+    ]
+
+    day_to_day_id = next(item["id"] for item in payload if item["key"] == "day_to_day")
+    rename_response = client.patch(
+        f"/api/v1/filter-groups/{day_to_day_id}",
+        json={"name": "daily"},
+    )
+    assert rename_response.status_code == 409
+
+    create_response = client.post(
+        "/api/v1/filter-groups",
+        json={
+            "name": "education",
+            "description": "Track education separately.",
+            "rule": {
+                "include": {
+                    "type": "group",
+                    "operator": "AND",
+                    "children": [
+                        {"type": "condition", "field": "entry_kind", "operator": "is", "value": "EXPENSE"},
+                        {"type": "condition", "field": "tags", "operator": "has_any", "value": ["education"]},
+                    ],
+                }
+            },
+        },
+    )
+    create_response.raise_for_status()
+    custom_group = create_response.json()
+    assert custom_group["key"].startswith("custom_")
+
+    dashboard = client.get("/api/v1/dashboard", params={"month": "2026-01"})
+    dashboard.raise_for_status()
+    dashboard_payload = dashboard.json()
+
+    filter_groups = {item["name"]: item for item in dashboard_payload["filter_groups"]}
+    assert filter_groups["one-time"]["total_minor"] == 1500
+    assert filter_groups["education"]["total_minor"] == 1500
+
+    delete_response = client.delete(f"/api/v1/filter-groups/{custom_group['id']}")
+    assert delete_response.status_code == 204

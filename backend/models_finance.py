@@ -86,6 +86,44 @@ class User(Base):
     owned_groups: Mapped[list[EntryGroup]] = relationship(
         back_populates="owner_user", foreign_keys="EntryGroup.owner_user_id"
     )
+    filter_groups: Mapped[list[FilterGroup]] = relationship(
+        back_populates="owner_user",
+        foreign_keys="FilterGroup.owner_user_id",
+        cascade="all, delete-orphan",
+    )
+
+
+class FilterGroup(Base):
+    __tablename__ = "filter_groups"
+    __table_args__ = (
+        UniqueConstraint("owner_user_id", "key", name="uq_filter_groups_owner_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    color: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    definition_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+    )
+
+    owner_user: Mapped[User] = relationship(
+        back_populates="filter_groups",
+        foreign_keys=[owner_user_id],
+    )
 
 
 class Account(Base):

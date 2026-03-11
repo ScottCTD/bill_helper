@@ -64,6 +64,26 @@ Operational rules:
 - `is_admin` (persisted admin-role gate)
 - `created_at`, `updated_at`
 
+## `filter_groups`
+
+- `id` (PK UUID string)
+- `owner_user_id` (FK -> `users.id`)
+- `key` (stable internal identifier, unique per owner)
+- `name` (user-visible label)
+- `description` (nullable)
+- `color` (nullable chart/display color)
+- `is_default` (built-in vs custom group)
+- `position` (owner-local display order)
+- `definition_json` (structured include/exclude rule tree)
+- `created_at`, `updated_at`
+
+Operational rules:
+
+- filter groups are always principal-owned; admin access does not expose another user's saved groups
+- default groups are provisioned lazily per user and persisted on first dashboard/filter-group read
+- default groups keep stable `key` values (`day_to_day`, `one_time`, `fixed`, `transfers`, `untagged`) even when their rules are edited
+- rule definitions are recursive logical trees over `entry_kind`, tag inclusion/exclusion, and `is_internal_transfer`
+
 ## `runtime_settings`
 
 - `id` (PK int)

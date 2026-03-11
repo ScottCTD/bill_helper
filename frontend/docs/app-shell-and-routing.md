@@ -28,7 +28,7 @@ Defined in `frontend/src/App.tsx`.
 Current shell behavior:
 
 - startup session gate blocks route rendering until a local principal is selected or prefilled
-- collapsible left sidebar (`Sidebar.tsx`) with navigation links for `Agent`, `Dashboard`, `Entries`, `Entities`, `Groups`, `Accounts`, `Properties`, and `Settings`
+- collapsible left sidebar (`Sidebar.tsx`) with navigation links for `Agent`, `Dashboard`, `Filter`, `Entries`, `Entities`, `Groups`, `Accounts`, `Properties`, and `Settings`
 - sidebar footer includes the active-principal switcher used by the frontend-owned development session
 - desktop sidebar is resizable and persists width in localStorage
 - content canvas is route-driven
@@ -41,7 +41,8 @@ Route map:
 
 - `/` -> AI home chat
 - `/dashboard` -> dashboard analytics
-- `/entries` -> entry list
+- `/filters` -> first-class saved filter-group workspace
+- `/entries` -> entry list, including optional `filter_group_id` URL filtering
 - `/entities` -> entity list
 - `/entries/:entryId` -> entry detail
 - `/groups` -> derived group workspace

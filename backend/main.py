@@ -7,7 +7,18 @@ from fastapi.responses import JSONResponse
 
 from backend.auth.dependencies import get_or_create_current_principal
 from backend.config import get_settings
-from backend.routers import currencies, dashboard, entities, entries, groups, settings, tags, taxonomies, users
+from backend.routers import (
+    currencies,
+    dashboard,
+    entities,
+    entries,
+    filter_groups,
+    groups,
+    settings,
+    tags,
+    taxonomies,
+    users,
+)
 from backend.routers.agent import router as agent_router
 from backend.routers.accounts import router as accounts_router
 from backend.services.crud_policy import PolicyViolation
@@ -42,6 +53,7 @@ def create_app() -> FastAPI:
         entities.router,
         entries.router,
         tags.router,
+        filter_groups.router,
         taxonomies.router,
         users.router,
         groups.router,
