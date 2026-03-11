@@ -29,7 +29,22 @@ final class AgentFeatureViewModelTests: XCTestCase {
         )
 
         XCTAssertNil(rendered.markdown)
-        XCTAssertEqual(rendered.fallbackText, "Bad\u{0000}markdown")
+        XCTAssertEqual(rendered.fallbackText, "Badmarkdown")
+    }
+
+    func testAssistantMarkdownRendererPreservesEmojiInMarkdown() async throws {
+        let rendered = AssistantMessageMarkdownRenderer.renderedContent(
+            forMarkdown: "Hello! 👋 Welcome",
+            messageID: "message-emoji"
+        )
+
+        XCTAssertEqual(rendered.markdown, "Hello! 👋 Welcome")
+        XCTAssertEqual(rendered.fallbackText, "Hello! 👋 Welcome")
+    }
+
+    func testAgentDisplayTextPreservesEmojiWhileRemovingUnsupportedControls() {
+        XCTAssertEqual(agentDisplayText("Hello! 👋 Welcome"), "Hello! 👋 Welcome")
+        XCTAssertEqual(agentDisplayText("Bad\u{0000}markdown"), "Badmarkdown")
     }
 
     func testListViewModelLoadsThreadsAndCreatesNewThread() async {

@@ -9,7 +9,7 @@
 
 ## Detail View
 
- - assistant markdown is rendered through the shared markdown renderer, keeps list/code/blockquote spacing stable even when streamed text arrives with weak formatting, and now stays visually aligned with the assistant bubble instead of inheriting a GitHub-style white card
+- assistant markdown is rendered through the shared markdown renderer, keeps list/code/blockquote spacing stable even when streamed text arrives with weak formatting, normalizes display text before rendering, and stays visually aligned with the assistant bubble instead of inheriting a selectable white card
 - the composer supports text plus Photos/file-import attachments
 - attachment validation uses runtime settings for max image size and image count
 - thread detail shows:

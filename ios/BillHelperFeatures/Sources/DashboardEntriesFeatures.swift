@@ -11,6 +11,7 @@ final class DashboardScreenModel: ObservableObject {
 
     private let apiClient: APIClient
     private var hasLoaded = false
+    private var lastLoadedAt: Date?
 
     init(apiClient: APIClient) {
         self.apiClient = apiClient
@@ -35,6 +36,7 @@ final class DashboardScreenModel: ObservableObject {
                 selectedFilterGroupKey = dashboard.filterGroups.first?.key
             }
             hasLoaded = true
+            lastLoadedAt = .now
         } catch {
             phase = .failed(Self.message(for: error))
         }
@@ -50,6 +52,20 @@ final class DashboardScreenModel: ObservableObject {
         guard case .dashboard(let month)? = deepLink else { return }
         if let month, !month.isEmpty {
             selectedMonth = month
+        }
+        await reload()
+    }
+
+    func refreshIfNeeded(currentDate: Date = .now) async {
+        guard hasLoaded else { return }
+
+        let currentMonth = Self.defaultMonthString(date: currentDate)
+        let isMissingCurrentMonth = currentMonth >= selectedMonth && !timelineMonths.contains(currentMonth)
+        let isStale = lastLoadedAt.map { currentDate.timeIntervalSince($0) > 45 } ?? true
+        guard isMissingCurrentMonth || isStale else { return }
+
+        if isMissingCurrentMonth {
+            selectedMonth = currentMonth
         }
         await reload()
     }
@@ -114,6 +130,9 @@ struct DashboardRootView: View {
         }
         .background(Color(.systemGroupedBackground))
         .task { await model.loadIfNeeded() }
+        .onAppear {
+            Task { await model.refreshIfNeeded() }
+        }
         .refreshable { await model.reload() }
         .onChange(of: deepLink) { _, newValue in
             guard newValue?.destination == .dashboard else { return }

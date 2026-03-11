@@ -4,6 +4,7 @@
 
 - the dashboard loads month availability from `GET /dashboard/timeline`, then loads the selected month from `GET /dashboard?month=...`
 - month chips are driven by the timeline payload, not by local date math, and the selected month auto-centers on load, refresh, and deep-link selection
+- if the dashboard view was already loaded and the cached timeline is missing the current month, iOS refreshes the timeline and advances selection to the current month on re-entry instead of staying pinned to the old last-available month
 - the dashboard surface includes:
   - a monthly hero card with spend, income, net, and spend-day metrics
   - a projection section using `dashboard.projection`

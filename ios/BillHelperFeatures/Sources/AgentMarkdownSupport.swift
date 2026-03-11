@@ -14,20 +14,32 @@ struct AgentRenderedMarkdown: Equatable {
 struct AgentMarkdownText: View {
     let rendered: AgentRenderedMarkdown
     var tint: Color = .indigo
+    var bodyColor: Color = .primary
 
     var body: some View {
         Group {
             if let markdown = rendered.markdown {
 #if canImport(MarkdownUI)
                 Markdown(markdown)
-                    .foregroundStyle(agentMarkdownForegroundColor(for: tint))
+                    .markdownTheme(.basic)
+                    .markdownTextStyle {
+                        FontFamily(.system(.default))
+                        ForegroundColor(bodyColor)
+                        BackgroundColor(nil)
+                    }
                     .markdownTextStyle(\.link) {
                         ForegroundColor(tint)
+                    }
+                    .markdownTextStyle(\.strong) {
+                        ForegroundColor(bodyColor)
+                    }
+                    .markdownTextStyle(\.emphasis) {
+                        ForegroundColor(bodyColor)
                     }
                     .markdownTextStyle(\.code) {
                         FontFamilyVariant(.monospaced)
                         FontSize(.em(0.88))
-                        ForegroundColor(agentMarkdownForegroundColor(for: tint))
+                        ForegroundColor(bodyColor)
                         BackgroundColor(tint.opacity(0.12))
                     }
                     .markdownBlockStyle(\.paragraph) { configuration in
@@ -44,7 +56,7 @@ struct AgentMarkdownText: View {
                             .padding(.vertical, 8)
                             .padding(.horizontal, 12)
                             .markdownTextStyle {
-                                ForegroundColor(agentMarkdownForegroundColor(for: tint))
+                                ForegroundColor(bodyColor)
                                 BackgroundColor(nil)
                             }
                             .overlay(alignment: .leading) {
@@ -57,21 +69,19 @@ struct AgentMarkdownText: View {
 #else
                 if let attributed = try? AttributedString(markdown: markdown) {
                     Text(attributed)
+                        .foregroundStyle(bodyColor)
                 } else {
-                    Text(rendered.fallbackText)
+                    Text(verbatim: rendered.fallbackText)
+                        .foregroundStyle(bodyColor)
                 }
 #endif
             } else {
-                Text(rendered.fallbackText)
+                Text(verbatim: rendered.fallbackText)
+                    .foregroundStyle(bodyColor)
             }
         }
         .tint(tint)
-        .textSelection(.enabled)
     }
-}
-
-private func agentMarkdownForegroundColor(for tint: Color) -> Color {
-    tint.opacity(0.96)
 }
 
 enum AssistantMessageMarkdownRenderer {
@@ -81,16 +91,17 @@ enum AssistantMessageMarkdownRenderer {
     }
 
     static func renderedContent(forMarkdown markdown: String, messageID: String) -> AgentRenderedMarkdown {
-        let fallbackText = markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No message text." : markdown
-        let normalized = normalizedMarkdown(markdown)
-        guard !normalized.isEmpty else {
-            return AgentRenderedMarkdown(markdown: nil, fallbackText: fallbackText)
-        }
-
-        if containsUnsupportedControlCharacters(normalized) {
+        let displayText = agentDisplayText(markdown)
+        let fallbackText = displayText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No message text." : displayText
+        if containsUnsupportedControlCharacters(markdown) {
             agentMessageMarkdownLogger.error(
                 "Falling back to plain text for message \(messageID, privacy: .public) because the markdown contains unsupported control characters."
             )
+            return AgentRenderedMarkdown(markdown: nil, fallbackText: fallbackText)
+        }
+
+        let normalized = normalizedMarkdown(displayText)
+        guard !normalized.isEmpty else {
             return AgentRenderedMarkdown(markdown: nil, fallbackText: fallbackText)
         }
 
@@ -106,9 +117,7 @@ enum AssistantMessageMarkdownRenderer {
     }
 
     static func normalizedMarkdown(_ raw: String) -> String {
-        let sanitized = raw
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
+        let sanitized = agentDisplayText(raw)
             .replacingOccurrences(of: "\u{00A0}", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -203,4 +212,21 @@ enum AssistantMessageMarkdownRenderer {
             }
         }
     }
+}
+
+func agentDisplayText(_ raw: String) -> String {
+    let normalizedNewlines = raw
+        .replacingOccurrences(of: "\r\n", with: "\n")
+        .replacingOccurrences(of: "\r", with: "\n")
+        .precomposedStringWithCanonicalMapping
+
+    let visibleScalars = normalizedNewlines.unicodeScalars.filter { scalar in
+        switch scalar.value {
+        case 9, 10:
+            return true
+        default:
+            return scalar.properties.generalCategory != .control
+        }
+    }
+    return String(String.UnicodeScalarView(visibleScalars))
 }

@@ -1235,9 +1235,8 @@ private struct AgentThreadSummaryRow: View {
             }
 
             if let preview = thread.lastMessagePreview, !preview.isEmpty {
-                Text(preview)
+                Text(verbatim: agentDisplayText(preview))
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
                     .lineLimit(2)
             } else {
                 Text("No messages yet")
@@ -1292,15 +1291,15 @@ private struct AgentMessageCard: View {
                 if let renderedContent = AssistantMessageMarkdownRenderer.renderedContent(for: message) {
                     AgentMarkdownText(
                         rendered: renderedContent,
-                        tint: message.role == .assistant ? .indigo : .secondary
+                        tint: message.role == .assistant ? .indigo : .secondary,
+                        bodyColor: message.role == .assistant ? .primary : .primary
                     )
                 } else {
-                    Text(messageContent(message))
-                        .foregroundStyle(message.role == .assistant ? Color.indigo.opacity(0.96) : .primary)
+                    Text(verbatim: messageContent(message))
+                        .foregroundStyle(.primary)
                 }
             }
             .font(.body)
-            .textSelection(.enabled)
 
             if !message.attachments.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1578,7 +1577,7 @@ func roleSymbol(_ role: AgentMessageRole) -> String {
 }
 
 func messageContent(_ message: AgentMessage) -> String {
-    let trimmed = message.contentMarkdown.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmed = agentDisplayText(message.contentMarkdown).trimmingCharacters(in: .whitespacesAndNewlines)
     if !trimmed.isEmpty {
         return trimmed
     }

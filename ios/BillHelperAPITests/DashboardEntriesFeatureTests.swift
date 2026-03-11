@@ -55,6 +55,47 @@ final class DashboardEntriesFeatureTests: XCTestCase {
         XCTAssertEqual(model.phase, .loaded(dashboard))
     }
 
+    func testDashboardModelRefreshIfNeededReloadsWhenCurrentMonthIsMissingFromCachedTimeline() async throws {
+        let februaryDashboard = Self.sampleDashboard(expenseTotalMinor: 80_00, largestExpenses: [Self.sampleLargestExpense])
+        let marchDashboard = Self.sampleDashboard(expenseTotalMinor: 125_00, largestExpenses: [Self.sampleLargestExpense])
+        let requestCounts = LockedRequestCounts()
+        let initialTimelineData = try Self.encode(DashboardTimeline(months: ["2026-02"]))
+        let refreshedTimelineData = try Self.encode(DashboardTimeline(months: ["2026-02", "2026-03"]))
+        let februaryDashboardData = try Self.encode(februaryDashboard)
+        let marchDashboardData = try Self.encode(marchDashboard)
+
+        let client = makeClient(
+            responseHandler: { request in
+                let path = request.url?.path.replacingOccurrences(of: "/api/v1", with: "") ?? ""
+                switch path {
+                case "/dashboard/timeline":
+                    if requestCounts.nextTimelineRequest() == 1 {
+                        return HTTPResponse(data: initialTimelineData, statusCode: 200, headers: [:])
+                    }
+                    return HTTPResponse(data: refreshedTimelineData, statusCode: 200, headers: [:])
+                case "/dashboard":
+                    if requestCounts.nextDashboardRequest() == 1 {
+                        return HTTPResponse(data: februaryDashboardData, statusCode: 200, headers: [:])
+                    }
+                    return HTTPResponse(data: marchDashboardData, statusCode: 200, headers: [:])
+                default:
+                    return HTTPResponse(data: Data("{}".utf8), statusCode: 404, headers: [:])
+                }
+            }
+        )
+        let model = DashboardScreenModel(apiClient: client)
+        model.selectedMonth = "2026-02"
+
+        await model.reload()
+        await model.refreshIfNeeded(currentDate: Self.date(year: 2026, month: 3, day: 11))
+
+        XCTAssertEqual(model.timelineMonths, ["2026-02", "2026-03"])
+        XCTAssertEqual(model.selectedMonth, "2026-03")
+        XCTAssertEqual(model.phase, .loaded(marchDashboard))
+        XCTAssertEqual(requestCounts.timelineRequests, 2)
+        XCTAssertEqual(requestCounts.dashboardRequests, 2)
+    }
+
     func testEntriesModelLoadsItemsAndSupportingData() async throws {
         let response = EntryListResponse(items: [Self.sampleEntry], total: 1, limit: 50, offset: 0)
         let client = makeClient(
@@ -178,6 +219,16 @@ final class DashboardEntriesFeatureTests: XCTestCase {
 
     private static func encode<T: Encodable>(_ value: T) throws -> Data {
         try JSONEncoder.billHelper.encode(value)
+    }
+
+    private static func date(year: Int, month: Int, day: Int) -> Date {
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.timeZone = TimeZone(secondsFromGMT: 0)
+        components.year = year
+        components.month = month
+        components.day = day
+        return components.date ?? .now
     }
 
     private static let sampleLargestExpense = DashboardLargestExpenseItem(
@@ -347,5 +398,25 @@ private actor DashboardEntriesMockTransport: HTTPTransport {
 
     func stream(for request: URLRequest) async throws -> HTTPResponseStream {
         HTTPResponseStream(statusCode: 200, headers: [:], chunks: AsyncThrowingStream { $0.finish() })
+    }
+}
+
+private final class LockedRequestCounts: @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var timelineRequests = 0
+    private(set) var dashboardRequests = 0
+
+    func nextTimelineRequest() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        timelineRequests += 1
+        return timelineRequests
+    }
+
+    func nextDashboardRequest() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        dashboardRequests += 1
+        return dashboardRequests
     }
 }
