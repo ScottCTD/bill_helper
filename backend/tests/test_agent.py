@@ -631,6 +631,9 @@ def test_system_prompt_mentions_snapshot_and_reconciliation_tools():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
+    assert "Treat snapshots as bank balance checkpoints for one account on a specific date." in prompt
+    assert "Reconciliation is interval-based, not lifetime-based:" in prompt
+    assert "Entries on a snapshot date belong to the interval ending at that snapshot." in prompt
     assert "Use propose_create_snapshot" in prompt
     assert "use list_snapshots" in prompt
     assert "Use get_reconciliation" in prompt
