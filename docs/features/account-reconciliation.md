@@ -40,11 +40,15 @@ Reconciliation is computed server-side in `backend/services/finance.py` as inter
 - Snapshots partition the timeline into `(start_snapshot_date, end_snapshot_date]` intervals.
 - Closed intervals compare:
   - `bank_change_minor = end_snapshot.balance_minor - start_snapshot.balance_minor`
-  - `tracked_change_minor = SUM(entries in the interval)`
+  - `tracked_change_minor = SUM(account-linked entry effects in the interval)`
   - `delta_minor = tracked_change_minor - bank_change_minor`
 - The most recent snapshot always produces one open interval from that snapshot to `as_of`.
 - The open interval exposes tracked activity only; it has no bank change or delta because there is no closing checkpoint yet.
 - Entries that occur on a snapshot date belong to the interval ending at that snapshot.
+- Account-linked entry effects are resolved from the account entity root first:
+  - `from_entity_id == account.id` subtracts `amount_minor`
+  - `to_entity_id == account.id` adds `amount_minor`
+  - legacy rows that only set `account_id == account.id` fall back to entry-kind signing (`INCOME` positive, other kinds negative)
 
 The `as_of` date still defaults to the server's current day when the query parameter is omitted.
 

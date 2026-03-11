@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from statistics import median
 
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -108,15 +108,33 @@ def _interval_entry_rollup(
         return 0, 0
 
     signed_amount = _signed_entry_amount()
+    account_effect = case(
+        (
+            and_(
+                Entry.from_entity_id == account_id,
+                Entry.to_entity_id == account_id,
+            ),
+            0,
+        ),
+        (Entry.from_entity_id == account_id, -Entry.amount_minor),
+        (Entry.to_entity_id == account_id, Entry.amount_minor),
+        (Entry.account_id == account_id, signed_amount),
+        else_=None,
+    )
+    account_entry_filter = or_(
+        Entry.from_entity_id == account_id,
+        Entry.to_entity_id == account_id,
+        Entry.account_id == account_id,
+    )
     totals = db.execute(
         select(
-            func.coalesce(func.sum(signed_amount), 0),
+            func.coalesce(func.sum(account_effect), 0),
             func.count(Entry.id),
         ).where(
-            Entry.account_id == account_id,
             Entry.is_deleted.is_(False),
             Entry.occurred_at > start_exclusive,
             Entry.occurred_at <= end_inclusive,
+            account_entry_filter,
         )
     ).one()
     return int(totals[0] or 0), int(totals[1] or 0)

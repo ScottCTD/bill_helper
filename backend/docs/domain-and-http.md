@@ -76,6 +76,7 @@ Important read models:
   - shared user create/update contracts reused by schemas, routers, and services
 - `backend/services/finance.py`
   - owns reconciliation math and dashboard analytics sections:
+    - account reconciliation rollups derive account balance effect from account-entity flow (`from_entity_id` / `to_entity_id`) with `account_id` as a legacy fallback
     - configured-currency monthly KPIs
     - filter-group-powered daily and monthly spend series
     - monthly trend rollups

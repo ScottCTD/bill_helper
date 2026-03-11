@@ -72,6 +72,10 @@ Behavior:
 - deleting a snapshot removes only that stored checkpoint; the account and ledger entries remain unchanged
 - reconciliation returns full interval history, not one absolute ledger-vs-balance delta
 - interval boundaries are `(start_snapshot_date, end_snapshot_date]`, so entries on a snapshot date belong to the interval ending at that snapshot
+- `tracked_change_minor` is the net balance effect for the account in that interval:
+  - `from_entity_id == account.id` subtracts `amount_minor`
+  - `to_entity_id == account.id` adds `amount_minor`
+  - legacy rows with only `account_id == account.id` fall back to entry-kind signing
 - each response includes:
   - `intervals[]`
   - `start_snapshot`
