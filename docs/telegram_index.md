@@ -12,6 +12,7 @@ This file is the Telegram index. Use it to find the transport docs under `../tel
 
 - Telegram update handling, formatting, and state persistence live under `telegram/`.
 - The transport reuses existing backend thread, run, and settings APIs instead of adding a Telegram-specific backend stack.
+- The transport now also owns Telegram-native streaming, inline review actions, dashboard chart rendering, and optional forum-topic thread mapping.
 - Telegram-specific transport behavior belongs in `telegram/docs/*.md`, while cross-repo workflow and backend/API references stay under `docs/`.
 
 ## Related Docs

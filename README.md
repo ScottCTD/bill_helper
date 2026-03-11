@@ -106,9 +106,11 @@ This starts both backend and frontend, applies pending migrations, and opens:
 - **Backend API**: http://localhost:8000/api/v1
 - **API docs**: http://localhost:8000/docs
 
-Press `Ctrl+C` to stop both services.
+If `TELEGRAM_BOT_TOKEN` is configured, it also starts the Telegram polling worker.
 
-`./scripts/dev_up.sh` also clears `frontend/node_modules/.vite` before launching Vite so local restarts do not reuse stale optimized dependency chunks for the markdown editor.
+Press `Ctrl+C` to stop all started services.
+
+`./scripts/dev_up.sh` now delegates to `scripts/dev_up.py`, which clears `frontend/node_modules/.vite` before launching Vite so local restarts do not reuse stale optimized dependency chunks for the markdown editor. Service output is prefixed with `[backend]`, `[frontend]`, or `[telegram]` in both the terminal and the timestamped log files under `logs/`.
 
 On first frontend load, the app now requires an explicit local principal session for protected API calls. Set `VITE_DEV_PRINCIPAL_NAME` to prefill that session, or enter a principal name in the browser when prompted.
 

@@ -215,19 +215,23 @@ Behavior:
 - checks for a legacy local schema state where app tables exist but `alembic_version` is missing/empty, then auto-runs `uv run alembic stamp head`
 - runs `uv run alembic upgrade head` before starting services
 - checks whether the `accounts` table is empty and seeds demo data only when no accounts exist
-  - implementation: `scripts/dev_up.sh` calls `backend/services/bootstrap.py` (`should_seed_demo_data`) before deciding to run `scripts/seed_demo.py`
+  - implementation: `scripts/dev_up.py` calls `backend/services/bootstrap.py` (`should_seed_demo_data`) before deciding to run `scripts/seed_demo.py`
   - fresh worktree impact: first boot auto-seeds demo data into that worktree-local SQLite database
 - skips demo seeding when existing accounts are present
 - runs `npm install` in `frontend/` before starting services to keep UI deps in sync
 - clears `frontend/node_modules/.vite` before starting Vite so local restarts rebuild optimized frontend dependencies
-- starts both processes
+- starts the backend API and frontend dev server
+- starts the Telegram polling worker too when `TELEGRAM_BOT_TOKEN` (or `BILL_HELPER_TELEGRAM_BOT_TOKEN`) is configured
 - writes logs in `/path/to/bill_helper/logs`
+- prefixes service log lines with `[backend]`, `[frontend]`, or `[telegram]` in both the terminal stream and the per-service log files
 - prints service URLs
-- `Ctrl+C` shuts down both
+- `Ctrl+C` shuts down every service that was started
+- implementation note: `scripts/dev_up.sh` is a thin wrapper; the orchestration logic lives in `scripts/dev_up.py`
 
 Constraints/known limitations:
 
 - conditional auto-seeding depends on the same CSV source as manual seeding (`BILL_HELPER_SEED_CREDIT_CSV` or the script default path). If the CSV file is missing, `dev_up.sh` fails during seeding.
+- Telegram startup is skipped when no bot token is configured; see the Telegram sections below for the required bot settings and backend auth headers.
 
 ## Run Backend Only
 

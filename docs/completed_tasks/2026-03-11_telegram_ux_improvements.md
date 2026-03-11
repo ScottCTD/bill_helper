@@ -1,8 +1,8 @@
 # Telegram Transport UX Improvements
 
-> **Status:** Active plan — decisions finalized
+> **Status:** Completed on 2026-03-11
 > **Scope:** `telegram/`, chart generation module, no backend changes needed for P0–P1
-> **Reminder:** Use Context7 (`/python-telegram-bot/python-telegram-bot` and `/websites/core_telegram_bots_api`) when implementing any Telegram Bot API feature to get the latest docs and code examples.
+> **Result:** Telegram now streams replies from SSE, surfaces inline review actions, renders dashboard charts, registers command metadata, and can bind new threads to Telegram forum topics when enabled.
 
 ## Context
 

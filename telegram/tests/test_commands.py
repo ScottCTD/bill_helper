@@ -5,15 +5,17 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from backend.schemas_agent import AgentRunRead, AgentThreadDetailRead, AgentThreadRead, AgentThreadSummaryRead
-from backend.schemas_finance import RuntimeSettingsOverridesRead, RuntimeSettingsRead
+from backend.schemas_settings import RuntimeSettingsOverridesRead, RuntimeSettingsRead
 from telegram.commands import (
     INVALID_THREAD_SELECTOR_REPLY,
     TelegramBotHandlers,
     TelegramCommandRouter,
+    TELEGRAM_BOT_COMMANDS,
     UNAUTHORIZED_PRIVATE_REPLY,
+    _register_bot_commands,
     register_application_handlers,
 )
-from telegram.ptb import CommandHandler, MessageHandler
+from telegram.ptb import CallbackQueryHandler, CommandHandler, MessageHandler
 from telegram.state import ChatStateStore
 
 
@@ -176,9 +178,35 @@ class FakeBillHelperApiClient:
 class ReplyRecorder:
     def __init__(self) -> None:
         self.replies: list[str] = []
+        self.html_replies: list[str] = []
+        self.photos: list[tuple[object, str | None]] = []
 
     async def reply_text(self, text: str) -> None:
         self.replies.append(text)
+
+    async def reply_html(self, text: str) -> None:
+        self.html_replies.append(text)
+
+    async def reply_photo(self, photo, caption: str | None = None) -> None:
+        self.photos.append((photo, caption))
+
+
+class FakeTelegramBot:
+    def __init__(self) -> None:
+        self.created_topics: list[tuple[int, str]] = []
+        self.sent_messages: list[dict[str, object]] = []
+        self.commands: list[object] = []
+
+    async def create_forum_topic(self, *, chat_id: int, name: str):
+        self.created_topics.append((chat_id, name))
+        return SimpleNamespace(message_thread_id=77)
+
+    async def send_message(self, **kwargs):
+        self.sent_messages.append(kwargs)
+        return SimpleNamespace(message_id=501, **kwargs)
+
+    async def set_my_commands(self, commands):
+        self.commands = list(commands)
 
 
 class PtbDocumentStub:
@@ -198,6 +226,7 @@ class PtbMessageStub(ReplyRecorder):
         caption: str | None = None,
         chat_type: str = "private",
         user_id: int = 12345,
+        bot: FakeTelegramBot | None = None,
     ) -> None:
         super().__init__()
         self.message_id = 99
@@ -208,6 +237,10 @@ class PtbMessageStub(ReplyRecorder):
         self.date = None
         self.photo = []
         self.document = PtbDocumentStub() if caption is not None else None
+        self._bot = bot or FakeTelegramBot()
+
+    def get_bot(self) -> FakeTelegramBot:
+        return self._bot
 
 
 def _ptb_update(
@@ -216,8 +249,9 @@ def _ptb_update(
     caption: str | None = None,
     chat_type: str = "private",
     user_id: int = 12345,
+    bot: FakeTelegramBot | None = None,
 ):
-    message = PtbMessageStub(text=text, caption=caption, chat_type=chat_type, user_id=user_id)
+    message = PtbMessageStub(text=text, caption=caption, chat_type=chat_type, user_id=user_id, bot=bot)
     return SimpleNamespace(
         effective_message=message,
         effective_chat=message.chat,
@@ -269,16 +303,83 @@ def test_model_stop_and_status_update_state(tmp_path):
     state_store.set_active_run(12345, "run-1")
     router = TelegramCommandRouter(api_client=api_client, state_store=state_store)
 
-    model_reply = router.handle_model("openai/gpt-4.1")
+    model_reply = router.handle_model("openai/gpt-4.1-mini")
     stop_reply = router.handle_stop(12345)
     status_reply = router.handle_status(12345)
 
-    assert model_reply == "Updated model to openai/gpt-4.1."
+    assert model_reply == "Updated model to openai/gpt-4.1-mini."
     assert stop_reply == "Stopped run run-1: Run interrupted by user."
-    assert status_reply == f"Model: openai/gpt-4.1\nActive thread: Taxes ({THREAD_2_ID})\nRun: idle"
-    assert api_client.patched_models == ["openai/gpt-4.1"]
+    assert status_reply == f"Model: openai/gpt-4.1-mini\nActive thread: Taxes ({THREAD_2_ID})\nRun: idle"
+    assert api_client.patched_models == ["openai/gpt-4.1-mini"]
     assert api_client.interrupted_runs == ["run-1"]
     assert state_store.get(12345).active_run_id is None
+
+
+def test_model_accepts_unique_substring_selector(tmp_path):
+    api_client = FakeBillHelperApiClient()
+    state_store = ChatStateStore(Path(tmp_path) / "chat_state.json")
+    router = TelegramCommandRouter(api_client=api_client, state_store=state_store)
+
+    reply = router.handle_model("qwen3.5")
+
+    assert reply == "Updated model to openrouter/qwen/qwen3.5-27b."
+    assert api_client.patched_models == ["openrouter/qwen/qwen3.5-27b"]
+
+
+def test_model_reports_multiple_substring_matches(tmp_path):
+    api_client = FakeBillHelperApiClient()
+    api_client.settings = api_client.settings.model_copy(
+        update={
+            "available_agent_models": [
+                "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+                "openrouter/anthropic/claude-3.5-haiku",
+                "openai/gpt-4.1-mini",
+            ]
+        }
+    )
+    state_store = ChatStateStore(Path(tmp_path) / "chat_state.json")
+    router = TelegramCommandRouter(api_client=api_client, state_store=state_store)
+
+    reply = router.handle_model("haiku")
+
+    assert reply == (
+        "Multiple models matched 'haiku'. Be more specific:\n"
+        "- bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0\n"
+        "- openrouter/anthropic/claude-3.5-haiku"
+    )
+    assert api_client.patched_models == []
+
+
+def test_model_reports_no_match_for_unknown_selector(tmp_path):
+    api_client = FakeBillHelperApiClient()
+    state_store = ChatStateStore(Path(tmp_path) / "chat_state.json")
+    router = TelegramCommandRouter(api_client=api_client, state_store=state_store)
+
+    reply = router.handle_model("does-not-exist")
+
+    assert reply == "No model matched 'does-not-exist'."
+    assert api_client.patched_models == []
+
+
+def test_model_ignores_polluted_bare_saved_value_when_matching_substring(tmp_path):
+    api_client = FakeBillHelperApiClient()
+    api_client.settings = api_client.settings.model_copy(
+        update={
+            "agent_model": "haiku",
+            "available_agent_models": [
+                "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+                "openrouter/qwen/qwen3.5-27b",
+                "haiku",
+            ],
+        }
+    )
+    state_store = ChatStateStore(Path(tmp_path) / "chat_state.json")
+    router = TelegramCommandRouter(api_client=api_client, state_store=state_store)
+
+    reply = router.handle_model("haiku")
+
+    assert reply == "Updated model to bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0."
+    assert api_client.patched_models == ["bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"]
 
 
 def test_ptb_command_handler_replies_with_router_text(tmp_path):
@@ -386,6 +487,53 @@ def test_register_application_handlers_adds_ptb_command_and_message_handlers(tmp
     application = FakeApplication()
     register_application_handlers(application, handlers)
 
-    assert len(application.handlers) == 10
-    assert sum(isinstance(handler, CommandHandler) for handler in application.handlers) == 9
+    assert len(application.handlers) == 13
+    assert sum(isinstance(handler, CommandHandler) for handler in application.handlers) == 11
+    assert sum(isinstance(handler, CallbackQueryHandler) for handler in application.handlers) == 1
     assert isinstance(application.handlers[-1], MessageHandler)
+
+
+def test_handle_topics_toggles_topic_mode(tmp_path):
+    api_client = FakeBillHelperApiClient()
+    state_store = ChatStateStore(Path(tmp_path) / "chat_state.json")
+    handlers = TelegramBotHandlers(
+        command_router=TelegramCommandRouter(api_client=api_client, state_store=state_store),
+        state_store=state_store,
+        allowed_user_ids=frozenset({12345}),
+    )
+    update, message = _ptb_update(text="/topics on")
+
+    asyncio.run(handlers.handle_topics(update, SimpleNamespace(args=["on"])))
+
+    assert message.replies == [
+        "Topics are on. Existing Telegram topics keep their own backend threads, and the first message in a new Telegram topic will bind a fresh backend thread. The bot will not create new Telegram topics for commands or /new."
+    ]
+    assert state_store.get(12345).topics_enabled is True
+
+
+def test_handle_new_does_not_create_forum_topic_when_topics_enabled(tmp_path):
+    api_client = FakeBillHelperApiClient()
+    state_store = ChatStateStore(Path(tmp_path) / "chat_state.json")
+    state_store.set_topics_enabled(12345, True)
+    bot = FakeTelegramBot()
+    handlers = TelegramBotHandlers(
+        command_router=TelegramCommandRouter(api_client=api_client, state_store=state_store),
+        state_store=state_store,
+        allowed_user_ids=frozenset({12345}),
+    )
+    update, message = _ptb_update(text="/new", bot=bot)
+
+    asyncio.run(handlers.handle_new(update, SimpleNamespace(args=[])))
+
+    assert bot.created_topics == []
+    assert bot.sent_messages == []
+    assert message.replies == ["Started a new thread: Untitled thread (thread-3)"]
+
+
+def test_register_bot_commands_uses_expected_command_set():
+    bot = FakeTelegramBot()
+    application = SimpleNamespace(bot=bot)
+
+    asyncio.run(_register_bot_commands(application))
+
+    assert [command.command for command in bot.commands] == [command.command for command in TELEGRAM_BOT_COMMANDS]

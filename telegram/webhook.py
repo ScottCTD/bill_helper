@@ -8,7 +8,7 @@ from secrets import compare_digest
 from fastapi import FastAPI, Header, HTTPException, status
 import uvicorn
 
-from telegram.commands import build_application_from_settings
+from telegram.commands import _register_bot_commands, build_application_from_settings
 from telegram.config import TelegramSettings, get_settings
 from telegram.ptb import Application, Update as PtbUpdate
 
@@ -43,6 +43,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         await ptb_application.initialize()
+        await _register_bot_commands(ptb_application)
         await ptb_application.start()
         try:
             yield
