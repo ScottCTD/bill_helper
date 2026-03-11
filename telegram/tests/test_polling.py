@@ -12,7 +12,7 @@ class FakeApplication:
         self.calls.append(kwargs)
 
 
-def test_run_polling_uses_ptb_allowed_message_updates():
+def test_run_polling_uses_ptb_allowed_updates():
     application = FakeApplication()
 
     run_polling(application=application, drop_pending_updates=True)

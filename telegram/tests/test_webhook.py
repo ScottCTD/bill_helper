@@ -9,7 +9,7 @@ from telegram.webhook import TELEGRAM_WEBHOOK_HEADER_NAME, WEBHOOK_PATH, create_
 
 class FakeApplication:
     def __init__(self) -> None:
-        self.bot = object()
+        self.bot = SimpleBot()
         self.lifecycle: list[str] = []
         self.processed_updates: list[object] = []
 
@@ -27,6 +27,14 @@ class FakeApplication:
 
     async def process_update(self, update) -> None:
         self.processed_updates.append(update)
+
+
+class SimpleBot:
+    def __init__(self) -> None:
+        self.commands = []
+
+    async def set_my_commands(self, commands) -> None:
+        self.commands = list(commands)
 
 
 def test_webhook_validates_secret_and_dispatches_update(tmp_path):

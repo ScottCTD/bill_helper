@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import json
@@ -9,8 +10,15 @@ from urllib.parse import urlencode
 import httpx
 from pydantic import TypeAdapter
 
-from backend.schemas_agent import AgentRunRead, AgentThreadDetailRead, AgentThreadRead, AgentThreadSummaryRead
-from backend.schemas_finance import RuntimeSettingsRead, RuntimeSettingsUpdate
+from backend.schemas_agent import (
+    AgentChangeItemRead,
+    AgentRunRead,
+    AgentThreadDetailRead,
+    AgentThreadRead,
+    AgentThreadSummaryRead,
+)
+from backend.schemas_finance import DashboardRead
+from backend.schemas_settings import RuntimeSettingsRead, RuntimeSettingsUpdate
 from telegram.config import TelegramSettings
 
 
@@ -25,6 +33,21 @@ class BillHelperApiError(RuntimeError):
     def __init__(self, *, status_code: int, message: str) -> None:
         super().__init__(message)
         self.status_code = status_code
+
+
+class BillHelperApiStreamError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class StreamEvent:
+    event: str
+    payload: dict[str, Any]
+
+    @property
+    def run_id(self) -> str | None:
+        value = self.payload.get("run_id")
+        return str(value) if isinstance(value, str) and value else None
 
 
 class BillHelperApiClient:
@@ -102,6 +125,28 @@ class BillHelperApiClient:
         payload = self._request_json("POST", f"/agent/runs/{run_id}/interrupt", json_body={})
         return AgentRunRead.model_validate(payload)
 
+    def approve_change_item(self, item_id: str) -> AgentChangeItemRead:
+        payload = self._request_json(
+            "POST",
+            f"/agent/change-items/{item_id}/approve",
+            json_body={},
+            expected_status=200,
+        )
+        return AgentChangeItemRead.model_validate(payload)
+
+    def reject_change_item(self, item_id: str) -> AgentChangeItemRead:
+        payload = self._request_json(
+            "POST",
+            f"/agent/change-items/{item_id}/reject",
+            json_body={},
+            expected_status=200,
+        )
+        return AgentChangeItemRead.model_validate(payload)
+
+    def get_dashboard(self, month: str | None = None) -> DashboardRead:
+        payload = self._request_json("GET", "/dashboard", query_params={"month": month})
+        return DashboardRead.model_validate(payload)
+
     def get_settings(self) -> RuntimeSettingsRead:
         payload = self._request_json("GET", "/settings")
         return RuntimeSettingsRead.model_validate(payload)
@@ -118,6 +163,43 @@ class BillHelperApiClient:
         )
         return RuntimeSettingsRead.model_validate(response_payload)
 
+    async def stream_thread_message(
+        self,
+        *,
+        thread_id: str,
+        content: str = "",
+        files: Sequence[AttachmentUpload] = (),
+    ) -> AsyncIterator[StreamEvent]:
+        request_files = [
+            ("content", (None, content)),
+            ("surface", (None, "telegram")),
+            *[("files", (upload.filename, upload.content, upload.mime_type)) for upload in files],
+        ]
+        try:
+            async with httpx.AsyncClient(
+                headers=self._build_headers(),
+                timeout=self._timeout_seconds,
+                transport=self._transport,
+            ) as client:
+                async with client.stream(
+                    "POST",
+                    self._build_url(f"/agent/threads/{thread_id}/messages/stream"),
+                    headers={"Accept": "text/event-stream"},
+                    files=request_files,
+                ) as response:
+                    if response.status_code != 200:
+                        body = await response.aread()
+                        raise BillHelperApiError(
+                            status_code=response.status_code,
+                            message=self._extract_error_message_from_bytes(response.status_code, body),
+                        )
+                    async for event in self._iter_sse_events(response):
+                        yield event
+        except BillHelperApiError:
+            raise
+        except httpx.RequestError as exc:
+            raise BillHelperApiStreamError(f"HTTP stream request failed: {exc}") from exc
+
     def _request_json(
         self,
         method: str,
@@ -125,9 +207,13 @@ class BillHelperApiClient:
         *,
         json_body: Mapping[str, Any] | None = None,
         query_params: Mapping[str, Any] | None = None,
+        expected_status: int | None = None,
     ) -> Any:
         response = self._request(method, path, json_body=json_body, query_params=query_params)
-        return self._read_json_response(response, expected_status=200 if method != "POST" or path.endswith("/interrupt") else 201)
+        resolved_status = expected_status
+        if resolved_status is None:
+            resolved_status = 200 if method != "POST" or path.endswith("/interrupt") else 201
+        return self._read_json_response(response, expected_status=resolved_status)
 
     def _request(
         self,
@@ -191,6 +277,42 @@ class BillHelperApiClient:
                 message="Bill Helper API returned invalid JSON.",
             ) from exc
 
+    async def _iter_sse_events(self, response: httpx.Response) -> AsyncIterator[StreamEvent]:
+        event_name: str | None = None
+        data_lines: list[str] = []
+        async for raw_line in response.aiter_lines():
+            line = raw_line.strip()
+            if not line:
+                event = self._parse_sse_block(event_name, data_lines)
+                if event is not None:
+                    yield event
+                event_name = None
+                data_lines = []
+                continue
+            if line.startswith(":"):
+                continue
+            if line.startswith("event:"):
+                event_name = line.split(":", 1)[1].strip() or None
+                continue
+            if line.startswith("data:"):
+                data_lines.append(line.split(":", 1)[1].lstrip())
+
+        event = self._parse_sse_block(event_name, data_lines)
+        if event is not None:
+            yield event
+
+    def _parse_sse_block(self, event_name: str | None, data_lines: list[str]) -> StreamEvent | None:
+        if not data_lines:
+            return None
+        try:
+            payload = json.loads("\n".join(data_lines))
+        except json.JSONDecodeError as exc:
+            raise BillHelperApiStreamError("Bill Helper API returned invalid SSE JSON.") from exc
+        if not isinstance(payload, dict):
+            raise BillHelperApiStreamError("Bill Helper API returned a non-object SSE payload.")
+        name = event_name or str(payload.get("type") or "event")
+        return StreamEvent(event=name, payload=payload)
+
     def _extract_error_message(self, response: httpx.Response) -> str:
         if response.content:
             try:
@@ -201,3 +323,14 @@ class BillHelperApiClient:
             if isinstance(detail, str) and detail.strip():
                 return detail.strip()
         return f"Bill Helper API request failed with status {response.status_code}"
+
+    def _extract_error_message_from_bytes(self, status_code: int, body: bytes) -> str:
+        if body:
+            try:
+                parsed = json.loads(body.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                return body.decode("utf-8", errors="ignore").strip() or "Bill Helper API request failed"
+            detail = parsed.get("detail") if isinstance(parsed, dict) else None
+            if isinstance(detail, str) and detail.strip():
+                return detail.strip()
+        return f"Bill Helper API request failed with status {status_code}"

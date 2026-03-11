@@ -30,22 +30,51 @@ def _bootstrap_python_telegram_bot() -> None:
 
 _bootstrap_python_telegram_bot()
 
-from telegram import Bot, Document, File, Message, PhotoSize, Update  # noqa: E402
-from telegram.constants import ParseMode  # noqa: E402
-from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters  # noqa: E402
+from telegram import (  # noqa: E402
+    Bot,
+    BotCommand,
+    CallbackQuery,
+    Document,
+    File,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    PhotoSize,
+    Update,
+)
+from telegram.constants import ChatAction, ParseMode  # noqa: E402
+from telegram.error import BadRequest, RetryAfter, TelegramError  # noqa: E402
+from telegram.ext import (  # noqa: E402
+    Application,
+    ApplicationBuilder,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 __all__ = [
     "Application",
     "ApplicationBuilder",
+    "BadRequest",
     "Bot",
+    "BotCommand",
+    "CallbackQuery",
+    "CallbackQueryHandler",
+    "ChatAction",
     "CommandHandler",
     "ContextTypes",
     "Document",
     "File",
+    "InlineKeyboardButton",
+    "InlineKeyboardMarkup",
     "Message",
     "MessageHandler",
     "ParseMode",
     "PhotoSize",
+    "RetryAfter",
+    "TelegramError",
     "Update",
     "filters",
 ]
