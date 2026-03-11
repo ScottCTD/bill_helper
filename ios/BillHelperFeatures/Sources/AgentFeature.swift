@@ -1290,9 +1290,13 @@ private struct AgentMessageCard: View {
 
             Group {
                 if let renderedContent = AssistantMessageMarkdownRenderer.renderedContent(for: message) {
-                    AgentMarkdownText(rendered: renderedContent)
+                    AgentMarkdownText(
+                        rendered: renderedContent,
+                        tint: message.role == .assistant ? .indigo : .secondary
+                    )
                 } else {
                     Text(messageContent(message))
+                        .foregroundStyle(message.role == .assistant ? Color.indigo.opacity(0.96) : .primary)
                 }
             }
             .font(.body)
@@ -1567,7 +1571,7 @@ func roleTitle(_ role: AgentMessageRole) -> String {
 
 func roleSymbol(_ role: AgentMessageRole) -> String {
     switch role {
-    case .assistant: "sparkles"
+    case .assistant: "ellipsis.bubble.fill"
     case .system: "gearshape.2"
     case .user: "person.fill"
     }

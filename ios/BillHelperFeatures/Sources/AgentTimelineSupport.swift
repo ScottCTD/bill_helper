@@ -218,7 +218,7 @@ struct AgentPendingAssistantBubble: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            AgentBubbleHeader(role: "Agent", symbol: "sparkles", timestamp: agentRelativeTimestamp(timestamp))
+            AgentBubbleHeader(role: "Agent", symbol: "ellipsis.bubble.fill", timestamp: agentRelativeTimestamp(timestamp))
             if let run {
                 AgentRunActivityBlock(
                     presentedRun: run,

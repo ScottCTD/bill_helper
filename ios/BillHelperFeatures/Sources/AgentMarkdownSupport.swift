@@ -20,26 +20,39 @@ struct AgentMarkdownText: View {
             if let markdown = rendered.markdown {
 #if canImport(MarkdownUI)
                 Markdown(markdown)
-                    .markdownTheme(.gitHub)
+                    .foregroundStyle(agentMarkdownForegroundColor(for: tint))
                     .markdownTextStyle(\.link) {
                         ForegroundColor(tint)
                     }
                     .markdownTextStyle(\.code) {
                         FontFamilyVariant(.monospaced)
                         FontSize(.em(0.88))
-                        ForegroundColor(.primary)
-                        BackgroundColor(Color.primary.opacity(0.08))
+                        ForegroundColor(agentMarkdownForegroundColor(for: tint))
+                        BackgroundColor(tint.opacity(0.12))
+                    }
+                    .markdownBlockStyle(\.paragraph) { configuration in
+                        configuration.label
+                            .relativeLineSpacing(.em(0.2))
+                            .markdownMargin(top: 0, bottom: 14)
+                    }
+                    .markdownBlockStyle(\.listItem) { configuration in
+                        configuration.label
+                            .markdownMargin(top: .em(0.18))
                     }
                     .markdownBlockStyle(\.blockquote) { configuration in
                         configuration.label
                             .padding(.vertical, 8)
                             .padding(.horizontal, 12)
+                            .markdownTextStyle {
+                                ForegroundColor(agentMarkdownForegroundColor(for: tint))
+                                BackgroundColor(nil)
+                            }
                             .overlay(alignment: .leading) {
                                 Capsule()
                                     .fill(tint.opacity(0.45))
                                     .frame(width: 4)
                             }
-                            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
 #else
                 if let attributed = try? AttributedString(markdown: markdown) {
@@ -55,6 +68,10 @@ struct AgentMarkdownText: View {
         .tint(tint)
         .textSelection(.enabled)
     }
+}
+
+private func agentMarkdownForegroundColor(for tint: Color) -> Color {
+    tint.opacity(0.96)
 }
 
 enum AssistantMessageMarkdownRenderer {

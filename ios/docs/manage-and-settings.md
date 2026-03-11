@@ -26,7 +26,7 @@ The manage tab is a grouped native workspace for backend-backed finance referenc
 The settings tab has three sections:
 
 - session: current backend URL, principal name, reconnect, and logout
-- runtime settings: backend-backed editable fields such as currency defaults, model selection, memory, retry settings, and attachment limits
+- runtime settings: backend-backed editable fields such as labeled currency pickers, agent-model picker selection, available-model editing, memory, retry settings, and attachment limits
 - diagnostics: environment, current principal, enabled models, and current attachment limits
 
 ## Files

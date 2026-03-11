@@ -179,6 +179,7 @@ struct SettingsRootView: View {
     @State private var principalName = ""
     @State private var runtimeSettings: RuntimeSettings?
     @State private var currentUser: User?
+    @State private var currencies: [Currency] = []
     @State private var errorMessage: String?
     @State private var isSavingConnection = false
     @State private var isSavingSettings = false
@@ -188,6 +189,20 @@ struct SettingsRootView: View {
 
     private var canEditSettings: Bool {
         currentUser?.isAdmin ?? false
+    }
+
+    private var availableCurrencyCodes: [String] {
+        var seen = Set<String>()
+        let candidates = currencies.map(\.code)
+            + [runtimeSettings?.defaultCurrencyCode, runtimeSettings?.dashboardCurrencyCode].compactMap { $0 }
+        return candidates.filter { seen.insert($0).inserted }
+    }
+
+    private var availableModelOptions: [String] {
+        var seen = Set<String>()
+        let candidates = (runtimeSettings?.availableAgentModels ?? [])
+            + [runtimeSettings?.agentModel].compactMap { $0 }
+        return candidates.filter { seen.insert($0).inserted }
     }
 
     var body: some View {
@@ -217,18 +232,35 @@ struct SettingsRootView: View {
 
             if let runtimeSettings {
                 Section("Runtime Settings") {
-                    TextField("Default currency", text: Binding(
+                    Picker("Default currency", selection: Binding(
                         get: { settingsForm.defaultCurrencyCode ?? runtimeSettings.defaultCurrencyCode },
-                        set: { settingsForm.defaultCurrencyCode = normalizedOptional($0) }
-                    ))
-                    TextField("Dashboard currency", text: Binding(
+                        set: { settingsForm.defaultCurrencyCode = $0 }
+                    )) {
+                        ForEach(availableCurrencyCodes, id: \.self) { code in
+                            Text(code).tag(code)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Picker("Dashboard currency", selection: Binding(
                         get: { settingsForm.dashboardCurrencyCode ?? runtimeSettings.dashboardCurrencyCode },
-                        set: { settingsForm.dashboardCurrencyCode = normalizedOptional($0) }
-                    ))
-                    TextField("Agent model", text: Binding(
+                        set: { settingsForm.dashboardCurrencyCode = $0 }
+                    )) {
+                        ForEach(availableCurrencyCodes, id: \.self) { code in
+                            Text(code).tag(code)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Picker("Agent model", selection: Binding(
                         get: { settingsForm.agentModel ?? runtimeSettings.agentModel },
                         set: { settingsForm.agentModel = normalizedOptional($0) }
-                    ))
+                    )) {
+                        ForEach(availableModelOptions, id: \.self) { model in
+                            Text(model).tag(model)
+                        }
+                    }
+                    .pickerStyle(.menu)
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Available agent models")
@@ -248,45 +280,88 @@ struct SettingsRootView: View {
                             .disabled(!canEditSettings)
                     }
 
-                    TextField("Max steps", value: Binding(
-                        get: { settingsForm.agentMaxSteps ?? runtimeSettings.agentMaxSteps },
-                        set: { settingsForm.agentMaxSteps = $0 }
-                    ), format: .number)
-                    TextField("Bulk concurrent threads", value: Binding(
-                        get: { settingsForm.agentBulkMaxConcurrentThreads ?? runtimeSettings.agentBulkMaxConcurrentThreads },
-                        set: { settingsForm.agentBulkMaxConcurrentThreads = $0 }
-                    ), format: .number)
-                    TextField("Retry max attempts", value: Binding(
-                        get: { settingsForm.agentRetryMaxAttempts ?? runtimeSettings.agentRetryMaxAttempts },
-                        set: { settingsForm.agentRetryMaxAttempts = $0 }
-                    ), format: .number)
-                    TextField("Retry initial wait", value: Binding(
-                        get: { settingsForm.agentRetryInitialWaitSeconds ?? runtimeSettings.agentRetryInitialWaitSeconds },
-                        set: { settingsForm.agentRetryInitialWaitSeconds = $0 }
-                    ), format: .number)
-                    TextField("Retry max wait", value: Binding(
-                        get: { settingsForm.agentRetryMaxWaitSeconds ?? runtimeSettings.agentRetryMaxWaitSeconds },
-                        set: { settingsForm.agentRetryMaxWaitSeconds = $0 }
-                    ), format: .number)
-                    TextField("Retry backoff", value: Binding(
-                        get: { settingsForm.agentRetryBackoffMultiplier ?? runtimeSettings.agentRetryBackoffMultiplier },
-                        set: { settingsForm.agentRetryBackoffMultiplier = $0 }
-                    ), format: .number)
-                    TextField("Image max bytes", value: Binding(
-                        get: { settingsForm.agentMaxImageSizeBytes ?? runtimeSettings.agentMaxImageSizeBytes },
-                        set: { settingsForm.agentMaxImageSizeBytes = $0 }
-                    ), format: .number)
-                    TextField("Images per message", value: Binding(
-                        get: { settingsForm.agentMaxImagesPerMessage ?? runtimeSettings.agentMaxImagesPerMessage },
-                        set: { settingsForm.agentMaxImagesPerMessage = $0 }
-                    ), format: .number)
-                    TextField("Agent base URL", text: Binding(
-                        get: { settingsForm.agentBaseURL ?? runtimeSettings.agentBaseURL ?? "" },
-                        set: { settingsForm.agentBaseURL = normalizedOptional($0) }
-                    ))
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
+                    LabeledContent("Max steps") {
+                        TextField("Max steps", value: Binding(
+                            get: { settingsForm.agentMaxSteps ?? runtimeSettings.agentMaxSteps },
+                            set: { settingsForm.agentMaxSteps = $0 }
+                        ), format: .number)
+                        .multilineTextAlignment(.trailing)
+                        .keyboardType(.numberPad)
+                    }
+
+                    LabeledContent("Bulk concurrent threads") {
+                        TextField("Bulk concurrent threads", value: Binding(
+                            get: { settingsForm.agentBulkMaxConcurrentThreads ?? runtimeSettings.agentBulkMaxConcurrentThreads },
+                            set: { settingsForm.agentBulkMaxConcurrentThreads = $0 }
+                        ), format: .number)
+                        .multilineTextAlignment(.trailing)
+                        .keyboardType(.numberPad)
+                    }
+
+                    LabeledContent("Retry max attempts") {
+                        TextField("Retry max attempts", value: Binding(
+                            get: { settingsForm.agentRetryMaxAttempts ?? runtimeSettings.agentRetryMaxAttempts },
+                            set: { settingsForm.agentRetryMaxAttempts = $0 }
+                        ), format: .number)
+                        .multilineTextAlignment(.trailing)
+                        .keyboardType(.numberPad)
+                    }
+
+                    LabeledContent("Retry initial wait") {
+                        TextField("Retry initial wait", value: Binding(
+                            get: { settingsForm.agentRetryInitialWaitSeconds ?? runtimeSettings.agentRetryInitialWaitSeconds },
+                            set: { settingsForm.agentRetryInitialWaitSeconds = $0 }
+                        ), format: .number)
+                        .multilineTextAlignment(.trailing)
+                        .keyboardType(.decimalPad)
+                    }
+
+                    LabeledContent("Retry max wait") {
+                        TextField("Retry max wait", value: Binding(
+                            get: { settingsForm.agentRetryMaxWaitSeconds ?? runtimeSettings.agentRetryMaxWaitSeconds },
+                            set: { settingsForm.agentRetryMaxWaitSeconds = $0 }
+                        ), format: .number)
+                        .multilineTextAlignment(.trailing)
+                        .keyboardType(.decimalPad)
+                    }
+
+                    LabeledContent("Retry backoff") {
+                        TextField("Retry backoff", value: Binding(
+                            get: { settingsForm.agentRetryBackoffMultiplier ?? runtimeSettings.agentRetryBackoffMultiplier },
+                            set: { settingsForm.agentRetryBackoffMultiplier = $0 }
+                        ), format: .number)
+                        .multilineTextAlignment(.trailing)
+                        .keyboardType(.decimalPad)
+                    }
+
+                    LabeledContent("Image max bytes") {
+                        TextField("Image max bytes", value: Binding(
+                            get: { settingsForm.agentMaxImageSizeBytes ?? runtimeSettings.agentMaxImageSizeBytes },
+                            set: { settingsForm.agentMaxImageSizeBytes = $0 }
+                        ), format: .number)
+                        .multilineTextAlignment(.trailing)
+                        .keyboardType(.numberPad)
+                    }
+
+                    LabeledContent("Images per message") {
+                        TextField("Images per message", value: Binding(
+                            get: { settingsForm.agentMaxImagesPerMessage ?? runtimeSettings.agentMaxImagesPerMessage },
+                            set: { settingsForm.agentMaxImagesPerMessage = $0 }
+                        ), format: .number)
+                        .multilineTextAlignment(.trailing)
+                        .keyboardType(.numberPad)
+                    }
+
+                    LabeledContent("Agent base URL") {
+                        TextField("Agent base URL", text: Binding(
+                            get: { settingsForm.agentBaseURL ?? runtimeSettings.agentBaseURL ?? "" },
+                            set: { settingsForm.agentBaseURL = normalizedOptional($0) }
+                        ))
+                        .multilineTextAlignment(.trailing)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        .autocorrectionDisabled()
+                    }
 
                     Button(isSavingSettings ? "Saving…" : "Save runtime settings") {
                         Task { await saveRuntimeSettings() }
@@ -334,10 +409,12 @@ struct SettingsRootView: View {
         do {
             async let settingsTask = composition.apiClient.runtimeSettings()
             async let usersTask = composition.apiClient.listUsers()
+            async let currenciesTask = composition.apiClient.listCurrencies()
             let loadedSettings = try await settingsTask
             runtimeSettings = loadedSettings
             settingsForm = RuntimeSettingsUpdatePayload()
             currentUser = try await usersTask.first(where: \.isCurrentUser)
+            currencies = try await currenciesTask.sorted(by: { $0.code.localizedCaseInsensitiveCompare($1.code) == .orderedAscending })
             availableModelsText = loadedSettings.availableAgentModels.joined(separator: "\n")
             userMemoryText = (loadedSettings.userMemory ?? []).joined(separator: "\n")
             errorMessage = nil
