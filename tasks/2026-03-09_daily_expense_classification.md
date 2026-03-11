@@ -291,3 +291,262 @@ match:
   tags_none: [internal_transfer]
 ```
 The rules for filter groups would then be based on logic operators like Notion style filtering. For e.g.: kind = ... AND tag contains ... AND tag not contains ... AND ...
+
+# Plan: Daily Expense Classification & Filter Groups
+
+Please use this as the source of truth if there's any conflicts between this and the above feature request and raw thoughts.
+
+## Problem
+
+The current dashboard classifies expenses using a primitive `daily` / `non-daily` tag check. This doesn't answer real questions like "how much did I spend day-to-day vs one-time vs fixed?" and forces manual mental grouping. The task proposes **filter groups** — reusable, user-editable saved filter definitions that classify entries into meaningful analytics buckets.
+
+## Agreed Decisions (from discussion)
+
+| Topic | Decision |
+|---|---|
+| Storage | DB table, per-user (defaults seeded per user at creation) |
+| "Unclassified" | Remainder bucket: entries with no tags OR entries not matching any filter group |
+| Multi-match | Allowed — an entry can appear in multiple filter groups |
+| Transfers group | Includes any entry tagged `e_transfer`/`cash_withdrawal` regardless of kind |
+| Legacy daily/non-daily | Removed entirely (tags + dashboard logic + schema fields) |
+| Evaluation | On-the-fly at query time (no materialized cache) |
+| Filter model v1 | Flat: `kind_in`, `tags_any`, `tags_none` — nested AND/OR deferred |
+| Scope | Full: backend model + API + dashboard overhaul + filter group management UI |
+| Month navigation | Scrollable timeline (no manual month picker) |
+| Dashboard style | Tabbed views, creative/elegant Recharts charts, human-readable insights |
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────┐
+│  filter_groups table (per-user, JSON rule column)    │
+│  ─────────────────────────────────────────────────   │
+│  id | owner_user_id | name | slug | description |    │
+│  is_default | position | rule (JSON) | timestamps    │
+└──────────────────────┬──────────────────────────────┘
+                       │
+        ┌──────────────┴──────────────┐
+        │  FilterGroupService          │
+        │  • evaluate(entries, groups) │
+        │  • classify_entry(entry)     │
+        │  • seed_defaults(user)       │
+        └──────────────┬──────────────┘
+                       │
+     ┌─────────────────┼─────────────────┐
+     │                 │                 │
+  Routers:          Services:         Frontend:
+  /filter-groups    Dashboard          FilterGroupsPage
+  /dashboard        (refactored)       DashboardPage (redesigned)
+```
+
+## Todos
+
+### Phase 1: Backend Data Model & Seed
+
+**1.1 — Create `filter_groups` table + Alembic migration**
+- New model `FilterGroup` in `models_finance.py`:
+  - `id` (UUID PK)
+  - `owner_user_id` (FK → users, indexed)
+  - `name` (str, e.g. "Day-to-Day")
+  - `slug` (str, unique per user, e.g. "day-to-day")
+  - `description` (text, user-facing explanation)
+  - `is_default` (bool, marks system-provided groups)
+  - `position` (int, display ordering)
+  - `rule` (JSON column, stores the filter definition)
+  - `created_at`, `updated_at` (timestamps)
+- UniqueConstraint on `(owner_user_id, slug)`
+- Rule JSON schema v1:
+  ```json
+  {
+    "version": 1,
+    "kind_in": ["EXPENSE"],
+    "tags_any": ["grocery", "dining_out", ...],
+    "tags_none": ["one_time", "internal_transfer"]
+  }
+  ```
+- The special "unclassified" group has `rule: {"version": 1, "mode": "unclassified"}` — computed dynamically as remainder.
+- Alembic migration: `alembic revision --autogenerate -m "add_filter_groups"`
+
+**1.2 — Seed default filter groups per user**
+- Add `seed_default_filter_groups(db, user_id)` to `scripts/seed_defaults.py` or a new `backend/services/filter_groups.py`.
+- Call during user creation flow so new users get defaults automatically.
+- 5 default groups with `is_default=True`:
+
+| slug | name | kind_in | tags_any | tags_none |
+|---|---|---|---|---|
+| `day-to-day` | Day-to-Day | [EXPENSE] | grocery, dining_out, coffee_snacks, transportation, personal_care, pharmacy, alcohol_bars, fitness, entertainment, subscriptions, home, pets | one_time, internal_transfer |
+| `one-time` | One-Time | [EXPENSE] | one_time | internal_transfer |
+| `fixed` | Fixed | [EXPENSE] | housing, utilities, internet_mobile, insurance, interest_expense, taxes, debt_payment | internal_transfer |
+| `transfers` | Transfers | [EXPENSE, INCOME, TRANSFER] | e_transfer, cash_withdrawal | internal_transfer |
+| `unclassified` | Unclassified | — | — | — | (mode: "unclassified") |
+
+**1.3 — Remove legacy `daily` / `non-daily` tags and logic**
+- Remove `daily` from `DEFAULT_TAGS` in `seed_defaults.py` (it's not currently there — confirm and ensure it doesn't creep in).
+- Remove `DASHBOARD_DAILY_TAG_NAME`, `DASHBOARD_NON_DAILY_TAG_NAMES` constants from `finance.py`.
+- Remove `_entry_has_daily_tag()` function.
+- Remove `daily_expense_total_minor`, `non_daily_expense_total_minor`, `daily_expense_minor`, `non_daily_expense_minor`, `average_daily_expense_minor`, `median_daily_expense_minor`, `daily_spending_days`, `is_daily` from all schemas.
+- This is a breaking change — dashboard frontend will be updated in Phase 3.
+
+### Phase 2: Backend Service & API
+
+**2.1 — FilterGroup evaluation service (`backend/services/filter_groups.py`)**
+- `list_filter_groups(db, user_id) → list[FilterGroup]` — ordered by position.
+- `get_filter_group(db, user_id, group_id) → FilterGroup`.
+- `create_filter_group(db, user_id, payload) → FilterGroup`.
+- `update_filter_group(db, user_id, group_id, payload) → FilterGroup`.
+- `delete_filter_group(db, user_id, group_id)` — prevent deleting `is_default` groups? Or allow with warning? (Allow — user can always re-seed.)
+- `evaluate_filter_group(rule: dict, entry: Entry) → bool` — pure function that checks if an entry matches a rule.
+  - For standard rules: `entry.kind in rule.kind_in AND entry has any tag in rule.tags_any AND entry has no tag in rule.tags_none`.
+  - For "unclassified": entry has no tags, OR entry doesn't match any other non-unclassified group for that user.
+- `classify_entries(db, user_id, entries: list[Entry]) → dict[str, list[Entry]]` — returns `{group_slug: [entries]}`. An entry can appear in multiple groups. Unclassified is computed as remainder.
+- `seed_default_filter_groups(db, user_id)` — idempotent, creates defaults if missing.
+
+**2.2 — Filter groups CRUD router (`backend/routers/filter_groups.py`)**
+- `GET /filter-groups` — list all for current user.
+- `GET /filter-groups/{group_id}` — get one.
+- `POST /filter-groups` — create custom group.
+- `PATCH /filter-groups/{group_id}` — update name, description, rule, position.
+- `DELETE /filter-groups/{group_id}` — delete (soft or hard, TBD).
+- Request/response schemas in `schemas_finance.py`:
+  - `FilterGroupRead`: id, name, slug, description, is_default, position, rule, created_at, updated_at.
+  - `FilterGroupCreate`: name, description, rule.
+  - `FilterGroupUpdate`: name?, description?, rule?, position?.
+  - `FilterGroupRuleRead`: version, kind_in?, tags_any?, tags_none?, mode?.
+
+**2.3 — Refactor dashboard service to use filter groups**
+- Replace `_entry_has_daily_tag` / daily vs non-daily logic with filter group classification.
+- New dashboard response shape:
+  - `kpis`: total expense, total income, net, per-filter-group expense totals.
+  - `filter_group_breakdown`: `[{group_slug, group_name, total_minor, share, entry_count}]`.
+  - `daily_spending`: per-date points with per-filter-group breakdown (not just daily/non-daily).
+  - `monthly_trend`: per-month points with per-filter-group breakdown + income.
+  - `spending_by_tag`, `spending_by_from`, `spending_by_to`: kept as-is.
+  - `weekday_spending`: kept.
+  - `largest_expenses`: kept, but replace `is_daily` with `filter_groups: [slug]`.
+  - `projection`: kept, but projected for each filter group (or at least day-to-day + total).
+  - `reconciliation`: kept as-is.
+- The API should accept an optional `filter_group_ids` query param to scope analytics to specific groups.
+- The dashboard endpoint should return filter group metadata alongside the data so the frontend knows group names/colors.
+
+**2.4 — Dashboard API response schema redesign**
+- `DashboardKpisRead`: remove daily/non-daily fields, add `filter_group_totals: list[FilterGroupTotalRead]` where each has `slug, name, total_minor, entry_count`.
+- `DashboardDailySpendingPoint`: `date, expense_total_minor, filter_group_totals: list[{slug, total_minor}]`.
+- `DashboardMonthlyTrendPoint`: `month, expense_total_minor, income_total_minor, filter_group_totals: list[{slug, total_minor}]`.
+- `DashboardLargestExpenseItem`: replace `is_daily` with `filter_groups: list[str]` (slugs).
+- New: `DashboardFilterGroupSummary`: `slug, name, description, color, total_minor, share, entry_count` — returned at top level so frontend can render legend/tabs.
+
+### Phase 3: Frontend — Filter Group Management Page
+
+**3.1 — New route: `/filter-groups`**
+- Add to `App.tsx` router config with lazy loading.
+- Add sidebar navigation item.
+
+**3.2 — FilterGroupsPage component**
+- List all filter groups with drag-to-reorder (position field).
+- Each group card shows: name, description, rule summary in plain language (e.g., "Expenses tagged with grocery, dining_out, ... but not one_time or internal_transfer").
+- Click to edit → dialog/sheet with:
+  - Name, description fields.
+  - Rule editor: kind selector (checkboxes for EXPENSE/INCOME/TRANSFER), tag inclusion multi-select, tag exclusion multi-select.
+  - Preview: show count of matching entries with current rule.
+- "Add Custom Group" button → same editor.
+- Delete button for non-default groups (confirm dialog).
+- Default groups show a badge and can be edited but not deleted (or can be deleted with "Reset to defaults" option).
+
+**3.3 — API client + query keys**
+- Add `filterGroups` key namespace to `queryKeys.ts`.
+- Add API client functions in a new `lib/api/filterGroups.ts` or extend existing client.
+- Invalidation: editing a filter group should invalidate dashboard queries too (since classification changes).
+
+### Phase 4: Frontend — Dashboard Redesign
+
+**4.1 — Remove legacy daily/non-daily UI**
+- Remove all references to `daily_expense_total_minor`, `non_daily_expense_total_minor`, `is_daily`, etc.
+- Remove the "Daily vs Non-daily" pie chart.
+- Remove the "Daily Spend" tab in its current form.
+
+**4.2 — Scrollable month timeline navigation**
+- Replace `<input type="month">` with a horizontal scrollable timeline.
+- Shows month labels (e.g., "Jan", "Feb", "Mar 2026") as clickable chips/pills.
+- Current/selected month is highlighted.
+- Auto-scrolls to show current month on load.
+- Can scroll left to see older months, right for future (up to current month).
+- Optionally show mini sparkline bars under each month chip (total expense) for visual context.
+
+**4.3 — Overview tab redesign**
+- **KPI row**: Total Expense, Total Income, Net, Day-to-Day total (or primary group).
+- **Filter Group Breakdown**: Horizontal stacked bar or donut chart showing expense split by filter group. Each group gets a consistent color. Clicking a segment could filter the view.
+- **Monthly Trend**: Stacked area or bar chart (6–12 months) with each filter group as a layer + income line overlay.
+- **Projection Card**: Projected monthly total, projected by day-to-day group specifically, days elapsed/remaining.
+
+**4.4 — Spending tab (replaces "Daily Spend")**
+- **Daily spending area chart**: Stacked areas by filter group, x-axis = dates in month.
+- **Filter group KPIs**: Average daily spend for day-to-day group, median, spending days count.
+- **Comparison**: This month vs last month for each filter group (small delta indicators).
+
+**4.5 — Breakdowns tab (enhanced)**
+- **By filter group**: Primary visualization — pie/donut or horizontal bars.
+- **By tag**: Top tags pie chart (kept, enhanced with filter group color coding).
+- **By destination entity**: Top merchants/payees ranked bar chart.
+- **By source entity**: Top sources ranked bar chart.
+
+**4.6 — Insights tab (enhanced)**
+- **Weekday heatmap or bar chart**: Spending patterns by day of week.
+- **Largest expenses table**: With filter group badges instead of daily/non-daily flag.
+- **Unclassified entries alert**: If unclassified count > 0, show a prominent card with count and link to review.
+- **Reconciliation**: Kept as-is.
+- **Yearly view**: Aggregate by year with monthly bars, filter group stacking, YoY comparison.
+
+**4.7 — Color system for filter groups**
+- Assign deterministic colors to default groups (consistent across sessions).
+- Custom groups get colors from a palette or user-chosen.
+- Colors returned from API in `DashboardFilterGroupSummary`.
+
+### Phase 5: Docs & Cleanup
+
+**5.1 — Update documentation**
+- `docs/data-model.md`: Add `filter_groups` table documentation.
+- `docs/api.md` / `docs/api/*.md`: Document new `/filter-groups` endpoints and dashboard schema changes.
+- `backend/docs/*.md`: Update service and router docs.
+- `frontend/docs/*.md`: Update dashboard and new page docs.
+- `docs/repository-structure.md`: Update if file structure changed.
+
+**5.2 — Update seed scripts**
+- Ensure `seed_defaults.py` creates filter groups.
+- Remove any `daily`/`non-daily` tag references.
+
+**5.3 — Run verification gates**
+- `uv run python -m py_compile` on all touched Python modules.
+- `OPENROUTER_API_KEY=test uv run pytest backend/tests -q`.
+- `uv run python scripts/check_docs_sync.py`.
+
+**5.4 — Move task doc to completed**
+- Move `tasks/2026-03-09_daily_expense_classification.md` → `docs/completed_tasks/`.
+
+## Open Design Decisions (to resolve during implementation)
+
+1. **Filter group colors**: Hardcoded per default group, or derived from slug hash like tags?
+2. **Yearly view**: Separate tab or section within Overview/Insights?
+3. **"Unclassified" evaluation performance**: For large entry sets, evaluating against ALL other groups to find remainders could be slow. May need optimization if entry count grows beyond ~10k/month.
+4. **Filter group rule versioning**: The `version: 1` field in rule JSON allows future migration to nested AND/OR without breaking existing rules.
+5. **Drag-to-reorder UX**: Use `@dnd-kit` or similar? Or simple up/down arrows?
+
+## Dependency Graph
+
+```
+1.1 (DB model)
+ ├→ 1.2 (seed defaults)
+ ├→ 1.3 (remove legacy)
+ └→ 2.1 (evaluation service)
+      ├→ 2.2 (CRUD router)
+      ├→ 2.3 (dashboard service refactor)
+      │    └→ 2.4 (schema redesign)
+      │         └→ 4.1 (remove legacy FE)
+      │              ├→ 4.2 (timeline nav)
+      │              ├→ 4.3 (overview tab)
+      │              ├→ 4.4 (spending tab)
+      │              ├→ 4.5 (breakdowns tab)
+      │              └→ 4.6 (insights tab)
+      └→ 3.1, 3.2, 3.3 (filter group mgmt page)
+4.7 (colors) — parallel with any Phase 4 work
+5.x (docs/cleanup) — after all implementation
+```
