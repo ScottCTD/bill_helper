@@ -10,7 +10,7 @@
 - `pyproject.toml`: Python package metadata, dependencies, scripts, pytest config.
 - `uv.lock`: locked Python dependency graph for `uv`.
 - `alembic.ini`: Alembic runtime/logging configuration.
-- `ios/`: SwiftUI iOS MVP workspace containing the app shell target, shared mobile core sources, feature surfaces, `ios/docs/` client notes, and focused API/unit tests.
+- `ios/`: SwiftUI iPhone app workspace containing the onboarding-aware app shell target, shared mobile core sources, feature surfaces, `ios/docs/` client notes, and focused API/unit tests.
 - `telegram/`: top-level Telegram transport package with `telegram/README.md`, `telegram/docs/` implementation notes, config, PTB application/handler wiring, the `telegram/ptb.py` import-collision shim/re-export for `python-telegram-bot`, polling/webhook intake adapters, file/reply helpers, and targeted tests for the bot integration surface.
 
 ## Migration Layer (`/alembic`)

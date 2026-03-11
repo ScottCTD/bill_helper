@@ -6,8 +6,10 @@ This file is the iOS index. Use it to find the native-client docs under `../ios/
 
 - `../ios/README.md`: local package overview, run loop, and verification commands.
 - `../ios/docs/README.md`: topic map for iOS-specific behavior docs.
-- `../ios/docs/dashboard-and-entries-mvp.md`: dashboard and entries MVP behavior.
-- `../ios/docs/agent-mvp.md`: agent thread, upload, run-state, and review behavior.
+- `../ios/docs/app-shell-and-session.md`: onboarding, saved connection state, tab shell, and deep links.
+- `../ios/docs/dashboard-entries.md`: dashboard charts, entries filters, detail flows, and editor behavior.
+- `../ios/docs/manage-and-settings.md`: management workspaces, settings editor, diagnostics, and admin gating.
+- `../ios/docs/agent.md`: agent threads, run state, attachments, tool calls, and review flows.
 
 ## Stable Boundaries
 

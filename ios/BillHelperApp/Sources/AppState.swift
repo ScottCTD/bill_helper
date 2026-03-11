@@ -19,15 +19,18 @@ final class AppComposition: ObservableObject {
     @Published var onboardingError: String?
 
     private let preferencesStorage: AppPreferencesStorage
+    private let connectionTester: (URL, AuthSession) async throws -> Void
 
     init(
         configuration: AppConfiguration,
         sessionStore: SessionStore,
-        preferencesStorage: AppPreferencesStorage
+        preferencesStorage: AppPreferencesStorage,
+        connectionTester: @escaping (URL, AuthSession) async throws -> Void = AppComposition.defaultConnectionTester
     ) {
         self.configuration = configuration
         self.sessionStore = sessionStore
         self.preferencesStorage = preferencesStorage
+        self.connectionTester = connectionTester
         activeAPIBaseURL = preferencesStorage.loadBaseURL() ?? configuration.apiBaseURL
     }
 
@@ -61,10 +64,9 @@ final class AppComposition: ObservableObject {
         }
 
         let session = AuthSession(credential: .principal(name: normalizedPrincipal), currentUserName: normalizedPrincipal)
-        let testClient = APIClient(baseURL: baseURL, sessionProvider: StaticSessionProvider(currentSession: session))
 
         do {
-            _ = try await testClient.runtimeSettings()
+            try await connectionTester(baseURL, session)
             try preferencesStorage.saveBaseURL(baseURL)
             try sessionStore.save(session)
             activeAPIBaseURL = baseURL
@@ -99,5 +101,10 @@ final class AppComposition: ObservableObject {
             sessionStore: SessionStore(storage: sessionStorage),
             preferencesStorage: preferencesStorage
         )
+    }
+
+    private static func defaultConnectionTester(baseURL: URL, session: AuthSession) async throws {
+        let testClient = APIClient(baseURL: baseURL, sessionProvider: StaticSessionProvider(currentSession: session))
+        _ = try await testClient.runtimeSettings()
     }
 }

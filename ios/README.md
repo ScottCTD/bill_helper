@@ -1,27 +1,26 @@
 # iOS Client
 
-This is the main local entry point for the native iOS client shipped in this repository. The current target is an internal SwiftUI iPhone MVP that talks to the existing Bill Helper backend.
+This is the local entry point for the native SwiftUI iPhone client. The current app is a backend-backed five-tab shell with principal-based onboarding, management workspaces, and full agent/detail flows.
 
-## Shipped MVP behavior
+## Shipped App Behavior
 
-- dashboard tab loads the current-month backend dashboard and shows summary cards, KPI tiles, top spending, largest expenses, and reconciliation state
-- entries tab loads backend entries, shows a mobile-first list, supports pull-to-refresh, and opens a read-only detail view from loaded row data
-- agent tab shows thread list/detail flows with loading, empty, error, and refresh states
-- creating a thread pushes directly into thread detail for immediate messaging
-- thread detail shows assistant/user messages, run state, recent streamed text/reasoning, and pending review cards
-- assistant message bubbles render markdown formatting from the backend `contentMarkdown` field while user/system messages stay plain text
-- composer supports text send plus invoice/receipt attachments from Photos or the file importer
-- approve/reject proposal review actions update thread detail immediately and refresh parent-list summaries
-- app startup restores persisted session state before wiring the live client, and app configuration resolves the backend base URL for MVP development
+- first launch shows onboarding for backend URL + principal name, then persists the base URL in app preferences and the session credential in Keychain
+- the tab shell is `Dashboard`, `Entries`, `Agent`, `Manage`, and `Settings`, with one `NavigationStack` per tab
+- dashboard loads `GET /dashboard/timeline` and `GET /dashboard`, then shows month chips, filter-group slices, charts, largest expenses, and reconciliation cards
+- entries supports search, local filters, detail navigation, create/edit forms, direct-group assignment, and delete actions
+- agent supports thread create/rename/delete, live run state, attachment upload/download, hydrated tool-call detail, review approve/reject/reopen, and explicit access gating for non-admin principals
+- manage exposes accounts, entities, tags, groups, filter groups, taxonomies, currencies, and users with native list/detail/form flows
+- settings exposes session controls, runtime settings editing, and diagnostics for the current principal and agent limits
+- the app handles `billhelper://...` deep links for dashboard month, entry detail, account detail, group detail, agent thread, and settings
 
 ## Folder structure
 
 - `BillHelperApp/`: app entry, app-shell composition, and shared app resources
 - `BillHelperCore/`: API client, finance/agent models, session infrastructure, transport, and upload support
-- `BillHelperFeatures/`: SwiftUI feature surfaces for dashboard, entries, and agent workflows
-- `BillHelperAPITests/`: focused simulator-run tests for API, app configuration, dashboard/entries, agent flows, upload support, and transport behavior
+- `BillHelperFeatures/`: SwiftUI feature surfaces for dashboard, entries, agent, manage, and settings workflows
+- `BillHelperAPITests/`: focused simulator-run tests for API, onboarding/session wiring, dashboard/entries, agent flows, upload support, and transport behavior
 - `BillHelperApp.xcodeproj/`: Xcode project, workspace metadata, and shared scheme
-- `docs/`: iOS-client-specific behavior notes for shipped MVP screens and flows
+- `docs/`: iOS-client-specific behavior notes for the shipped full app
 - `build/`: generated local build output; not source-of-truth documentation or product code
 
 ## Verification
@@ -34,13 +33,16 @@ This is the main local entry point for the native iOS client shipped in this rep
 - the app defaults to `http://localhost:8000/api/v1`, but for iOS-local development prefer a high local port to avoid collisions with other work
 - from the repo root, apply migrations if needed: `uv run alembic upgrade head`
 - start the backend on the recommended iOS-local port: `uv run uvicorn backend.main:create_app --factory --host 127.0.0.1 --port 48187 --reload`
-- in the Xcode scheme environment, set `BILL_HELPER_API_BASE_URL=http://127.0.0.1:48187/api/v1` before launching the app
-- after the backend is running and the environment variable is set, the dashboard, entries, and agent flows will read from that local backend
+- in the Xcode scheme environment, set `BILL_HELPER_API_BASE_URL=http://127.0.0.1:48187/api/v1` before launching the app if you want the onboarding form prefilled
+- launch the app, enter the backend URL and a valid principal name, then tap `Test connection`
+- after onboarding succeeds, every tab uses that saved backend URL until the session is changed in Settings
 
 ## Local docs
 
 - start here for the local iOS overview
 - see `../docs/ios_index.md` for the cross-repo iOS entry point
 - see `docs/README.md` for iOS-specific detail docs
-- see `docs/dashboard-and-entries-mvp.md` for dashboard and entries behavior
-- see `docs/agent-mvp.md` for thread, upload, run-state, and review behavior
+- see `docs/app-shell-and-session.md` for onboarding, tabs, and deep links
+- see `docs/dashboard-entries.md` for dashboard and ledger behavior
+- see `docs/manage-and-settings.md` for the manage tab and runtime settings surfaces
+- see `docs/agent.md` for thread, upload, tool-call, and review behavior

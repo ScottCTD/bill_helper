@@ -40,10 +40,15 @@ final class AgentFeatureViewModelTests: XCTestCase {
                 ]
             },
             createThread: { _ in createdThread },
+            renameThread: { _, _ in fatalError("unused") },
+            deleteThread: { _ in fatalError("unused") },
             loadThread: { _ in fatalError("unused") },
+            loadToolCall: { _ in fatalError("unused") },
+            loadAttachment: { _ in fatalError("unused") },
             startMessageRun: { _, _, _ in fatalError("unused") },
             approveChange: { _ in fatalError("unused") },
-            rejectChange: { _ in fatalError("unused") }
+            rejectChange: { _ in fatalError("unused") },
+            reopenChange: { _ in fatalError("unused") }
         )
 
         let viewModel = AgentThreadListViewModel(client: client)
@@ -86,10 +91,14 @@ final class AgentFeatureViewModelTests: XCTestCase {
         let client = AgentFeatureClient(
             listThreads: { [] },
             createThread: { _ in fatalError("unused") },
+            renameThread: { _, _ in fatalError("unused") },
+            deleteThread: { _ in fatalError("unused") },
             loadThread: { _ in
                 loadCount += 1
                 return loadCount == 1 ? initialDetail : finalDetail
             },
+            loadToolCall: { _ in fatalError("unused") },
+            loadAttachment: { _ in fatalError("unused") },
             startMessageRun: { _, _, _ in
                 AsyncThrowingStream { continuation in
                     continuation.yield(.snapshot(completedRun))
@@ -97,10 +106,11 @@ final class AgentFeatureViewModelTests: XCTestCase {
                 }
             },
             approveChange: { _ in fatalError("unused") },
-            rejectChange: { _ in fatalError("unused") }
+            rejectChange: { _ in fatalError("unused") },
+            reopenChange: { _ in fatalError("unused") }
         )
 
-        let viewModel = AgentThreadDetailViewModel(thread: initialThread, client: client)
+        let viewModel = AgentThreadDetailViewModel(thread: initialThread, client: client, attachmentLimits: nil)
         await viewModel.loadIfNeeded()
         viewModel.composerText = "Review this receipt"
 
@@ -118,6 +128,8 @@ final class AgentFeatureViewModelTests: XCTestCase {
         let client = AgentFeatureClient(
             listThreads: { [] },
             createThread: { _ in fatalError("unused") },
+            renameThread: { _, _ in fatalError("unused") },
+            deleteThread: { _ in fatalError("unused") },
             loadThread: { _ in
                 AgentThreadDetail(
                     thread: self.makeThread(id: "thread-1", title: "Review"),
@@ -127,18 +139,86 @@ final class AgentFeatureViewModelTests: XCTestCase {
                     currentContextTokens: nil
                 )
             },
+            loadToolCall: { _ in fatalError("unused") },
+            loadAttachment: { _ in fatalError("unused") },
             startMessageRun: { _, _, _ in fatalError("unused") },
             approveChange: { _ in self.makeChangeItem(id: "item-1", status: .approved) },
-            rejectChange: { _ in fatalError("unused") }
+            rejectChange: { _ in fatalError("unused") },
+            reopenChange: { _ in fatalError("unused") }
         )
 
-        let viewModel = AgentThreadDetailViewModel(thread: initialThread, client: client)
+        let viewModel = AgentThreadDetailViewModel(thread: initialThread, client: client, attachmentLimits: nil)
         await viewModel.loadIfNeeded()
         XCTAssertEqual(viewModel.pendingReviewItems.count, 1)
 
         await viewModel.approve(itemID: "item-1")
 
         XCTAssertEqual(viewModel.pendingReviewItems.count, 0)
+        XCTAssertNil(viewModel.actionError)
+    }
+
+    func testListViewModelRenameThreadUpdatesTitle() async {
+        let client = AgentFeatureClient(
+            listThreads: {
+                [self.makeThreadSummary(id: "thread-1", title: "Old title")]
+            },
+            createThread: { _ in fatalError("unused") },
+            renameThread: { id, title in
+                self.makeThread(id: id, title: title)
+            },
+            deleteThread: { _ in fatalError("unused") },
+            loadThread: { _ in fatalError("unused") },
+            loadToolCall: { _ in fatalError("unused") },
+            loadAttachment: { _ in fatalError("unused") },
+            startMessageRun: { _, _, _ in fatalError("unused") },
+            approveChange: { _ in fatalError("unused") },
+            rejectChange: { _ in fatalError("unused") },
+            reopenChange: { _ in fatalError("unused") }
+        )
+
+        let viewModel = AgentThreadListViewModel(client: client)
+        await viewModel.loadIfNeeded()
+
+        let renamed = await viewModel.renameThread(threadID: "thread-1", title: "New title")
+
+        XCTAssertEqual(renamed?.title, "New title")
+        XCTAssertEqual(viewModel.threads.first?.title, "New title")
+        XCTAssertNil(viewModel.errorMessage)
+    }
+
+    func testDetailViewModelReopenMovesRejectedItemBackToPending() async {
+        let rejectedItem = makeChangeItem(id: "item-1", status: .rejected)
+        let initialThread = makeThreadSummary(id: "thread-1", title: "Review")
+        let client = AgentFeatureClient(
+            listThreads: { [] },
+            createThread: { _ in fatalError("unused") },
+            renameThread: { _, _ in fatalError("unused") },
+            deleteThread: { _ in fatalError("unused") },
+            loadThread: { _ in
+                AgentThreadDetail(
+                    thread: self.makeThread(id: "thread-1", title: "Review"),
+                    messages: [],
+                    runs: [self.makeRun(id: "run-1", status: .completed, assistantMessageID: nil, changeItems: [rejectedItem])],
+                    configuredModelName: "gpt-5",
+                    currentContextTokens: nil
+                )
+            },
+            loadToolCall: { _ in fatalError("unused") },
+            loadAttachment: { _ in fatalError("unused") },
+            startMessageRun: { _, _, _ in fatalError("unused") },
+            approveChange: { _ in fatalError("unused") },
+            rejectChange: { _ in fatalError("unused") },
+            reopenChange: { _ in self.makeChangeItem(id: "item-1", status: .pendingReview) }
+        )
+
+        let viewModel = AgentThreadDetailViewModel(thread: initialThread, client: client, attachmentLimits: nil)
+        await viewModel.loadIfNeeded()
+        XCTAssertEqual(viewModel.rejectedReviewItems.count, 1)
+
+        await viewModel.reopen(itemID: "item-1")
+
+        XCTAssertEqual(viewModel.rejectedReviewItems.count, 0)
+        XCTAssertEqual(viewModel.pendingReviewItems.count, 1)
         XCTAssertNil(viewModel.actionError)
     }
 
@@ -180,8 +260,11 @@ final class AgentFeatureViewModelTests: XCTestCase {
             threadId: "thread-1",
             userMessageId: "message-1",
             assistantMessageId: assistantMessageID,
+            terminalAssistantReply: assistantMessageID == nil ? nil : "Done",
             status: status,
             modelName: "gpt-5",
+            surface: "ios",
+            replySurface: "ios",
             contextTokens: nil,
             inputTokens: nil,
             outputTokens: nil,

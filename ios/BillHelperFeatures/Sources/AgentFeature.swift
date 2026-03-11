@@ -1,9 +1,17 @@
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
+import UIKit
 import os
 
 private let agentMessageMarkdownLogger = Logger(subsystem: "com.billhelper.ios", category: "AgentMessageMarkdown")
+private let threadTitleMaxLength = 80
+private let threadTitleMaxWords = 5
+
+struct AgentAttachmentLimits: Equatable {
+    let maxImageSizeBytes: Int
+    let maxImagesPerMessage: Int
+}
 
 struct AgentFeatureClient {
     var listThreads: () async throws -> [AgentThreadSummary]
@@ -32,6 +40,49 @@ struct AgentFeatureClient {
             rejectChange: { try await apiClient.rejectChangeItem(id: $0) },
             reopenChange: { try await apiClient.reopenChangeItem(id: $0) }
         )
+    }
+}
+
+@MainActor
+final class AgentAccessViewModel: ObservableObject {
+    @Published private(set) var currentUser: User?
+    @Published private(set) var attachmentLimits: AgentAttachmentLimits?
+    @Published private(set) var isLoading = false
+    @Published private(set) var errorMessage: String?
+
+    private let apiClient: APIClient
+    private var hasLoaded = false
+
+    init(apiClient: APIClient) {
+        self.apiClient = apiClient
+    }
+
+    var isAdmin: Bool {
+        currentUser?.isAdmin ?? false
+    }
+
+    func loadIfNeeded() async {
+        guard !hasLoaded else { return }
+        await reload()
+    }
+
+    func reload() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            async let usersTask = apiClient.listUsers()
+            async let settingsTask = apiClient.runtimeSettings()
+            currentUser = try await usersTask.first(where: \.isCurrentUser)
+            let settings = try await settingsTask
+            attachmentLimits = AgentAttachmentLimits(
+                maxImageSizeBytes: settings.agentMaxImageSizeBytes,
+                maxImagesPerMessage: settings.agentMaxImagesPerMessage
+            )
+            errorMessage = nil
+            hasLoaded = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -90,6 +141,56 @@ final class AgentThreadListViewModel: ObservableObject {
             return nil
         }
     }
+
+    func renameThread(threadID: String, title: String) async -> AgentThreadSummary? {
+        guard let index = threads.firstIndex(where: { $0.id == threadID }) else { return nil }
+        let previous = threads[index]
+        var optimistic = previous
+        optimistic = AgentThreadSummary(
+            id: previous.id,
+            title: title,
+            createdAt: previous.createdAt,
+            updatedAt: previous.updatedAt,
+            lastMessagePreview: previous.lastMessagePreview,
+            pendingChangeCount: previous.pendingChangeCount,
+            hasRunningRun: previous.hasRunningRun
+        )
+        threads[index] = optimistic
+
+        do {
+            let thread = try await client.renameThread(threadID, title)
+            let updated = AgentThreadSummary(
+                id: thread.id,
+                title: thread.title,
+                createdAt: thread.createdAt,
+                updatedAt: thread.updatedAt,
+                lastMessagePreview: previous.lastMessagePreview,
+                pendingChangeCount: previous.pendingChangeCount,
+                hasRunningRun: previous.hasRunningRun
+            )
+            threads[index] = updated
+            errorMessage = nil
+            return updated
+        } catch {
+            threads[index] = previous
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func deleteThread(threadID: String) async -> Bool {
+        guard let index = threads.firstIndex(where: { $0.id == threadID }) else { return false }
+        let removed = threads.remove(at: index)
+        do {
+            try await client.deleteThread(threadID)
+            errorMessage = nil
+            return true
+        } catch {
+            threads.insert(removed, at: index)
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
 }
 
 @MainActor
@@ -112,16 +213,19 @@ final class AgentThreadDetailViewModel: ObservableObject {
     @Published var actionError: String?
     @Published var composerText = ""
     @Published private(set) var attachments: [ComposerAttachment] = []
+    @Published private(set) var isMutatingThread = false
 
     let threadID: String
 
     private let client: AgentFeatureClient
+    private let attachmentLimits: AgentAttachmentLimits?
     private var hasLoaded = false
 
-    init(thread: AgentThreadSummary, client: AgentFeatureClient) {
+    init(thread: AgentThreadSummary, client: AgentFeatureClient, attachmentLimits: AgentAttachmentLimits?) {
         threadID = thread.id
         threadTitle = thread.title
         self.client = client
+        self.attachmentLimits = attachmentLimits
     }
 
     var canSend: Bool {
@@ -147,6 +251,14 @@ final class AgentThreadDetailViewModel: ObservableObject {
         sortedRuns.flatMap { run in
             run.changeItems
                 .filter { $0.status == .pendingReview }
+                .map { AgentReviewItem(run: run, item: $0) }
+        }
+    }
+
+    var rejectedReviewItems: [AgentReviewItem] {
+        sortedRuns.flatMap { run in
+            run.changeItems
+                .filter { $0.status == .rejected || $0.status == .applyFailed }
                 .map { AgentReviewItem(run: run, item: $0) }
         }
     }
@@ -191,6 +303,7 @@ final class AgentThreadDetailViewModel: ObservableObject {
 
         do {
             let imported = try urls.map(Self.loadAttachment(from:))
+            try validateAttachmentBatch(imported)
             attachments.append(contentsOf: imported)
             actionError = nil
         } catch {
@@ -219,6 +332,7 @@ final class AgentThreadDetailViewModel: ObservableObject {
                 )
                 imported.append(ComposerAttachment(upload: upload))
             }
+            try validateAttachmentBatch(imported)
             attachments.append(contentsOf: imported)
             actionError = nil
         } catch {
@@ -281,6 +395,46 @@ final class AgentThreadDetailViewModel: ObservableObject {
 
     func reject(itemID: String) async {
         await updateReview(itemID: itemID, operation: client.rejectChange)
+    }
+
+    func reopen(itemID: String) async {
+        await updateReview(itemID: itemID, operation: client.reopenChange)
+    }
+
+    func renameThread(title: String) async -> Bool {
+        isMutatingThread = true
+        defer { isMutatingThread = false }
+        do {
+            let thread = try await client.renameThread(threadID, title)
+            threadTitle = thread.title
+            actionError = nil
+            return true
+        } catch {
+            actionError = error.localizedDescription
+            return false
+        }
+    }
+
+    func deleteThread() async -> Bool {
+        isMutatingThread = true
+        defer { isMutatingThread = false }
+        do {
+            try await client.deleteThread(threadID)
+            actionError = nil
+            return true
+        } catch {
+            actionError = error.localizedDescription
+            return false
+        }
+    }
+
+    func loadToolCall(id: String) async throws -> AgentToolCall {
+        try await client.loadToolCall(id)
+    }
+
+    func loadAttachment(_ attachment: AgentMessageAttachment) async throws -> AgentLoadedAttachment {
+        let resource = try await client.loadAttachment(attachment.id)
+        return try AgentLoadedAttachment(resource: resource)
     }
 
     private func updateReview(
@@ -404,6 +558,19 @@ final class AgentThreadDetailViewModel: ObservableObject {
         }
         return "image/jpeg"
     }
+
+    private func validateAttachmentBatch(_ incoming: [ComposerAttachment]) throws {
+        guard let attachmentLimits else { return }
+        let totalImageCount = (attachments + incoming).filter { $0.mimeType.hasPrefix("image/") }.count
+        if totalImageCount > attachmentLimits.maxImagesPerMessage {
+            throw AttachmentImportError.tooManyImages(limit: attachmentLimits.maxImagesPerMessage)
+        }
+        for attachment in incoming where attachment.mimeType.hasPrefix("image/") {
+            if attachment.upload.data.count > attachmentLimits.maxImageSizeBytes {
+                throw AttachmentImportError.imageTooLarge(limit: attachmentLimits.maxImageSizeBytes)
+            }
+        }
+    }
 }
 
 struct AgentRootView: View {
@@ -411,19 +578,32 @@ struct AgentRootView: View {
     let client: AgentFeatureClient
     @Binding private var deepLink: AppDeepLink?
 
+    @StateObject private var accessModel: AgentAccessViewModel
     @StateObject private var viewModel: AgentThreadListViewModel
     @State private var selectedThread: AgentThreadSummary?
+    @State private var renameTarget: AgentThreadSummary?
+    @State private var deleteTarget: AgentThreadSummary?
+    @State private var pendingDeepLinkThreadID: String?
 
-    init(configuration: AppConfiguration, client: AgentFeatureClient, deepLink: Binding<AppDeepLink?>) {
+    init(configuration: AppConfiguration, client: AgentFeatureClient, deepLink: Binding<AppDeepLink?>, apiClient: APIClient? = nil) {
         self.configuration = configuration
         self.client = client
         _deepLink = deepLink
+        _accessModel = StateObject(wrappedValue: AgentAccessViewModel(apiClient: apiClient ?? APIClient(baseURL: configuration.apiBaseURL)))
         _viewModel = StateObject(wrappedValue: AgentThreadListViewModel(client: client))
     }
 
     var body: some View {
         Group {
-            if viewModel.isLoading && viewModel.threads.isEmpty {
+            if accessModel.isLoading && accessModel.currentUser == nil {
+                ProgressView("Loading agent access…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemGroupedBackground))
+            } else if accessModel.isAdmin == false {
+                AgentAccessRequiredView(principalName: accessModel.currentUser?.name)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemGroupedBackground))
+            } else if viewModel.isLoading && viewModel.threads.isEmpty {
                 ProgressView("Loading threads…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.systemGroupedBackground))
@@ -461,6 +641,21 @@ struct AgentRootView: View {
                                 AgentThreadSummaryRow(thread: thread)
                             }
                             .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    deleteTarget = thread
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                            .swipeActions(edge: .leading) {
+                                Button {
+                                    renameTarget = thread
+                                } label: {
+                                    Label("Rename", systemImage: "pencil")
+                                }
+                                .tint(.indigo)
+                            }
                         }
                     }
 
@@ -469,47 +664,92 @@ struct AgentRootView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Label(configuration.environment.displayName, systemImage: "globe")
+                        if let limits = accessModel.attachmentLimits {
+                            Label("Images/message: \(limits.maxImagesPerMessage)", systemImage: "photo.stack")
+                            Label("Image bytes: \(limits.maxImageSizeBytes)", systemImage: "externaldrive")
+                        }
                     }
                 }
                 .listStyle(.insetGrouped)
                 .refreshable {
+                    await accessModel.reload()
                     await viewModel.reload()
                 }
             }
         }
         .task {
+            await accessModel.loadIfNeeded()
             await viewModel.loadIfNeeded()
+            resolvePendingDeepLink()
         }
         .onChange(of: deepLink) { _, newValue in
             guard case .agentThread(let id)? = newValue else { return }
-            if let matched = viewModel.threads.first(where: { $0.id == id }) {
-                selectedThread = matched
-                deepLink = nil
-            }
+            pendingDeepLinkThreadID = id
+            deepLink = nil
+            resolvePendingDeepLink()
+        }
+        .onChange(of: viewModel.threads) { _, _ in
+            resolvePendingDeepLink()
         }
         .navigationDestination(item: $selectedThread) { thread in
-            AgentThreadDetailView(thread: thread, client: client) {
+            AgentThreadDetailView(thread: thread, client: client, attachmentLimits: accessModel.attachmentLimits) {
                 Task {
                     await viewModel.reload()
                 }
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Task {
-                        selectedThread = await viewModel.createThread()
-                    }
-                } label: {
-                    if viewModel.isCreatingThread {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "plus.circle.fill")
-                    }
+        .sheet(item: $renameTarget) { thread in
+            AgentThreadRenameSheet(initialTitle: compactThreadTitle(thread.title)) { title in
+                let normalized = try validateThreadTitle(title)
+                let updated = await viewModel.renameThread(threadID: thread.id, title: normalized)
+                if let updated, selectedThread?.id == updated.id {
+                    selectedThread = updated
                 }
-                .accessibilityLabel("New thread")
-                .disabled(viewModel.isCreatingThread)
             }
+        }
+        .alert("Delete thread?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } })) {
+            Button("Delete", role: .destructive) {
+                guard let deleteTarget else { return }
+                Task {
+                    let deleted = await viewModel.deleteThread(threadID: deleteTarget.id)
+                    if deleted, selectedThread?.id == deleteTarget.id {
+                        selectedThread = nil
+                    }
+                    self.deleteTarget = nil
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                deleteTarget = nil
+            }
+        } message: {
+            Text("Threads with running runs cannot be deleted.")
+        }
+        .toolbar {
+            if accessModel.isAdmin {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task {
+                            selectedThread = await viewModel.createThread()
+                        }
+                    } label: {
+                        if viewModel.isCreatingThread {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                    }
+                    .accessibilityLabel("New thread")
+                    .disabled(viewModel.isCreatingThread)
+                }
+            }
+        }
+    }
+
+    private func resolvePendingDeepLink() {
+        guard let pendingDeepLinkThreadID else { return }
+        if let matched = viewModel.threads.first(where: { $0.id == pendingDeepLinkThreadID }) {
+            selectedThread = matched
+            self.pendingDeepLinkThreadID = nil
         }
     }
 }
@@ -523,20 +763,85 @@ private extension AgentThread {
 private struct AgentThreadDetailView: View {
     let thread: AgentThreadSummary
     let client: AgentFeatureClient
+    let attachmentLimits: AgentAttachmentLimits?
     let onThreadChanged: () -> Void
 
     @StateObject private var viewModel: AgentThreadDetailViewModel
     @State private var importedPhotoItems: [PhotosPickerItem] = []
     @State private var isFileImporterPresented = false
+    @State private var renamePresented = false
+    @State private var deleteConfirmationPresented = false
+    @State private var selectedToolCall: AgentToolCall?
+    @State private var selectedAttachment: AgentLoadedAttachment?
+    @Environment(\.dismiss) private var dismiss
 
-    init(thread: AgentThreadSummary, client: AgentFeatureClient, onThreadChanged: @escaping () -> Void) {
+    init(thread: AgentThreadSummary, client: AgentFeatureClient, attachmentLimits: AgentAttachmentLimits?, onThreadChanged: @escaping () -> Void) {
         self.thread = thread
         self.client = client
+        self.attachmentLimits = attachmentLimits
         self.onThreadChanged = onThreadChanged
-        _viewModel = StateObject(wrappedValue: AgentThreadDetailViewModel(thread: thread, client: client))
+        _viewModel = StateObject(wrappedValue: AgentThreadDetailViewModel(thread: thread, client: client, attachmentLimits: attachmentLimits))
     }
 
     var body: some View {
+        detailContent
+            .scrollDismissesKeyboard(.interactively)
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle(compactThreadTitle(viewModel.threadTitle ?? thread.title))
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) {
+                composerInset
+            }
+            .fileImporter(
+                isPresented: $isFileImporterPresented,
+                allowedContentTypes: [.pdf, .image],
+                allowsMultipleSelection: true,
+                onCompletion: handleFileImport
+            )
+            .onChange(of: importedPhotoItems) { _, newValue in
+                Task {
+                    await viewModel.importPhotoItems(newValue)
+                    importedPhotoItems = []
+                }
+            }
+            .task {
+                await viewModel.loadIfNeeded()
+            }
+            .refreshable {
+                await viewModel.reload()
+                onThreadChanged()
+            }
+            .sheet(isPresented: $renamePresented) {
+                renameSheet
+            }
+            .sheet(item: $selectedToolCall) { toolCall in
+                AgentToolCallSheet(toolCall: toolCall)
+            }
+            .sheet(item: $selectedAttachment) { attachment in
+                AgentAttachmentSheet(attachment: attachment)
+            }
+            .alert("Delete thread?", isPresented: $deleteConfirmationPresented) {
+                Button("Delete", role: .destructive) {
+                    Task {
+                        let deleted = await viewModel.deleteThread()
+                        if deleted {
+                            onThreadChanged()
+                            dismiss()
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Deleting a thread also removes its messages, runs, tool calls, and review history.")
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    threadMenu
+                }
+            }
+    }
+
+    private var detailContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 if let errorMessage = viewModel.errorMessage, viewModel.messages.isEmpty, viewModel.sortedRuns.isEmpty {
@@ -578,7 +883,16 @@ private struct AgentThreadDetailView: View {
                             currentContextTokens: viewModel.currentContextTokens,
                             liveReasoning: viewModel.liveReasoning,
                             liveText: viewModel.liveText,
-                            liveEvents: viewModel.liveEvents
+                            liveEvents: viewModel.liveEvents,
+                            onOpenToolCall: { toolCallID in
+                                Task {
+                                    do {
+                                        selectedToolCall = try await viewModel.loadToolCall(id: toolCallID)
+                                    } catch {
+                                        viewModel.actionError = error.localizedDescription
+                                    }
+                                }
+                            }
                         )
                     }
 
@@ -586,7 +900,15 @@ private struct AgentThreadDetailView: View {
                         AgentEmptyThreadCard()
                     } else {
                         ForEach(viewModel.messages, id: \.id) { message in
-                            AgentMessageCard(message: message)
+                            AgentMessageCard(message: message) { attachment in
+                                Task {
+                                    do {
+                                        selectedAttachment = try await viewModel.loadAttachment(attachment)
+                                    } catch {
+                                        viewModel.actionError = error.localizedDescription
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -610,6 +932,29 @@ private struct AgentThreadDetailView: View {
                                             await viewModel.reject(itemID: reviewItem.item.id)
                                             onThreadChanged()
                                         }
+                                    },
+                                    onReopen: nil
+                                )
+                            }
+                        }
+                    }
+
+                    if !viewModel.rejectedReviewItems.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Rejected or failed")
+                                .font(.headline)
+
+                            ForEach(viewModel.rejectedReviewItems) { reviewItem in
+                                AgentReviewCard(
+                                    reviewItem: reviewItem,
+                                    isBusy: viewModel.activeReviewItemID == reviewItem.item.id,
+                                    onApprove: {},
+                                    onReject: {},
+                                    onReopen: {
+                                        Task {
+                                            await viewModel.reopen(itemID: reviewItem.item.id)
+                                            onThreadChanged()
+                                        }
                                     }
                                 )
                             }
@@ -619,53 +964,61 @@ private struct AgentThreadDetailView: View {
             }
             .padding(20)
         }
-        .scrollDismissesKeyboard(.interactively)
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle(compactThreadTitle(viewModel.threadTitle ?? thread.title))
-        .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
-            AgentComposerBar(
-                text: $viewModel.composerText,
-                attachments: viewModel.attachments,
-                isBusy: viewModel.isSending || viewModel.isImportingAttachment,
-                actionError: viewModel.actionError,
-                canSend: viewModel.canSend,
-                importedPhotoItems: $importedPhotoItems,
-                isFileImporterPresented: $isFileImporterPresented,
-                onRemoveAttachment: viewModel.removeAttachment(id:),
-                onSend: {
-                    Task {
-                        onThreadChanged()
-                        await viewModel.sendMessage()
-                        onThreadChanged()
-                    }
+    }
+
+    private var composerInset: some View {
+        AgentComposerBar(
+            text: $viewModel.composerText,
+            attachments: viewModel.attachments,
+            isBusy: viewModel.isSending || viewModel.isImportingAttachment,
+            actionError: viewModel.actionError,
+            canSend: viewModel.canSend,
+            maxImageSelectionCount: attachmentLimits?.maxImagesPerMessage ?? 6,
+            importedPhotoItems: $importedPhotoItems,
+            isFileImporterPresented: $isFileImporterPresented,
+            onRemoveAttachment: viewModel.removeAttachment(id:),
+            onSend: {
+                Task {
+                    onThreadChanged()
+                    await viewModel.sendMessage()
+                    onThreadChanged()
                 }
-            )
-        }
-        .fileImporter(
-            isPresented: $isFileImporterPresented,
-            allowedContentTypes: [.pdf, .image],
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls):
-                Task { await viewModel.importFileURLs(urls) }
-            case .failure(let error):
-                viewModel.actionError = error.localizedDescription
+            }
+        )
+    }
+
+    private var renameSheet: some View {
+        AgentThreadRenameSheet(initialTitle: viewModel.threadTitle ?? thread.title ?? "") { title in
+            let renamed = await viewModel.renameThread(title: title)
+            if renamed {
+                onThreadChanged()
             }
         }
-        .onChange(of: importedPhotoItems) { _, newValue in
-            Task {
-                await viewModel.importPhotoItems(newValue)
-                importedPhotoItems = []
+    }
+
+    private var threadMenu: some View {
+        Menu {
+            Button("Rename thread") {
+                renamePresented = true
+            }
+            Button("Delete thread", role: .destructive) {
+                deleteConfirmationPresented = true
+            }
+        } label: {
+            if viewModel.isMutatingThread {
+                ProgressView()
+            } else {
+                Image(systemName: "ellipsis.circle")
             }
         }
-        .task {
-            await viewModel.loadIfNeeded()
-        }
-        .refreshable {
-            await viewModel.reload()
-            onThreadChanged()
+    }
+
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            Task { await viewModel.importFileURLs(urls) }
+        case .failure(let error):
+            viewModel.actionError = error.localizedDescription
         }
     }
 }
@@ -715,6 +1068,7 @@ private struct AgentThreadSummaryRow: View {
 
 private struct AgentMessageCard: View {
     let message: AgentMessage
+    let onOpenAttachment: (AgentMessageAttachment) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -741,11 +1095,16 @@ private struct AgentMessageCard: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(message.attachments, id: \.id) { attachment in
-                            Label(attachmentName(attachment), systemImage: attachment.mimeType == "application/pdf" ? "doc.richtext" : "photo")
-                                .font(.caption.weight(.medium))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Color.secondary.opacity(0.12), in: Capsule())
+                            Button {
+                                onOpenAttachment(attachment)
+                            } label: {
+                                Label(attachmentName(attachment), systemImage: attachment.mimeType == "application/pdf" ? "doc.richtext" : "photo")
+                                    .font(.caption.weight(.medium))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(Color.secondary.opacity(0.12), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -764,6 +1123,7 @@ private struct AgentRunStatusCard: View {
     let liveReasoning: String
     let liveText: String
     let liveEvents: [AgentRunEvent]
+    let onOpenToolCall: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -789,6 +1149,16 @@ private struct AgentRunStatusCard: View {
                     .foregroundStyle(.secondary)
             }
 
+            HStack(spacing: 12) {
+                Text("Surface: \(run.surface)")
+                Text("Reply: \(run.replySurface)")
+                if let totalCostUsd = run.totalCostUsd {
+                    Text(totalCostUsd.formatted(.currency(code: "USD")))
+                }
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+
             if !liveText.isEmpty {
                 Text(liveText)
                     .font(.body)
@@ -803,9 +1173,66 @@ private struct AgentRunStatusCard: View {
             if !liveEvents.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(liveEvents.suffix(4)), id: \.id) { event in
-                        Label(event.message ?? readableEventType(event.eventType), systemImage: "sparkle")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                        if let toolCallID = event.toolCallId {
+                            Button {
+                                onOpenToolCall(toolCallID)
+                            } label: {
+                                Label(event.message ?? readableEventType(event.eventType), systemImage: "sparkle")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Label(event.message ?? readableEventType(event.eventType), systemImage: "sparkle")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            if let terminalAssistantReply = run.terminalAssistantReply, !terminalAssistantReply.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Terminal reply")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(terminalAssistantReply)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !run.toolCalls.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Tool calls")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    ForEach(run.toolCalls, id: \.id) { toolCall in
+                        Button {
+                            onOpenToolCall(toolCall.id)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(toolCall.toolName)
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundStyle(.primary)
+                                    Text(toolCall.status.rawValue.uppercased())
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if toolCall.hasFullPayload {
+                                    Text("Open")
+                                        .font(.caption)
+                                        .foregroundStyle(.indigo)
+                                } else {
+                                    Text("Hydrate")
+                                        .font(.caption)
+                                        .foregroundStyle(.indigo)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -821,6 +1248,7 @@ private struct AgentReviewCard: View {
     let isBusy: Bool
     let onApprove: () -> Void
     let onReject: () -> Void
+    let onReopen: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -849,13 +1277,21 @@ private struct AgentReviewCard: View {
                 .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             HStack {
-                Button("Reject", action: onReject)
-                    .buttonStyle(.bordered)
-                    .tint(.red)
-                    .disabled(isBusy)
-                Button(isBusy ? "Approving…" : "Approve", action: onApprove)
+                if reviewItem.item.status == .pendingReview {
+                    Button("Reject", action: onReject)
+                        .buttonStyle(.bordered)
+                        .tint(.red)
+                        .disabled(isBusy)
+                    Button(isBusy ? "Approving…" : "Approve", action: onApprove)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isBusy)
+                } else if let onReopen {
+                    Button(isBusy ? "Reopening…" : "Reopen") {
+                        onReopen()
+                    }
                     .buttonStyle(.borderedProminent)
                     .disabled(isBusy)
+                }
                 Spacer()
                 Text("Run \(shortID(reviewItem.run.id))")
                     .font(.caption)
@@ -874,6 +1310,7 @@ private struct AgentComposerBar: View {
     let isBusy: Bool
     let actionError: String?
     let canSend: Bool
+    let maxImageSelectionCount: Int
     @Binding var importedPhotoItems: [PhotosPickerItem]
     @Binding var isFileImporterPresented: Bool
     let onRemoveAttachment: (UUID) -> Void
@@ -911,7 +1348,7 @@ private struct AgentComposerBar: View {
                 .disabled(isBusy)
 
             HStack(spacing: 12) {
-                PhotosPicker(selection: $importedPhotoItems, maxSelectionCount: 6, matching: .images) {
+                PhotosPicker(selection: $importedPhotoItems, maxSelectionCount: maxImageSelectionCount, matching: .images) {
                     Label("Photo", systemImage: "photo.on.rectangle")
                 }
                 .disabled(isBusy)
@@ -993,6 +1430,169 @@ private struct AgentEmptyThreadCard: View {
     }
 }
 
+private struct AgentAccessRequiredView: View {
+    let principalName: String?
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Agent access required", systemImage: "lock.fill")
+        } description: {
+            Text("\(principalName ?? "This principal") does not have admin access, so the agent thread and review routes stay unavailable.")
+        } actions: {
+            Link(destination: URL(string: "billhelper://settings")!) {
+                Label("Switch principal in Settings", systemImage: "gearshape")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+}
+
+private struct AgentThreadRenameSheet: View {
+    let initialTitle: String
+    let onSave: (String) async throws -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var errorMessage: String?
+    @State private var isSaving = false
+
+    init(initialTitle: String, onSave: @escaping (String) async throws -> Void) {
+        self.initialTitle = initialTitle
+        self.onSave = onSave
+        _title = State(initialValue: initialTitle)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Title") {
+                    TextField("1-5 words", text: $title)
+                    Text("\(title.trimmingCharacters(in: .whitespacesAndNewlines).count)/\(threadTitleMaxLength) characters")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let errorMessage {
+                    Section {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("Rename Thread")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Saving…" : "Save") {
+                        Task { await save() }
+                    }
+                    .disabled(isSaving)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            let normalized = try validateThreadTitle(title)
+            try await onSave(normalized)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct AgentToolCallSheet: View {
+    let toolCall: AgentToolCall
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Overview") {
+                    LabeledContent("Tool", value: toolCall.toolName)
+                    LabeledContent("Status", value: toolCall.status.rawValue.uppercased())
+                    LabeledContent("Queued", value: relativeTimestamp(toolCall.createdAt))
+                }
+
+                if let inputJson = toolCall.inputJson {
+                    Section("Input") {
+                        Text(prettyJSONPreview(inputJson))
+                            .font(.footnote.monospaced())
+                            .textSelection(.enabled)
+                    }
+                }
+
+                if let outputJson = toolCall.outputJson {
+                    Section("Output JSON") {
+                        Text(prettyJSONPreview(outputJson))
+                            .font(.footnote.monospaced())
+                            .textSelection(.enabled)
+                    }
+                }
+
+                if let outputText = toolCall.outputText, !outputText.isEmpty {
+                    Section("Output Text") {
+                        Text(outputText)
+                            .font(.footnote)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+            .navigationTitle(toolCall.toolName)
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+private struct AgentAttachmentSheet: View {
+    let attachment: AgentLoadedAttachment
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let image = attachment.image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    } else {
+                        Label("Preview unavailable", systemImage: attachment.resource.mimeType == "application/pdf" ? "doc.richtext" : "doc")
+                            .font(.headline)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(attachment.resource.fileName)
+                            .font(.headline)
+                        Text(attachment.resource.mimeType)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Text("\(attachment.resource.data.count) bytes")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    ShareLink(item: attachment.url) {
+                        Label("Download or share", systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(20)
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Attachment")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
 private struct AgentPill: View {
     let text: String
     let tint: Color
@@ -1022,13 +1622,41 @@ struct AgentReviewItem: Identifiable, Equatable {
     var id: String { item.id }
 }
 
+struct AgentLoadedAttachment: Identifiable, Equatable {
+    let id = UUID()
+    let resource: AgentAttachmentResource
+    let url: URL
+    let image: UIImage?
+
+    init(resource: AgentAttachmentResource) throws {
+        self.resource = resource
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("billhelper-agent-attachments", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let preferredName = resource.fileName.isEmpty ? UUID().uuidString : resource.fileName
+        let url = directory.appendingPathComponent(preferredName)
+        try resource.data.write(to: url, options: .atomic)
+        self.url = url
+        if resource.mimeType.hasPrefix("image/") {
+            image = UIImage(data: resource.data)
+        } else {
+            image = nil
+        }
+    }
+}
+
 private enum AttachmentImportError: LocalizedError {
     case unreadableAsset
+    case tooManyImages(limit: Int)
+    case imageTooLarge(limit: Int)
 
     var errorDescription: String? {
         switch self {
         case .unreadableAsset:
             return "One of the selected attachments could not be read."
+        case .tooManyImages(let limit):
+            return "You can attach at most \(limit) images per message."
+        case .imageTooLarge(let limit):
+            return "One of the selected images exceeds the \(limit)-byte size limit."
         }
     }
 }
@@ -1038,6 +1666,24 @@ extension AgentThreadSummary: Identifiable {}
 private func compactThreadTitle(_ title: String?) -> String {
     let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return trimmed.isEmpty ? "Untitled thread" : trimmed
+}
+
+private func validateThreadTitle(_ value: String) throws -> String {
+    let normalized = value
+        .split(whereSeparator: \.isWhitespace)
+        .map(String.init)
+        .joined(separator: " ")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !normalized.isEmpty else {
+        throw APIError.requestFailed(statusCode: 422, message: "thread title cannot be empty")
+    }
+    guard normalized.count <= threadTitleMaxLength else {
+        throw APIError.requestFailed(statusCode: 422, message: "thread title must be \(threadTitleMaxLength) characters or fewer")
+    }
+    guard normalized.split(separator: " ").count <= threadTitleMaxWords else {
+        throw APIError.requestFailed(statusCode: 422, message: "thread title must be \(threadTitleMaxWords) words or fewer")
+    }
+    return normalized
 }
 
 private func roleTitle(_ role: AgentMessageRole) -> String {
@@ -1207,6 +1853,16 @@ private func payloadPreview(_ payload: [String: JSONValue]) -> String {
     guard let data = try? JSONEncoder.billHelper.encode(payload),
           let text = String(data: data, encoding: .utf8) else {
         return "{}"
+    }
+    return text
+}
+
+private func prettyJSONPreview(_ payload: [String: JSONValue]) -> String {
+    guard let data = try? JSONEncoder.billHelper.encode(payload),
+          let object = try? JSONSerialization.jsonObject(with: data),
+          let prettyData = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted]),
+          let text = String(data: prettyData, encoding: .utf8) else {
+        return payloadPreview(payload)
     }
     return text
 }

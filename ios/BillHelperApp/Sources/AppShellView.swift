@@ -126,7 +126,8 @@ struct AppShellView: View {
                     AgentRootView(
                         configuration: composition.configuration,
                         client: .live(apiClient: composition.apiClient, transport: composition.agentRunTransport),
-                        deepLink: $pendingDeepLink
+                        deepLink: $pendingDeepLink,
+                        apiClient: composition.apiClient
                     )
                 }
             )

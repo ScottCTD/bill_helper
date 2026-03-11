@@ -348,12 +348,22 @@ cd /path/to/bill_helper/frontend
 npm run test
 ```
 
-iOS shell + API tests:
+iOS app tests:
 
 ```bash
 cd /path/to/bill_helper
 xcodebuild -project ios/BillHelperApp.xcodeproj -scheme BillHelperApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:BillHelperAPITests test
 ```
+
+Local iOS backend loop:
+
+```bash
+cd /path/to/bill_helper
+uv run uvicorn backend.main:create_app --factory --host 127.0.0.1 --port 48187 --reload
+```
+
+- optionally set `BILL_HELPER_API_BASE_URL=http://127.0.0.1:48187/api/v1` in the Xcode scheme to prefill onboarding
+- on first launch, enter the backend URL and principal name in the onboarding screen, then use Settings to switch principals or base URLs later
 
 Migration state:
 

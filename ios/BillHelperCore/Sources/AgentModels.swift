@@ -156,7 +156,7 @@ struct AgentMessage: Codable, Equatable, Sendable {
     let attachments: [AgentMessageAttachment]
 }
 
-struct AgentToolCall: Codable, Equatable, Sendable {
+struct AgentToolCall: Codable, Equatable, Identifiable, Sendable {
     let id: String
     let runId: String
     let llmToolCallId: String?

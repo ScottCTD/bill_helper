@@ -397,6 +397,15 @@
 				INFOPLIST_KEY_BILL_HELPER_API_BASE_URL = "http://localhost:8000/api/v1";
 				INFOPLIST_KEY_BILL_HELPER_APP_ENVIRONMENT = local;
 				INFOPLIST_KEY_CFBundleDisplayName = "Bill Helper";
+				INFOPLIST_KEY_CFBundleURLTypes = (
+					{
+						CFBundleTypeRole = Editor;
+						CFBundleURLName = com.billhelper.ios;
+						CFBundleURLSchemes = (
+							billhelper,
+						);
+					},
+				);
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -425,6 +434,15 @@
 				INFOPLIST_KEY_BILL_HELPER_API_BASE_URL = "http://localhost:8000/api/v1";
 				INFOPLIST_KEY_BILL_HELPER_APP_ENVIRONMENT = local;
 				INFOPLIST_KEY_CFBundleDisplayName = "Bill Helper";
+				INFOPLIST_KEY_CFBundleURLTypes = (
+					{
+						CFBundleTypeRole = Editor;
+						CFBundleURLName = com.billhelper.ios;
+						CFBundleURLSchemes = (
+							billhelper,
+						);
+					},
+				);
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;

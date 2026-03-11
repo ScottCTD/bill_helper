@@ -158,7 +158,7 @@ frontend/                 # React + Vite application
   src/features/agent/     # Agent workspace, timeline, and review feature
   src/features/           # Feature modules (agent, accounts, properties)
   src/pages/              # Route pages
-ios/                      # SwiftUI iOS MVP shell, shared mobile core, and API tests
+ios/                      # SwiftUI iPhone app shell, shared mobile core, and focused API/unit tests
 telegram/                 # PTB-based Telegram transport, package-local docs, entrypoints, and tests
 alembic/                  # Database migrations
 scripts/                  # Dev and seed scripts
