@@ -18,6 +18,9 @@
 		A1B2C3D40100000000000022 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000032 /* OnboardingView.swift */; };
 			D1E2F3A40100000000000001 /* AgentFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A40100000000000011 /* AgentFeature.swift */; };
 			D1E2F3A40100000000000002 /* AgentFeatureViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A40100000000000012 /* AgentFeatureViewModelTests.swift */; };
+			D1E2F3A40100000000000003 /* AgentMarkdownSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A40100000000000013 /* AgentMarkdownSupport.swift */; };
+			D1E2F3A40100000000000004 /* AgentSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A40100000000000014 /* AgentSupportViews.swift */; };
+			D1E2F3A40100000000000005 /* AgentTimelineSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A40100000000000015 /* AgentTimelineSupport.swift */; };
 			C1D2E3F40100000000000001 /* DashboardEntriesFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F40100000000000011 /* DashboardEntriesFeatures.swift */; };
 			C1D2E3F40100000000000002 /* DashboardEntriesFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F40100000000000012 /* DashboardEntriesFeatureTests.swift */; };
 			B1C2D3E40100000000000001 /* FinanceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000011 /* FinanceModels.swift */; };
@@ -37,6 +40,7 @@
 			B1C2D3E40100000000000035 /* APIClient+Finance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000025 /* APIClient+Finance.swift */; };
 			B1C2D3E40100000000000036 /* APIClient+Catalogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000026 /* APIClient+Catalogs.swift */; };
 			B1C2D3E40100000000000037 /* APIClient+AgentExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000027 /* APIClient+AgentExtensions.swift */; };
+			F1E2D3C40100000000000001 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = F1E2D3C40100000000000003 /* MarkdownUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +67,9 @@
 		A1B2C3D40100000000000032 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 			D1E2F3A40100000000000011 /* AgentFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFeature.swift; sourceTree = "<group>"; };
 			D1E2F3A40100000000000012 /* AgentFeatureViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFeatureViewModelTests.swift; sourceTree = "<group>"; };
+			D1E2F3A40100000000000013 /* AgentMarkdownSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMarkdownSupport.swift; sourceTree = "<group>"; };
+			D1E2F3A40100000000000014 /* AgentSupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSupportViews.swift; sourceTree = "<group>"; };
+			D1E2F3A40100000000000015 /* AgentTimelineSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTimelineSupport.swift; sourceTree = "<group>"; };
 			C1D2E3F40100000000000011 /* DashboardEntriesFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardEntriesFeatures.swift; sourceTree = "<group>"; };
 			C1D2E3F40100000000000012 /* DashboardEntriesFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardEntriesFeatureTests.swift; sourceTree = "<group>"; };
 			B1C2D3E40100000000000011 /* FinanceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceModels.swift; sourceTree = "<group>"; };
@@ -89,6 +96,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F1E2D3C40100000000000001 /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -194,6 +202,9 @@
 			isa = PBXGroup;
 			children = (
 					D1E2F3A40100000000000011 /* AgentFeature.swift */,
+					D1E2F3A40100000000000013 /* AgentMarkdownSupport.swift */,
+					D1E2F3A40100000000000014 /* AgentSupportViews.swift */,
+					D1E2F3A40100000000000015 /* AgentTimelineSupport.swift */,
 					C1D2E3F40100000000000011 /* DashboardEntriesFeatures.swift */,
 				A1B2C3D40100000000000014 /* PlaceholderFeatures.swift */,
 			);
@@ -237,6 +248,9 @@
 			dependencies = (
 			);
 			name = BillHelperApp;
+			packageProductDependencies = (
+				F1E2D3C40100000000000003 /* MarkdownUI */,
+			);
 			productName = BillHelperApp;
 			productReference = A1B2C3D40100000000000017 /* BillHelperApp.app */;
 			productType = "com.apple.product-type.application";
@@ -285,6 +299,9 @@
 				Base,
 			);
 			mainGroup = A1B2C3D40100000000000111;
+			packageReferences = (
+				F1E2D3C40100000000000002 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+			);
 			productRefGroup = A1B2C3D40100000000000116 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -317,6 +334,9 @@
 				A1B2C3D40100000000000021 /* AppState.swift in Sources */,
 				A1B2C3D40100000000000022 /* OnboardingView.swift in Sources */,
 					D1E2F3A40100000000000001 /* AgentFeature.swift in Sources */,
+					D1E2F3A40100000000000003 /* AgentMarkdownSupport.swift in Sources */,
+					D1E2F3A40100000000000004 /* AgentSupportViews.swift in Sources */,
+					D1E2F3A40100000000000005 /* AgentTimelineSupport.swift in Sources */,
 					C1D2E3F40100000000000001 /* DashboardEntriesFeatures.swift in Sources */,
 				A1B2C3D40100000000000004 /* PlaceholderFeatures.swift in Sources */,
 					B1C2D3E40100000000000001 /* FinanceModels.swift in Sources */,
@@ -359,6 +379,17 @@
 		};
 /* End PBXTargetDependency section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		F1E2D3C40100000000000002 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCBuildConfiguration section */
 		A1B2C3D40100000000000140 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -393,6 +424,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_BILL_HELPER_API_BASE_URL = "http://localhost:8000/api/v1";
 				INFOPLIST_KEY_BILL_HELPER_APP_ENVIRONMENT = local;
@@ -430,6 +462,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_BILL_HELPER_API_BASE_URL = "http://localhost:8000/api/v1";
 				INFOPLIST_KEY_BILL_HELPER_APP_ENVIRONMENT = local;
@@ -465,6 +498,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -486,6 +520,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -533,6 +568,14 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F1E2D3C40100000000000003 /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F1E2D3C40100000000000002 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A1B2C3D40100000000000110 /* Project object */;
 }

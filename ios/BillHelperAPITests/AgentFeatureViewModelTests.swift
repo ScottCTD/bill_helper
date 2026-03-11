@@ -7,20 +7,29 @@ final class AgentFeatureViewModelTests: XCTestCase {
         let message = makeMessage(
             id: "message-1",
             role: .assistant,
-            content: "**Bold** [link](https://example.com)"
+            content: "Hello\n- item one\n- item two\nAfter list"
         )
 
         let rendered = try XCTUnwrap(AssistantMessageMarkdownRenderer.renderedContent(for: message))
 
-        XCTAssertEqual(String(rendered.characters), "Bold link")
-        XCTAssertTrue(rendered.runs.contains { $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true })
-        XCTAssertTrue(rendered.runs.contains { $0.link == URL(string: "https://example.com")! })
+        XCTAssertEqual(rendered.markdown, "Hello\n\n- item one\n- item two\n\nAfter list")
+        XCTAssertEqual(rendered.fallbackText, "Hello\n- item one\n- item two\nAfter list")
     }
 
     func testAssistantMarkdownRendererLeavesUserMessagesAsPlainText() async {
         let message = makeMessage(id: "message-2", role: .user, content: "**Bold**")
 
         XCTAssertNil(AssistantMessageMarkdownRenderer.renderedContent(for: message))
+    }
+
+    func testAssistantMarkdownRendererFallsBackForUnsupportedControlCharacters() async {
+        let rendered = AssistantMessageMarkdownRenderer.renderedContent(
+            forMarkdown: "Bad\u{0000}markdown",
+            messageID: "message-bad"
+        )
+
+        XCTAssertNil(rendered.markdown)
+        XCTAssertEqual(rendered.fallbackText, "Bad\u{0000}markdown")
     }
 
     func testListViewModelLoadsThreadsAndCreatesNewThread() async {
@@ -119,7 +128,63 @@ final class AgentFeatureViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.messages.count, 2)
         XCTAssertEqual(viewModel.latestRun?.status, .completed)
         XCTAssertEqual(viewModel.composerText, "")
+        XCTAssertNil(viewModel.pendingUserMessage)
         XCTAssertNil(viewModel.actionError)
+    }
+
+    func testConversationStatePlacesAssistantRunBelowPersistedUserMessage() async {
+        let userMessage = makeMessage(id: "message-1", role: .user, content: "Hello")
+        let runningRun = makeRun(
+            id: "run-1",
+            status: .running,
+            assistantMessageID: nil,
+            changeItems: []
+        )
+
+        let state = AgentThreadConversationState(
+            messages: [userMessage],
+            runs: [runningRun],
+            activeRun: runningRun,
+            pendingUserMessage: nil,
+            liveReasoning: "Thinking about the receipt",
+            liveText: "",
+            liveEvents: [],
+            hydratedToolCallsByID: [:],
+            isSending: true
+        )
+
+        XCTAssertEqual(state.pendingRunsByUserMessageID["message-1"]?.first?.run.id, "run-1")
+        XCTAssertNil(state.pendingUserMessage)
+    }
+
+    func testConversationStateAttachesActiveRunToPendingUserMessageBeforePersistence() async {
+        let pendingUserMessage = PendingAgentComposerMessage(
+            threadID: "thread-1",
+            content: "Hello",
+            attachments: [],
+            createdAt: "2026-03-08T00:00:00Z"
+        )
+        let runningRun = makeRun(
+            id: "run-1",
+            status: .running,
+            assistantMessageID: nil,
+            changeItems: []
+        )
+
+        let state = AgentThreadConversationState(
+            messages: [],
+            runs: [runningRun],
+            activeRun: runningRun,
+            pendingUserMessage: pendingUserMessage,
+            liveReasoning: "Thinking…",
+            liveText: "",
+            liveEvents: [],
+            hydratedToolCallsByID: [:],
+            isSending: true
+        )
+
+        XCTAssertEqual(state.pendingUserRun?.run.id, "run-1")
+        XCTAssertFalse(state.showsPendingAssistantPlaceholder)
     }
 
     func testDetailViewModelApproveRemovesPendingReviewItem() async {
@@ -222,6 +287,48 @@ final class AgentFeatureViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.actionError)
     }
 
+    func testHydrateToolCallCachesLoadedPayload() async {
+        let toolCall = makeToolCall(id: "tool-1", hasFullPayload: true)
+        var loadCount = 0
+        let client = AgentFeatureClient(
+            listThreads: { [] },
+            createThread: { _ in fatalError("unused") },
+            renameThread: { _, _ in fatalError("unused") },
+            deleteThread: { _ in fatalError("unused") },
+            loadThread: { _ in
+                AgentThreadDetail(
+                    thread: self.makeThread(id: "thread-1", title: "Review"),
+                    messages: [],
+                    runs: [self.makeRun(id: "run-1", status: .running, assistantMessageID: nil, changeItems: [], toolCalls: [self.makeToolCall(id: "tool-1", hasFullPayload: false)])],
+                    configuredModelName: "gpt-5",
+                    currentContextTokens: nil
+                )
+            },
+            loadToolCall: { _ in
+                loadCount += 1
+                return toolCall
+            },
+            loadAttachment: { _ in fatalError("unused") },
+            startMessageRun: { _, _, _ in fatalError("unused") },
+            approveChange: { _ in fatalError("unused") },
+            rejectChange: { _ in fatalError("unused") },
+            reopenChange: { _ in fatalError("unused") }
+        )
+
+        let viewModel = AgentThreadDetailViewModel(thread: makeThreadSummary(id: "thread-1", title: "Review"), client: client, attachmentLimits: nil)
+        await viewModel.loadIfNeeded()
+
+        await viewModel.hydrateToolCallIfNeeded(id: "tool-1")
+        await viewModel.hydrateToolCallIfNeeded(id: "tool-1")
+
+        XCTAssertEqual(loadCount, 1)
+        XCTAssertEqual(viewModel.hydratedToolCallsByID["tool-1"], toolCall)
+    }
+
+    func testRelativeTimestampParsesNaiveFractionalTimestamp() async {
+        XCTAssertNotEqual(relativeTimestamp("2026-03-11T13:30:45.359741"), "2026-03-11T13:30:45.359741")
+    }
+
     private func makeThreadSummary(id: String, title: String?) -> AgentThreadSummary {
         AgentThreadSummary(
             id: id,
@@ -253,7 +360,9 @@ final class AgentFeatureViewModelTests: XCTestCase {
         id: String,
         status: AgentRunStatus,
         assistantMessageID: String?,
-        changeItems: [AgentChangeItem]
+        changeItems: [AgentChangeItem],
+        toolCalls: [AgentToolCall] = [],
+        events: [AgentRunEvent] = []
     ) -> AgentRun {
         AgentRun(
             id: id,
@@ -276,9 +385,26 @@ final class AgentFeatureViewModelTests: XCTestCase {
             errorText: nil,
             createdAt: "2026-03-08T00:00:00Z",
             completedAt: status.isTerminal ? "2026-03-08T00:00:10Z" : nil,
-            events: [],
-            toolCalls: [],
+            events: events,
+            toolCalls: toolCalls,
             changeItems: changeItems
+        )
+    }
+
+    private func makeToolCall(id: String, hasFullPayload: Bool) -> AgentToolCall {
+        AgentToolCall(
+            id: id,
+            runId: "run-1",
+            llmToolCallId: "llm-\(id)",
+            toolName: "rename_thread",
+            inputJson: hasFullPayload ? ["title": .string("March receipts")] : nil,
+            outputJson: hasFullPayload ? ["status": .string("ok")] : nil,
+            outputText: hasFullPayload ? "OK" : nil,
+            hasFullPayload: hasFullPayload,
+            status: .ok,
+            createdAt: "2026-03-08T00:00:00Z",
+            startedAt: "2026-03-08T00:00:01Z",
+            completedAt: "2026-03-08T00:00:02Z"
         )
     }
 

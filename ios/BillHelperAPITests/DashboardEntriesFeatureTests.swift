@@ -36,6 +36,25 @@ final class DashboardEntriesFeatureTests: XCTestCase {
         XCTAssertEqual(model.phase, .empty(dashboard))
     }
 
+    func testDashboardModelFallsBackToLatestAvailableMonthAndFilterGroup() async throws {
+        let dashboard = Self.sampleDashboard(expenseTotalMinor: 125_00, largestExpenses: [Self.sampleLargestExpense])
+        let client = makeClient(
+            responses: [
+                "/dashboard/timeline": try Self.encode(DashboardTimeline(months: ["2026-02", "2026-03"])),
+                "/dashboard": try Self.encode(dashboard),
+            ]
+        )
+        let model = DashboardScreenModel(apiClient: client)
+        model.selectedMonth = "2026-04"
+        model.selectedFilterGroupKey = "legacy-group"
+
+        await model.reload()
+
+        XCTAssertEqual(model.selectedMonth, "2026-03")
+        XCTAssertEqual(model.selectedFilterGroupKey, "groceries")
+        XCTAssertEqual(model.phase, .loaded(dashboard))
+    }
+
     func testEntriesModelLoadsItemsAndSupportingData() async throws {
         let response = EntryListResponse(items: [Self.sampleEntry], total: 1, limit: 50, offset: 0)
         let client = makeClient(
@@ -76,6 +95,69 @@ final class DashboardEntriesFeatureTests: XCTestCase {
         await model.reload()
 
         XCTAssertEqual(model.phase, .failed("Server unavailable"))
+    }
+
+    func testDashboardMonthPickerStateUsesSelectedMonthWhenTimelineIsEmpty() {
+        XCTAssertEqual(
+            DashboardMonthPickerState.availableMonths(timelineMonths: [], selectedMonth: "2026-03"),
+            ["2026-03"]
+        )
+        XCTAssertEqual(
+            DashboardMonthPickerState.availableMonths(timelineMonths: ["2026-02", "2026-03"], selectedMonth: "2026-03"),
+            ["2026-02", "2026-03"]
+        )
+    }
+
+    func testEntryTagSelectionNormalizesAndDeduplicatesValues() {
+        XCTAssertEqual(
+            EntryTagSelection.normalize([" Groceries ", "groceries", "TRAVEL", "", "travel "]),
+            ["groceries", "travel"]
+        )
+    }
+
+    func testEntryTagSelectionToggleAndRemoveAreStable() {
+        let toggled = EntryTagSelection.toggle("Groceries", in: ["travel"])
+        XCTAssertEqual(toggled, ["travel", "groceries"])
+        XCTAssertEqual(EntryTagSelection.toggle("travel", in: toggled), ["groceries"])
+        XCTAssertEqual(EntryTagSelection.remove("groceries", from: toggled), ["travel"])
+    }
+
+    func testEntryTagSelectionFilteredOptionsIncludeSelectedCustomTags() {
+        let options = EntryTagSelection.filteredOptions(
+            tags: [Self.sampleTag],
+            selected: ["travel", "groceries"],
+            query: "tr"
+        )
+
+        XCTAssertEqual(options, [EntryDisplayedTag(key: "travel", name: "travel", color: nil)])
+    }
+
+    func testEntryTagSelectionCreatableTagOnlyAppearsForUnknownValue() {
+        XCTAssertEqual(
+            EntryTagSelection.creatableTagName(
+                tags: [Self.sampleTag],
+                selected: ["travel"],
+                query: " dining ",
+                allowCreate: true
+            ),
+            "dining"
+        )
+        XCTAssertNil(
+            EntryTagSelection.creatableTagName(
+                tags: [Self.sampleTag],
+                selected: ["travel"],
+                query: "groceries",
+                allowCreate: true
+            )
+        )
+        XCTAssertNil(
+            EntryTagSelection.creatableTagName(
+                tags: [Self.sampleTag],
+                selected: ["travel"],
+                query: "travel",
+                allowCreate: true
+            )
+        )
     }
 
     private func makeClient(

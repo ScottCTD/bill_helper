@@ -7,9 +7,9 @@ Start with `../README.md` for the current shipped iOS app summary and `ios/` fol
 ## Files
 
 - `app-shell-and-session.md`: onboarding, session persistence, tab shell, and deep-link routing.
-- `dashboard-entries.md`: dashboard month/filter UX plus entries list/detail/editor behavior.
+- `dashboard-entries.md`: dashboard month/filter UX, long-form analytics cards, and entries list/detail/editor behavior.
 - `manage-and-settings.md`: management workspaces, permissions, runtime settings editor, and diagnostics.
-- `agent.md`: thread list/detail/composer, tool-call inspection, attachments, and review flows.
+- `agent.md`: thread list/detail/composer, inline assistant activity timeline, markdown rendering, tool-call inspection, attachments, and review flows.
 
 ## Scope
 

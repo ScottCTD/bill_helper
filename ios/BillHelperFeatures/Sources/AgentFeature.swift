@@ -2,11 +2,14 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
-import os
 
-private let agentMessageMarkdownLogger = Logger(subsystem: "com.billhelper.ios", category: "AgentMessageMarkdown")
 private let threadTitleMaxLength = 80
 private let threadTitleMaxWords = 5
+
+struct AgentScrollRequest: Equatable {
+    let id = UUID()
+    let force: Bool
+}
 
 struct AgentAttachmentLimits: Equatable {
     let maxImageSizeBytes: Int
@@ -209,6 +212,10 @@ final class AgentThreadDetailViewModel: ObservableObject {
     @Published private(set) var liveText = ""
     @Published private(set) var liveEvents: [AgentRunEvent] = []
     @Published private(set) var activeRun: AgentRun?
+    @Published private(set) var hydratingToolCallIDs: Set<String> = []
+    @Published private(set) var hydratedToolCallsByID: [String: AgentToolCall] = [:]
+    @Published private(set) var pendingUserMessage: PendingAgentComposerMessage?
+    @Published private(set) var scrollRequest = AgentScrollRequest(force: false)
     @Published private(set) var errorMessage: String?
     @Published var actionError: String?
     @Published var composerText = ""
@@ -265,6 +272,20 @@ final class AgentThreadDetailViewModel: ObservableObject {
 
     var latestRun: AgentRun? {
         sortedRuns.last
+    }
+
+    var conversationState: AgentThreadConversationState {
+        AgentThreadConversationState(
+            messages: messages,
+            runs: sortedRuns,
+            activeRun: activeRun,
+            pendingUserMessage: pendingUserMessage,
+            liveReasoning: liveReasoning,
+            liveText: liveText,
+            liveEvents: liveEvents,
+            hydratedToolCallsByID: hydratedToolCallsByID,
+            isSending: isSending
+        )
     }
 
     var reviewStatusText: String? {
@@ -350,6 +371,12 @@ final class AgentThreadDetailViewModel: ObservableObject {
         let draftAttachments = attachments
         guard !draftText.isEmpty || !draftAttachments.isEmpty else { return }
 
+        pendingUserMessage = PendingAgentComposerMessage(
+            threadID: threadID,
+            content: draftText,
+            attachments: draftAttachments,
+            createdAt: Self.currentTimestamp()
+        )
         composerText = ""
         attachments = []
         isSending = true
@@ -359,6 +386,7 @@ final class AgentThreadDetailViewModel: ObservableObject {
         liveText = ""
         liveEvents = []
         activeRun = nil
+        requestScroll(force: true)
 
         defer {
             isSending = false
@@ -385,6 +413,7 @@ final class AgentThreadDetailViewModel: ObservableObject {
         } catch {
             composerText = draftText
             attachments = draftAttachments
+            pendingUserMessage = nil
             actionError = error.localizedDescription
         }
     }
@@ -429,12 +458,37 @@ final class AgentThreadDetailViewModel: ObservableObject {
     }
 
     func loadToolCall(id: String) async throws -> AgentToolCall {
-        try await client.loadToolCall(id)
+        if let hydrated = hydratedToolCallsByID[id] {
+            return hydrated
+        }
+        let toolCall = try await client.loadToolCall(id)
+        hydratedToolCallsByID[id] = toolCall
+        return toolCall
     }
 
     func loadAttachment(_ attachment: AgentMessageAttachment) async throws -> AgentLoadedAttachment {
         let resource = try await client.loadAttachment(attachment.id)
         return try AgentLoadedAttachment(resource: resource)
+    }
+
+    func hydrateToolCallIfNeeded(id: String) async {
+        if hydratingToolCallIDs.contains(id) {
+            return
+        }
+        if hydratedToolCallsByID[id]?.hasFullPayload == true {
+            return
+        }
+
+        hydratingToolCallIDs.insert(id)
+        defer { hydratingToolCallIDs.remove(id) }
+
+        do {
+            let toolCall = try await client.loadToolCall(id)
+            hydratedToolCallsByID[id] = toolCall
+            actionError = nil
+        } catch {
+            actionError = error.localizedDescription
+        }
     }
 
     private func updateReview(
@@ -463,6 +517,8 @@ final class AgentThreadDetailViewModel: ObservableObject {
             currentContextTokens = detail.currentContextTokens
             errorMessage = nil
             hasLoaded = true
+            clearPendingUserMessageIfReconciled()
+            requestScroll(force: false)
             if clearTransientError {
                 actionError = nil
             }
@@ -476,6 +532,7 @@ final class AgentThreadDetailViewModel: ObservableObject {
         case .snapshot(let run):
             activeRun = run
             upsertRun(run)
+            clearPendingUserMessageIfReconciled()
         case .event(let event):
             switch event {
             case .reasoningDelta(_, let delta):
@@ -488,6 +545,7 @@ final class AgentThreadDetailViewModel: ObservableObject {
                 }
             }
         }
+        requestScroll(force: false)
     }
 
     private func upsertRun(_ run: AgentRun) {
@@ -532,6 +590,31 @@ final class AgentThreadDetailViewModel: ObservableObject {
             toolCalls: run.toolCalls,
             changeItems: items
         )
+    }
+
+    private func clearPendingUserMessageIfReconciled() {
+        guard let pendingUserMessage else { return }
+
+        if let activeRun, messages.contains(where: { $0.id == activeRun.userMessageId }) {
+            self.pendingUserMessage = nil
+            return
+        }
+
+        if messages.contains(where: {
+            $0.role == .user
+                && $0.attachments.count == pendingUserMessage.attachments.count
+                && $0.contentMarkdown.trimmingCharacters(in: .whitespacesAndNewlines) == pendingUserMessage.content
+        }) {
+            self.pendingUserMessage = nil
+        }
+    }
+
+    private func requestScroll(force: Bool) {
+        scrollRequest = AgentScrollRequest(force: force)
+    }
+
+    private static func currentTimestamp() -> String {
+        AgentDateFormatters.fractionalISO8601.string(from: Date())
     }
 
     private static func loadAttachment(from url: URL) throws -> ComposerAttachment {
@@ -773,7 +856,10 @@ private struct AgentThreadDetailView: View {
     @State private var deleteConfirmationPresented = false
     @State private var selectedToolCall: AgentToolCall?
     @State private var selectedAttachment: AgentLoadedAttachment?
+    @State private var isScrolledAwayFromBottom = false
     @Environment(\.dismiss) private var dismiss
+
+    private let bottomAnchorID = "agent-thread-bottom-anchor"
 
     init(thread: AgentThreadSummary, client: AgentFeatureClient, attachmentLimits: AgentAttachmentLimits?, onThreadChanged: @escaping () -> Void) {
         self.thread = thread
@@ -784,65 +870,78 @@ private struct AgentThreadDetailView: View {
     }
 
     var body: some View {
-        detailContent
-            .scrollDismissesKeyboard(.interactively)
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle(compactThreadTitle(viewModel.threadTitle ?? thread.title))
-            .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom) {
-                composerInset
-            }
-            .fileImporter(
-                isPresented: $isFileImporterPresented,
-                allowedContentTypes: [.pdf, .image],
-                allowsMultipleSelection: true,
-                onCompletion: handleFileImport
-            )
-            .onChange(of: importedPhotoItems) { _, newValue in
-                Task {
-                    await viewModel.importPhotoItems(newValue)
-                    importedPhotoItems = []
+        ScrollViewReader { proxy in
+            detailContent(scrollProxy: proxy)
+                .onAppear {
+                    scrollToBottom(with: proxy, animated: false)
                 }
+                .onChange(of: viewModel.scrollRequest) { _, request in
+                    guard request.force || !isScrolledAwayFromBottom else { return }
+                    scrollToBottom(with: proxy, animated: true)
+                }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle(compactThreadTitle(viewModel.threadTitle ?? thread.title))
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            composerInset
+        }
+        .fileImporter(
+            isPresented: $isFileImporterPresented,
+            allowedContentTypes: [.pdf, .image],
+            allowsMultipleSelection: true,
+            onCompletion: handleFileImport
+        )
+        .onChange(of: importedPhotoItems) { _, newValue in
+            Task {
+                await viewModel.importPhotoItems(newValue)
+                importedPhotoItems = []
             }
-            .task {
-                await viewModel.loadIfNeeded()
-            }
-            .refreshable {
-                await viewModel.reload()
-                onThreadChanged()
-            }
-            .sheet(isPresented: $renamePresented) {
-                renameSheet
-            }
-            .sheet(item: $selectedToolCall) { toolCall in
-                AgentToolCallSheet(toolCall: toolCall)
-            }
-            .sheet(item: $selectedAttachment) { attachment in
-                AgentAttachmentSheet(attachment: attachment)
-            }
-            .alert("Delete thread?", isPresented: $deleteConfirmationPresented) {
-                Button("Delete", role: .destructive) {
-                    Task {
-                        let deleted = await viewModel.deleteThread()
-                        if deleted {
-                            onThreadChanged()
-                            dismiss()
-                        }
+        }
+        .task {
+            await viewModel.loadIfNeeded()
+        }
+        .refreshable {
+            await viewModel.reload()
+            onThreadChanged()
+        }
+        .sheet(isPresented: $renamePresented) {
+            renameSheet
+        }
+        .sheet(item: $selectedToolCall) { toolCall in
+            AgentToolCallSheet(toolCall: toolCall)
+        }
+        .sheet(item: $selectedAttachment) { attachment in
+            AgentAttachmentSheet(attachment: attachment)
+        }
+        .alert("Delete thread?", isPresented: $deleteConfirmationPresented) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    let deleted = await viewModel.deleteThread()
+                    if deleted {
+                        AgentFeedback.warning()
+                        onThreadChanged()
+                        dismiss()
                     }
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Deleting a thread also removes its messages, runs, tool calls, and review history.")
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    threadMenu
-                }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Deleting a thread also removes its messages, runs, tool calls, and review history.")
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                threadMenu
             }
+        }
     }
 
-    private var detailContent: some View {
-        ScrollView {
+    private func detailContent(scrollProxy: ScrollViewProxy) -> some View {
+        let conversationState = viewModel.conversationState
+        let detachedRuns = conversationState.detachedRuns.filter { $0.id != conversationState.pendingUserRun?.id }
+
+        return ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 if let errorMessage = viewModel.errorMessage, viewModel.messages.isEmpty, viewModel.sortedRuns.isEmpty {
                     ContentUnavailableView {
@@ -876,39 +975,62 @@ private struct AgentThreadDetailView: View {
                         )
                     }
 
-                    if let latestRun = viewModel.latestRun {
-                        AgentRunStatusCard(
-                            run: latestRun,
-                            configuredModelName: viewModel.configuredModelName,
-                            currentContextTokens: viewModel.currentContextTokens,
-                            liveReasoning: viewModel.liveReasoning,
-                            liveText: viewModel.liveText,
-                            liveEvents: viewModel.liveEvents,
-                            onOpenToolCall: { toolCallID in
-                                Task {
-                                    do {
-                                        selectedToolCall = try await viewModel.loadToolCall(id: toolCallID)
-                                    } catch {
-                                        viewModel.actionError = error.localizedDescription
-                                    }
-                                }
-                            }
-                        )
-                    }
-
-                    if viewModel.messages.isEmpty && viewModel.sortedRuns.isEmpty {
+                    if viewModel.messages.isEmpty && viewModel.sortedRuns.isEmpty && conversationState.pendingUserMessage == nil {
                         AgentEmptyThreadCard()
                     } else {
                         ForEach(viewModel.messages, id: \.id) { message in
-                            AgentMessageCard(message: message) { attachment in
-                                Task {
-                                    do {
-                                        selectedAttachment = try await viewModel.loadAttachment(attachment)
-                                    } catch {
-                                        viewModel.actionError = error.localizedDescription
-                                    }
+                            AgentMessageCard(
+                                message: message,
+                                associatedRuns: conversationState.runsByAssistantMessageID[message.id] ?? [],
+                                hydratingToolCallIDs: viewModel.hydratingToolCallIDs,
+                                onHydrateToolCall: hydrateToolCall,
+                                onOpenToolCall: openToolCall,
+                                onOpenAttachment: openAttachment
+                            )
+
+                            if message.role == .user {
+                                ForEach(conversationState.pendingRunsByUserMessageID[message.id] ?? []) { presentedRun in
+                                    AgentPendingAssistantBubble(
+                                        run: presentedRun,
+                                        timestamp: presentedRun.run.createdAt,
+                                        hydratingToolCallIDs: viewModel.hydratingToolCallIDs,
+                                        onHydrateToolCall: hydrateToolCall,
+                                        onOpenToolCall: openToolCall
+                                    )
                                 }
                             }
+                        }
+
+                        if let pendingUserMessage = conversationState.pendingUserMessage {
+                            AgentPendingUserMessageCard(message: pendingUserMessage)
+
+                            if let pendingRun = conversationState.pendingUserRun {
+                                AgentPendingAssistantBubble(
+                                    run: pendingRun,
+                                    timestamp: pendingRun.run.createdAt,
+                                    hydratingToolCallIDs: viewModel.hydratingToolCallIDs,
+                                    onHydrateToolCall: hydrateToolCall,
+                                    onOpenToolCall: openToolCall
+                                )
+                            } else if conversationState.showsPendingAssistantPlaceholder {
+                                AgentPendingAssistantBubble(
+                                    run: nil,
+                                    timestamp: pendingUserMessage.createdAt,
+                                    hydratingToolCallIDs: viewModel.hydratingToolCallIDs,
+                                    onHydrateToolCall: hydrateToolCall,
+                                    onOpenToolCall: openToolCall
+                                )
+                            }
+                        }
+
+                        ForEach(detachedRuns) { presentedRun in
+                            AgentPendingAssistantBubble(
+                                run: presentedRun,
+                                timestamp: presentedRun.run.createdAt,
+                                hydratingToolCallIDs: viewModel.hydratingToolCallIDs,
+                                onHydrateToolCall: hydrateToolCall,
+                                onOpenToolCall: openToolCall
+                            )
                         }
                     }
 
@@ -961,8 +1083,34 @@ private struct AgentThreadDetailView: View {
                         }
                     }
                 }
+
+                Color.clear
+                    .frame(height: 1)
+                    .id(bottomAnchorID)
             }
             .padding(20)
+        }
+        .onScrollGeometryChange(for: Bool.self, of: { geometry in
+            geometry.contentOffset.y + geometry.containerSize.height < geometry.contentSize.height - 160
+        }) { _, newValue in
+            isScrolledAwayFromBottom = newValue
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if isScrolledAwayFromBottom {
+                Button {
+                    scrollToBottom(with: scrollProxy, animated: true)
+                } label: {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.indigo)
+                        .padding(12)
+                        .background(.thinMaterial, in: Circle())
+                }
+                .padding(.trailing, 18)
+                .padding(.bottom, 18)
+                .accessibilityLabel("Scroll to latest message")
+            }
         }
     }
 
@@ -991,6 +1139,7 @@ private struct AgentThreadDetailView: View {
         AgentThreadRenameSheet(initialTitle: viewModel.threadTitle ?? thread.title ?? "") { title in
             let renamed = await viewModel.renameThread(title: title)
             if renamed {
+                AgentFeedback.success()
                 onThreadChanged()
             }
         }
@@ -1021,6 +1170,49 @@ private struct AgentThreadDetailView: View {
             viewModel.actionError = error.localizedDescription
         }
     }
+
+    private func openToolCall(_ toolCallID: String) {
+        Task {
+            do {
+                selectedToolCall = try await viewModel.loadToolCall(id: toolCallID)
+            } catch {
+                viewModel.actionError = error.localizedDescription
+                AgentFeedback.error()
+            }
+        }
+    }
+
+    private func hydrateToolCall(_ toolCallID: String) {
+        Task {
+            await viewModel.hydrateToolCallIfNeeded(id: toolCallID)
+        }
+    }
+
+    private func openAttachment(_ attachment: AgentMessageAttachment) {
+        Task {
+            do {
+                selectedAttachment = try await viewModel.loadAttachment(attachment)
+            } catch {
+                viewModel.actionError = error.localizedDescription
+                AgentFeedback.error()
+            }
+        }
+    }
+
+    private func scrollToBottom(with proxy: ScrollViewProxy, animated: Bool) {
+        let action = {
+            proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+            isScrolledAwayFromBottom = false
+        }
+
+        if animated {
+            withAnimation(.snappy(duration: 0.24)) {
+                action()
+            }
+        } else {
+            action()
+        }
+    }
 }
 
 private struct AgentThreadSummaryRow: View {
@@ -1037,7 +1229,7 @@ private struct AgentThreadSummaryRow: View {
                         .controlSize(.small)
                 }
                 Spacer()
-                Text(relativeTimestamp(thread.updatedAt))
+                Text(agentRelativeTimestamp(thread.updatedAt))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1068,6 +1260,10 @@ private struct AgentThreadSummaryRow: View {
 
 private struct AgentMessageCard: View {
     let message: AgentMessage
+    let associatedRuns: [AgentPresentedRun]
+    let hydratingToolCallIDs: Set<String>
+    let onHydrateToolCall: (String) -> Void
+    let onOpenToolCall: (String) -> Void
     let onOpenAttachment: (AgentMessageAttachment) -> Void
 
     var body: some View {
@@ -1076,14 +1272,25 @@ private struct AgentMessageCard: View {
                 Label(roleTitle(message.role), systemImage: roleSymbol(message.role))
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                Text(relativeTimestamp(message.createdAt))
+                Text(agentRelativeTimestamp(message.createdAt))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
+            if message.role == .assistant {
+                ForEach(associatedRuns) { presentedRun in
+                    AgentRunActivityBlock(
+                        presentedRun: presentedRun,
+                        hydratingToolCallIDs: hydratingToolCallIDs,
+                        onHydrateToolCall: onHydrateToolCall,
+                        onOpenToolCall: onOpenToolCall
+                    )
+                }
+            }
+
             Group {
                 if let renderedContent = AssistantMessageMarkdownRenderer.renderedContent(for: message) {
-                    Text(renderedContent)
+                    AgentMarkdownText(rendered: renderedContent)
                 } else {
                     Text(messageContent(message))
                 }
@@ -1112,134 +1319,7 @@ private struct AgentMessageCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(backgroundColor(message.role), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-}
-
-private struct AgentRunStatusCard: View {
-    let run: AgentRun
-    let configuredModelName: String
-    let currentContextTokens: Int?
-    let liveReasoning: String
-    let liveText: String
-    let liveEvents: [AgentRunEvent]
-    let onOpenToolCall: (String) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                AgentPill(text: runStatusText(run.status), tint: runStatusTint(run.status))
-                Text((run.modelName.isEmpty ? configuredModelName : run.modelName).isEmpty ? "Agent" : (run.modelName.isEmpty ? configuredModelName : run.modelName))
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text(relativeTimestamp(run.createdAt))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let errorText = run.errorText, !errorText.isEmpty {
-                Text(errorText)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-            }
-
-            if let currentContextTokens {
-                Text("Context tokens: \(currentContextTokens)")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack(spacing: 12) {
-                Text("Surface: \(run.surface)")
-                Text("Reply: \(run.replySurface)")
-                if let totalCostUsd = run.totalCostUsd {
-                    Text(totalCostUsd.formatted(.currency(code: "USD")))
-                }
-            }
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-
-            if !liveText.isEmpty {
-                Text(liveText)
-                    .font(.body)
-            }
-
-            if !liveReasoning.isEmpty {
-                Text(liveReasoning)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            if !liveEvents.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(liveEvents.suffix(4)), id: \.id) { event in
-                        if let toolCallID = event.toolCallId {
-                            Button {
-                                onOpenToolCall(toolCallID)
-                            } label: {
-                                Label(event.message ?? readableEventType(event.eventType), systemImage: "sparkle")
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            Label(event.message ?? readableEventType(event.eventType), systemImage: "sparkle")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-
-            if let terminalAssistantReply = run.terminalAssistantReply, !terminalAssistantReply.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Terminal reply")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text(terminalAssistantReply)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if !run.toolCalls.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Tool calls")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    ForEach(run.toolCalls, id: \.id) { toolCall in
-                        Button {
-                            onOpenToolCall(toolCall.id)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(toolCall.toolName)
-                                        .font(.footnote.weight(.semibold))
-                                        .foregroundStyle(.primary)
-                                    Text(toolCall.status.rawValue.uppercased())
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if toolCall.hasFullPayload {
-                                    Text("Open")
-                                        .font(.caption)
-                                        .foregroundStyle(.indigo)
-                                } else {
-                                    Text("Hydrate")
-                                        .font(.caption)
-                                        .foregroundStyle(.indigo)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.indigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(agentBubbleBackgroundColor(for: message.role), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
 
@@ -1255,7 +1335,7 @@ private struct AgentReviewCard: View {
             HStack {
                 AgentPill(text: changeTypeLabel(reviewItem.item.changeType), tint: .orange)
                 Spacer()
-                Text(relativeTimestamp(reviewItem.item.createdAt))
+                Text(agentRelativeTimestamp(reviewItem.item.createdAt))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1301,117 +1381,6 @@ private struct AgentReviewCard: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-}
-
-private struct AgentComposerBar: View {
-    @Binding var text: String
-    let attachments: [ComposerAttachment]
-    let isBusy: Bool
-    let actionError: String?
-    let canSend: Bool
-    let maxImageSelectionCount: Int
-    @Binding var importedPhotoItems: [PhotosPickerItem]
-    @Binding var isFileImporterPresented: Bool
-    let onRemoveAttachment: (UUID) -> Void
-    let onSend: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if !attachments.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(attachments) { attachment in
-                            HStack(spacing: 6) {
-                                Label(attachment.filename, systemImage: attachment.mimeType == "application/pdf" ? "doc" : "photo")
-                                    .lineLimit(1)
-                                Button {
-                                    onRemoveAttachment(attachment.id)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(isBusy)
-                            }
-                            .font(.caption.weight(.medium))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.secondary.opacity(0.12), in: Capsule())
-                        }
-                    }
-                }
-            }
-
-            TextField("Ask the agent to review an invoice or receipt…", text: $text, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(1 ... 4)
-                .disabled(isBusy)
-
-            HStack(spacing: 12) {
-                PhotosPicker(selection: $importedPhotoItems, maxSelectionCount: maxImageSelectionCount, matching: .images) {
-                    Label("Photo", systemImage: "photo.on.rectangle")
-                }
-                .disabled(isBusy)
-
-                Button {
-                    isFileImporterPresented = true
-                } label: {
-                    Label("PDF / File", systemImage: "doc.badge.plus")
-                }
-                .disabled(isBusy)
-
-                Spacer()
-
-                Button(action: onSend) {
-                    Label(isBusy ? "Sending" : "Send", systemImage: "arrow.up.circle.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!canSend)
-            }
-            .font(.subheadline.weight(.medium))
-
-            if let actionError, !actionError.isEmpty {
-                Label(actionError, systemImage: "exclamationmark.triangle.fill")
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-            }
-        }
-        .padding(16)
-        .background(.regularMaterial)
-        .overlay(alignment: .top) {
-            Divider()
-        }
-    }
-}
-
-private struct AgentInfoCard: View {
-    let title: String
-    let message: String
-    let symbol: String
-    let tint: Color
-    let showsProgress: Bool
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            if showsProgress {
-                ProgressView()
-                    .tint(tint)
-            } else {
-                Image(systemName: symbol)
-                    .foregroundStyle(tint)
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.headline)
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
@@ -1509,104 +1478,6 @@ private struct AgentThreadRenameSheet: View {
     }
 }
 
-private struct AgentToolCallSheet: View {
-    let toolCall: AgentToolCall
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("Overview") {
-                    LabeledContent("Tool", value: toolCall.toolName)
-                    LabeledContent("Status", value: toolCall.status.rawValue.uppercased())
-                    LabeledContent("Queued", value: relativeTimestamp(toolCall.createdAt))
-                }
-
-                if let inputJson = toolCall.inputJson {
-                    Section("Input") {
-                        Text(prettyJSONPreview(inputJson))
-                            .font(.footnote.monospaced())
-                            .textSelection(.enabled)
-                    }
-                }
-
-                if let outputJson = toolCall.outputJson {
-                    Section("Output JSON") {
-                        Text(prettyJSONPreview(outputJson))
-                            .font(.footnote.monospaced())
-                            .textSelection(.enabled)
-                    }
-                }
-
-                if let outputText = toolCall.outputText, !outputText.isEmpty {
-                    Section("Output Text") {
-                        Text(outputText)
-                            .font(.footnote)
-                            .textSelection(.enabled)
-                    }
-                }
-            }
-            .navigationTitle(toolCall.toolName)
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-}
-
-private struct AgentAttachmentSheet: View {
-    let attachment: AgentLoadedAttachment
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if let image = attachment.image {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    } else {
-                        Label("Preview unavailable", systemImage: attachment.resource.mimeType == "application/pdf" ? "doc.richtext" : "doc")
-                            .font(.headline)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(attachment.resource.fileName)
-                            .font(.headline)
-                        Text(attachment.resource.mimeType)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        Text("\(attachment.resource.data.count) bytes")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    ShareLink(item: attachment.url) {
-                        Label("Download or share", systemImage: "square.and.arrow.down")
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .padding(20)
-            }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("Attachment")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-}
-
-private struct AgentPill: View {
-    let text: String
-    let tint: Color
-
-    var body: some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(tint.opacity(0.14), in: Capsule())
-            .foregroundStyle(tint)
-    }
-}
-
 struct ComposerAttachment: Identifiable, Equatable {
     let id = UUID()
     let upload: AttachmentUpload
@@ -1686,7 +1557,7 @@ private func validateThreadTitle(_ value: String) throws -> String {
     return normalized
 }
 
-private func roleTitle(_ role: AgentMessageRole) -> String {
+func roleTitle(_ role: AgentMessageRole) -> String {
     switch role {
     case .assistant: "Agent"
     case .system: "System"
@@ -1694,7 +1565,7 @@ private func roleTitle(_ role: AgentMessageRole) -> String {
     }
 }
 
-private func roleSymbol(_ role: AgentMessageRole) -> String {
+func roleSymbol(_ role: AgentMessageRole) -> String {
     switch role {
     case .assistant: "sparkles"
     case .system: "gearshape.2"
@@ -1702,31 +1573,7 @@ private func roleSymbol(_ role: AgentMessageRole) -> String {
     }
 }
 
-private func backgroundColor(_ role: AgentMessageRole) -> Color {
-    switch role {
-    case .assistant: Color.indigo.opacity(0.08)
-    case .system: Color.secondary.opacity(0.10)
-    case .user: Color.green.opacity(0.10)
-    }
-}
-
-enum AssistantMessageMarkdownRenderer {
-    static func renderedContent(for message: AgentMessage) -> AttributedString? {
-        guard message.role == .assistant else { return nil }
-
-        let content = messageContent(message)
-        do {
-            return try AttributedString(markdown: content)
-        } catch {
-            agentMessageMarkdownLogger.error(
-                "Failed to parse assistant markdown for message \(message.id, privacy: .public): \(String(describing: error), privacy: .public)"
-            )
-            return nil
-        }
-    }
-}
-
-private func messageContent(_ message: AgentMessage) -> String {
+func messageContent(_ message: AgentMessage) -> String {
     let trimmed = message.contentMarkdown.trimmingCharacters(in: .whitespacesAndNewlines)
     if !trimmed.isEmpty {
         return trimmed
@@ -1734,12 +1581,12 @@ private func messageContent(_ message: AgentMessage) -> String {
     return message.attachments.isEmpty ? "No message text." : "Attachment uploaded"
 }
 
-private func attachmentName(_ attachment: AgentMessageAttachment) -> String {
+func attachmentName(_ attachment: AgentMessageAttachment) -> String {
     let path = attachment.filePath.split(separator: "/").last.map(String.init) ?? attachment.id
     return path.isEmpty ? attachment.id : path
 }
 
-private enum AgentDateFormatters {
+enum AgentDateFormatters {
     nonisolated(unsafe) static let fractionalISO8601: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -1751,15 +1598,44 @@ private enum AgentDateFormatters {
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
     }()
+
+    static let naiveFractional: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
+        return formatter
+    }()
+
+    static let naiveBasic: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return formatter
+    }()
 }
 
-private func relativeTimestamp(_ value: String) -> String {
-    let date = AgentDateFormatters.fractionalISO8601.date(from: value) ?? AgentDateFormatters.basicISO8601.date(from: value)
+func relativeTimestamp(_ value: String) -> String {
+    let date =
+        AgentDateFormatters.fractionalISO8601.date(from: value)
+        ?? AgentDateFormatters.basicISO8601.date(from: value)
+        ?? AgentDateFormatters.naiveFractional.date(from: value)
+        ?? AgentDateFormatters.naiveBasic.date(from: value)
     guard let date else { return value }
-    return date.formatted(.relative(presentation: .named))
+
+    if Calendar.current.isDateInToday(date) {
+        return date.formatted(date: .omitted, time: .shortened)
+    }
+    if Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year) {
+        return date.formatted(.dateTime.month(.abbreviated).day().hour().minute())
+    }
+    return date.formatted(.dateTime.year().month(.abbreviated).day().hour().minute())
 }
 
-private func runStatusText(_ status: AgentRunStatus) -> String {
+func runStatusText(_ status: AgentRunStatus) -> String {
     switch status {
     case .running: "Running"
     case .completed: "Completed"
@@ -1767,7 +1643,7 @@ private func runStatusText(_ status: AgentRunStatus) -> String {
     }
 }
 
-private func runStatusTint(_ status: AgentRunStatus) -> Color {
+func runStatusTint(_ status: AgentRunStatus) -> Color {
     switch status {
     case .running: .indigo
     case .completed: .green
@@ -1775,7 +1651,7 @@ private func runStatusTint(_ status: AgentRunStatus) -> Color {
     }
 }
 
-private func readableEventType(_ eventType: AgentRunEventType) -> String {
+func readableEventType(_ eventType: AgentRunEventType) -> String {
     switch eventType {
     case .runStarted: "Run started"
     case .reasoningUpdate: "Reasoning update"
@@ -1789,7 +1665,7 @@ private func readableEventType(_ eventType: AgentRunEventType) -> String {
     }
 }
 
-private func changeTypeLabel(_ changeType: AgentChangeType) -> String {
+func changeTypeLabel(_ changeType: AgentChangeType) -> String {
     switch changeType {
     case .createEntry: "Create Entry"
     case .updateEntry: "Update Entry"
@@ -1849,7 +1725,7 @@ private func reviewSummary(_ item: AgentChangeItem) -> String {
     }
 }
 
-private func payloadPreview(_ payload: [String: JSONValue]) -> String {
+func payloadPreview(_ payload: [String: JSONValue]) -> String {
     guard let data = try? JSONEncoder.billHelper.encode(payload),
           let text = String(data: data, encoding: .utf8) else {
         return "{}"
@@ -1857,7 +1733,7 @@ private func payloadPreview(_ payload: [String: JSONValue]) -> String {
     return text
 }
 
-private func prettyJSONPreview(_ payload: [String: JSONValue]) -> String {
+func prettyJSONPreview(_ payload: [String: JSONValue]) -> String {
     guard let data = try? JSONEncoder.billHelper.encode(payload),
           let object = try? JSONSerialization.jsonObject(with: data),
           let prettyData = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted]),

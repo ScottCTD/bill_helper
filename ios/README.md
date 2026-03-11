@@ -6,9 +6,9 @@ This is the local entry point for the native SwiftUI iPhone client. The current 
 
 - first launch shows onboarding for backend URL + principal name, then persists the base URL in app preferences and the session credential in Keychain
 - the tab shell is `Dashboard`, `Entries`, `Agent`, `Manage`, and `Settings`, with one `NavigationStack` per tab
-- dashboard loads `GET /dashboard/timeline` and `GET /dashboard`, then shows month chips, filter-group slices, charts, largest expenses, and reconciliation cards
-- entries supports search, local filters, detail navigation, create/edit forms, direct-group assignment, and delete actions
-- agent supports thread create/rename/delete, live run state, attachment upload/download, hydrated tool-call detail, review approve/reject/reopen, and explicit access gating for non-admin principals
+- dashboard loads `GET /dashboard/timeline` and `GET /dashboard`, then shows a centered month strip, KPI/projection cards, trend and breakdown charts, largest expenses, and reconciliation drill-ins
+- entries supports search, multi-tag local filters, detail navigation, create/edit forms, searchable tag selection, direct-group assignment, markdown notes, and delete actions
+- agent supports thread create/rename/delete, message-anchored run state, themed markdown rendering, attachment upload/download, hydrated tool-call detail, review approve/reject/reopen, and explicit access gating for non-admin principals
 - manage exposes accounts, entities, tags, groups, filter groups, taxonomies, currencies, and users with native list/detail/form flows
 - settings exposes session controls, runtime settings editing, and diagnostics for the current principal and agent limits
 - the app handles `billhelper://...` deep links for dashboard month, entry detail, account detail, group detail, agent thread, and settings
@@ -17,7 +17,7 @@ This is the local entry point for the native SwiftUI iPhone client. The current 
 
 - `BillHelperApp/`: app entry, app-shell composition, and shared app resources
 - `BillHelperCore/`: API client, finance/agent models, session infrastructure, transport, and upload support
-- `BillHelperFeatures/`: SwiftUI feature surfaces for dashboard, entries, agent, manage, and settings workflows
+- `BillHelperFeatures/`: SwiftUI feature surfaces for dashboard, entries, agent, manage, and settings workflows, including the extracted agent timeline/markdown support helpers
 - `BillHelperAPITests/`: focused simulator-run tests for API, onboarding/session wiring, dashboard/entries, agent flows, upload support, and transport behavior
 - `BillHelperApp.xcodeproj/`: Xcode project, workspace metadata, and shared scheme
 - `docs/`: iOS-client-specific behavior notes for the shipped full app
