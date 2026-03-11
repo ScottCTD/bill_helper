@@ -63,7 +63,13 @@ Behavior:
 
 - `POST /accounts/{account_id}/snapshots` -> `SnapshotRead`
 - `GET /accounts/{account_id}/snapshots` -> `SnapshotRead[]`
+- `DELETE /accounts/{account_id}/snapshots/{snapshot_id}` -> `204`
 - `GET /accounts/{account_id}/reconciliation` -> `ReconciliationRead`
+
+Behavior:
+
+- snapshot create/list/delete are principal-scoped through the parent account lookup
+- deleting a snapshot removes only that stored checkpoint; the account and ledger entries remain unchanged
 
 ## Entries
 

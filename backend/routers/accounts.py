@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from backend.auth.contracts import RequestPrincipal
 from backend.auth.dependencies import get_or_create_current_principal
 from backend.database import get_db
-from backend.models_finance import Account, AccountSnapshot, Entity
+from backend.models_finance import Account, Entity
 from backend.schemas_finance import (
     AccountCreate,
     AccountRead,
@@ -26,6 +26,11 @@ from backend.services.accounts import (
     create_account as create_account_service,
     delete_account_and_entity_root,
     update_account as update_account_service,
+)
+from backend.services.account_snapshots import (
+    create_account_snapshot,
+    delete_account_snapshot,
+    list_account_snapshots,
 )
 from backend.services.finance_contracts import AccountCreateCommand, AccountPatch
 from backend.services.finance import build_reconciliation
@@ -107,13 +112,13 @@ def create_snapshot(
 ) -> SnapshotRead:
     account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
 
-    snapshot = AccountSnapshot(
-        account_id=account_id,
+    snapshot = create_account_snapshot(
+        db,
+        account=account,
         snapshot_at=payload.snapshot_at,
         balance_minor=payload.balance_minor,
         note=payload.note,
     )
-    db.add(snapshot)
     db.commit()
     db.refresh(snapshot)
     return SnapshotRead.model_validate(snapshot)
@@ -127,14 +132,20 @@ def list_snapshots(
 ) -> list[SnapshotRead]:
     get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
 
-    snapshots = list(
-        db.scalars(
-            select(AccountSnapshot)
-            .where(AccountSnapshot.account_id == account_id)
-            .order_by(AccountSnapshot.snapshot_at.desc(), AccountSnapshot.created_at.desc())
-        )
-    )
+    snapshots = list_account_snapshots(db, account_id=account_id)
     return [SnapshotRead.model_validate(snapshot) for snapshot in snapshots]
+
+
+@router.delete("/{account_id}/snapshots/{snapshot_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_snapshot(
+    account_id: str,
+    snapshot_id: str,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+) -> None:
+    account = get_account_for_principal_or_404(db, account_id=account_id, principal=principal)
+    delete_account_snapshot(db, account=account, snapshot_id=snapshot_id)
+    db.commit()
 
 
 @router.get("/{account_id}/reconciliation", response_model=ReconciliationRead)

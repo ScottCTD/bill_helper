@@ -1,5 +1,7 @@
 import type { FormEvent } from "react";
+import { Plus } from "lucide-react";
 
+import { DeleteIconButton } from "../../components/DeleteIconButton";
 import type { Account, Snapshot } from "../../lib/types";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
@@ -15,6 +17,7 @@ interface SnapshotsSectionProps {
   snapshotForm: SnapshotFormState;
   onSnapshotFormChange: (next: SnapshotFormState) => void;
   onCreateSnapshot: (event: FormEvent<HTMLFormElement>) => void;
+  onDeleteSnapshot: (snapshotId: string) => void;
   snapshots: Snapshot[] | undefined;
   isLoading: boolean;
   errorMessage: string | null;
@@ -29,6 +32,7 @@ export function SnapshotsSection(props: SnapshotsSectionProps) {
     snapshotForm,
     onSnapshotFormChange,
     onCreateSnapshot,
+    onDeleteSnapshot,
     snapshots,
     isLoading,
     errorMessage,
@@ -87,15 +91,15 @@ export function SnapshotsSection(props: SnapshotsSectionProps) {
                   onChange={(event) => onSnapshotFormChange({ ...snapshotForm, balance_major: event.target.value })}
                 />
               </FormField>
-              <FormField label="Note" className="full-row">
-                <Input
-                  value={snapshotForm.note}
-                  onChange={(event) => onSnapshotFormChange({ ...snapshotForm, note: event.target.value })}
-                />
-              </FormField>
-              <div className="full-row flex justify-end">
-                <Button type="submit" disabled={isCreating}>
-                  {isCreating ? "Adding..." : "Add snapshot"}
+              <div className="full-row flex items-end gap-3">
+                <FormField label="Note" className="min-w-0 flex-1">
+                  <Input
+                    value={snapshotForm.note}
+                    onChange={(event) => onSnapshotFormChange({ ...snapshotForm, note: event.target.value })}
+                  />
+                </FormField>
+                <Button type="submit" size="icon" variant="outline" aria-label="Add snapshot" disabled={isCreating}>
+                  <Plus className="h-4 w-4" />
                 </Button>
               </div>
             </form>
@@ -113,6 +117,9 @@ export function SnapshotsSection(props: SnapshotsSectionProps) {
                     <TableHead>Balance</TableHead>
                     <TableHead>Note</TableHead>
                     <TableHead>Added</TableHead>
+                    <TableHead className="icon-action-column">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -122,6 +129,14 @@ export function SnapshotsSection(props: SnapshotsSectionProps) {
                       <TableCell>{formatMinor(snapshot.balance_minor, selectedAccount.currency_code)}</TableCell>
                       <TableCell>{snapshot.note ?? "-"}</TableCell>
                       <TableCell>{toDateLabel(snapshot.created_at)}</TableCell>
+                      <TableCell className="icon-action-column">
+                        <div className="table-actions">
+                          <DeleteIconButton
+                            label={`Delete snapshot ${snapshot.snapshot_at}`}
+                            onClick={() => onDeleteSnapshot(snapshot.id)}
+                          />
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

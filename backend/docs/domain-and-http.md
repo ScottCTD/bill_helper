@@ -147,7 +147,7 @@ Router behavior:
 - empty PATCH payloads for account, entity, tag, group, and user mutations are rejected consistently during request validation
 - `POST /groups/{group_id}/members` accepts one typed `target` object (`entry` vs `child_group`) instead of sibling mutually-exclusive top-level ids
 - `dashboard.py` is principal-scoped by visible accounts and entries
-- `accounts.py` includes principal-scoped delete in addition to create, update, snapshots, and reconciliation
+- `accounts.py` includes principal-scoped account delete plus snapshot create/list/delete and reconciliation handlers
 - `entities.py` includes admin-only delete for non-account entities and returns `409` for account-backed roots
 - `tags.py` includes admin-only delete and succeeds even when entries still reference the tag
 - `entities.py`, `tags.py`, and `taxonomies.py` mutations require admin principal

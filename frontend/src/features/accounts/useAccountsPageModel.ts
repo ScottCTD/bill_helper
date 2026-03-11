@@ -5,6 +5,7 @@ import {
   createAccount,
   createSnapshot,
   deleteAccount,
+  deleteSnapshot,
   getRuntimeSettings,
   getReconciliation,
   listAccounts,
@@ -32,6 +33,7 @@ export function useAccountsPageModel() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
+  const [deletingSnapshotId, setDeletingSnapshotId] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<AccountFormState>(ACCOUNT_FORM_DEFAULTS);
   const [editForm, setEditForm] = useState<AccountFormState>(ACCOUNT_FORM_DEFAULTS);
   const [snapshotForm, setSnapshotForm] = useState<SnapshotFormState>({
@@ -124,6 +126,7 @@ export function useAccountsPageModel() {
     queryFn: () => listSnapshots(selectedAccountId),
     enabled: Boolean(selectedAccountId)
   });
+  const deletingSnapshot = snapshotsQuery.data?.find((snapshot) => snapshot.id === deletingSnapshotId) ?? null;
 
   const reconciliationQuery = useQuery({
     queryKey: queryKeys.accounts.reconciliation(selectedAccountId),
@@ -178,6 +181,14 @@ export function useAccountsPageModel() {
         setEditingAccountId(null);
       }
       setDeletingAccountId(null);
+    }
+  });
+
+  const deleteSnapshotMutation = useMutation({
+    mutationFn: ({ accountId, snapshotId }: { accountId: string; snapshotId: string }) => deleteSnapshot(accountId, snapshotId),
+    onSuccess: (_data, variables) => {
+      invalidateAccountReadModels(queryClient, variables.accountId);
+      setDeletingSnapshotId(null);
     }
   });
 
@@ -276,6 +287,27 @@ export function useAccountsPageModel() {
     deleteAccountMutation.mutate(deletingAccountId);
   }
 
+  function openDeleteSnapshotDialog(snapshotId: string) {
+    setDeletingSnapshotId(snapshotId);
+  }
+
+  function onDeleteSnapshotDialogOpenChange(open: boolean) {
+    if (!open) {
+      setDeletingSnapshotId(null);
+      deleteSnapshotMutation.reset();
+    }
+  }
+
+  function confirmDeleteSnapshot() {
+    if (!deletingSnapshot || !deletingSnapshotId) {
+      return;
+    }
+    deleteSnapshotMutation.mutate({
+      accountId: deletingSnapshot.account_id,
+      snapshotId: deletingSnapshotId
+    });
+  }
+
   return {
     selectedAccountId,
     selectedAccount,
@@ -288,6 +320,8 @@ export function useAccountsPageModel() {
     editingAccount,
     deletingAccountId,
     deletingAccount,
+    deletingSnapshotId,
+    deletingSnapshot,
     createForm,
     setCreateForm,
     editForm,
@@ -309,7 +343,8 @@ export function useAccountsPageModel() {
       createAccountMutation,
       updateAccountMutation,
       createSnapshotMutation,
-      deleteAccountMutation
+      deleteAccountMutation,
+      deleteSnapshotMutation
     },
     actions: {
       onCreateAccount,
@@ -320,7 +355,10 @@ export function useAccountsPageModel() {
       onEditDialogOpenChange,
       openDeleteDialog,
       onDeleteDialogOpenChange,
-      confirmDeleteAccount
+      confirmDeleteAccount,
+      openDeleteSnapshotDialog,
+      onDeleteSnapshotDialogOpenChange,
+      confirmDeleteSnapshot
     }
   };
 }

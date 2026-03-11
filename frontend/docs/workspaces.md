@@ -67,6 +67,7 @@
 - account dialogs edit `Owner`, `Name`, `Currency`, `Notes`, and `Active`
 - legacy `institution` and `type` fields are removed
 - reconciliation and snapshot side panels are driven by the selected table row
+- snapshot history rows expose per-snapshot delete actions with confirmation
 - delete confirmation warns that snapshots are removed and preserved entry labels will surface missing-entity markers
 
 ## Properties

@@ -9,6 +9,7 @@ import {
   createAccount,
   createSnapshot,
   deleteAccount,
+  deleteSnapshot,
   getReconciliation,
   getRuntimeSettings,
   listAccounts,
@@ -31,7 +32,8 @@ vi.mock("../lib/api", async () => {
     createAccount: vi.fn(),
     updateAccount: vi.fn(),
     createSnapshot: vi.fn(),
-    deleteAccount: vi.fn()
+    deleteAccount: vi.fn(),
+    deleteSnapshot: vi.fn()
   };
 });
 
@@ -359,6 +361,60 @@ describe("AccountsPage", () => {
 
     await waitFor(() => {
       expect(vi.mocked(deleteAccount).mock.calls[0]?.[0]).toBe("acc-1");
+    });
+  });
+
+  it("deletes a snapshot from the history table", async () => {
+    vi.mocked(listAccounts).mockResolvedValue([
+      {
+        id: "acc-1",
+        owner_user_id: "user-1",
+        name: "Main",
+        markdown_body: null,
+        currency_code: "CAD",
+        is_active: true,
+        created_at: "2026-02-15T00:00:00Z",
+        updated_at: "2026-02-15T00:00:00Z"
+      }
+    ]);
+    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
+    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true, account_count: 1, entry_count: 0 }]);
+    vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
+    vi.mocked(listSnapshots).mockResolvedValue([
+      {
+        id: "snap-1",
+        account_id: "acc-1",
+        snapshot_at: "2026-02-16",
+        balance_minor: 123_45,
+        note: "manual",
+        created_at: "2026-02-16T00:00:00Z"
+      }
+    ]);
+    vi.mocked(getReconciliation).mockResolvedValue({
+      account_id: "acc-1",
+      account_name: "Main",
+      currency_code: "CAD",
+      as_of: "2026-02-16",
+      ledger_balance_minor: 100_00,
+      snapshot_balance_minor: 123_45,
+      snapshot_at: "2026-02-16",
+      delta_minor: -23_45
+    });
+    vi.mocked(deleteSnapshot).mockResolvedValue(undefined);
+
+    renderWithQueryClient(<AccountsPage />);
+
+    await screen.findByText("Main");
+    await screen.findByText("manual");
+    await userEvent.click(screen.getByRole("button", { name: "Delete snapshot 2026-02-16" }));
+
+    const deleteDialog = await screen.findByRole("dialog", { name: "Delete snapshot from 2026-02-16?" });
+    expect(within(deleteDialog).getByText(/next most recent snapshot/i)).toBeInTheDocument();
+
+    await userEvent.click(within(deleteDialog).getByRole("button", { name: "Delete snapshot" }));
+
+    await waitFor(() => {
+      expect(vi.mocked(deleteSnapshot).mock.calls[0]).toEqual(["acc-1", "snap-1"]);
     });
   });
 });

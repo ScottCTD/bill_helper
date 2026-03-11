@@ -91,6 +91,28 @@ def test_reconciliation_math(client):
     assert payload["delta_minor"] == -97000
 
 
+def test_delete_snapshot_removes_checkpoint_from_account_history(client):
+    account = create_account(client)
+
+    snapshot_response = client.post(
+        f"/api/v1/accounts/{account['id']}/snapshots",
+        json={"snapshot_at": "2026-01-10", "balance_minor": 100000, "note": "Bank balance"},
+    )
+    snapshot_response.raise_for_status()
+    snapshot = snapshot_response.json()
+
+    delete_response = client.delete(f"/api/v1/accounts/{account['id']}/snapshots/{snapshot['id']}")
+    assert delete_response.status_code == 204
+
+    snapshots_response = client.get(f"/api/v1/accounts/{account['id']}/snapshots")
+    snapshots_response.raise_for_status()
+    assert snapshots_response.json() == []
+
+    missing_response = client.delete(f"/api/v1/accounts/{account['id']}/snapshots/{snapshot['id']}")
+    assert missing_response.status_code == 404
+    assert missing_response.json()["detail"] == "Snapshot not found"
+
+
 def test_dashboard_monthly_aggregations(client):
     account = create_account(client)
     other_currency_account = create_account(client, name="Travel Card")

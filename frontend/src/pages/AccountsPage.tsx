@@ -49,6 +49,7 @@ export function AccountsPage() {
           snapshotForm={model.snapshotForm}
           onSnapshotFormChange={model.setSnapshotForm}
           onCreateSnapshot={model.actions.onCreateSnapshot}
+          onDeleteSnapshot={model.actions.openDeleteSnapshotDialog}
           snapshots={model.queries.snapshotsQuery.data}
           isLoading={model.queries.snapshotsQuery.isLoading}
           errorMessage={snapshotsError}
@@ -94,6 +95,23 @@ export function AccountsPage() {
           "Snapshot history for this account is deleted."
         ]}
         onConfirm={model.actions.confirmDeleteAccount}
+      />
+
+      <DeleteConfirmDialog
+        open={Boolean(model.deletingSnapshotId)}
+        onOpenChange={model.actions.onDeleteSnapshotDialogOpenChange}
+        title={model.deletingSnapshot ? `Delete snapshot from ${model.deletingSnapshot.snapshot_at}?` : "Delete snapshot?"}
+        description="This removes a stored balance checkpoint from the account history."
+        confirmLabel="Delete snapshot"
+        isPending={model.mutations.deleteSnapshotMutation.isPending}
+        errorMessage={
+          model.mutations.deleteSnapshotMutation.isError ? (model.mutations.deleteSnapshotMutation.error as Error).message : null
+        }
+        warnings={[
+          "This action cannot be undone.",
+          "Reconciliation will fall back to the next most recent snapshot on or before the selected date."
+        ]}
+        onConfirm={model.actions.confirmDeleteSnapshot}
       />
     </div>
   );

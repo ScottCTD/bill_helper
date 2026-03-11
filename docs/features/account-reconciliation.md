@@ -10,6 +10,7 @@ This doc is the fast path for understanding account management UX, snapshot chec
 - `DELETE /api/v1/accounts/{account_id}`
 - `POST /api/v1/accounts/{account_id}/snapshots`
 - `GET /api/v1/accounts/{account_id}/snapshots`
+- `DELETE /api/v1/accounts/{account_id}/snapshots/{snapshot_id}`
 - `GET /api/v1/accounts/{account_id}/reconciliation`
 - frontend account workspace in `frontend/src/pages/AccountsPage.tsx`
 
@@ -23,7 +24,7 @@ This doc is the fast path for understanding account management UX, snapshot chec
 - Account metadata now excludes legacy `institution` and `type`; dialogs focus on owner/name/currency/notes/active state.
 - Account create/edit modals include optional markdown notes (`markdown_body`) for richer account-level context.
 - Snapshot and reconciliation panels are bound to the currently selected table row.
-- Snapshot creation is append-only in the UI (no snapshot edit/delete controls).
+- Snapshot creation and deletion both happen in the account workspace; each saved snapshot row exposes its own delete action with confirmation.
 - Reconciliation and snapshot panels include plain-language term definitions directly in the page so users can understand fields without leaving the workflow.
 
 Delete semantics:
@@ -45,6 +46,7 @@ The as-of date defaults to the server's current day when the query parameter is 
 ## Backend Modules
 
 - `backend/routers/accounts.py`: account create/update/delete plus snapshot/reconciliation routes.
+- `backend/services/account_snapshots.py`: shared snapshot create/list/delete persistence workflows.
 - `backend/services/agent/message_history.py`: current-user account context assembly for agent system prompt (includes account notes).
 - `backend/services/accounts.py`: shared account/entity-root create, update, and delete behavior.
 - `backend/services/finance.py`: ledger aggregation + latest-snapshot lookup.
@@ -62,11 +64,12 @@ The as-of date defaults to the server's current day when the query parameter is 
 - `frontend/src/lib/api.ts`: account/snapshot/reconciliation client methods.
 - `frontend/src/lib/queryKeys.ts`: account query keys (`accounts`, `snapshots`, `reconciliation`).
 - `frontend/src/lib/queryInvalidation.ts`: `invalidateAccountReadModels` after account/snapshot writes.
-- `frontend/src/pages/AccountsPage.test.tsx`: integration tests for create-account, create-snapshot, and delete-account flows.
+- `frontend/src/pages/AccountsPage.test.tsx`: integration tests for create-account, snapshot create/delete, and delete-account flows.
 
 ## Operational Notes and Constraints
 
 - Create-account default currency is sourced from runtime settings (`GET /api/v1/settings`), then uppercased.
 - Snapshot balance input is entered in major units in the UI, then converted to minor units before API submit.
 - Snapshot list ordering is newest checkpoint first (`snapshot_at desc`, then `created_at desc`).
+- Deleting a snapshot only removes that checkpoint; reconciliation then falls back to the next most recent snapshot on or before the requested date.
 - Snapshots are intended as bank checkpoints, not derived balances; the user must add them manually.

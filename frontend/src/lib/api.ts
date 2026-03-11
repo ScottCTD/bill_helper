@@ -286,6 +286,12 @@ export function listSnapshots(accountId: string): Promise<Snapshot[]> {
   return request<Snapshot[]>(`/api/v1/accounts/${accountId}/snapshots`);
 }
 
+export function deleteSnapshot(accountId: string, snapshotId: string): Promise<void> {
+  return request<void>(`/api/v1/accounts/${accountId}/snapshots/${snapshotId}`, {
+    method: "DELETE"
+  });
+}
+
 export function getReconciliation(accountId: string, asOf?: string): Promise<Reconciliation> {
   const params = new URLSearchParams();
   if (asOf) {
