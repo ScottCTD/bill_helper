@@ -72,20 +72,56 @@ final class AgentAccessViewModel: ObservableObject {
     func reload() async {
         isLoading = true
         defer { isLoading = false }
-        do {
-            async let usersTask = apiClient.listUsers()
-            async let settingsTask = apiClient.runtimeSettings()
-            currentUser = try await usersTask.first(where: \.isCurrentUser)
-            let settings = try await settingsTask
-            attachmentLimits = AgentAttachmentLimits(
-                maxImageSizeBytes: settings.agentMaxImageSizeBytes,
-                maxImagesPerMessage: settings.agentMaxImagesPerMessage
-            )
-            errorMessage = nil
-            hasLoaded = true
-        } catch {
-            errorMessage = error.localizedDescription
+
+        async let userResult = loadCurrentUser()
+        async let limitsResult = loadAttachmentLimits()
+
+        var errors: [String] = []
+
+        switch await userResult {
+        case .success(let user):
+            currentUser = user
+        case .failure(let error):
+            errors.append("Couldn't load current user access. \(Self.errorDetail(for: error))")
         }
+
+        switch await limitsResult {
+        case .success(let limits):
+            attachmentLimits = limits
+        case .failure(let error):
+            errors.append("Couldn't load attachment limits. \(Self.errorDetail(for: error))")
+        }
+
+        errorMessage = errors.isEmpty ? nil : errors.joined(separator: " ")
+        hasLoaded = errors.isEmpty
+    }
+
+    private func loadCurrentUser() async -> Result<User?, Error> {
+        do {
+            let users = try await apiClient.listUsers()
+            return .success(users.first(where: \.isCurrentUser))
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private func loadAttachmentLimits() async -> Result<AgentAttachmentLimits, Error> {
+        do {
+            let settings = try await apiClient.runtimeSettings()
+            return .success(
+                AgentAttachmentLimits(
+                    maxImageSizeBytes: settings.agentMaxImageSizeBytes,
+                    maxImagesPerMessage: settings.agentMaxImagesPerMessage
+                )
+            )
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private static func errorDetail(for error: Error) -> String {
+        let detail = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        return detail.isEmpty ? "Please try again." : detail
     }
 }
 
@@ -646,11 +682,18 @@ final class AgentThreadDetailViewModel: ObservableObject {
         guard let attachmentLimits else { return }
         let totalImageCount = (attachments + incoming).filter { $0.mimeType.hasPrefix("image/") }.count
         if totalImageCount > attachmentLimits.maxImagesPerMessage {
-            throw AttachmentImportError.tooManyImages(limit: attachmentLimits.maxImagesPerMessage)
+            throw AttachmentImportError.tooManyImages(
+                limit: attachmentLimits.maxImagesPerMessage,
+                attemptedCount: totalImageCount
+            )
         }
         for attachment in incoming where attachment.mimeType.hasPrefix("image/") {
             if attachment.upload.data.count > attachmentLimits.maxImageSizeBytes {
-                throw AttachmentImportError.imageTooLarge(limit: attachmentLimits.maxImageSizeBytes)
+                throw AttachmentImportError.imageTooLarge(
+                    fileName: attachment.filename,
+                    actualSize: attachment.upload.data.count,
+                    limit: attachmentLimits.maxImageSizeBytes
+                )
             }
         }
     }
@@ -682,6 +725,21 @@ struct AgentRootView: View {
                 ProgressView("Loading agent access…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.systemGroupedBackground))
+            } else if let errorMessage = accessModel.errorMessage, accessModel.currentUser == nil {
+                ContentUnavailableView {
+                    Label("Couldn't load agent access", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(errorMessage)
+                } actions: {
+                    Button("Retry") {
+                        Task {
+                            await accessModel.reload()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemGroupedBackground))
             } else if accessModel.isAdmin == false {
                 AgentAccessRequiredView(principalName: accessModel.currentUser?.name)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -708,6 +766,14 @@ struct AgentRootView: View {
                 .background(Color(.systemGroupedBackground))
             } else {
                 List {
+                    if let errorMessage = accessModel.errorMessage {
+                        Section {
+                            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                                .font(.footnote)
+                        }
+                    }
+
                     if let errorMessage = viewModel.errorMessage {
                         Section {
                             Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -1510,7 +1576,7 @@ struct AgentLoadedAttachment: Identifiable, Equatable {
         self.resource = resource
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("billhelper-agent-attachments", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let preferredName = resource.fileName.isEmpty ? UUID().uuidString : resource.fileName
+        let preferredName = Self.safeFilename(resource.fileName)
         let url = directory.appendingPathComponent(preferredName)
         try resource.data.write(to: url, options: .atomic)
         self.url = url
@@ -1520,22 +1586,38 @@ struct AgentLoadedAttachment: Identifiable, Equatable {
             image = nil
         }
     }
+
+    private static func safeFilename(_ fileName: String) -> String {
+        let trimmed = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmed.replacingOccurrences(of: "\\", with: "/")
+        let lastPathComponent = (normalized as NSString).lastPathComponent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !lastPathComponent.isEmpty, lastPathComponent != ".", lastPathComponent != ".." else {
+            return UUID().uuidString
+        }
+        return lastPathComponent
+    }
 }
 
 private enum AttachmentImportError: LocalizedError {
     case unreadableAsset
-    case tooManyImages(limit: Int)
-    case imageTooLarge(limit: Int)
+    case tooManyImages(limit: Int, attemptedCount: Int)
+    case imageTooLarge(fileName: String, actualSize: Int, limit: Int)
 
     var errorDescription: String? {
         switch self {
         case .unreadableAsset:
             return "One of the selected attachments could not be read."
-        case .tooManyImages(let limit):
-            return "You can attach at most \(limit) images per message."
-        case .imageTooLarge(let limit):
-            return "One of the selected images exceeds the \(limit)-byte size limit."
+        case .tooManyImages(let limit, let attemptedCount):
+            return "This message has \(attemptedCount) images, but the limit is \(limit) per message."
+        case .imageTooLarge(let fileName, let actualSize, let limit):
+            let displayName = fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Selected image" : fileName
+            return "\"\(displayName)\" is \(Self.byteCount(actualSize)); the limit is \(Self.byteCount(limit))."
         }
+    }
+
+    private static func byteCount(_ value: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(value), countStyle: .file)
     }
 }
 

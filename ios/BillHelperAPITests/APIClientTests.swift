@@ -83,47 +83,28 @@ final class APIClientTests: XCTestCase {
         XCTAssertTrue(queryItems.contains(URLQueryItem(name: "offset", value: "20")))
     }
 
-    func testUpdateRuntimeSettingsEncodesPatchBody() async throws {
-        let transport = MockHTTPTransport(
-            responseHandler: { _ in
-                HTTPResponse(data: Data(Self.runtimeSettingsPayload.utf8), statusCode: 200, headers: [:])
-            },
-            streamHandler: { _ in
-                HTTPResponseStream(statusCode: 200, headers: [:], chunks: AsyncThrowingStream { $0.finish() })
-            }
-        )
-        let client = APIClient(baseURL: URL(string: "http://localhost:8000/api/v1")!, transport: transport)
+    func testUpdateRuntimeSettingsUsesPatchRequest() async throws {
+        let request = try await recordRuntimeSettingsUpdateRequest()
 
-        _ = try await client.updateRuntimeSettings(
-            RuntimeSettingsUpdatePayload(
-                userMemory: ["Track dining"],
-                defaultCurrencyCode: "USD",
-                dashboardCurrencyCode: "CAD",
-                agentModel: "gpt-5",
-                availableAgentModels: ["gpt-5", "gpt-5-mini"],
-                agentMaxSteps: 12,
-                agentBulkMaxConcurrentThreads: 3,
-                agentRetryMaxAttempts: 4,
-                agentRetryInitialWaitSeconds: 1.5,
-                agentRetryMaxWaitSeconds: 20,
-                agentRetryBackoffMultiplier: 2,
-                agentMaxImageSizeBytes: 4_000_000,
-                agentMaxImagesPerMessage: 4,
-                agentBaseURL: "https://openrouter.ai/api/v1",
-                agentApiKey: "secret"
-            )
-        )
-
-        let recordedRequest = await transport.recordedRequests.first
-        let request = try XCTUnwrap(recordedRequest)
         XCTAssertEqual(request.httpMethod, "PATCH")
         XCTAssertEqual(request.url?.path, "/api/v1/settings")
-        let body = try XCTUnwrap(request.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+    }
+
+    func testUpdateRuntimeSettingsEncodesCurrencyAndModelFields() async throws {
+        let request = try await recordRuntimeSettingsUpdateRequest()
+        let json = try Self.jsonBody(from: request)
+
         XCTAssertEqual(json["default_currency_code"] as? String, "USD")
         XCTAssertEqual(json["dashboard_currency_code"] as? String, "CAD")
         XCTAssertEqual(json["agent_model"] as? String, "gpt-5")
+    }
+
+    func testUpdateRuntimeSettingsEncodesAttachmentLimitFields() async throws {
+        let request = try await recordRuntimeSettingsUpdateRequest()
+        let json = try Self.jsonBody(from: request)
+
         XCTAssertEqual(json["agent_max_images_per_message"] as? Int, 4)
+        XCTAssertEqual(json["agent_max_image_size_bytes"] as? Int, 4_000_000)
     }
 
     func testCreateAccountEncodesBody() async throws {
@@ -240,7 +221,7 @@ final class APIClientTests: XCTestCase {
         let transport = MockHTTPTransport(
             responseHandler: { _ in
                 HTTPResponse(
-                    data: Data([0xFF, 0xD8, 0xFF]),
+                    data: Self.jpegHeaderData,
                     statusCode: 200,
                     headers: [
                         "Content-Type": "image/jpeg",
@@ -258,7 +239,52 @@ final class APIClientTests: XCTestCase {
 
         XCTAssertEqual(resource.mimeType, "image/jpeg")
         XCTAssertEqual(resource.fileName, "receipt.jpg")
-        XCTAssertEqual(resource.data, Data([0xFF, 0xD8, 0xFF]))
+        XCTAssertEqual(resource.data, Self.jpegHeaderData)
+    }
+
+    func testAgentAttachmentSanitizesUnsafeHeaderFilename() async throws {
+        let transport = MockHTTPTransport(
+            responseHandler: { _ in
+                HTTPResponse(
+                    data: Self.jpegHeaderData,
+                    statusCode: 200,
+                    headers: [
+                        "Content-Type": "image/jpeg",
+                        "Content-Disposition": "attachment; filename=\"../../receipt.jpg\"",
+                    ]
+                )
+            },
+            streamHandler: { _ in
+                HTTPResponseStream(statusCode: 200, headers: [:], chunks: AsyncThrowingStream { $0.finish() })
+            }
+        )
+        let client = APIClient(baseURL: URL(string: "http://localhost:8000/api/v1")!, transport: transport)
+
+        let resource = try await client.agentAttachment(id: "attachment-1")
+
+        XCTAssertEqual(resource.fileName, "receipt.jpg")
+    }
+
+    private func recordRuntimeSettingsUpdateRequest() async throws -> URLRequest {
+        let transport = MockHTTPTransport(
+            responseHandler: { _ in
+                HTTPResponse(data: Data(Self.runtimeSettingsPayload.utf8), statusCode: 200, headers: [:])
+            },
+            streamHandler: { _ in
+                HTTPResponseStream(statusCode: 200, headers: [:], chunks: AsyncThrowingStream { $0.finish() })
+            }
+        )
+        let client = APIClient(baseURL: URL(string: "http://localhost:8000/api/v1")!, transport: transport)
+
+        _ = try await client.updateRuntimeSettings(Self.runtimeSettingsUpdatePayload)
+
+        let recordedRequest = await transport.recordedRequests.first
+        return try XCTUnwrap(recordedRequest)
+    }
+
+    private static func jsonBody(from request: URLRequest) throws -> [String: Any] {
+        let body = try XCTUnwrap(request.httpBody)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
     }
 
     private static let dashboardPayload = """
@@ -340,6 +366,26 @@ final class APIClientTests: XCTestCase {
       }
     }
     """
+
+    private static let runtimeSettingsUpdatePayload = RuntimeSettingsUpdatePayload(
+        userMemory: ["Track dining"],
+        defaultCurrencyCode: "USD",
+        dashboardCurrencyCode: "CAD",
+        agentModel: "gpt-5",
+        availableAgentModels: ["gpt-5", "gpt-5-mini"],
+        agentMaxSteps: 12,
+        agentBulkMaxConcurrentThreads: 3,
+        agentRetryMaxAttempts: 4,
+        agentRetryInitialWaitSeconds: 1.5,
+        agentRetryMaxWaitSeconds: 20,
+        agentRetryBackoffMultiplier: 2,
+        agentMaxImageSizeBytes: 4_000_000,
+        agentMaxImagesPerMessage: 4,
+        agentBaseURL: "https://openrouter.ai/api/v1",
+        agentApiKey: "secret"
+    )
+
+    private static let jpegHeaderData = Data([0xFF, 0xD8, 0xFF])
 
     private static let accountPayload = """
     {

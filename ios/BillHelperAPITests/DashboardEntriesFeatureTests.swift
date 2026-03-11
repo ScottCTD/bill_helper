@@ -125,10 +125,14 @@ final class DashboardEntriesFeatureTests: XCTestCase {
     func testEntriesModelSurfacesErrorMessage() async {
         let client = makeClient(
             responseHandler: { request in
-                guard request.url?.path == "/api/v1/entries" else {
+                switch request.url?.path {
+                case "/api/v1/entries":
+                    return HTTPResponse(data: Data("{\"detail\":\"Server unavailable\"}".utf8), statusCode: 503, headers: [:])
+                case "/api/v1/tags", "/api/v1/groups", "/api/v1/entities", "/api/v1/users", "/api/v1/currencies", "/api/v1/filter-groups":
                     return HTTPResponse(data: Data("[]".utf8), statusCode: 200, headers: [:])
+                default:
+                    return HTTPResponse(data: Data("{}".utf8), statusCode: 404, headers: [:])
                 }
-                return HTTPResponse(data: Data("{\"detail\":\"Server unavailable\"}".utf8), statusCode: 503, headers: [:])
             }
         )
         let model = EntriesScreenModel(apiClient: client)

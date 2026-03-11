@@ -52,6 +52,66 @@ final class AgentFeatureViewModelTests: XCTestCase {
         XCTAssertEqual(assistantSurfaceText("## 📋 Import Summary"), "## Import Summary")
     }
 
+    func testLoadedAttachmentSanitizesRemoteFilenameBeforeWritingTempFile() throws {
+        let loaded = try AgentLoadedAttachment(
+            resource: AgentAttachmentResource(
+                data: Data("receipt".utf8),
+                mimeType: "application/pdf",
+                fileName: "../../receipts/march.pdf"
+            )
+        )
+        defer { try? FileManager.default.removeItem(at: loaded.url) }
+
+        XCTAssertEqual(loaded.url.lastPathComponent, "march.pdf")
+        XCTAssertFalse(loaded.url.path.contains("../"))
+    }
+
+    func testAccessViewModelReportsSettingsFailureWithoutLosingCurrentUser() async {
+        let usersPayload = Self.usersPayload
+        let client = makeAccessClient(
+            responseHandler: { request in
+                switch request.url?.path {
+                case "/api/v1/users":
+                    return HTTPResponse(data: Data(usersPayload.utf8), statusCode: 200, headers: [:])
+                case "/api/v1/settings":
+                    return HTTPResponse(data: Data("{\"detail\":\"Settings unavailable\"}".utf8), statusCode: 503, headers: [:])
+                default:
+                    return HTTPResponse(data: Data("{}".utf8), statusCode: 404, headers: [:])
+                }
+            }
+        )
+        let viewModel = AgentAccessViewModel(apiClient: client)
+
+        await viewModel.reload()
+
+        XCTAssertEqual(viewModel.currentUser?.name, "Casey")
+        XCTAssertNil(viewModel.attachmentLimits)
+        XCTAssertEqual(viewModel.errorMessage, "Couldn't load attachment limits. Settings unavailable")
+    }
+
+    func testAccessViewModelReportsUserFailureWhileKeepingAttachmentLimits() async {
+        let runtimeSettingsPayload = Self.runtimeSettingsPayload
+        let client = makeAccessClient(
+            responseHandler: { request in
+                switch request.url?.path {
+                case "/api/v1/users":
+                    return HTTPResponse(data: Data("{\"detail\":\"Users unavailable\"}".utf8), statusCode: 503, headers: [:])
+                case "/api/v1/settings":
+                    return HTTPResponse(data: Data(runtimeSettingsPayload.utf8), statusCode: 200, headers: [:])
+                default:
+                    return HTTPResponse(data: Data("{}".utf8), statusCode: 404, headers: [:])
+                }
+            }
+        )
+        let viewModel = AgentAccessViewModel(apiClient: client)
+
+        await viewModel.reload()
+
+        XCTAssertNil(viewModel.currentUser)
+        XCTAssertEqual(viewModel.attachmentLimits, AgentAttachmentLimits(maxImageSizeBytes: 4_000_000, maxImagesPerMessage: 4))
+        XCTAssertEqual(viewModel.errorMessage, "Couldn't load current user access. Users unavailable")
+    }
+
     func testListViewModelLoadsThreadsAndCreatesNewThread() async {
         let createdThread = makeThread(id: "thread-2", title: "Receipt follow-up")
         let client = AgentFeatureClient(
@@ -446,5 +506,87 @@ final class AgentFeatureViewModelTests: XCTestCase {
             updatedAt: "2026-03-08T00:00:00Z",
             reviewActions: []
         )
+    }
+
+    private func makeAccessClient(
+        responseHandler: @escaping @Sendable (URLRequest) throws -> HTTPResponse
+    ) -> APIClient {
+        let transport = AgentFeatureMockTransport(responseHandler: responseHandler)
+        let sessionStore = SessionStore(
+            storage: InMemorySessionStorage(),
+            initialSession: AuthSession(credential: .principal(name: "Casey"), currentUserName: "Casey")
+        )
+        return APIClient(
+            baseURL: URL(string: "http://localhost:8000/api/v1")!,
+            transport: transport,
+            sessionProvider: sessionStore
+        )
+    }
+
+    private static let usersPayload = """
+    [
+      {
+        "id": "user-1",
+        "name": "Casey",
+        "is_admin": true,
+        "is_current_user": true,
+        "account_count": 2,
+        "entry_count": 3
+      }
+    ]
+    """
+
+    private static let runtimeSettingsPayload = """
+    {
+      "current_user_name": "Casey",
+      "user_memory": ["Track dining"],
+      "default_currency_code": "CAD",
+      "dashboard_currency_code": "CAD",
+      "agent_model": "gpt-5",
+      "available_agent_models": ["gpt-5", "gpt-5-mini"],
+      "agent_max_steps": 12,
+      "agent_bulk_max_concurrent_threads": 3,
+      "agent_retry_max_attempts": 4,
+      "agent_retry_initial_wait_seconds": 1.5,
+      "agent_retry_max_wait_seconds": 20,
+      "agent_retry_backoff_multiplier": 2,
+      "agent_max_image_size_bytes": 4000000,
+      "agent_max_images_per_message": 4,
+      "agent_base_url": "https://openrouter.ai/api/v1",
+      "agent_api_key_configured": true,
+      "overrides": {
+        "user_memory": ["Track dining"],
+        "default_currency_code": "CAD",
+        "dashboard_currency_code": "CAD",
+        "agent_model": "gpt-5",
+        "available_agent_models": ["gpt-5", "gpt-5-mini"],
+        "agent_max_steps": 12,
+        "agent_bulk_max_concurrent_threads": 3,
+        "agent_retry_max_attempts": 4,
+        "agent_retry_initial_wait_seconds": 1.5,
+        "agent_retry_max_wait_seconds": 20,
+        "agent_retry_backoff_multiplier": 2,
+        "agent_max_image_size_bytes": 4000000,
+        "agent_max_images_per_message": 4,
+        "agent_base_url": "https://openrouter.ai/api/v1",
+        "agent_api_key_configured": true
+      }
+    }
+    """
+}
+
+private actor AgentFeatureMockTransport: HTTPTransport {
+    private let responseHandler: @Sendable (URLRequest) throws -> HTTPResponse
+
+    init(responseHandler: @escaping @Sendable (URLRequest) throws -> HTTPResponse) {
+        self.responseHandler = responseHandler
+    }
+
+    func response(for request: URLRequest) async throws -> HTTPResponse {
+        try responseHandler(request)
+    }
+
+    func stream(for request: URLRequest) async throws -> HTTPResponseStream {
+        HTTPResponseStream(statusCode: 200, headers: [:], chunks: AsyncThrowingStream { $0.finish() })
     }
 }

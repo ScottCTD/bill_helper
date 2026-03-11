@@ -1,4 +1,7 @@
+import OSLog
 import SwiftUI
+
+private let appDeepLinkLogger = Logger(subsystem: "BillHelperApp", category: "DeepLink")
 
 enum AppDestination: String, Hashable, CaseIterable {
     case dashboard
@@ -61,21 +64,39 @@ enum AppDeepLink: Equatable {
                 .first(where: { $0.name == "month" })?
                 .value)
         case "entries":
-            return pathParts.first.map { .entry(id: $0) }
+            guard let id = pathParts.first, !id.isEmpty else {
+                logInvalid(url, reason: "missing entry identifier")
+                return nil
+            }
+            return .entry(id: id)
         case "accounts":
-            return pathParts.first.map { .account(id: $0) }
+            guard let id = pathParts.first, !id.isEmpty else {
+                logInvalid(url, reason: "missing account identifier")
+                return nil
+            }
+            return .account(id: id)
         case "groups":
-            return pathParts.first.map { .group(id: $0) }
+            guard let id = pathParts.first, !id.isEmpty else {
+                logInvalid(url, reason: "missing group identifier")
+                return nil
+            }
+            return .group(id: id)
         case "agent":
             if pathParts.count >= 2, pathParts[0] == "threads" {
                 return .agentThread(id: pathParts[1])
             }
+            logInvalid(url, reason: "expected /threads/:id")
             return nil
         case "settings":
             return .settings
         default:
+            logInvalid(url, reason: "unsupported destination")
             return nil
         }
+    }
+
+    private static func logInvalid(_ url: URL, reason: String) {
+        appDeepLinkLogger.warning("Ignored deep link (\(reason, privacy: .public)): \(url.absoluteString, privacy: .public)")
     }
 }
 
