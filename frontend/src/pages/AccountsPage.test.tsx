@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AccountsPage } from "./AccountsPage";
 import { renderWithQueryClient } from "../test/renderWithQueryClient";
-import type { RuntimeSettings } from "../lib/types";
+import type { Reconciliation, RuntimeSettings } from "../lib/types";
 import {
   createAccount,
   createSnapshot,
@@ -74,38 +74,76 @@ const runtimeSettingsFixture: RuntimeSettings = {
   }
 };
 
+function reconciliationFixture(): Reconciliation {
+  return {
+    account_id: "acc-1",
+    account_name: "Main",
+    currency_code: "CAD",
+    as_of: "2026-02-16",
+    intervals: [
+      {
+        start_snapshot: {
+          id: "snap-0",
+          snapshot_at: "2026-01-01",
+          balance_minor: 500_00,
+          note: "Opening"
+        },
+        end_snapshot: {
+          id: "snap-1",
+          snapshot_at: "2026-02-01",
+          balance_minor: 420_00,
+          note: "Month end"
+        },
+        is_open: false,
+        tracked_change_minor: -60_00,
+        bank_change_minor: -80_00,
+        delta_minor: 20_00,
+        entry_count: 3
+      },
+      {
+        start_snapshot: {
+          id: "snap-1",
+          snapshot_at: "2026-02-01",
+          balance_minor: 420_00,
+          note: "Month end"
+        },
+        end_snapshot: null,
+        is_open: true,
+        tracked_change_minor: -35_00,
+        bank_change_minor: null,
+        delta_minor: null,
+        entry_count: 2
+      }
+    ]
+  };
+}
+
+function arrangeBaseMocks() {
+  vi.mocked(listAccounts).mockResolvedValue([
+    {
+      id: "acc-1",
+      owner_user_id: "user-1",
+      name: "Main",
+      markdown_body: null,
+      currency_code: "CAD",
+      is_active: true,
+      created_at: "2026-02-15T00:00:00Z",
+      updated_at: "2026-02-15T00:00:00Z"
+    }
+  ]);
+  vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
+  vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true, account_count: 1, entry_count: 0 }]);
+  vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
+  vi.mocked(getReconciliation).mockResolvedValue(reconciliationFixture());
+}
+
 afterEach(() => {
   vi.clearAllMocks();
 });
 
 describe("AccountsPage", () => {
   it("creates an account from the dialog flow", async () => {
-    vi.mocked(listAccounts).mockResolvedValue([
-      {
-        id: "acc-1",
-        owner_user_id: "user-1",
-        name: "Main",
-        markdown_body: null,
-        currency_code: "CAD",
-        is_active: true,
-        created_at: "2026-02-15T00:00:00Z",
-        updated_at: "2026-02-15T00:00:00Z"
-      }
-    ]);
-    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
-    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true, account_count: 1, entry_count: 0 }]);
-    vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
-    vi.mocked(listSnapshots).mockResolvedValue([]);
-    vi.mocked(getReconciliation).mockResolvedValue({
-      account_id: "acc-1",
-      account_name: "Main",
-      currency_code: "CAD",
-      as_of: "2026-02-15",
-      ledger_balance_minor: 100_00,
-      snapshot_balance_minor: 100_00,
-      snapshot_at: "2026-02-15",
-      delta_minor: 0
-    });
+    arrangeBaseMocks();
     vi.mocked(createAccount).mockResolvedValue({
       id: "acc-2",
       owner_user_id: "user-1",
@@ -115,24 +153,6 @@ describe("AccountsPage", () => {
       is_active: true,
       created_at: "2026-02-15T00:00:00Z",
       updated_at: "2026-02-15T00:00:00Z"
-    });
-    vi.mocked(updateAccount).mockResolvedValue({
-      id: "acc-1",
-      owner_user_id: "user-1",
-      name: "Main",
-      markdown_body: null,
-      currency_code: "CAD",
-      is_active: true,
-      created_at: "2026-02-15T00:00:00Z",
-      updated_at: "2026-02-15T00:00:00Z"
-    });
-    vi.mocked(createSnapshot).mockResolvedValue({
-      id: "snap-1",
-      account_id: "acc-1",
-      snapshot_at: "2026-02-15",
-      balance_minor: 100_00,
-      note: null,
-      created_at: "2026-02-15T00:00:00Z"
     });
 
     renderWithQueryClient(<AccountsPage />);
@@ -159,32 +179,8 @@ describe("AccountsPage", () => {
   });
 
   it("opens account editing on row double-click and keeps delete isolated", async () => {
-    vi.mocked(listAccounts).mockResolvedValue([
-      {
-        id: "acc-1",
-        owner_user_id: "user-1",
-        name: "Main",
-        markdown_body: null,
-        currency_code: "CAD",
-        is_active: true,
-        created_at: "2026-02-15T00:00:00Z",
-        updated_at: "2026-02-15T00:00:00Z"
-      }
-    ]);
-    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
-    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true, account_count: 1, entry_count: 0 }]);
-    vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
+    arrangeBaseMocks();
     vi.mocked(listSnapshots).mockResolvedValue([]);
-    vi.mocked(getReconciliation).mockResolvedValue({
-      account_id: "acc-1",
-      account_name: "Main",
-      currency_code: "CAD",
-      as_of: "2026-02-15",
-      ledger_balance_minor: 100_00,
-      snapshot_balance_minor: 100_00,
-      snapshot_at: "2026-02-15",
-      delta_minor: 0
-    });
     vi.mocked(updateAccount).mockResolvedValue({
       id: "acc-1",
       owner_user_id: "user-1",
@@ -207,66 +203,24 @@ describe("AccountsPage", () => {
     }
 
     await userEvent.dblClick(row);
-    const editDialog = await screen.findByRole("dialog", { name: "Edit Account" });
+    const editDialog = await screen.findByRole("dialog", { name: "Main" });
     expect(within(editDialog).getByLabelText("Name")).toHaveValue("Main");
+    expect(within(editDialog).getByRole("button", { name: "Reconciliation" })).toBeInTheDocument();
+    expect(within(editDialog).getByRole("button", { name: "Snapshots" })).toBeInTheDocument();
 
     await userEvent.click(within(editDialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => {
-      expect(screen.queryByRole("dialog", { name: "Edit Account" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Main" })).not.toBeInTheDocument();
     });
 
     await userEvent.dblClick(screen.getByRole("button", { name: "Delete account Main" }));
     expect(await screen.findByRole("dialog", { name: "Delete Main?" })).toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "Edit Account" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Main" })).not.toBeInTheDocument();
   });
 
-  it("creates snapshots for the selected account", async () => {
-    vi.mocked(listAccounts).mockResolvedValue([
-      {
-        id: "acc-1",
-        owner_user_id: "user-1",
-        name: "Main",
-        markdown_body: null,
-        currency_code: "CAD",
-        is_active: true,
-        created_at: "2026-02-15T00:00:00Z",
-        updated_at: "2026-02-15T00:00:00Z"
-      }
-    ]);
-    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
-    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true, account_count: 1, entry_count: 0 }]);
-    vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
+  it("creates snapshots from the account modal", async () => {
+    arrangeBaseMocks();
     vi.mocked(listSnapshots).mockResolvedValue([]);
-    vi.mocked(getReconciliation).mockResolvedValue({
-      account_id: "acc-1",
-      account_name: "Main",
-      currency_code: "CAD",
-      as_of: "2026-02-15",
-      ledger_balance_minor: 100_00,
-      snapshot_balance_minor: 100_00,
-      snapshot_at: "2026-02-15",
-      delta_minor: 0
-    });
-    vi.mocked(createAccount).mockResolvedValue({
-      id: "acc-2",
-      owner_user_id: "user-1",
-      name: "Travel Card",
-      markdown_body: null,
-      currency_code: "CAD",
-      is_active: true,
-      created_at: "2026-02-15T00:00:00Z",
-      updated_at: "2026-02-15T00:00:00Z"
-    });
-    vi.mocked(updateAccount).mockResolvedValue({
-      id: "acc-1",
-      owner_user_id: "user-1",
-      name: "Main",
-      markdown_body: null,
-      currency_code: "CAD",
-      is_active: true,
-      created_at: "2026-02-15T00:00:00Z",
-      updated_at: "2026-02-15T00:00:00Z"
-    });
     vi.mocked(createSnapshot).mockResolvedValue({
       id: "snap-1",
       account_id: "acc-1",
@@ -278,75 +232,30 @@ describe("AccountsPage", () => {
 
     renderWithQueryClient(<AccountsPage />);
 
-    await screen.findByText("Main");
-    const balanceInput = await screen.findByLabelText("Balance (CAD)");
-    await userEvent.clear(balanceInput);
-    await userEvent.type(balanceInput, "123.45");
-    await userEvent.type(screen.getByLabelText("Note"), "manual");
-    await userEvent.click(screen.getByRole("button", { name: "Add snapshot" }));
+    const row = (await screen.findByText("Main")).closest("tr");
+    if (!row) {
+      throw new Error("Expected account row");
+    }
+    await userEvent.dblClick(row);
+
+    const editDialog = await screen.findByRole("dialog", { name: "Main" });
+    await userEvent.click(within(editDialog).getByRole("button", { name: "Snapshots" }));
+    await userEvent.clear(within(editDialog).getByLabelText("Balance (CAD)"));
+    await userEvent.type(within(editDialog).getByLabelText("Balance (CAD)"), "123.45");
+    await userEvent.type(within(editDialog).getByLabelText("Note"), "manual");
+    await userEvent.click(within(editDialog).getByRole("button", { name: "Add snapshot" }));
 
     await waitFor(() => {
       expect(createSnapshot).toHaveBeenCalled();
     });
-    expect(vi.mocked(createSnapshot).mock.calls[0]?.[0]).toBe("acc-1");
-    expect(vi.mocked(createSnapshot).mock.calls[0]?.[1]).toEqual(expect.objectContaining({ balance_minor: 12345, note: "manual" }));
+    expect(vi.mocked(createSnapshot).mock.calls[0]).toEqual([
+      "acc-1",
+      expect.objectContaining({ balance_minor: 12345, note: "manual", snapshot_at: expect.any(String) })
+    ]);
   });
 
   it("deletes an account from the confirmation dialog", async () => {
-    vi.mocked(listAccounts).mockResolvedValue([
-      {
-        id: "acc-1",
-        owner_user_id: "user-1",
-        name: "Main",
-        markdown_body: null,
-        currency_code: "CAD",
-        is_active: true,
-        created_at: "2026-02-15T00:00:00Z",
-        updated_at: "2026-02-15T00:00:00Z"
-      }
-    ]);
-    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
-    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true, account_count: 1, entry_count: 0 }]);
-    vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
-    vi.mocked(listSnapshots).mockResolvedValue([]);
-    vi.mocked(getReconciliation).mockResolvedValue({
-      account_id: "acc-1",
-      account_name: "Main",
-      currency_code: "CAD",
-      as_of: "2026-02-15",
-      ledger_balance_minor: 100_00,
-      snapshot_balance_minor: 100_00,
-      snapshot_at: "2026-02-15",
-      delta_minor: 0
-    });
-    vi.mocked(createAccount).mockResolvedValue({
-      id: "acc-2",
-      owner_user_id: "user-1",
-      name: "Travel Card",
-      markdown_body: null,
-      currency_code: "CAD",
-      is_active: true,
-      created_at: "2026-02-15T00:00:00Z",
-      updated_at: "2026-02-15T00:00:00Z"
-    });
-    vi.mocked(updateAccount).mockResolvedValue({
-      id: "acc-1",
-      owner_user_id: "user-1",
-      name: "Main",
-      markdown_body: null,
-      currency_code: "CAD",
-      is_active: true,
-      created_at: "2026-02-15T00:00:00Z",
-      updated_at: "2026-02-15T00:00:00Z"
-    });
-    vi.mocked(createSnapshot).mockResolvedValue({
-      id: "snap-1",
-      account_id: "acc-1",
-      snapshot_at: "2026-02-15",
-      balance_minor: 100_00,
-      note: null,
-      created_at: "2026-02-15T00:00:00Z"
-    });
+    arrangeBaseMocks();
     vi.mocked(deleteAccount).mockResolvedValue(undefined);
 
     renderWithQueryClient(<AccountsPage />);
@@ -364,22 +273,8 @@ describe("AccountsPage", () => {
     });
   });
 
-  it("deletes a snapshot from the history table", async () => {
-    vi.mocked(listAccounts).mockResolvedValue([
-      {
-        id: "acc-1",
-        owner_user_id: "user-1",
-        name: "Main",
-        markdown_body: null,
-        currency_code: "CAD",
-        is_active: true,
-        created_at: "2026-02-15T00:00:00Z",
-        updated_at: "2026-02-15T00:00:00Z"
-      }
-    ]);
-    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
-    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true, account_count: 1, entry_count: 0 }]);
-    vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
+  it("deletes a snapshot from the modal history table", async () => {
+    arrangeBaseMocks();
     vi.mocked(listSnapshots).mockResolvedValue([
       {
         id: "snap-1",
@@ -388,28 +283,33 @@ describe("AccountsPage", () => {
         balance_minor: 123_45,
         note: "manual",
         created_at: "2026-02-16T00:00:00Z"
+      },
+      {
+        id: "snap-0",
+        account_id: "acc-1",
+        snapshot_at: "2026-01-15",
+        balance_minor: 150_00,
+        note: "opening",
+        created_at: "2026-01-15T00:00:00Z"
       }
     ]);
-    vi.mocked(getReconciliation).mockResolvedValue({
-      account_id: "acc-1",
-      account_name: "Main",
-      currency_code: "CAD",
-      as_of: "2026-02-16",
-      ledger_balance_minor: 100_00,
-      snapshot_balance_minor: 123_45,
-      snapshot_at: "2026-02-16",
-      delta_minor: -23_45
-    });
     vi.mocked(deleteSnapshot).mockResolvedValue(undefined);
 
     renderWithQueryClient(<AccountsPage />);
 
-    await screen.findByText("Main");
+    const row = (await screen.findByText("Main")).closest("tr");
+    if (!row) {
+      throw new Error("Expected account row");
+    }
+    await userEvent.dblClick(row);
+
+    const editDialog = await screen.findByRole("dialog", { name: "Main" });
+    await userEvent.click(within(editDialog).getByRole("button", { name: "Snapshots" }));
     await screen.findByText("manual");
-    await userEvent.click(screen.getByRole("button", { name: "Delete snapshot 2026-02-16" }));
+    await userEvent.click(within(editDialog).getByRole("button", { name: "Delete snapshot 2026-02-16" }));
 
     const deleteDialog = await screen.findByRole("dialog", { name: "Delete snapshot from 2026-02-16?" });
-    expect(within(deleteDialog).getByText(/next most recent snapshot/i)).toBeInTheDocument();
+    expect(within(deleteDialog).getByText(/new baseline for the open interval/i)).toBeInTheDocument();
 
     await userEvent.click(within(deleteDialog).getByRole("button", { name: "Delete snapshot" }));
 

@@ -12,6 +12,7 @@ import {
   buildEntryReviewDraftFromPreview,
   type EntityReviewDraft,
   type EntryReviewDraft,
+  type SnapshotReviewDraft,
   type TagReviewDraft,
   uniqueEntityOptionNames
 } from "./drafts";
@@ -235,6 +236,52 @@ export function ReviewAccountEditor({
           disabled={isDisabled}
           onChange={(event) => onDraftChange({ ...draft, markdownBody: event.target.value })}
         />
+      </FormField>
+    </div>
+  );
+}
+
+export function ReviewSnapshotEditor({
+  draft,
+  accountName,
+  currencyCode,
+  validationError,
+  isDisabled,
+  onDraftChange
+}: {
+  draft: SnapshotReviewDraft;
+  accountName: string;
+  currencyCode: string;
+  validationError: string | null;
+  isDisabled: boolean;
+  onDraftChange: (nextDraft: SnapshotReviewDraft) => void;
+}) {
+  return (
+    <div className="agent-review-editor-grid">
+      <FormField label="Account">
+        <Input value={accountName} disabled />
+      </FormField>
+      <div className="agent-review-editor-row">
+        <FormField label="Snapshot date" error={validationError === "Snapshot date is required." ? validationError : undefined}>
+          <Input
+            type="date"
+            value={draft.snapshotAt}
+            disabled={isDisabled}
+            onChange={(event) => onDraftChange({ ...draft, snapshotAt: event.target.value })}
+          />
+        </FormField>
+        <FormField label={`Balance (${currencyCode})`} error={validationError === "Balance must be a valid number." ? validationError : undefined}>
+          <Input
+            type="number"
+            step="0.01"
+            value={draft.balanceMajor}
+            disabled={isDisabled}
+            onChange={(event) => onDraftChange({ ...draft, balanceMajor: event.target.value })}
+          />
+        </FormField>
+      </div>
+      <FormField label="Note">
+        <Textarea rows={4} value={draft.note} disabled={isDisabled} onChange={(event) => onDraftChange({ ...draft, note: event.target.value })} />
       </FormField>
     </div>
   );

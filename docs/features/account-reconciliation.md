@@ -16,16 +16,16 @@ This doc is the fast path for understanding account management UX, snapshot chec
 
 ## Current Frontend Behavior
 
-- Accounts are displayed in a table workspace (search + single-click row selection + double-click row editing + row-level delete action).
+- Accounts are displayed in a table workspace (search + row selection + double-click row editing + row-level delete action).
 - Accounts are entity-root records; each account id is also the backing entity id.
 - Account creation is handled by the icon-only `+` action, which opens a modal.
 - Account edits are handled by double-clicking a table row, which opens the shared edit modal.
 - Account deletion starts from a subdued row-level delete action and is finalized in a confirmation dialog.
 - Account metadata now excludes legacy `institution` and `type`; dialogs focus on owner/name/currency/notes/active state.
 - Account create/edit modals include optional markdown notes (`markdown_body`) for richer account-level context.
-- Snapshot and reconciliation panels are bound to the currently selected table row.
-- Snapshot creation and deletion both happen in the account workspace; each saved snapshot row exposes its own delete action with confirmation.
-- Reconciliation and snapshot panels include plain-language term definitions directly in the page so users can understand fields without leaving the workflow.
+- The account edit modal now has dedicated `Details`, `Reconciliation`, and `Snapshots` tabs, so all account-specific state lives in one place.
+- Snapshot creation and deletion happen inside the account modal; each saved snapshot row exposes its own delete action with confirmation.
+- The reconciliation tab shows newest-first intervals, highlights the open interval separately, compresses reconciled intervals, and expands mismatched intervals.
 
 Delete semantics:
 
@@ -35,13 +35,18 @@ Delete semantics:
 
 ## Reconciliation Semantics
 
-Reconciliation is computed server-side in `backend/services/finance.py`:
+Reconciliation is computed server-side in `backend/services/finance.py` as interval history.
 
-1. `ledger_balance_minor`: sum of account entries up to `as_of` (`INCOME` positive, `EXPENSE` negative).
-2. `snapshot_balance_minor`: latest snapshot where `snapshot_at <= as_of`.
-3. `delta_minor = ledger_balance_minor - snapshot_balance_minor` when a snapshot exists; otherwise `null`.
+- Snapshots partition the timeline into `(start_snapshot_date, end_snapshot_date]` intervals.
+- Closed intervals compare:
+  - `bank_change_minor = end_snapshot.balance_minor - start_snapshot.balance_minor`
+  - `tracked_change_minor = SUM(entries in the interval)`
+  - `delta_minor = tracked_change_minor - bank_change_minor`
+- The most recent snapshot always produces one open interval from that snapshot to `as_of`.
+- The open interval exposes tracked activity only; it has no bank change or delta because there is no closing checkpoint yet.
+- Entries that occur on a snapshot date belong to the interval ending at that snapshot.
 
-The as-of date defaults to the server's current day when the query parameter is omitted.
+The `as_of` date still defaults to the server's current day when the query parameter is omitted.
 
 ## Backend Modules
 
@@ -49,16 +54,16 @@ The as-of date defaults to the server's current day when the query parameter is 
 - `backend/services/account_snapshots.py`: shared snapshot create/list/delete persistence workflows.
 - `backend/services/agent/message_history.py`: current-user account context assembly for agent system prompt (includes account notes).
 - `backend/services/accounts.py`: shared account/entity-root create, update, and delete behavior.
-- `backend/services/finance.py`: ledger aggregation + latest-snapshot lookup.
-- `backend/schemas_finance.py`: `Account*`, `Snapshot*`, and `ReconciliationRead` contracts.
+- `backend/services/finance.py`: interval reconciliation builders plus dashboard reconciliation summaries.
+- `backend/schemas_finance.py`: `Account*`, `Snapshot*`, `ReconciliationIntervalRead`, and `ReconciliationRead` contracts.
 
 ## Frontend Modules
 
 - `frontend/src/pages/AccountsPage.tsx`: thin page orchestrator for accounts workspace composition.
 - `frontend/src/features/accounts/useAccountsPageModel.ts`: query/mutation state, derived selection/filter state, and form orchestration.
 - `frontend/src/features/accounts/AccountsTableSection.tsx`: account table/search/selection UI.
-- `frontend/src/features/accounts/ReconciliationSection.tsx`: reconciliation summary UI.
-- `frontend/src/features/accounts/SnapshotsSection.tsx`: snapshot create/history UI.
+- `frontend/src/features/accounts/ReconciliationSection.tsx`: interval list UI inside the account modal.
+- `frontend/src/features/accounts/SnapshotsSection.tsx`: snapshot create/history UI inside the account modal.
 - `frontend/src/features/accounts/AccountDialogs.tsx`: create/edit dialog UI.
 - `frontend/src/components/DeleteConfirmDialog.tsx`: shared destructive confirmation dialog primitive.
 - `frontend/src/lib/api.ts`: account/snapshot/reconciliation client methods.
@@ -71,5 +76,5 @@ The as-of date defaults to the server's current day when the query parameter is 
 - Create-account default currency is sourced from runtime settings (`GET /api/v1/settings`), then uppercased.
 - Snapshot balance input is entered in major units in the UI, then converted to minor units before API submit.
 - Snapshot list ordering is newest checkpoint first (`snapshot_at desc`, then `created_at desc`).
-- Deleting a snapshot only removes that checkpoint; reconciliation then falls back to the next most recent snapshot on or before the requested date.
+- Deleting a snapshot only removes that checkpoint; reconciliation immediately rebuilds its interval history around the remaining checkpoints.
 - Snapshots are intended as bank checkpoints, not derived balances; the user must add them manually.

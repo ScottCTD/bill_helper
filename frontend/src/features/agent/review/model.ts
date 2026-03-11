@@ -7,7 +7,7 @@ export interface ThreadReviewItem {
   runIndex: number;
 }
 
-export type ProposalDomain = "entry" | "account" | "entity" | "tag" | "group";
+export type ProposalDomain = "entry" | "account" | "snapshot" | "entity" | "tag" | "group";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -18,6 +18,8 @@ const CHANGE_TYPE_LABEL: Record<AgentChangeType, string> = {
   create_account: "Create Account",
   update_account: "Update Account",
   delete_account: "Delete Account",
+  create_snapshot: "Create Snapshot",
+  delete_snapshot: "Delete Snapshot",
   create_group: "Create Group",
   update_group: "Update Group",
   delete_group: "Delete Group",
@@ -38,6 +40,8 @@ const CHANGE_TYPE_DOMAIN: Record<AgentChangeType, ProposalDomain> = {
   create_account: "account",
   update_account: "account",
   delete_account: "account",
+  create_snapshot: "snapshot",
+  delete_snapshot: "snapshot",
   create_group: "group",
   update_group: "group",
   delete_group: "group",
@@ -81,6 +85,17 @@ function itemSummaryFromPayload(changeType: AgentChangeType, payload: JsonRecord
     case "delete_account": {
       const name = typeof payload.name === "string" ? payload.name : "Untitled";
       return `${CHANGE_TYPE_LABEL[changeType]}: ${name}`;
+    }
+    case "create_snapshot": {
+      const accountName = typeof payload.account_name === "string" ? payload.account_name : "Untitled";
+      const snapshotAt = typeof payload.snapshot_at === "string" ? payload.snapshot_at : "unknown date";
+      return `Create Snapshot: ${accountName} on ${snapshotAt}`;
+    }
+    case "delete_snapshot": {
+      const accountName = typeof payload.account_name === "string" ? payload.account_name : "Untitled";
+      const target = asRecord(payload.target);
+      const snapshotAt = typeof target.snapshot_at === "string" ? target.snapshot_at : "unknown date";
+      return `Delete Snapshot: ${accountName} on ${snapshotAt}`;
     }
     case "create_group":
     case "delete_group": {

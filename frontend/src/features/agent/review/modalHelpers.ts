@@ -9,7 +9,7 @@ export interface TocStatusIndicator {
   label: string;
 }
 
-type TocProposalGroupKey = "entry" | "account" | "entity" | "tag" | "group";
+type TocProposalGroupKey = "entry" | "account" | "snapshot" | "entity" | "tag" | "group";
 
 interface TocProposalGroup {
   key: TocProposalGroupKey;
@@ -93,6 +93,7 @@ export function groupReviewItems(items: ThreadReviewItem[]): TocProposalGroup[] 
   const grouped: Record<TocProposalGroupKey, ThreadReviewItem[]> = {
     entry: [],
     account: [],
+    snapshot: [],
     entity: [],
     tag: [],
     group: []
@@ -103,6 +104,7 @@ export function groupReviewItems(items: ThreadReviewItem[]): TocProposalGroup[] 
   const groups: TocProposalGroup[] = [
     { key: "entry", label: "Entries", items: grouped.entry },
     { key: "account", label: "Accounts", items: grouped.account },
+    { key: "snapshot", label: "Snapshots", items: grouped.snapshot },
     { key: "group", label: "Groups", items: grouped.group },
     { key: "entity", label: "Entities", items: grouped.entity },
     { key: "tag", label: "Tags", items: grouped.tag }

@@ -1,7 +1,5 @@
 import { AccountDialogs } from "../features/accounts/AccountDialogs";
 import { AccountsTableSection } from "../features/accounts/AccountsTableSection";
-import { ReconciliationSection } from "../features/accounts/ReconciliationSection";
-import { SnapshotsSection } from "../features/accounts/SnapshotsSection";
 import { useAccountsPageModel } from "../features/accounts/useAccountsPageModel";
 import { DeleteConfirmDialog } from "../components/DeleteConfirmDialog";
 
@@ -36,29 +34,6 @@ export function AccountsPage() {
         errorMessage={accountTableError}
       />
 
-      <section className="grid-2">
-        <ReconciliationSection
-          selectedAccount={model.selectedAccount}
-          reconciliation={model.queries.reconciliationQuery.data}
-          isLoading={model.queries.reconciliationQuery.isLoading}
-          errorMessage={reconciliationError}
-        />
-
-        <SnapshotsSection
-          selectedAccount={model.selectedAccount}
-          snapshotForm={model.snapshotForm}
-          onSnapshotFormChange={model.setSnapshotForm}
-          onCreateSnapshot={model.actions.onCreateSnapshot}
-          onDeleteSnapshot={model.actions.openDeleteSnapshotDialog}
-          snapshots={model.queries.snapshotsQuery.data}
-          isLoading={model.queries.snapshotsQuery.isLoading}
-          errorMessage={snapshotsError}
-          formErrorMessage={model.snapshotFormError}
-          createErrorMessage={createSnapshotError}
-          isCreating={model.mutations.createSnapshotMutation.isPending}
-        />
-      </section>
-
       <AccountDialogs
         createDialogOpen={model.createDialogOpen}
         onCreateDialogOpenChange={model.setCreateDialogOpen}
@@ -73,6 +48,19 @@ export function AccountsPage() {
         users={model.queries.usersQuery.data}
         currencies={model.currencies}
         editingAccount={model.editingAccount}
+        reconciliation={model.queries.reconciliationQuery.data}
+        reconciliationErrorMessage={reconciliationError}
+        reconciliationIsLoading={model.queries.reconciliationQuery.isLoading}
+        snapshots={model.queries.snapshotsQuery.data}
+        snapshotsErrorMessage={snapshotsError}
+        snapshotsIsLoading={model.queries.snapshotsQuery.isLoading}
+        snapshotForm={model.snapshotForm}
+        onSnapshotFormChange={model.setSnapshotForm}
+        onCreateSnapshot={model.actions.onCreateSnapshot}
+        onDeleteSnapshot={model.actions.openDeleteSnapshotDialog}
+        snapshotFormErrorMessage={model.snapshotFormError}
+        snapshotCreateErrorMessage={createSnapshotError}
+        snapshotIsCreating={model.mutations.createSnapshotMutation.isPending}
         createErrorMessage={createAccountError}
         updateErrorMessage={updateAccountError}
         isCreating={model.mutations.createAccountMutation.isPending}
@@ -107,10 +95,7 @@ export function AccountsPage() {
         errorMessage={
           model.mutations.deleteSnapshotMutation.isError ? (model.mutations.deleteSnapshotMutation.error as Error).message : null
         }
-        warnings={[
-          "This action cannot be undone.",
-          "Reconciliation will fall back to the next most recent snapshot on or before the selected date."
-        ]}
+        warnings={model.deleteSnapshotImpactWarnings}
         onConfirm={model.actions.confirmDeleteSnapshot}
       />
     </div>

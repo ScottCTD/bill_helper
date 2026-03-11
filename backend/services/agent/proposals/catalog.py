@@ -22,6 +22,10 @@ from backend.services.agent.proposals.common import (
     has_pending_create_entity_root_proposal,
     proposal_result,
 )
+from backend.services.agent.proposals.snapshots import (
+    propose_create_snapshot,
+    propose_delete_snapshot,
+)
 from backend.services.agent.entry_references import entry_to_public_record
 from backend.services.agent.tool_results import error_result
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult

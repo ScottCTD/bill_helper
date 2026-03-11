@@ -70,6 +70,9 @@ You are an expert in personal finance and accounting. You always call the right 
 - Use account proposal tools only for the user's own accounts.
 - Before proposing an account mutation, use list_accounts to inspect existing accounts.
 - Never use propose_create_entity or propose_update_entity with `category="account"`.
+- Use propose_create_snapshot when the user gives a bank balance checkpoint for an existing account.
+- Before proposing snapshot deletion, use list_snapshots to inspect the account's existing checkpoints.
+- Use get_reconciliation to explain interval deltas, identify mismatched periods, and help the user find untracked transactions.
 
 ### Grouping
 #### Group Types

@@ -6,6 +6,8 @@ from backend.enums_agent import AgentChangeType
 from backend.services.agent.change_contracts.catalog import (
     CreateAccountPayload,
     CreateEntityPayload,
+    SnapshotCreatePayload,
+    SnapshotDeletePayload,
     CreateTagPayload,
     DeleteAccountPayload,
     DeleteEntityPayload,
@@ -129,6 +131,27 @@ def normalize_delete_account_payload(_context: ToolContext, payload: dict[str, A
     return normalized_payload
 
 
+def normalize_create_snapshot_payload(_context: ToolContext, payload: dict[str, Any]) -> dict[str, Any]:
+    parsed = parse_typed_change_payload(
+        change_type=AgentChangeType.CREATE_SNAPSHOT,
+        payload=payload,
+        model_type=SnapshotCreatePayload,
+    )
+    return parsed.model_dump(mode="json")
+
+
+def normalize_delete_snapshot_payload(_context: ToolContext, payload: dict[str, Any]) -> dict[str, Any]:
+    parsed = parse_typed_change_payload(
+        change_type=AgentChangeType.DELETE_SNAPSHOT,
+        payload=payload,
+        model_type=SnapshotDeletePayload,
+    )
+    normalized_payload = parsed.model_dump(mode="json")
+    if isinstance(payload.get("impact_preview"), dict):
+        normalized_payload["impact_preview"] = payload["impact_preview"]
+    return normalized_payload
+
+
 CATALOG_PAYLOAD_NORMALIZERS = {
     AgentChangeType.CREATE_TAG: normalize_create_tag_payload,
     AgentChangeType.UPDATE_TAG: normalize_update_tag_payload,
@@ -139,4 +162,6 @@ CATALOG_PAYLOAD_NORMALIZERS = {
     AgentChangeType.CREATE_ACCOUNT: normalize_create_account_payload,
     AgentChangeType.UPDATE_ACCOUNT: normalize_update_account_payload,
     AgentChangeType.DELETE_ACCOUNT: normalize_delete_account_payload,
+    AgentChangeType.CREATE_SNAPSHOT: normalize_create_snapshot_payload,
+    AgentChangeType.DELETE_SNAPSHOT: normalize_delete_snapshot_payload,
 }

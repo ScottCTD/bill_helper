@@ -18,13 +18,16 @@ from backend.schemas_finance import (
     DashboardBreakdownItem,
     DashboardDailySpendingPoint,
     DashboardFilterGroupSummary,
+    DashboardReconciliationRead,
     DashboardKpisRead,
     DashboardLargestExpenseItem,
     DashboardMonthlyTrendPoint,
     DashboardProjectionRead,
     DashboardTimelineRead,
     DashboardWeekdaySpendingPoint,
+    ReconciliationIntervalRead,
     ReconciliationRead,
+    SnapshotSummaryRead,
     TagBreakdownItem,
 )
 from backend.services.access_scope import account_owner_filter, entry_owner_filter
@@ -60,49 +63,136 @@ class DashboardAnalyticsOptions:
     account_filter: DashboardFilter | None = None
 
 
-def compute_ledger_balance(db: Session, account_id: str, as_of: date) -> int:
-    signed_amount = case(
+def _signed_entry_amount() -> ColumnElement[int]:
+    return case(
         (Entry.kind == EntryKind.INCOME, Entry.amount_minor),
         else_=-Entry.amount_minor,
     )
-    total = db.scalar(
-        select(func.coalesce(func.sum(signed_amount), 0)).where(
+
+
+def _snapshot_summary(snapshot: AccountSnapshot) -> SnapshotSummaryRead:
+    return SnapshotSummaryRead(
+        id=snapshot.id,
+        snapshot_at=snapshot.snapshot_at,
+        balance_minor=snapshot.balance_minor,
+        note=snapshot.note,
+    )
+
+
+def _list_reconciliation_snapshots(
+    db: Session,
+    *,
+    account_id: str,
+    as_of: date,
+) -> list[AccountSnapshot]:
+    return list(
+        db.scalars(
+            select(AccountSnapshot)
+            .where(
+                AccountSnapshot.account_id == account_id,
+                AccountSnapshot.snapshot_at <= as_of,
+            )
+            .order_by(AccountSnapshot.snapshot_at.asc(), AccountSnapshot.created_at.asc())
+        )
+    )
+
+
+def _interval_entry_rollup(
+    db: Session,
+    *,
+    account_id: str,
+    start_exclusive: date,
+    end_inclusive: date,
+) -> tuple[int, int]:
+    if end_inclusive < start_exclusive:
+        return 0, 0
+
+    signed_amount = _signed_entry_amount()
+    totals = db.execute(
+        select(
+            func.coalesce(func.sum(signed_amount), 0),
+            func.count(Entry.id),
+        ).where(
             Entry.account_id == account_id,
             Entry.is_deleted.is_(False),
-            Entry.occurred_at <= as_of,
+            Entry.occurred_at > start_exclusive,
+            Entry.occurred_at <= end_inclusive,
         )
-    )
-    return int(total or 0)
-
-
-def latest_snapshot(db: Session, account_id: str, as_of: date) -> AccountSnapshot | None:
-    return db.scalar(
-        select(AccountSnapshot)
-        .where(
-            AccountSnapshot.account_id == account_id,
-            AccountSnapshot.snapshot_at <= as_of,
-        )
-        .order_by(AccountSnapshot.snapshot_at.desc(), AccountSnapshot.created_at.desc())
-        .limit(1)
-    )
+    ).one()
+    return int(totals[0] or 0), int(totals[1] or 0)
 
 
 def build_reconciliation(db: Session, account: Account, as_of: date) -> ReconciliationRead:
-    ledger_balance = compute_ledger_balance(db, account.id, as_of)
-    snapshot = latest_snapshot(db, account.id, as_of)
+    snapshots = _list_reconciliation_snapshots(db, account_id=account.id, as_of=as_of)
+    intervals: list[ReconciliationIntervalRead] = []
 
-    snapshot_balance = snapshot.balance_minor if snapshot else None
-    delta = ledger_balance - snapshot_balance if snapshot_balance is not None else None
+    for start_snapshot, end_snapshot in zip(snapshots, snapshots[1:], strict=False):
+        tracked_change_minor, entry_count = _interval_entry_rollup(
+            db,
+            account_id=account.id,
+            start_exclusive=start_snapshot.snapshot_at,
+            end_inclusive=end_snapshot.snapshot_at,
+        )
+        bank_change_minor = end_snapshot.balance_minor - start_snapshot.balance_minor
+        intervals.append(
+            ReconciliationIntervalRead(
+                start_snapshot=_snapshot_summary(start_snapshot),
+                end_snapshot=_snapshot_summary(end_snapshot),
+                is_open=False,
+                tracked_change_minor=tracked_change_minor,
+                bank_change_minor=bank_change_minor,
+                delta_minor=tracked_change_minor - bank_change_minor,
+                entry_count=entry_count,
+            )
+        )
+
+    if snapshots:
+        tracked_change_minor, entry_count = _interval_entry_rollup(
+            db,
+            account_id=account.id,
+            start_exclusive=snapshots[-1].snapshot_at,
+            end_inclusive=as_of,
+        )
+        intervals.append(
+            ReconciliationIntervalRead(
+                start_snapshot=_snapshot_summary(snapshots[-1]),
+                end_snapshot=None,
+                is_open=True,
+                tracked_change_minor=tracked_change_minor,
+                bank_change_minor=None,
+                delta_minor=None,
+                entry_count=entry_count,
+            )
+        )
 
     return ReconciliationRead(
         account_id=account.id,
         account_name=account.name,
         currency_code=account.currency_code,
         as_of=as_of,
-        ledger_balance_minor=ledger_balance,
-        snapshot_balance_minor=snapshot_balance,
-        snapshot_at=snapshot.snapshot_at if snapshot else None,
-        delta_minor=delta,
+        intervals=intervals,
+    )
+
+
+def build_dashboard_reconciliation_summary(
+    reconciliation: ReconciliationRead,
+) -> DashboardReconciliationRead:
+    closed_intervals = [interval for interval in reconciliation.intervals if not interval.is_open]
+    open_interval = next((interval for interval in reconciliation.intervals if interval.is_open), None)
+    latest_closed = closed_intervals[-1] if closed_intervals else None
+    reconciled_interval_count = sum(1 for interval in closed_intervals if interval.delta_minor == 0)
+    mismatched_interval_count = sum(1 for interval in closed_intervals if interval.delta_minor != 0)
+    latest_snapshot = reconciliation.intervals[-1].start_snapshot if reconciliation.intervals else None
+
+    return DashboardReconciliationRead(
+        account_id=reconciliation.account_id,
+        account_name=reconciliation.account_name,
+        currency_code=reconciliation.currency_code,
+        latest_snapshot_at=latest_snapshot.snapshot_at if latest_snapshot else None,
+        current_tracked_change_minor=open_interval.tracked_change_minor if open_interval else None,
+        last_closed_delta_minor=latest_closed.delta_minor if latest_closed else None,
+        mismatched_interval_count=mismatched_interval_count,
+        reconciled_interval_count=reconciled_interval_count,
     )
 
 
@@ -167,7 +257,10 @@ def build_dashboard_read(
         currency_code=dashboard_currency_code,
         principal=principal,
     )
-    reconciliation = [build_reconciliation(db, account, as_of) for account in accounts]
+    reconciliation = [
+        build_dashboard_reconciliation_summary(build_reconciliation(db, account, as_of))
+        for account in accounts
+    ]
 
     return DashboardRead(
         month=month,

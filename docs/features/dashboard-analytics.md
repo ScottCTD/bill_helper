@@ -15,7 +15,7 @@ This doc is the fast path for understanding dashboard metrics, filter-group clas
 - Dashboard analytics use the runtime-configured dashboard currency (`/settings.dashboard_currency_code`).
 - Entries in other currencies are excluded from dashboard calculations.
 - Entries whose `from_entity_id` and `to_entity_id` both resolve to account-backed entity roots (`accounts.id` membership) are treated as internal transfers and excluded from dashboard KPIs, expense charts, breakdowns, largest-expense ranking, and projection math.
-- Reconciliation panel includes active accounts only for the selected dashboard currency.
+- Entries whose `from_entity_id` and `to_entity_id` both resolve to account-backed entity roots (`accounts.id` membership) are treated as internal transfers and excluded from dashboard KPIs, expense charts, breakdowns, largest-expense ranking, and projection math.
 
 ## Filter-Group Classification
 

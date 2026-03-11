@@ -32,8 +32,8 @@ export function useAgentThreadReviewController({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const flattenedItems = useMemo(() => buildThreadReviewItems(runs), [runs]);
-  const editorResources = useAgentReviewEditorResources(open);
   const activeReviewItem = useMemo(() => items.find((item) => item.item.id === activeItemId) ?? null, [activeItemId, items]);
+  const editorResources = useAgentReviewEditorResources(open, activeReviewItem);
   const draftState = useAgentReviewDraftState({
     activeReviewItem,
     defaultCurrencyCode: editorResources.defaultCurrencyCode
@@ -47,6 +47,7 @@ export function useAgentThreadReviewController({
     setActiveEntryDraft,
     setActiveGroupDraft,
     setActiveGroupMembershipDraft,
+    setActiveSnapshotDraft,
     setActiveTagDraft
   } = draftState;
 
@@ -326,6 +327,7 @@ export function useAgentThreadReviewController({
     setActiveEntryDraft,
     setActiveGroupDraft,
     setActiveGroupMembershipDraft,
+    setActiveSnapshotDraft,
     setActiveTagDraft,
     toggleSidebar() {
       setIsSidebarCollapsed((current) => !current);

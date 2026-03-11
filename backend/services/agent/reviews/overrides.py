@@ -20,6 +20,7 @@ EDITABLE_CHANGE_TYPES = {
     AgentChangeType.UPDATE_ENTITY,
     AgentChangeType.CREATE_ACCOUNT,
     AgentChangeType.UPDATE_ACCOUNT,
+    AgentChangeType.CREATE_SNAPSHOT,
     AgentChangeType.CREATE_ENTRY,
     AgentChangeType.UPDATE_ENTRY,
     AgentChangeType.CREATE_GROUP,
@@ -79,7 +80,7 @@ def validate_payload_override_supported(item: AgentChangeItem, payload_override:
         return
     if item.change_type not in EDITABLE_CHANGE_TYPES:
         raise PolicyViolation.bad_request(
-            "payload_override is only supported for editable create/update entry, tag, entity, account, and group items"
+            "payload_override is only supported for editable create/update entry, tag, entity, account, snapshot, and group items"
         )
 
 

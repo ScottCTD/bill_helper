@@ -70,6 +70,16 @@ Behavior:
 
 - snapshot create/list/delete are principal-scoped through the parent account lookup
 - deleting a snapshot removes only that stored checkpoint; the account and ledger entries remain unchanged
+- reconciliation returns full interval history, not one absolute ledger-vs-balance delta
+- interval boundaries are `(start_snapshot_date, end_snapshot_date]`, so entries on a snapshot date belong to the interval ending at that snapshot
+- each response includes:
+  - `intervals[]`
+  - `start_snapshot`
+  - `end_snapshot` or `null` for the open interval
+  - `tracked_change_minor`
+  - `bank_change_minor` for closed intervals only
+  - `delta_minor` for closed intervals only
+  - `entry_count`
 
 ## Entries
 

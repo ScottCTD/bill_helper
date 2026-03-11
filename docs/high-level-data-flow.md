@@ -87,7 +87,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 5. On approval, apply handlers create domain rows (including entries) and record review actions.
 6. Agent-created entries remain ungrouped until a user assigns them through the groups workspace.
 
-### Read Path (Dashboard + Reconciliation)
+### Read Path (Dashboard + Account Reconciliation)
 
 1. Frontend calls `/api/v1/dashboard?month=YYYY-MM` and account reconciliation endpoints.
 2. Finance service computes:
@@ -96,8 +96,8 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
    - daily and monthly expense series grouped by saved filter groups
    - monthly trend, breakdowns (`from`, `to`, `tag`)
    - weekday distribution, largest expenses, projection
-   - account reconciliation deltas
-3. Frontend renders tabbed interactive charts/tables from the aggregated payload.
+   - account reconciliation interval summaries for the account workspace
+3. Frontend renders dashboard charts/tables from the aggregated payload and renders account reconciliation in the accounts workspace.
 
 ### Filter-Group Configuration Path
 

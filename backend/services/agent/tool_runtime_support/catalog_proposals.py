@@ -3,6 +3,8 @@ from __future__ import annotations
 from backend.services.agent.change_contracts.catalog import (
     CreateAccountPayload as ProposeCreateAccountArgs,
     CreateEntityPayload as ProposeCreateEntityArgs,
+    ProposeCreateSnapshotArgs,
+    ProposeDeleteSnapshotArgs,
     CreateTagPayload as ProposeCreateTagArgs,
     DeleteAccountPayload as ProposeDeleteAccountArgs,
     DeleteEntityPayload as ProposeDeleteEntityArgs,
@@ -24,9 +26,11 @@ from backend.services.agent.change_contracts.groups import (
 from backend.services.agent.proposals.catalog import (
     propose_create_account,
     propose_create_entity,
+    propose_create_snapshot,
     propose_create_tag,
     propose_delete_account,
     propose_delete_entity,
+    propose_delete_snapshot,
     propose_delete_tag,
     propose_update_account,
     propose_update_entity,
@@ -144,6 +148,25 @@ PROPOSAL_TOOLS: dict[str, AgentToolDefinition] = {
         ),
         args_model=ProposeDeleteAccountArgs,
         handler=propose_delete_account,
+    ),
+    "propose_create_snapshot": AgentToolDefinition(
+        name="propose_create_snapshot",
+        description=(
+            "Create a review-gated proposal to add a balance snapshot for an existing account. "
+            "Provide balance in major currency units; the handler converts it to minor units before persisting "
+            "the review payload. This does not mutate snapshots immediately."
+        ),
+        args_model=ProposeCreateSnapshotArgs,
+        handler=propose_create_snapshot,
+    ),
+    "propose_delete_snapshot": AgentToolDefinition(
+        name="propose_delete_snapshot",
+        description=(
+            "Create a review-gated proposal to delete an existing account snapshot by account_id and snapshot_id. "
+            "Use list_snapshots first so you can pass the exact snapshot_id. This does not mutate snapshots immediately."
+        ),
+        args_model=ProposeDeleteSnapshotArgs,
+        handler=propose_delete_snapshot,
     ),
     "propose_create_entry": AgentToolDefinition(
         name="propose_create_entry",

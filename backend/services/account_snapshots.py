@@ -42,18 +42,27 @@ def list_account_snapshots(
     )
 
 
+def get_account_snapshot(
+    db: Session,
+    *,
+    account_id: str,
+    snapshot_id: str,
+) -> AccountSnapshot | None:
+    return db.scalar(
+        select(AccountSnapshot).where(
+            AccountSnapshot.id == snapshot_id,
+            AccountSnapshot.account_id == account_id,
+        )
+    )
+
+
 def delete_account_snapshot(
     db: Session,
     *,
     account: Account,
     snapshot_id: str,
 ) -> None:
-    snapshot = db.scalar(
-        select(AccountSnapshot).where(
-            AccountSnapshot.id == snapshot_id,
-            AccountSnapshot.account_id == account.id,
-        )
-    )
+    snapshot = get_account_snapshot(db, account_id=account.id, snapshot_id=snapshot_id)
     if snapshot is None:
         raise PolicyViolation.not_found("Snapshot not found")
     db.delete(snapshot)

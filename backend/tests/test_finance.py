@@ -71,24 +71,63 @@ def create_entry(
 def test_reconciliation_math(client):
     account = create_account(client)
 
-    snapshot_response = client.post(
+    opening_snapshot = client.post(
         f"/api/v1/accounts/{account['id']}/snapshots",
-        json={"snapshot_at": "2026-01-10", "balance_minor": 100000, "note": "Bank balance"},
+        json={"snapshot_at": "2026-01-01", "balance_minor": 500000, "note": "Opening balance"},
     )
-    snapshot_response.raise_for_status()
+    opening_snapshot.raise_for_status()
+    closing_snapshot = client.post(
+        f"/api/v1/accounts/{account['id']}/snapshots",
+        json={"snapshot_at": "2026-02-01", "balance_minor": 420000, "note": "Month-end balance"},
+    )
+    closing_snapshot.raise_for_status()
 
-    create_entry(client, account["id"], "INCOME", 5000, "2026-01-05")
-    create_entry(client, account["id"], "EXPENSE", 2000, "2026-01-08")
+    create_entry(client, account["id"], "EXPENSE", 70000, "2026-01-10")
+    create_entry(client, account["id"], "INCOME", 10000, "2026-01-20")
+    create_entry(client, account["id"], "EXPENSE", 5000, "2026-02-01", name="Statement-day coffee")
+    create_entry(client, account["id"], "EXPENSE", 2000, "2026-02-10")
 
     reconciliation = client.get(
-        f"/api/v1/accounts/{account['id']}/reconciliation", params={"as_of": "2026-01-10"}
+        f"/api/v1/accounts/{account['id']}/reconciliation", params={"as_of": "2026-02-15"}
     )
     reconciliation.raise_for_status()
     payload = reconciliation.json()
 
-    assert payload["ledger_balance_minor"] == 3000
-    assert payload["snapshot_balance_minor"] == 100000
-    assert payload["delta_minor"] == -97000
+    assert payload["intervals"] == [
+        {
+            "start_snapshot": {
+                "id": opening_snapshot.json()["id"],
+                "snapshot_at": "2026-01-01",
+                "balance_minor": 500000,
+                "note": "Opening balance",
+            },
+            "end_snapshot": {
+                "id": closing_snapshot.json()["id"],
+                "snapshot_at": "2026-02-01",
+                "balance_minor": 420000,
+                "note": "Month-end balance",
+            },
+            "is_open": False,
+            "tracked_change_minor": -65000,
+            "bank_change_minor": -80000,
+            "delta_minor": 15000,
+            "entry_count": 3,
+        },
+        {
+            "start_snapshot": {
+                "id": closing_snapshot.json()["id"],
+                "snapshot_at": "2026-02-01",
+                "balance_minor": 420000,
+                "note": "Month-end balance",
+            },
+            "end_snapshot": None,
+            "is_open": True,
+            "tracked_change_minor": -2000,
+            "bank_change_minor": None,
+            "delta_minor": None,
+            "entry_count": 1,
+        },
+    ]
 
 
 def test_delete_snapshot_removes_checkpoint_from_account_history(client):

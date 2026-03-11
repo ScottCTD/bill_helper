@@ -95,15 +95,40 @@ export interface Snapshot {
   created_at: string;
 }
 
+export interface SnapshotSummary {
+  id: string;
+  snapshot_at: string;
+  balance_minor: number;
+  note: string | null;
+}
+
+export interface ReconciliationInterval {
+  start_snapshot: SnapshotSummary;
+  end_snapshot: SnapshotSummary | null;
+  is_open: boolean;
+  tracked_change_minor: number;
+  bank_change_minor: number | null;
+  delta_minor: number | null;
+  entry_count: number;
+}
+
 export interface Reconciliation {
   account_id: string;
   account_name: string;
   currency_code: string;
   as_of: string;
-  ledger_balance_minor: number;
-  snapshot_balance_minor: number | null;
-  snapshot_at: string | null;
-  delta_minor: number | null;
+  intervals: ReconciliationInterval[];
+}
+
+export interface DashboardReconciliation {
+  account_id: string;
+  account_name: string;
+  currency_code: string;
+  latest_snapshot_at: string | null;
+  current_tracked_change_minor: number | null;
+  last_closed_delta_minor: number | null;
+  mismatched_interval_count: number;
+  reconciled_interval_count: number;
 }
 
 export interface EntryGroupRef {
@@ -327,7 +352,7 @@ export interface Dashboard {
   weekday_spending: DashboardWeekdaySpendingPoint[];
   largest_expenses: DashboardLargestExpenseItem[];
   projection: DashboardProjection;
-  reconciliation: Reconciliation[];
+  reconciliation: DashboardReconciliation[];
 }
 
 export interface RuntimeSettingsOverrides {
@@ -408,6 +433,8 @@ export type AgentChangeType =
   | "create_account"
   | "update_account"
   | "delete_account"
+  | "create_snapshot"
+  | "delete_snapshot"
   | "create_group"
   | "update_group"
   | "delete_group"

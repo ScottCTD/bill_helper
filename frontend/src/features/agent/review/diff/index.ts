@@ -74,6 +74,24 @@ export function buildProposalDiff(
   switch (changeType) {
     case "create_account":
       return buildCreateDiff(buildAccountRecord(payload), metadata, reviewerOverride ? buildAccountRecord(reviewerOverride) : undefined);
+    case "create_snapshot": {
+      pushMetadata(metadata, "Account", payload.account_name);
+      return buildCreateDiff(
+        {
+          snapshot_at: payload.snapshot_at,
+          balance_minor: payload.balance_minor,
+          note: payload.note ?? null
+        },
+        metadata,
+        reviewerOverride
+          ? {
+              snapshot_at: reviewerOverride.snapshot_at,
+              balance_minor: reviewerOverride.balance_minor,
+              note: reviewerOverride.note ?? null
+            }
+          : undefined
+      );
+    }
     case "create_entry":
     case "create_tag":
     case "create_entity":
@@ -99,6 +117,10 @@ export function buildProposalDiff(
       return buildDeleteDiff(payload, metadata, selector);
     case "delete_account":
       return buildDeleteDiff(payload, metadata, asRecord(impactPreview.current));
+    case "delete_snapshot":
+      pushMetadata(metadata, "Account", payload.account_name);
+      pushMetadata(metadata, "Snapshot ID", payload.snapshot_id);
+      return buildDeleteDiff(payload, metadata, asRecord(payload.target));
     case "delete_group":
       pushMetadata(metadata, "Group ID", payload.group_id);
       return buildDeleteDiff(payload, metadata, buildUpdateGroupBeforeRecord(payload));

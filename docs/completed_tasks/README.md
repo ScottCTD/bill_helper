@@ -19,5 +19,6 @@ This directory stores archived task docs after active work in `/tasks/*.md` is f
 - `2026-03-09_parallel_agent_thread.md`: archived task for thread-scoped agent composer controls and parallel thread activity UX.
 - `2026-03-09_entry_entity_label_repair_and_agent_selector_fix.md`: archived fix log for entry entity-label corruption and agent update selector approval failures.
 - `2026-03-10_markdown_editor_vite_fix_log.md`: archived fix log for the BlockNote markdown editor runtime/import failures and Vite dep-cache restart hardening.
+- `2026-03-11_interval_reconciliation.md`: archived task for interval-based account reconciliation, account-modal snapshot management, and snapshot proposal review.
 - `2026-03-08_telegram_bot_todo.md`: archived Telegram integration implementation task.
 - `2026-03-05_clean_architecture_fix_log.md`: archived desloppify and architecture fix log.

@@ -1,6 +1,6 @@
-import type { FormEvent } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
-import type { Account, User } from "../../lib/types";
+import type { Account, Reconciliation, Snapshot, User } from "../../lib/types";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { MarkdownBlockEditor } from "../../components/MarkdownBlockEditor";
@@ -15,7 +15,11 @@ import {
 import { FormField } from "../../components/ui/form-field";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
-import type { AccountFormState } from "./types";
+import { ReconciliationSection } from "./ReconciliationSection";
+import { SnapshotsSection } from "./SnapshotsSection";
+import type { AccountFormState, SnapshotFormState } from "./types";
+
+type AccountEditTab = "details" | "reconciliation" | "snapshots";
 
 interface AccountDialogsProps {
   createDialogOpen: boolean;
@@ -31,12 +35,41 @@ interface AccountDialogsProps {
   users: User[] | undefined;
   currencies: string[];
   editingAccount: Account | null;
+  reconciliation: Reconciliation | undefined;
+  reconciliationErrorMessage: string | null;
+  reconciliationIsLoading: boolean;
+  snapshots: Snapshot[] | undefined;
+  snapshotsErrorMessage: string | null;
+  snapshotsIsLoading: boolean;
+  snapshotForm: SnapshotFormState;
+  onSnapshotFormChange: (next: SnapshotFormState) => void;
+  onCreateSnapshot: (event: FormEvent<HTMLFormElement>) => void;
+  onDeleteSnapshot: (snapshotId: string) => void;
+  snapshotFormErrorMessage: string | null;
+  snapshotCreateErrorMessage: string | null;
+  snapshotIsCreating: boolean;
   createErrorMessage: string | null;
   updateErrorMessage: string | null;
   isCreating: boolean;
   isUpdating: boolean;
   onResetCreateMutationError: () => void;
   onResetUpdateMutationError: () => void;
+}
+
+function EditDialogTabButton({
+  active,
+  label,
+  onClick
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button type="button" size="sm" variant={active ? "default" : "outline"} onClick={onClick}>
+      {label}
+    </Button>
+  );
 }
 
 export function AccountDialogs(props: AccountDialogsProps) {
@@ -54,6 +87,19 @@ export function AccountDialogs(props: AccountDialogsProps) {
     users,
     currencies,
     editingAccount,
+    reconciliation,
+    reconciliationErrorMessage,
+    reconciliationIsLoading,
+    snapshots,
+    snapshotsErrorMessage,
+    snapshotsIsLoading,
+    snapshotForm,
+    onSnapshotFormChange,
+    onCreateSnapshot,
+    onDeleteSnapshot,
+    snapshotFormErrorMessage,
+    snapshotCreateErrorMessage,
+    snapshotIsCreating,
     createErrorMessage,
     updateErrorMessage,
     isCreating,
@@ -61,6 +107,14 @@ export function AccountDialogs(props: AccountDialogsProps) {
     onResetCreateMutationError,
     onResetUpdateMutationError
   } = props;
+  const [editTab, setEditTab] = useState<AccountEditTab>("details");
+
+  useEffect(() => {
+    if (editDialogOpen) {
+      setEditTab("details");
+    }
+  }, [editDialogOpen, editingAccount?.id]);
+
   const createMarkdownResetKey = `account-create-${createDialogOpen ? "open" : "closed"}`;
   const editMarkdownResetKey = `account-edit-${editingAccount?.id ?? "none"}-${editDialogOpen ? "open" : "closed"}`;
 
@@ -146,74 +200,126 @@ export function AccountDialogs(props: AccountDialogsProps) {
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-5xl">
           <DialogHeader>
-            <DialogTitle>Edit Account</DialogTitle>
-            <DialogDescription>Update account metadata and active status from the selected table row.</DialogDescription>
+            <DialogTitle>{editingAccount ? editingAccount.name : "Edit Account"}</DialogTitle>
+            <DialogDescription>Manage account details, interval reconciliation, and balance snapshots in one place.</DialogDescription>
           </DialogHeader>
-          <form className="grid gap-4" onSubmit={onUpdateAccount}>
-            <div className="form-grid">
-              <FormField label="Owner">
-                <NativeSelect
-                  value={editForm.owner_user_id}
-                  onChange={(event) => onEditFormChange({ ...editForm, owner_user_id: event.target.value })}
-                >
-                  <option value="">(none)</option>
-                  {users?.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                      {user.is_current_user ? " (Current User)" : ""}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </FormField>
-              <FormField label="Name">
-                <Input required value={editForm.name} onChange={(event) => onEditFormChange({ ...editForm, name: event.target.value })} />
-              </FormField>
-              <FormField label="Currency">
-                <NativeSelect
-                  value={editForm.currency_code}
-                  onChange={(event) => onEditFormChange({ ...editForm, currency_code: event.target.value })}
-                >
-                  {currencies.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </FormField>
-              <FormField label="Active">
-                <label className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm">
-                  <Checkbox
-                    checked={editForm.is_active}
-                    onCheckedChange={(checked) => onEditFormChange({ ...editForm, is_active: checked === true })}
-                  />
-                  <span>{editForm.is_active ? "Active account" : "Inactive account"}</span>
-                </label>
-              </FormField>
-            </div>
-            <section className="entry-editor-markdown">
-              <div className="grid gap-2 text-sm">
-                <p className="text-sm font-medium leading-none">Notes</p>
-                <MarkdownBlockEditor
-                  markdown={editForm.markdown_body}
-                  resetKey={editMarkdownResetKey}
-                  disabled={isUpdating || !editingAccount}
-                  onChange={(markdown) => onEditFormChange({ ...editForm, markdown_body: markdown })}
-                />
-                <p className="text-xs text-muted-foreground">Optional markdown notes for account context and agent prompts.</p>
+
+          <div className="flex flex-wrap gap-2">
+            <EditDialogTabButton active={editTab === "details"} label="Details" onClick={() => setEditTab("details")} />
+            <EditDialogTabButton
+              active={editTab === "reconciliation"}
+              label="Reconciliation"
+              onClick={() => setEditTab("reconciliation")}
+            />
+            <EditDialogTabButton active={editTab === "snapshots"} label="Snapshots" onClick={() => setEditTab("snapshots")} />
+          </div>
+
+          {editTab === "details" ? (
+            <form className="grid gap-4" onSubmit={onUpdateAccount}>
+              <div className="form-grid">
+                <FormField label="Owner">
+                  <NativeSelect
+                    value={editForm.owner_user_id}
+                    onChange={(event) => onEditFormChange({ ...editForm, owner_user_id: event.target.value })}
+                  >
+                    <option value="">(none)</option>
+                    {users?.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                        {user.is_current_user ? " (Current User)" : ""}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+                <FormField label="Name">
+                  <Input required value={editForm.name} onChange={(event) => onEditFormChange({ ...editForm, name: event.target.value })} />
+                </FormField>
+                <FormField label="Currency">
+                  <NativeSelect
+                    value={editForm.currency_code}
+                    onChange={(event) => onEditFormChange({ ...editForm, currency_code: event.target.value })}
+                  >
+                    {currencies.map((code) => (
+                      <option key={code} value={code}>
+                        {code}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+                <FormField label="Active">
+                  <label className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm">
+                    <Checkbox
+                      checked={editForm.is_active}
+                      onCheckedChange={(checked) => onEditFormChange({ ...editForm, is_active: checked === true })}
+                    />
+                    <span>{editForm.is_active ? "Active account" : "Inactive account"}</span>
+                  </label>
+                </FormField>
               </div>
-            </section>
-            {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onEditDialogOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isUpdating || !editingAccount}>
-                {isUpdating ? "Saving..." : "Save changes"}
-              </Button>
-            </DialogFooter>
-          </form>
+              <section className="entry-editor-markdown">
+                <div className="grid gap-2 text-sm">
+                  <p className="text-sm font-medium leading-none">Notes</p>
+                  <MarkdownBlockEditor
+                    markdown={editForm.markdown_body}
+                    resetKey={editMarkdownResetKey}
+                    disabled={isUpdating || !editingAccount}
+                    onChange={(markdown) => onEditFormChange({ ...editForm, markdown_body: markdown })}
+                  />
+                  <p className="text-xs text-muted-foreground">Optional markdown notes for account context and agent prompts.</p>
+                </div>
+              </section>
+              {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => onEditDialogOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isUpdating || !editingAccount}>
+                  {isUpdating ? "Saving..." : "Save changes"}
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : null}
+
+          {editTab === "reconciliation" ? (
+            <div className="space-y-4">
+              <ReconciliationSection
+                account={editingAccount}
+                reconciliation={reconciliation}
+                isLoading={reconciliationIsLoading}
+                errorMessage={reconciliationErrorMessage}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => onEditDialogOpenChange(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : null}
+
+          {editTab === "snapshots" ? (
+            <div className="space-y-4">
+              <SnapshotsSection
+                selectedAccount={editingAccount}
+                snapshotForm={snapshotForm}
+                onSnapshotFormChange={onSnapshotFormChange}
+                onCreateSnapshot={onCreateSnapshot}
+                onDeleteSnapshot={onDeleteSnapshot}
+                snapshots={snapshots}
+                isLoading={snapshotsIsLoading}
+                errorMessage={snapshotsErrorMessage}
+                formErrorMessage={snapshotFormErrorMessage}
+                createErrorMessage={snapshotCreateErrorMessage}
+                isCreating={snapshotIsCreating}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => onEditDialogOpenChange(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </>

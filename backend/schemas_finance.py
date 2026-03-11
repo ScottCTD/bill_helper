@@ -174,15 +174,40 @@ class SnapshotRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SnapshotSummaryRead(BaseModel):
+    id: str
+    snapshot_at: date
+    balance_minor: int
+    note: str | None = None
+
+
+class ReconciliationIntervalRead(BaseModel):
+    start_snapshot: SnapshotSummaryRead
+    end_snapshot: SnapshotSummaryRead | None = None
+    is_open: bool
+    tracked_change_minor: int
+    bank_change_minor: int | None = None
+    delta_minor: int | None = None
+    entry_count: int
+
+
 class ReconciliationRead(BaseModel):
     account_id: str
     account_name: str
     currency_code: str
     as_of: date
-    ledger_balance_minor: int
-    snapshot_balance_minor: int | None = None
-    snapshot_at: date | None = None
-    delta_minor: int | None = None
+    intervals: list[ReconciliationIntervalRead] = Field(default_factory=list)
+
+
+class DashboardReconciliationRead(BaseModel):
+    account_id: str
+    account_name: str
+    currency_code: str
+    latest_snapshot_at: date | None = None
+    current_tracked_change_minor: int | None = None
+    last_closed_delta_minor: int | None = None
+    mismatched_interval_count: int
+    reconciled_interval_count: int
 
 
 class EntryBase(BaseModel):
@@ -524,4 +549,4 @@ class DashboardRead(BaseModel):
     weekday_spending: list[DashboardWeekdaySpendingPoint]
     largest_expenses: list[DashboardLargestExpenseItem]
     projection: DashboardProjectionRead
-    reconciliation: list[ReconciliationRead]
+    reconciliation: list[DashboardReconciliationRead]
