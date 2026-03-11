@@ -761,6 +761,10 @@ struct AgentRootView: View {
             }
         }
         .task {
+            if case .agentThread(let id)? = deepLink {
+                pendingDeepLinkThreadID = id
+                deepLink = nil
+            }
             await accessModel.loadIfNeeded()
             await viewModel.loadIfNeeded()
             resolvePendingDeepLink()
@@ -1235,7 +1239,7 @@ private struct AgentThreadSummaryRow: View {
             }
 
             if let preview = thread.lastMessagePreview, !preview.isEmpty {
-                Text(verbatim: agentDisplayText(preview))
+                Text(verbatim: assistantSurfaceText(preview))
                     .font(.subheadline)
                     .lineLimit(2)
             } else {
@@ -1577,7 +1581,13 @@ func roleSymbol(_ role: AgentMessageRole) -> String {
 }
 
 func messageContent(_ message: AgentMessage) -> String {
-    let trimmed = agentDisplayText(message.contentMarkdown).trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedSource =
+        if message.role == .assistant {
+            assistantSurfaceText(message.contentMarkdown)
+        } else {
+            agentDisplayText(message.contentMarkdown)
+        }
+    let trimmed = trimmedSource.trimmingCharacters(in: .whitespacesAndNewlines)
     if !trimmed.isEmpty {
         return trimmed
     }

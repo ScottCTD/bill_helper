@@ -4,12 +4,13 @@
 
 - the agent tab shows a thread list and detail flow backed by the native agent transport plus the extended agent route family
 - thread rows support create, rename, and delete
+- initial agent-thread deep links are resolved after the thread list loads, so a cold-start open still pushes into the requested thread once summaries arrive
 - selecting a thread loads messages, runs, review items, and configured model metadata
 - non-admin principals see an explicit access-required state with a shortcut into `billhelper://settings`
 
 ## Detail View
 
-- assistant markdown is rendered through the shared markdown renderer, keeps list/code/blockquote spacing stable even when streamed text arrives with weak formatting, normalizes display text before rendering, and stays visually aligned with the assistant bubble instead of inheriting a selectable white card
+- assistant markdown is rendered through the shared markdown renderer, keeps list/code/blockquote spacing stable even when streamed text arrives with weak formatting, normalizes display text before rendering, strips unsupported standalone decorative emoji that currently render as missing glyphs on iOS, and stays visually aligned with the assistant bubble instead of inheriting a selectable white card
 - the composer supports text plus Photos/file-import attachments
 - attachment validation uses runtime settings for max image size and image count
 - thread detail shows:

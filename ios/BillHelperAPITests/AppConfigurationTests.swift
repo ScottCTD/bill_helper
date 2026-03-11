@@ -105,6 +105,16 @@ final class AppConfigurationTests: XCTestCase {
         XCTAssertNil(composition.sessionStore.currentSession)
         XCTAssertEqual(composition.launchPhase, .onboarding)
     }
+
+    func testMonthLabelDoesNotShiftAcrossLocalTimeZones() {
+        XCTAssertEqual(FinanceFormatters.monthLabel(for: "2026-03"), "Mar 2026")
+        XCTAssertEqual(FinanceFormatters.monthLabel(for: "2025-12"), "Dec 2025")
+    }
+
+    func testDayLabelDoesNotShiftAcrossLocalTimeZones() {
+        XCTAssertEqual(FinanceFormatters.dayLabel(for: "2026-03-01"), "Mar 1")
+        XCTAssertEqual(FinanceFormatters.dayLabel(for: "2026-12-31"), "Dec 31")
+    }
 }
 
 private final class RecordingSessionStorage: SessionStorage {

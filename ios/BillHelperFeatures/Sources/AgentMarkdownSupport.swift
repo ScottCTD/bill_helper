@@ -22,11 +22,7 @@ struct AgentMarkdownText: View {
 #if canImport(MarkdownUI)
                 Markdown(markdown)
                     .markdownTheme(.basic)
-                    .markdownTextStyle {
-                        FontFamily(.system(.default))
-                        ForegroundColor(bodyColor)
-                        BackgroundColor(nil)
-                    }
+                    .foregroundStyle(bodyColor)
                     .markdownTextStyle(\.link) {
                         ForegroundColor(tint)
                     }
@@ -91,7 +87,7 @@ enum AssistantMessageMarkdownRenderer {
     }
 
     static func renderedContent(forMarkdown markdown: String, messageID: String) -> AgentRenderedMarkdown {
-        let displayText = agentDisplayText(markdown)
+        let displayText = assistantSurfaceText(markdown)
         let fallbackText = displayText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No message text." : displayText
         if containsUnsupportedControlCharacters(markdown) {
             agentMessageMarkdownLogger.error(
@@ -218,15 +214,51 @@ func agentDisplayText(_ raw: String) -> String {
     let normalizedNewlines = raw
         .replacingOccurrences(of: "\r\n", with: "\n")
         .replacingOccurrences(of: "\r", with: "\n")
-        .precomposedStringWithCanonicalMapping
+
+    guard normalizedNewlines.unicodeScalars.contains(where: isUnsupportedAgentControlScalar) else {
+        return normalizedNewlines
+    }
 
     let visibleScalars = normalizedNewlines.unicodeScalars.filter { scalar in
-        switch scalar.value {
-        case 9, 10:
-            return true
-        default:
-            return scalar.properties.generalCategory != .control
-        }
+        !isUnsupportedAgentControlScalar(scalar)
     }
     return String(String.UnicodeScalarView(visibleScalars))
+}
+
+private func isUnsupportedAgentControlScalar(_ scalar: UnicodeScalar) -> Bool {
+    switch scalar.value {
+    case 9, 10:
+        return false
+    default:
+        return scalar.properties.generalCategory == .control
+    }
+}
+
+func assistantSurfaceText(_ raw: String) -> String {
+    let cleaned = agentDisplayText(raw)
+    let withoutEmoji = String(cleaned.filter { !isStandaloneAssistantEmoji($0) })
+    return withoutEmoji
+        .replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression)
+        .replacingOccurrences(of: " \n", with: "\n")
+        .replacingOccurrences(of: "\n ", with: "\n")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func isStandaloneAssistantEmoji(_ character: Character) -> Bool {
+    let scalars = character.unicodeScalars
+    guard scalars.contains(where: { $0.properties.isEmoji }) else {
+        return false
+    }
+
+    if scalars.contains(where: { CharacterSet.alphanumerics.contains($0) }) {
+        return false
+    }
+
+    return scalars.contains {
+        $0.properties.isEmojiPresentation
+            || $0.value > 0xFFFF
+            || $0.value == 0xFE0F
+            || $0.value == 0x200D
+            || $0.value == 0x20E3
+    }
 }
