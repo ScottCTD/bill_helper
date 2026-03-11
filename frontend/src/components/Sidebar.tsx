@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { NavLink } from "react-router-dom";
-import { Bot, Building2, CreditCard, FolderKanban, Home, Layers3, Network, Settings2, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Bot, Building2, CreditCard, FolderKanban, Home, Layers3, Network, Settings2, SlidersHorizontal, PanelLeftClose, PanelLeft } from "lucide-react";
 
 import { PrincipalSessionCard } from "../features/session";
 import { cn } from "../lib/utils";
@@ -9,6 +9,7 @@ import { Button } from "./ui/button";
 const navItems = [
   { to: "/", label: "Agent", icon: Bot },
   { to: "/dashboard", label: "Dashboard", icon: Home },
+  { to: "/filters", label: "Filter", icon: SlidersHorizontal },
   { to: "/entries", label: "Entries", icon: Layers3 },
   { to: "/entities", label: "Entities", icon: Building2 },
   { to: "/groups", label: "Groups", icon: Network },

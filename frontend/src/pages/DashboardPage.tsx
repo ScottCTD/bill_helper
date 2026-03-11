@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactElement } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactElement, type WheelEvent } from "react";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   Area,
   AreaChart,
@@ -15,31 +15,33 @@ import {
   YAxis
 } from "recharts";
 
+import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Input } from "../components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { getDashboard, getDashboardTimeline } from "../lib/api";
 import { currentMonth, formatMinor } from "../lib/format";
-import { getDashboard } from "../lib/api";
 import { queryKeys } from "../lib/queryKeys";
+import type { Dashboard } from "../lib/types";
 import { cn } from "../lib/utils";
 
 type DashboardTab = "overview" | "daily" | "breakdowns" | "insights";
+type DashboardViewMode = "month" | "year";
 
 const DASHBOARD_TABS: Array<{ id: DashboardTab; label: string; description: string }> = [
-  { id: "overview", label: "Overview", description: "Month snapshot and projection" },
-  { id: "daily", label: "Daily Spend", description: "Daily-tagged spending behavior" },
+  { id: "overview", label: "Overview", description: "Month snapshot, projection, and filter-group mix" },
+  { id: "daily", label: "Spending", description: "Daily spending and month-over-month filter-group comparisons" },
   { id: "breakdowns", label: "Breakdowns", description: "From / to / tag analysis" },
-  { id: "insights", label: "Insights", description: "Weekdays, outliers, reconciliation" }
+  { id: "insights", label: "Insights", description: "Weekdays, yearly views, outliers, and reconciliation" }
 ];
 
 const CHART_COLORS = {
-  income: "hsl(var(--success))",
-  expense: "hsl(var(--warning))",
-  daily: "hsl(var(--success))",
-  nonDaily: "hsl(var(--destructive))",
-  net: "hsl(var(--primary))",
-  muted: "hsl(var(--muted-foreground))"
+  income: "rgb(var(--chart-income))",
+  expense: "rgb(var(--chart-expense))",
+  net: "rgb(var(--chart-net))",
+  muted: "hsl(var(--muted-foreground))",
+  destination: "rgb(var(--chart-destination))",
+  source: "rgb(var(--chart-source))"
 };
 
 const PIE_COLORS = [
@@ -48,10 +50,19 @@ const PIE_COLORS = [
   "hsl(var(--warning))",
   "hsl(var(--destructive))",
   "hsl(var(--accent-foreground))",
-  "hsl(var(--muted-foreground))",
-  "hsl(var(--primary) / 0.75)",
-  "hsl(var(--success) / 0.75)"
+  "hsl(var(--muted-foreground))"
 ];
+
+const MODERN_SEGMENT_COLORS = [
+  "rgb(var(--chart-segment-1))",
+  "rgb(var(--chart-segment-2))",
+  "rgb(var(--chart-segment-3))",
+  "rgb(var(--chart-segment-4))",
+  "rgb(var(--chart-segment-5))",
+  "rgb(var(--chart-segment-6))"
+];
+
+const TIMELINE_WHEEL_LOCK_MS = 180;
 
 function axisTick(value: number | string) {
   const numericValue = typeof value === "number" ? value : Number(value);
@@ -80,6 +91,164 @@ function tooltipAmount(currencyCode: string, value: unknown): string {
 
 function tooltipAmountWithName(currencyCode: string, value: unknown, name: string | number | undefined): [string, string] {
   return [tooltipAmount(currencyCode, value), String(name ?? "")];
+}
+
+function normalizeChartColor(color: string | null | undefined, index: number): string {
+  return color ?? PIE_COLORS[index % PIE_COLORS.length];
+}
+
+function modernSegmentColor(index: number): string {
+  return MODERN_SEGMENT_COLORS[index % MODERN_SEGMENT_COLORS.length];
+}
+
+function pastelPieColor(index: number): string {
+  return MODERN_SEGMENT_COLORS[index % MODERN_SEGMENT_COLORS.length];
+}
+
+function monthDate(monthKey: string): Date {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(year, month - 1, 1);
+}
+
+function shiftMonthKey(monthKey: string, monthDelta: number): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  const shifted = new Date(year, month - 1 + monthDelta, 1);
+  return `${shifted.getFullYear()}-${`${shifted.getMonth() + 1}`.padStart(2, "0")}`;
+}
+
+function buildYearMonthKeys(year: number): string[] {
+  return Array.from({ length: 12 }, (_, index) => `${year}-${`${index + 1}`.padStart(2, "0")}`);
+}
+
+function buildTimelineYears(monthKeys: string[]): string[] {
+  return Array.from(new Set(monthKeys.map((monthKey) => monthKey.slice(0, 4))));
+}
+
+function pickTimelineMonthForYear(monthKeys: string[], yearKey: string, preferredMonthKey: string): string | null {
+  const yearMonths = monthKeys.filter((monthKey) => monthKey.startsWith(`${yearKey}-`));
+  if (yearMonths.length === 0) {
+    return null;
+  }
+  const preferredMonthNumber = Number(preferredMonthKey.slice(5, 7));
+  return (
+    yearMonths.find((monthKey) => Number(monthKey.slice(5, 7)) === preferredMonthNumber) ??
+    yearMonths[yearMonths.length - 1]
+  );
+}
+
+function formatMonthShort(monthKey: string): string {
+  return monthDate(monthKey).toLocaleDateString(undefined, { month: "short" });
+}
+
+function formatMonthLong(monthKey: string): string {
+  return monthDate(monthKey).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
+
+function filterGroupTotalForMonth(dashboard: Dashboard | undefined, filterGroupKey: string): number {
+  return dashboard?.filter_groups.find((group) => group.key === filterGroupKey)?.total_minor ?? 0;
+}
+
+function buildYearlyOverviewData(
+  monthKeys: string[],
+  dashboardsByMonth: Map<string, Dashboard>,
+  filterGroups: Dashboard["filter_groups"]
+) {
+  return monthKeys.map((monthKey) => {
+    const monthDashboard = dashboardsByMonth.get(monthKey);
+    return {
+      month: formatMonthShort(monthKey),
+      expense_total_minor: monthDashboard?.kpis.expense_total_minor ?? 0,
+      income_total_minor: monthDashboard?.kpis.income_total_minor ?? 0,
+      ...Object.fromEntries(
+        filterGroups.map((group) => [group.key, filterGroupTotalForMonth(monthDashboard, group.key)])
+      )
+    };
+  });
+}
+
+function buildYearOverYearData(
+  selectedYearMonths: string[],
+  previousYearMonths: string[],
+  dashboardsByMonth: Map<string, Dashboard>
+) {
+  return selectedYearMonths.map((monthKey, index) => {
+    const previousMonthKey = previousYearMonths[index];
+    const selectedDashboard = dashboardsByMonth.get(monthKey);
+    const previousDashboard = dashboardsByMonth.get(previousMonthKey);
+    return {
+      month: formatMonthShort(monthKey),
+      current_expense_total_minor: selectedDashboard?.kpis.expense_total_minor ?? 0,
+      previous_expense_total_minor: previousDashboard?.kpis.expense_total_minor ?? 0,
+      current_income_total_minor: selectedDashboard?.kpis.income_total_minor ?? 0,
+      previous_income_total_minor: previousDashboard?.kpis.income_total_minor ?? 0
+    };
+  });
+}
+
+function sumDashboardKpiForMonths(
+  monthKeys: string[],
+  dashboardsByMonth: Map<string, Dashboard>,
+  key: "expense_total_minor" | "income_total_minor" | "net_total_minor"
+): number {
+  return monthKeys.reduce((sum, monthKey) => sum + (dashboardsByMonth.get(monthKey)?.kpis[key] ?? 0), 0);
+}
+
+function sumFilterGroupForMonths(
+  monthKeys: string[],
+  dashboardsByMonth: Map<string, Dashboard>,
+  filterGroupKey: string
+): number {
+  return monthKeys.reduce(
+    (sum, monthKey) => sum + filterGroupTotalForMonth(dashboardsByMonth.get(monthKey), filterGroupKey),
+    0
+  );
+}
+
+function buildYearFilterGroupTotals(
+  filterGroups: Dashboard["filter_groups"],
+  monthKeys: string[],
+  dashboardsByMonth: Map<string, Dashboard>
+) {
+  return filterGroups.map((group) => ({
+    ...group,
+    total_minor: sumFilterGroupForMonths(monthKeys, dashboardsByMonth, group.key)
+  }));
+}
+
+function buildYearLargestExpenses(
+  monthKeys: string[],
+  dashboardsByMonth: Map<string, Dashboard>,
+  limit = 8
+): Dashboard["largest_expenses"] {
+  return monthKeys
+    .flatMap((monthKey) => dashboardsByMonth.get(monthKey)?.largest_expenses ?? [])
+    .sort((left, right) => {
+      if (right.amount_minor !== left.amount_minor) {
+        return right.amount_minor - left.amount_minor;
+      }
+      if (right.occurred_at !== left.occurred_at) {
+        return right.occurred_at.localeCompare(left.occurred_at);
+      }
+      return right.name.localeCompare(left.name);
+    })
+    .slice(0, limit);
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return Math.round((sorted[middle - 1] + sorted[middle]) / 2);
+  }
+  return sorted[middle];
+}
+
+function formatDelta(deltaMinor: number, currencyCode: string): string {
+  const prefix = deltaMinor > 0 ? "+" : deltaMinor < 0 ? "-" : "";
+  return `${prefix}${formatMinor(Math.abs(deltaMinor), currencyCode)}`;
 }
 
 type ChartDimensions = {
@@ -134,273 +303,845 @@ function DashboardChartContainer({ children }: { children: (dimensions: ChartDim
   );
 }
 
+function buildDailyChartData(data: Dashboard) {
+  return data.daily_spending.map((point) => ({
+    date: point.date,
+    expense_total_minor: point.expense_total_minor,
+    ...point.filter_group_totals
+  }));
+}
+
+function buildMonthlyChartData(data: Dashboard) {
+  return data.monthly_trend.map((point) => ({
+    month: point.month,
+    expense_total_minor: point.expense_total_minor,
+    income_total_minor: point.income_total_minor,
+    ...point.filter_group_totals
+  }));
+}
+
+function filterGroupNamesByKey(data: Dashboard) {
+  return new Map(data.filter_groups.map((group) => [group.key, group.name]));
+}
+
 export function DashboardPage() {
   const [month, setMonth] = useState(currentMonth());
+  const [viewMode, setViewMode] = useState<DashboardViewMode>("month");
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
-  const { data, isLoading, isError, error } = useQuery({
+  const timelineItemRefs = useRef(new Map<string, HTMLButtonElement>());
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
+  const timelineWheelLockRef = useRef<number | null>(null);
+  const timelineQuery = useQuery({
+    queryKey: queryKeys.dashboard.timeline,
+    queryFn: getDashboardTimeline,
+    staleTime: 60_000
+  });
+  const timelineMonths = timelineQuery.data?.months ?? [];
+  const timelineYears = buildTimelineYears(timelineMonths);
+  const selectedYear = Number(month.slice(0, 4));
+  const selectedYearMonths = buildYearMonthKeys(selectedYear);
+  const previousYearMonths = buildYearMonthKeys(selectedYear - 1);
+  const yearlyMonthKeys = [...previousYearMonths, ...selectedYearMonths];
+
+  const dashboardQuery = useQuery({
     queryKey: queryKeys.dashboard.month(month),
     queryFn: () => getDashboard(month)
   });
+  const yearlyQueries = useQueries({
+    queries: yearlyMonthKeys.map((monthKey) => ({
+      queryKey: queryKeys.dashboard.month(monthKey),
+      queryFn: () => getDashboard(monthKey),
+      staleTime: 60_000
+    }))
+  });
+  const timelineSelectionKey = viewMode === "month" ? month : String(selectedYear);
+  const monthTimelineIndex = timelineMonths.indexOf(month);
+  const yearTimelineIndex = timelineYears.indexOf(String(selectedYear));
 
-  if (isLoading) {
+  function centerTimelineItem(selectedItem: HTMLButtonElement) {
+    const timelineScroller = timelineScrollRef.current;
+    if (!timelineScroller) {
+      return;
+    }
+
+    const verticalScrollable = timelineScroller.scrollHeight > timelineScroller.clientHeight;
+    const scrollerRect = timelineScroller.getBoundingClientRect();
+    const itemRect = selectedItem.getBoundingClientRect();
+
+    if (verticalScrollable) {
+      const delta = itemRect.top + itemRect.height / 2 - (scrollerRect.top + scrollerRect.height / 2);
+      timelineScroller.scrollTop += delta;
+      return;
+    }
+
+    const delta = itemRect.left + itemRect.width / 2 - (scrollerRect.left + scrollerRect.width / 2);
+    timelineScroller.scrollLeft += delta;
+  }
+
+  function registerTimelineItem(key: string, node: HTMLButtonElement | null, isActive: boolean) {
+    if (!node) {
+      timelineItemRefs.current.delete(key);
+      return;
+    }
+
+    timelineItemRefs.current.set(key, node);
+    if (!isActive) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      centerTimelineItem(node);
+      requestAnimationFrame(() => {
+        centerTimelineItem(node);
+      });
+    });
+  }
+
+  function handleTimelineWheel(event: WheelEvent<HTMLDivElement>) {
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || Math.abs(event.deltaY) < 4) {
+      return;
+    }
+    event.preventDefault();
+    if (timelineWheelLockRef.current !== null) {
+      return;
+    }
+    shiftSelection(event.deltaY > 0 ? 1 : -1);
+    if (typeof window !== "undefined") {
+      timelineWheelLockRef.current = window.setTimeout(() => {
+        timelineWheelLockRef.current = null;
+      }, TIMELINE_WHEEL_LOCK_MS);
+    }
+  }
+
+  function handleTimelineKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      shiftSelection(1);
+      return;
+    }
+    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      shiftSelection(-1);
+    }
+  }
+
+  useEffect(() => {
+    if (timelineMonths.length === 0 || monthTimelineIndex >= 0) {
+      return;
+    }
+    const fallbackMonth = timelineMonths[timelineMonths.length - 1];
+    if (fallbackMonth !== month) {
+      setMonth(fallbackMonth);
+    }
+  }, [month, monthTimelineIndex, timelineMonths]);
+
+  useEffect(() => {
+    if (viewMode !== "year" || timelineYears.length === 0 || yearTimelineIndex >= 0) {
+      return;
+    }
+    const fallbackYear = timelineYears[timelineYears.length - 1];
+    const fallbackMonth = pickTimelineMonthForYear(timelineMonths, fallbackYear, month);
+    if (fallbackMonth && fallbackMonth !== month) {
+      setMonth(fallbackMonth);
+    }
+  }, [month, timelineMonths, timelineYears, viewMode, yearTimelineIndex]);
+
+  useEffect(() => {
+    const selectedItem = timelineItemRefs.current.get(timelineSelectionKey);
+    if (!selectedItem) {
+      return;
+    }
+
+    const firstFrame = requestAnimationFrame(() => {
+      centerTimelineItem(selectedItem);
+      requestAnimationFrame(() => {
+        centerTimelineItem(selectedItem);
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(firstFrame);
+    };
+  }, [timelineSelectionKey, viewMode]);
+
+  useEffect(
+    () => () => {
+      if (typeof window !== "undefined" && timelineWheelLockRef.current !== null) {
+        window.clearTimeout(timelineWheelLockRef.current);
+      }
+    },
+    []
+  );
+
+  if (timelineQuery.isLoading || dashboardQuery.isLoading) {
     return <p>Loading dashboard...</p>;
   }
 
-  if (isError || !data) {
-    return <p>Failed to load dashboard: {(error as Error).message}</p>;
+  if (timelineQuery.isError) {
+    return <p>Failed to load dashboard timeline: {(timelineQuery.error as Error).message}</p>;
   }
 
-  const dailySpendSplit = [
-    { name: "Daily", value: data.kpis.daily_expense_total_minor },
-    { name: "Non-daily", value: data.kpis.non_daily_expense_total_minor }
-  ];
+  if (dashboardQuery.isError || !dashboardQuery.data) {
+    return <p>Failed to load dashboard: {(dashboardQuery.error as Error).message}</p>;
+  }
+
+  const data = dashboardQuery.data;
+  const yearlyDashboardsByMonth = new Map<string, Dashboard>();
+  yearlyQueries.forEach((query, index) => {
+    if (query.data) {
+      yearlyDashboardsByMonth.set(yearlyMonthKeys[index], query.data);
+    }
+  });
+  const yearlyQueryError = yearlyQueries.find((query) => query.isError)?.error as Error | undefined;
+  const yearlyQueriesLoading = yearlyQueries.some((query) => query.isLoading);
+  const chartGroups = data.filter_groups.filter((group) => group.total_minor > 0);
+  const displayGroups = chartGroups.length > 0 ? chartGroups : data.filter_groups;
+  const dailyChartData = buildDailyChartData(data);
+  const monthlyChartData = buildMonthlyChartData(data);
+  const yearlyOverviewData = buildYearlyOverviewData(selectedYearMonths, yearlyDashboardsByMonth, data.filter_groups);
+  const yearOverYearData = buildYearOverYearData(selectedYearMonths, previousYearMonths, yearlyDashboardsByMonth);
+  const yearlyFilterGroupTotals = buildYearFilterGroupTotals(data.filter_groups, selectedYearMonths, yearlyDashboardsByMonth);
+  const yearlyDisplayGroups = yearlyFilterGroupTotals.filter((group) => group.total_minor > 0);
+  const monthlyTrendGroups = data.filter_groups.filter((group) =>
+    monthlyChartData.some((point) => toMinorValue((point as Record<string, unknown>)[group.key]) > 0)
+  );
+  const yearlyTrendGroups = data.filter_groups.filter((group) =>
+    yearlyOverviewData.some((point) => toMinorValue((point as Record<string, unknown>)[group.key]) > 0)
+  );
+  const expenseTrendGroups = monthlyTrendGroups.length > 0 ? monthlyTrendGroups : data.filter_groups;
+  const yearlyExpenseTrendGroups = yearlyTrendGroups.length > 0 ? yearlyTrendGroups : data.filter_groups;
+  const insightsLargestExpenses =
+    viewMode === "year" ? buildYearLargestExpenses(selectedYearMonths, yearlyDashboardsByMonth) : data.largest_expenses;
+  const groupNamesByKey = filterGroupNamesByKey(data);
+  const previousMonthDashboard = yearlyDashboardsByMonth.get(shiftMonthKey(month, -1));
+  const primaryFilterGroup = data.filter_groups.find((group) => group.key === "day_to_day") ?? data.filter_groups[0] ?? null;
+  const selectedYearExpenseTotalMinor = sumDashboardKpiForMonths(selectedYearMonths, yearlyDashboardsByMonth, "expense_total_minor");
+  const previousYearExpenseTotalMinor = sumDashboardKpiForMonths(previousYearMonths, yearlyDashboardsByMonth, "expense_total_minor");
+  const selectedYearIncomeTotalMinor = sumDashboardKpiForMonths(selectedYearMonths, yearlyDashboardsByMonth, "income_total_minor");
+  const previousYearIncomeTotalMinor = sumDashboardKpiForMonths(previousYearMonths, yearlyDashboardsByMonth, "income_total_minor");
+  const selectedYearNetTotalMinor = sumDashboardKpiForMonths(selectedYearMonths, yearlyDashboardsByMonth, "net_total_minor");
+  const yearlyPrimaryFilterGroupTotalMinor = primaryFilterGroup ? sumFilterGroupForMonths(selectedYearMonths, yearlyDashboardsByMonth, primaryFilterGroup.key) : 0;
+  const yearlyExpenseMonths = yearlyOverviewData.map((point) => point.expense_total_minor);
+  const yearlyAverageExpenseMonthMinor = yearlyExpenseMonths.length > 0 ? Math.round(selectedYearExpenseTotalMinor / yearlyExpenseMonths.length) : 0;
+  const yearlyMedianExpenseMonthMinor = median(yearlyExpenseMonths);
+
+  function shiftSelection(step: number) {
+    if (viewMode === "month") {
+      if (timelineMonths.length === 0) {
+        return;
+      }
+      const currentIndex = monthTimelineIndex >= 0 ? monthTimelineIndex : timelineMonths.length - 1;
+      const nextIndex = Math.max(0, Math.min(timelineMonths.length - 1, currentIndex + step));
+      const nextMonth = timelineMonths[nextIndex];
+      if (nextMonth && nextMonth !== month) {
+        setMonth(nextMonth);
+      }
+      return;
+    }
+
+    if (timelineYears.length === 0) {
+      return;
+    }
+    const currentIndex = yearTimelineIndex >= 0 ? yearTimelineIndex : timelineYears.length - 1;
+    const nextIndex = Math.max(0, Math.min(timelineYears.length - 1, currentIndex + step));
+    const nextYear = timelineYears[nextIndex];
+    const nextMonth = pickTimelineMonthForYear(timelineMonths, nextYear, month);
+    if (nextMonth && nextMonth !== month) {
+      setMonth(nextMonth);
+    }
+  }
 
   return (
-    <div className="stack-lg">
-      <Card>
-        <CardContent className="space-y-4 pt-6">
-          <div className="table-shell-header">
-            <div>
-              <h2 className="table-shell-title">Dashboard</h2>
+    <div className="dashboard-page-layout">
+      <div className="stack-lg min-w-0">
+        <Card>
+          <CardContent className="space-y-4 pt-6">
+            <div className="table-shell-header">
+              <div>
+                <h2 className="table-shell-title">Dashboard</h2>
+              </div>
             </div>
-          </div>
 
-          <div className="table-toolbar">
-            <label className="field min-w-[220px]">
-              <span>Month</span>
-              <Input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
-            </label>
-            <div className="field min-w-[180px]">
-              <span>Currency</span>
-              <p className="rounded-md border border-input bg-muted/30 px-3 py-2 text-sm font-medium">{data.currency_code}</p>
+            <div className="table-toolbar dashboard-toolbar">
+              <div className="field min-w-[220px]">
+                <span>View</span>
+                <div className="dashboard-view-toggle" role="tablist" aria-label="Dashboard period view">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={viewMode === "month"}
+                    className={cn("dashboard-view-toggle-button", viewMode === "month" && "dashboard-view-toggle-button-active")}
+                    onClick={() => setViewMode("month")}
+                  >
+                    Month
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={viewMode === "year"}
+                    className={cn("dashboard-view-toggle-button", viewMode === "year" && "dashboard-view-toggle-button-active")}
+                    onClick={() => setViewMode("year")}
+                  >
+                    Year
+                  </button>
+                </div>
+              </div>
+              <div className="field min-w-[180px]">
+                <span>Currency</span>
+                <p className="rounded-md border border-input bg-muted/30 px-3 py-2 text-sm font-medium">{data.currency_code}</p>
+              </div>
             </div>
-          </div>
 
-          <div className="dashboard-tab-list" role="tablist" aria-label="Dashboard sections">
-            {DASHBOARD_TABS.map((tab) => (
-              <Button
-                key={tab.id}
-                id={`dashboard-tab-${tab.id}`}
-                role="tab"
-                aria-controls={`dashboard-panel-${tab.id}`}
-                aria-selected={activeTab === tab.id}
-                variant={activeTab === tab.id ? "default" : "outline"}
-                size="sm"
-                className={cn("dashboard-tab-button", activeTab === tab.id ? "dashboard-tab-active" : "")}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </Button>
-            ))}
-          </div>
+            <div className="dashboard-tab-list" role="tablist" aria-label="Dashboard sections">
+              {DASHBOARD_TABS.map((tab) => (
+                <Button
+                  key={tab.id}
+                  id={`dashboard-tab-${tab.id}`}
+                  role="tab"
+                  aria-controls={`dashboard-panel-${tab.id}`}
+                  aria-selected={activeTab === tab.id}
+                  variant={activeTab === tab.id ? "default" : "outline"}
+                  size="sm"
+                  className={cn("dashboard-tab-button", activeTab === tab.id ? "dashboard-tab-active" : "")}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </Button>
+              ))}
+            </div>
 
-          <p className="muted">{DASHBOARD_TABS.find((tab) => tab.id === activeTab)?.description}</p>
-        </CardContent>
-      </Card>
+            <p className="muted">{DASHBOARD_TABS.find((tab) => tab.id === activeTab)?.description}</p>
+          </CardContent>
+        </Card>
 
-      {activeTab === "overview" ? (
+        {activeTab === "overview" ? (
         <section className="stack-lg" role="tabpanel" id="dashboard-panel-overview" aria-labelledby="dashboard-tab-overview">
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Expense (Month)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">{formatMinor(data.kpis.expense_total_minor, data.currency_code)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Income (Month)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">{formatMinor(data.kpis.income_total_minor, data.currency_code)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Net (Month)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">{formatMinor(data.kpis.net_total_minor, data.currency_code)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Daily-Tagged Days</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">{data.kpis.daily_spending_days}</p>
-              </CardContent>
-            </Card>
-          </section>
+          {viewMode === "month" ? (
+            <>
+              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Expense</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">{formatMinor(data.kpis.expense_total_minor, data.currency_code)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Income</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">{formatMinor(data.kpis.income_total_minor, data.currency_code)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Net</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">{formatMinor(data.kpis.net_total_minor, data.currency_code)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      {primaryFilterGroup ? primaryFilterGroup.name : "Primary Group"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">
+                      {primaryFilterGroup ? formatMinor(primaryFilterGroup.total_minor, data.currency_code) : "-"}
+                    </p>
+                  </CardContent>
+                </Card>
+              </section>
 
-          <section className="grid gap-4 xl:grid-cols-3">
-            <Card className="xl:col-span-2">
-              <CardHeader>
-                <CardTitle>Income vs Expense Trend</CardTitle>
-              </CardHeader>
-              <CardContent className="h-80 min-w-0">
-                <DashboardChartContainer>
-                  {({ width, height }) => (
-                    <BarChart width={width} height={height} data={data.monthly_trend}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                      <XAxis dataKey="month" />
-                      <YAxis tickFormatter={axisTick} />
-                      <Tooltip
-                        formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)}
-                        cursor={{ fill: "hsl(var(--muted) / 0.35)" }}
-                      />
-                      <Legend />
-                      <Bar dataKey="income_total_minor" name="Income" fill={CHART_COLORS.income} radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="expense_total_minor" name="Expense" fill={CHART_COLORS.expense} radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  )}
-                </DashboardChartContainer>
-              </CardContent>
-            </Card>
+              <section className="grid gap-4 xl:grid-cols-3">
+                <Card className="xl:col-span-2">
+                  <CardHeader>
+                    <CardTitle>Income vs Expense Trend</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-80 min-w-0">
+                    <DashboardChartContainer>
+                      {({ width, height }) => (
+                        <BarChart width={width} height={height} data={monthlyChartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+                          <XAxis dataKey="month" />
+                          <YAxis tickFormatter={axisTick} />
+                          <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
+                          <Legend />
+                          <Bar dataKey="income_total_minor" name="Income" fill={CHART_COLORS.income} />
+                          {expenseTrendGroups.map((group, index) => (
+                            <Bar
+                              key={group.key}
+                              dataKey={group.key}
+                              name={group.name}
+                              stackId="expense-trend"
+                              fill={modernSegmentColor(index)}
+                            />
+                          ))}
+                        </BarChart>
+                      )}
+                    </DashboardChartContainer>
+                  </CardContent>
+                </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Daily vs Non-daily Split</CardTitle>
-              </CardHeader>
-              <CardContent className="h-80 min-w-0">
-                <DashboardChartContainer>
-                  {({ width, height }) => (
-                    <PieChart width={width} height={height}>
-                      <Pie data={dailySpendSplit} dataKey="value" nameKey="name" innerRadius={56} outerRadius={90} paddingAngle={4}>
-                        {dailySpendSplit.map((entry, index) => (
-                          <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Expense by Filter Group</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-80 min-w-0">
+                    {displayGroups.length === 0 ? (
+                      <p className="muted">No classified expense activity this month.</p>
+                    ) : (
+                      <DashboardChartContainer>
+                        {({ width, height }) => (
+                          <PieChart width={width} height={height}>
+                            <Pie data={displayGroups} dataKey="total_minor" nameKey="name" innerRadius={56} outerRadius={90} paddingAngle={4}>
+                              {displayGroups.map((group, index) => (
+                                <Cell key={group.key} fill={pastelPieColor(index)} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
+                            <Legend />
+                          </PieChart>
+                        )}
+                      </DashboardChartContainer>
+                    )}
+                  </CardContent>
+                </Card>
+              </section>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Projection (Current Month)</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-2 md:grid-cols-3">
+                    <p className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm">
+                      <span className="block text-xs text-muted-foreground">Spent to date</span>
+                      <strong>{formatMinor(data.projection.spent_to_date_minor, data.currency_code)}</strong>
+                    </p>
+                    <p className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm">
+                      <span className="block text-xs text-muted-foreground">Projected total</span>
+                      <strong>
+                        {data.projection.projected_total_minor === null
+                          ? "Not a current month"
+                          : formatMinor(data.projection.projected_total_minor, data.currency_code)}
+                      </strong>
+                    </p>
+                    <p className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm">
+                      <span className="block text-xs text-muted-foreground">Projected remaining</span>
+                      <strong>
+                        {data.projection.projected_remaining_minor === null
+                          ? "-"
+                          : formatMinor(data.projection.projected_remaining_minor, data.currency_code)}
+                      </strong>
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-border/70">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Filter group</TableHead>
+                          <TableHead>Projected total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data.filter_groups.map((group) => (
+                          <TableRow key={group.key}>
+                            <TableCell>{group.name}</TableCell>
+                            <TableCell>
+                              {data.projection.projected_total_minor === null
+                                ? "-"
+                                : formatMinor(data.projection.projected_filter_group_totals[group.key] ?? 0, data.currency_code)}
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
-                      <Legend />
-                    </PieChart>
-                  )}
-                </DashboardChartContainer>
-              </CardContent>
-            </Card>
-          </section>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <>
+              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">{selectedYear} Expense</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">{formatMinor(selectedYearExpenseTotalMinor, data.currency_code)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">{selectedYear} Income</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">{formatMinor(selectedYearIncomeTotalMinor, data.currency_code)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">{selectedYear} Net</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">{formatMinor(selectedYearNetTotalMinor, data.currency_code)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      {primaryFilterGroup ? `${primaryFilterGroup.name} (${selectedYear})` : "Primary Group"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">
+                      {primaryFilterGroup ? formatMinor(yearlyPrimaryFilterGroupTotalMinor, data.currency_code) : "-"}
+                    </p>
+                  </CardContent>
+                </Card>
+              </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Projection (Current Month)</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2 md:grid-cols-3">
-              <p className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm">
-                <span className="block text-xs text-muted-foreground">Spent to date</span>
-                <strong>{formatMinor(data.projection.spent_to_date_minor, data.currency_code)}</strong>
-              </p>
-              <p className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm">
-                <span className="block text-xs text-muted-foreground">Projected total</span>
-                <strong>
-                  {data.projection.projected_total_minor === null
-                    ? "Not a current month"
-                    : formatMinor(data.projection.projected_total_minor, data.currency_code)}
-                </strong>
-              </p>
-              <p className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm">
-                <span className="block text-xs text-muted-foreground">Projected remaining</span>
-                <strong>
-                  {data.projection.projected_remaining_minor === null
-                    ? "-"
-                    : formatMinor(data.projection.projected_remaining_minor, data.currency_code)}
-                </strong>
-              </p>
-            </CardContent>
-          </Card>
+              <section className="grid gap-4 xl:grid-cols-3">
+                <Card className="xl:col-span-2">
+                  <CardHeader>
+                    <CardTitle>{selectedYear} Income vs Expense Trend</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-80 min-w-0">
+                    {yearlyQueriesLoading ? (
+                      <p className="muted">Loading yearly trend...</p>
+                    ) : yearlyQueryError ? (
+                      <p className="error">Failed to load yearly trend: {yearlyQueryError.message}</p>
+                    ) : (
+                      <DashboardChartContainer>
+                        {({ width, height }) => (
+                          <BarChart width={width} height={height} data={yearlyOverviewData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+                            <XAxis dataKey="month" />
+                            <YAxis tickFormatter={axisTick} />
+                            <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
+                            <Legend />
+                            <Bar dataKey="income_total_minor" name="Income" fill={CHART_COLORS.income} />
+                            {yearlyExpenseTrendGroups.map((group, index) => (
+                              <Bar
+                                key={group.key}
+                                dataKey={group.key}
+                                name={group.name}
+                                stackId="yearly-expense-trend"
+                                fill={modernSegmentColor(index)}
+                              />
+                            ))}
+                          </BarChart>
+                        )}
+                      </DashboardChartContainer>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{selectedYear} Expense by Filter Group</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-80 min-w-0">
+                    {yearlyQueriesLoading ? (
+                      <p className="muted">Loading yearly groups...</p>
+                    ) : yearlyQueryError ? (
+                      <p className="error">Failed to load yearly groups: {yearlyQueryError.message}</p>
+                    ) : yearlyDisplayGroups.length === 0 ? (
+                      <p className="muted">No classified expense activity this year.</p>
+                    ) : (
+                      <DashboardChartContainer>
+                        {({ width, height }) => (
+                          <BarChart width={width} height={height} data={yearlyDisplayGroups} layout="vertical" margin={{ left: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+                            <XAxis type="number" tickFormatter={axisTick} />
+                            <YAxis dataKey="name" type="category" width={132} />
+                            <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
+                            <Bar dataKey="total_minor" name="Total" radius={[0, 6, 6, 0]}>
+                              {yearlyDisplayGroups.map((group, index) => (
+                                <Cell key={group.key} fill={modernSegmentColor(index)} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        )}
+                      </DashboardChartContainer>
+                    )}
+                  </CardContent>
+                </Card>
+              </section>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>{selectedYear} Filter Group Monthly Bars</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="muted text-sm">Each saved filter group gets its own month-by-month bar chart for the selected year.</p>
+                  {yearlyQueriesLoading ? (
+                    <p className="muted">Loading filter-group yearly bars...</p>
+                  ) : yearlyQueryError ? (
+                    <p className="error">Failed to load filter-group yearly bars: {yearlyQueryError.message}</p>
+                  ) : (
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      {data.filter_groups.map((group, index) => {
+                        const groupYearData = selectedYearMonths.map((monthKey) => ({
+                          month: formatMonthShort(monthKey),
+                          total_minor: filterGroupTotalForMonth(yearlyDashboardsByMonth.get(monthKey), group.key)
+                        }));
+                        return (
+                          <div key={group.key} className="rounded-xl border border-border/70 p-4">
+                            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="font-medium">{group.name}</p>
+                                <p className="muted text-xs">{selectedYear}</p>
+                              </div>
+                              <Badge variant="outline" style={{ borderColor: normalizeChartColor(group.color, index), color: normalizeChartColor(group.color, index) }}>
+                                {formatMinor(sumFilterGroupForMonths(selectedYearMonths, yearlyDashboardsByMonth, group.key), data.currency_code)}
+                              </Badge>
+                            </div>
+                            <div className="h-56 min-w-0">
+                              <DashboardChartContainer>
+                                {({ width, height }) => (
+                                  <BarChart width={width} height={height} data={groupYearData}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+                                    <XAxis dataKey="month" />
+                                    <YAxis tickFormatter={axisTick} />
+                                    <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
+                                  <Bar dataKey="total_minor" name={group.name} fill={normalizeChartColor(group.color, index)} radius={[4, 4, 0, 0]} />
+                                  
+                                </BarChart>
+                              )}
+                            </DashboardChartContainer>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </section>
       ) : null}
 
       {activeTab === "daily" ? (
         <section className="stack-lg" role="tabpanel" id="dashboard-panel-daily" aria-labelledby="dashboard-tab-daily">
-          <section className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Average Daily Spend</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">{formatMinor(data.kpis.average_daily_expense_minor, data.currency_code)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Median Daily Spend</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">{formatMinor(data.kpis.median_daily_expense_minor, data.currency_code)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Daily-tagged total</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">{formatMinor(data.kpis.daily_expense_total_minor, data.currency_code)}</p>
-              </CardContent>
-            </Card>
-          </section>
+          {viewMode === "month" ? (
+            <>
+              <section className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Average Spend Day</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">{formatMinor(data.kpis.average_expense_day_minor, data.currency_code)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Median Spend Day</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">{formatMinor(data.kpis.median_expense_day_minor, data.currency_code)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Tracked Groups</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">{data.filter_groups.length}</p>
+                  </CardContent>
+                </Card>
+              </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Daily Spending (Selected Month)</CardTitle>
-            </CardHeader>
-            <CardContent className="h-80 min-w-0">
-              <DashboardChartContainer>
-                {({ width, height }) => (
-                  <AreaChart width={width} height={height} data={data.daily_spending}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                    <XAxis dataKey="date" />
-                    <YAxis tickFormatter={axisTick} />
-                    <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
-                    <Legend />
-                    <Area
-                      type="monotone"
-                      dataKey="daily_expense_minor"
-                      name="Daily-tagged"
-                      stroke={CHART_COLORS.daily}
-                      fill="hsl(var(--success) / 0.2)"
-                      strokeWidth={2}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="non_daily_expense_minor"
-                      name="Non-daily"
-                      stroke={CHART_COLORS.nonDaily}
-                      fill="hsl(var(--destructive) / 0.16)"
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                )}
-              </DashboardChartContainer>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Daily Spending by Filter Group</CardTitle>
+                </CardHeader>
+                <CardContent className="h-80 min-w-0">
+                  <DashboardChartContainer>
+                    {({ width, height }) => (
+                      <AreaChart width={width} height={height} data={dailyChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+                        <XAxis dataKey="date" />
+                        <YAxis tickFormatter={axisTick} />
+                        <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
+                        <Legend />
+                        {data.filter_groups.map((group, index) => (
+                          <Area
+                            key={group.key}
+                            type="monotone"
+                            dataKey={group.key}
+                            name={group.name}
+                            stackId="expenses"
+                            stroke={modernSegmentColor(index)}
+                            fill={modernSegmentColor(index)}
+                            fillOpacity={0.18}
+                            strokeWidth={2}
+                          />
+                        ))}
+                      </AreaChart>
+                    )}
+                  </DashboardChartContainer>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Monthly Daily Spend Trend</CardTitle>
-            </CardHeader>
-            <CardContent className="h-80 min-w-0">
-              <DashboardChartContainer>
-                {({ width, height }) => (
-                  <BarChart width={width} height={height} data={data.monthly_trend}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                    <XAxis dataKey="month" />
-                    <YAxis tickFormatter={axisTick} />
-                    <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
-                    <Legend />
-                    <Bar dataKey="daily_expense_minor" name="Daily-tagged" fill={CHART_COLORS.daily} radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="non_daily_expense_minor" name="Non-daily" fill={CHART_COLORS.nonDaily} radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                )}
-              </DashboardChartContainer>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Month-over-Month Filter Group Comparison</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="muted text-sm">
+                    Compare {formatMonthLong(month)} against {formatMonthLong(shiftMonthKey(month, -1))} for each saved group.
+                  </p>
+                  <div className="dashboard-comparison-grid">
+                    {data.filter_groups.map((group, index) => {
+                      const previousTotalMinor = filterGroupTotalForMonth(previousMonthDashboard, group.key);
+                      const deltaMinor = group.total_minor - previousTotalMinor;
+                      return (
+                        <div key={group.key} className="dashboard-comparison-card">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-medium">{group.name}</p>
+                              <p className="muted text-xs">{formatMonthLong(month)}</p>
+                            </div>
+                            <Badge variant="outline" style={{ borderColor: normalizeChartColor(group.color, index), color: normalizeChartColor(group.color, index) }}>
+                              {formatMinor(group.total_minor, data.currency_code)}
+                            </Badge>
+                          </div>
+                          <div className="grid gap-1 text-sm">
+                            <p className="muted">
+                              Last month: <strong>{formatMinor(previousTotalMinor, data.currency_code)}</strong>
+                            </p>
+                            <p className={cn("dashboard-delta", deltaMinor > 0 ? "dashboard-delta-up" : deltaMinor < 0 ? "dashboard-delta-down" : "dashboard-delta-flat")}>
+                              {deltaMinor === 0 ? "No change" : `${formatDelta(deltaMinor, data.currency_code)} vs last month`}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <>
+              <section className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Average Expense Month</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">{formatMinor(yearlyAverageExpenseMonthMinor, data.currency_code)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Median Expense Month</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">{formatMinor(yearlyMedianExpenseMonthMinor, data.currency_code)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Tracked Groups</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-semibold">{data.filter_groups.length}</p>
+                  </CardContent>
+                </Card>
+              </section>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>{selectedYear} Monthly Filter Group Trend</CardTitle>
+                </CardHeader>
+                <CardContent className="h-80 min-w-0">
+                  {yearlyQueriesLoading ? (
+                    <p className="muted">Loading yearly monthly trend...</p>
+                  ) : yearlyQueryError ? (
+                    <p className="error">Failed to load yearly monthly trend: {yearlyQueryError.message}</p>
+                  ) : (
+                    <DashboardChartContainer>
+                      {({ width, height }) => (
+                        <BarChart width={width} height={height} data={yearlyOverviewData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+                          <XAxis dataKey="month" />
+                          <YAxis tickFormatter={axisTick} />
+                          <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
+                          <Legend />
+                          {data.filter_groups.map((group, index) => (
+                            <Bar
+                              key={group.key}
+                              dataKey={group.key}
+                              name={group.name}
+                              stackId="yearly-group-spend"
+                              fill={modernSegmentColor(index)}
+                              radius={[4, 4, 0, 0]}
+                            />
+                          ))}
+                        </BarChart>
+                      )}
+                    </DashboardChartContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Year-over-Year Filter Group Comparison</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="muted text-sm">Compare the selected year against the prior year for each saved filter group.</p>
+                  <div className="dashboard-comparison-grid">
+                    {data.filter_groups.map((group, index) => {
+                      const currentTotalMinor = sumFilterGroupForMonths(selectedYearMonths, yearlyDashboardsByMonth, group.key);
+                      const previousTotalMinor = sumFilterGroupForMonths(previousYearMonths, yearlyDashboardsByMonth, group.key);
+                      const deltaMinor = currentTotalMinor - previousTotalMinor;
+                      return (
+                        <div key={group.key} className="dashboard-comparison-card">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-medium">{group.name}</p>
+                              <p className="muted text-xs">{selectedYear}</p>
+                            </div>
+                            <Badge variant="outline" style={{ borderColor: normalizeChartColor(group.color, index), color: normalizeChartColor(group.color, index) }}>
+                              {formatMinor(currentTotalMinor, data.currency_code)}
+                            </Badge>
+                          </div>
+                          <div className="grid gap-1 text-sm">
+                            <p className="muted">
+                              {selectedYear - 1}: <strong>{formatMinor(previousTotalMinor, data.currency_code)}</strong>
+                            </p>
+                            <p className={cn("dashboard-delta", deltaMinor > 0 ? "dashboard-delta-up" : deltaMinor < 0 ? "dashboard-delta-down" : "dashboard-delta-flat")}>
+                              {deltaMinor === 0 ? "No change" : `${formatDelta(deltaMinor, data.currency_code)} year over year`}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </section>
       ) : null}
 
       {activeTab === "breakdowns" ? (
         <section className="grid gap-4 xl:grid-cols-3" role="tabpanel" id="dashboard-panel-breakdowns" aria-labelledby="dashboard-tab-breakdowns">
+          {viewMode === "year" ? (
+            <div className="dashboard-scope-note xl:col-span-3">
+              Breakdowns remain anchored to <strong>{formatMonthLong(month)}</strong>. Use `Overview` and `Spending` for year-level trend charts.
+            </div>
+          ) : null}
           <Card className="xl:col-span-1">
             <CardHeader>
               <CardTitle>Spending by Tags</CardTitle>
@@ -414,7 +1155,7 @@ export function DashboardPage() {
                     <PieChart width={width} height={height}>
                       <Pie data={data.spending_by_tag} dataKey="total_minor" nameKey="label" outerRadius={95}>
                         {data.spending_by_tag.map((item, index) => (
-                          <Cell key={item.label} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                          <Cell key={item.label} fill={pastelPieColor(index)} />
                         ))}
                       </Pie>
                       <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
@@ -428,7 +1169,7 @@ export function DashboardPage() {
 
           <Card className="xl:col-span-2">
             <CardHeader>
-              <CardTitle>Spending by Destination (`to`)</CardTitle>
+              <CardTitle>Spending by Destination</CardTitle>
             </CardHeader>
             <CardContent className="h-80 min-w-0">
               {data.spending_by_to.length === 0 ? (
@@ -441,7 +1182,7 @@ export function DashboardPage() {
                       <XAxis type="number" tickFormatter={axisTick} />
                       <YAxis dataKey="label" type="category" width={140} />
                       <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
-                      <Bar dataKey="total_minor" name="Total" fill={CHART_COLORS.expense} radius={[0, 6, 6, 0]} />
+                      <Bar dataKey="total_minor" name="Total" fill={CHART_COLORS.destination} radius={[0, 6, 6, 0]} />
                     </BarChart>
                   )}
                 </DashboardChartContainer>
@@ -464,7 +1205,7 @@ export function DashboardPage() {
                       <XAxis dataKey="label" />
                       <YAxis tickFormatter={axisTick} />
                       <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
-                      <Bar dataKey="total_minor" name="Total" fill={CHART_COLORS.net} radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="total_minor" name="Total" fill={CHART_COLORS.source} radius={[6, 6, 0, 0]} />
                     </BarChart>
                   )}
                 </DashboardChartContainer>
@@ -476,83 +1217,44 @@ export function DashboardPage() {
 
       {activeTab === "insights" ? (
         <section className="stack-lg" role="tabpanel" id="dashboard-panel-insights" aria-labelledby="dashboard-tab-insights">
-          <section className="grid gap-4 xl:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Spending by Weekday</CardTitle>
+              <CardTitle>{viewMode === "year" ? "Largest Expenses (Year)" : "Largest Expenses"}</CardTitle>
               </CardHeader>
-              <CardContent className="h-80 min-w-0">
-                <DashboardChartContainer>
-                  {({ width, height }) => (
-                    <BarChart width={width} height={height} data={data.weekday_spending}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                      <XAxis dataKey="weekday" />
-                      <YAxis tickFormatter={axisTick} />
-                      <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
-                      <Bar dataKey="total_minor" name="Total" fill={CHART_COLORS.expense} radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  )}
-                </DashboardChartContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Largest Expenses (Month)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {data.largest_expenses.length === 0 ? (
-                  <p className="muted">No expense entries in this month.</p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Amount</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.largest_expenses.map((entry) => (
-                        <TableRow key={entry.id}>
-                          <TableCell>{entry.occurred_at}</TableCell>
-                          <TableCell>{entry.name}</TableCell>
-                          <TableCell>{entry.is_daily ? "Daily" : "Non-daily"}</TableCell>
-                          <TableCell>{formatMinor(entry.amount_minor, data.currency_code)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </section>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>{data.currency_code} Reconciliation</CardTitle>
-            </CardHeader>
             <CardContent>
-              {data.reconciliation.length === 0 ? (
-                <p className="muted">No active {data.currency_code} accounts configured.</p>
+              {insightsLargestExpenses.length === 0 ? (
+                <p className="muted">
+                  {viewMode === "year" ? "No expense entries in this selected year." : "No expense entries in this month."}
+                </p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Account</TableHead>
-                      <TableHead>Ledger</TableHead>
-                      <TableHead>Snapshot</TableHead>
-                      <TableHead>Delta</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Groups</TableHead>
+                      <TableHead>Amount</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.reconciliation.map((row) => (
-                      <TableRow key={row.account_id}>
-                        <TableCell>{row.account_name}</TableCell>
-                        <TableCell>{formatMinor(row.ledger_balance_minor, row.currency_code)}</TableCell>
-                        <TableCell>{row.snapshot_balance_minor === null ? "-" : formatMinor(row.snapshot_balance_minor, row.currency_code)}</TableCell>
-                        <TableCell>{row.delta_minor === null ? "-" : formatMinor(row.delta_minor, row.currency_code)}</TableCell>
+                    {insightsLargestExpenses.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell>{entry.occurred_at}</TableCell>
+                        <TableCell>{entry.name}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {entry.matching_filter_group_keys.length > 0 ? (
+                              entry.matching_filter_group_keys.map((key) => (
+                                <Badge key={key} variant="outline">
+                                  {groupNamesByKey.get(key) ?? key}
+                                </Badge>
+                              ))
+                            ) : (
+                              <Badge variant="outline">Unmatched</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatMinor(entry.amount_minor, data.currency_code)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -562,6 +1264,68 @@ export function DashboardPage() {
           </Card>
         </section>
       ) : null}
+
+      </div>
+
+      <aside className="dashboard-page-rail">
+        <div className="dashboard-timeline-panel">
+          <div className="dashboard-timeline-viewport">
+            <div
+              ref={timelineScrollRef}
+              className="dashboard-month-timeline dashboard-month-timeline-vertical"
+              aria-label={viewMode === "month" ? "Month timeline" : "Year timeline"}
+              onWheel={handleTimelineWheel}
+              onKeyDown={handleTimelineKeyDown}
+              tabIndex={0}
+            >
+              {(viewMode === "month" ? timelineMonths.length === 0 : timelineYears.length === 0) ? (
+                <div className="dashboard-timeline-empty">
+                  No expense {viewMode === "month" ? "months" : "years"} yet.
+                </div>
+              ) : viewMode === "month"
+                ? timelineMonths.map((monthKey) => {
+                    const isActive = monthKey === month;
+                    return (
+                      <button
+                        key={monthKey}
+                        ref={(node) => registerTimelineItem(monthKey, node, isActive)}
+                        type="button"
+                        className={cn("dashboard-month-chip", isActive && "dashboard-month-chip-active")}
+                        onClick={() => setMonth(monthKey)}
+                        aria-pressed={isActive}
+                      >
+                        <span className="dashboard-month-chip-label">{formatMonthShort(monthKey)}</span>
+                        <span className="dashboard-month-chip-year">
+                          {monthKey.endsWith("-01") || isActive ? formatMonthLong(monthKey) : monthKey.slice(0, 4)}
+                        </span>
+                      </button>
+                    );
+                  })
+                : timelineYears.map((yearKey) => {
+                    const isActive = yearKey === String(selectedYear);
+                    return (
+                      <button
+                        key={yearKey}
+                        ref={(node) => registerTimelineItem(yearKey, node, isActive)}
+                        type="button"
+                        className={cn("dashboard-month-chip", isActive && "dashboard-month-chip-active")}
+                        onClick={() => {
+                          const nextMonth = pickTimelineMonthForYear(timelineMonths, yearKey, month);
+                          if (nextMonth) {
+                            setMonth(nextMonth);
+                          }
+                        }}
+                        aria-pressed={isActive}
+                      >
+                        <span className="dashboard-month-chip-label">{yearKey}</span>
+                        <span className="dashboard-month-chip-year">{`${yearKey} overview`}</span>
+                      </button>
+                    );
+                  })}
+            </div>
+          </div>
+        </div>
+      </aside>
     </div>
   );
 }

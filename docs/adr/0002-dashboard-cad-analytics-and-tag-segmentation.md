@@ -1,8 +1,10 @@
 # ADR 0002: CAD-Scoped Dashboard With Tag-Based Daily Segmentation
 
-- Status: accepted
+- Status: superseded
 - Date: 2026-02-09
 - Deciders: Bill Helper maintainers
+
+Superseded by `0005-filter-group-analytics.md`.
 
 ## Context
 

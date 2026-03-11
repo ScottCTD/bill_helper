@@ -9,9 +9,12 @@ import type {
   AgentToolCall,
   Currency,
   Dashboard,
+  DashboardTimeline,
   Entity,
   EntryDetail,
   EntryListResponse,
+  FilterGroup,
+  FilterGroupRule,
   GroupMemberCreatePayload,
   GroupMemberRole,
   GroupGraph,
@@ -167,6 +170,43 @@ export function listTags(): Promise<Tag[]> {
   return request<Tag[]>("/api/v1/tags");
 }
 
+export function listFilterGroups(): Promise<FilterGroup[]> {
+  return request<FilterGroup[]>("/api/v1/filter-groups");
+}
+
+export function createFilterGroup(payload: {
+  name: string;
+  description?: string | null;
+  color?: string | null;
+  rule: FilterGroupRule;
+}): Promise<FilterGroup> {
+  return request<FilterGroup>("/api/v1/filter-groups", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateFilterGroup(
+  filterGroupId: string,
+  payload: {
+    name?: string | null;
+    description?: string | null;
+    color?: string | null;
+    rule?: FilterGroupRule | null;
+  }
+): Promise<FilterGroup> {
+  return request<FilterGroup>(`/api/v1/filter-groups/${filterGroupId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteFilterGroup(filterGroupId: string): Promise<void> {
+  return request<void>(`/api/v1/filter-groups/${filterGroupId}`, {
+    method: "DELETE"
+  });
+}
+
 export function listUsers(): Promise<User[]> {
   return request<User[]>("/api/v1/users");
 }
@@ -310,6 +350,7 @@ export function listEntries(params: {
   currency?: string;
   source?: string;
   account_id?: string;
+  filter_group_id?: string;
   limit?: number;
   offset?: number;
 }): Promise<EntryListResponse> {
@@ -409,6 +450,10 @@ export function deleteGroupMember(groupId: string, membershipId: string): Promis
 
 export function getDashboard(month: string): Promise<Dashboard> {
   return request<Dashboard>(`/api/v1/dashboard?month=${month}`);
+}
+
+export function getDashboardTimeline(): Promise<DashboardTimeline> {
+  return request<DashboardTimeline>("/api/v1/dashboard/timeline");
 }
 
 export function getRuntimeSettings(): Promise<RuntimeSettings> {

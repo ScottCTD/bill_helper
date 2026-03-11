@@ -7,6 +7,7 @@
 - lists, filters, edits, and deletes entries
 - create action is a compact `+` beside the `Source text` filter
 - `Tag` and `Currency` filters use chip-based multi-select controls
+- a `Filter group` selector syncs with the `filter_group_id` URL search param so deep links can open the entries list already scoped to one saved group
 - date column is fixed-width and no-wrap
 - name cells show the primary name plus a compact `from -> to` secondary line
 - amount cells combine the kind marker with the numeric value, reusing the existing `+ / - / ~` tone colors on the symbol itself with tight inline spacing
@@ -89,10 +90,25 @@
 
 ### `frontend/src/pages/DashboardPage.tsx`
 
-- tabbed analytics surface with `Overview`, `Daily Spend`, `Breakdowns`, and `Insights`
+- tabbed analytics surface with `Overview`, `Spending`, `Breakdowns`, and `Insights`
+- includes an explicit `Month` / `Year` mode toggle
+- uses a floating page-level right-side timeline rail on desktop for month/year selection; the rail is visually reduced to floating date chips, stays fixed while the dashboard scrolls, and does not consume dashboard layout width
+- desktop wheel interaction is discrete: one wheel gesture advances one visible month or year, and only expense-bearing months/years appear in the rail
+- on small screens the timeline falls back to a compact horizontal strip above the dashboard content
+- yearly mode moves annual trend charts into the active dashboard view instead of hiding them only inside `Insights`
 - uses Recharts with measured containers so charts render only after non-zero dimensions are available
 - dashboard totals and charts exclude internal transfers when both endpoints resolve to account-backed entity roots
-- daily classification uses `daily` vs `non-daily` tags
+- monthly classification is driven by saved filter groups, including yearly views that fan out to month-scoped dashboard reads for the selected and previous years
+- the monthly and yearly `Income vs Expense Trend` charts render income as a standalone bar and expense as stacked filter-group segments
+- `Insights` is intentionally reduced to the largest-expenses table only; month mode shows the current month while year mode aggregates the selected year's largest expenses
+
+## Filter
+
+### `frontend/src/pages/FilterGroupsPage.tsx`
+
+- dedicated first-class filter-group workspace at `/filters`
+- page shell delegates the actual CRUD surface to `frontend/src/features/filterGroups/FilterGroupsManager.tsx`
+- each saved group exposes a direct `View matching entries` link that opens the entries workspace scoped to that group
 
 ## Settings
 

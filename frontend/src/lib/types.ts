@@ -211,30 +211,73 @@ export interface TopTag {
   total_minor: number;
 }
 
+export type FilterRuleField = "entry_kind" | "tags" | "is_internal_transfer";
+export type FilterRuleConditionOperator = "is" | "has_any" | "has_none";
+export type FilterRuleLogicalOperator = "AND" | "OR";
+
+export interface FilterRuleCondition {
+  type: "condition";
+  field: FilterRuleField;
+  operator: FilterRuleConditionOperator;
+  value: string | boolean | string[];
+}
+
+export interface FilterRuleGroup {
+  type: "group";
+  operator: FilterRuleLogicalOperator;
+  children: FilterRuleNode[];
+}
+
+export type FilterRuleNode = FilterRuleCondition | FilterRuleGroup;
+
+export interface FilterGroupRule {
+  include: FilterRuleGroup;
+  exclude: FilterRuleGroup | null;
+}
+
+export interface FilterGroup {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  is_default: boolean;
+  position: number;
+  rule: FilterGroupRule;
+  rule_summary: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DashboardKpis {
   expense_total_minor: number;
   income_total_minor: number;
   net_total_minor: number;
-  daily_expense_total_minor: number;
-  non_daily_expense_total_minor: number;
-  average_daily_expense_minor: number;
-  median_daily_expense_minor: number;
-  daily_spending_days: number;
+  average_expense_day_minor: number;
+  median_expense_day_minor: number;
+  spending_days: number;
+}
+
+export interface DashboardFilterGroupSummary {
+  filter_group_id: string;
+  key: string;
+  name: string;
+  color: string | null;
+  total_minor: number;
+  share: number;
 }
 
 export interface DashboardDailySpendingPoint {
   date: string;
   expense_total_minor: number;
-  daily_expense_minor: number;
-  non_daily_expense_minor: number;
+  filter_group_totals: Record<string, number>;
 }
 
 export interface DashboardMonthlyTrendPoint {
   month: string;
   expense_total_minor: number;
   income_total_minor: number;
-  daily_expense_minor: number;
-  non_daily_expense_minor: number;
+  filter_group_totals: Record<string, number>;
 }
 
 export interface DashboardBreakdownItem {
@@ -254,7 +297,7 @@ export interface DashboardLargestExpenseItem {
   name: string;
   to_entity: string | null;
   amount_minor: number;
-  is_daily: boolean;
+  matching_filter_group_keys: string[];
 }
 
 export interface DashboardProjection {
@@ -264,12 +307,18 @@ export interface DashboardProjection {
   spent_to_date_minor: number;
   projected_total_minor: number | null;
   projected_remaining_minor: number | null;
+  projected_filter_group_totals: Record<string, number>;
+}
+
+export interface DashboardTimeline {
+  months: string[];
 }
 
 export interface Dashboard {
   month: string;
   currency_code: string;
   kpis: DashboardKpis;
+  filter_groups: DashboardFilterGroupSummary[];
   daily_spending: DashboardDailySpendingPoint[];
   monthly_trend: DashboardMonthlyTrendPoint[];
   spending_by_from: DashboardBreakdownItem[];

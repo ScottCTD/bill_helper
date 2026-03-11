@@ -34,6 +34,11 @@ from backend.services.entries import (
     soft_delete_entry,
     update_entry_from_command,
 )
+from backend.services.filter_groups import (
+    entry_matches_filter_group,
+    get_filter_group_definition,
+    list_account_entity_ids_for_principal,
+)
 from backend.services.groups import entry_group_options
 from backend.services.serializers import entry_to_detail_schema, entry_to_schema
 from backend.validation.finance_names import normalize_tag_name
@@ -49,6 +54,7 @@ class EntryListQueryParams(BaseModel):
     currency: str | None = None
     source: str | None = None
     account_id: str | None = None
+    filter_group_id: str | None = None
     limit: int = Field(default=50, ge=1, le=200)
     offset: int = Field(default=0, ge=0)
 
@@ -234,8 +240,30 @@ def list_entries(
         stmt = stmt.join(Entry.tags).where(Tag.name == normalized)
         count_stmt = count_stmt.select_from(Entry).join(Entry.tags).where(Tag.name == normalized, *conditions)
 
-    total = int(db.scalar(count_stmt) or 0)
-    entries = list(db.scalars(stmt.limit(filters.limit).offset(filters.offset)))
+    if filters.filter_group_id is not None:
+        filter_group = get_filter_group_definition(
+            db,
+            filter_group_id=filters.filter_group_id,
+            principal=principal,
+        )
+        account_entity_ids = list_account_entity_ids_for_principal(
+            db,
+            principal=principal,
+        )
+        matching_entries = [
+            entry
+            for entry in db.scalars(stmt)
+            if entry_matches_filter_group(
+                entry,
+                filter_group=filter_group,
+                account_entity_ids=account_entity_ids,
+            )
+        ]
+        total = len(matching_entries)
+        entries = matching_entries[filters.offset : filters.offset + filters.limit]
+    else:
+        total = int(db.scalar(count_stmt) or 0)
+        entries = list(db.scalars(stmt.limit(filters.limit).offset(filters.offset)))
 
     return EntryListResponse(
         items=[entry_to_schema(entry) for entry in entries],

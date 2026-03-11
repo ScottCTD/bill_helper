@@ -2,7 +2,7 @@
 
 ## Domain Models
 
-- `backend/models_finance.py`: ledger, account, entity, tag, taxonomy, and entry models
+- `backend/models_finance.py`: ledger, account, entity, tag, taxonomy, filter-group, and entry models
 - `backend/models_agent.py`: thread, run, tool-call, change-item, and review models
 - `backend/models_settings.py`: runtime settings override model
 - `backend/contracts_groups.py`: shared group write contracts and typed group-member target payloads
@@ -12,6 +12,7 @@
 Core ledger models:
 
 - `Account`, `AccountSnapshot`
+- `FilterGroup`
 - `Entry`, `EntryGroup`, `EntryGroupMember`
 - `User`, `Entity`
 - `Tag`, `EntryTag`
@@ -43,7 +44,7 @@ Agent models:
 
 ## Schemas
 
-- `backend/schemas_finance.py`: accounts, entries, groups, and dashboard contracts
+- `backend/schemas_finance.py`: accounts, entries, groups, filter-group, and dashboard contracts
 - `backend/schemas_agent.py`: thread, message, run, change-item, and review contracts
 - `backend/schemas_settings.py`: runtime settings request/response contracts
 
@@ -54,6 +55,7 @@ Important read models:
 - `EntityRead` for `/entities` with usage counters plus a same-currency net aggregate (`net_amount_minor`, `net_amount_currency_code`) and a mixed-currency fallback flag
 - `TagSummaryRead` for embedded entry-tag payloads, with `TagRead` reserved for `/tags` catalog responses that include `entry_count`
 - `EntryRead` / `EntryDetailRead` for entry list/detail reads with `direct_group`, `direct_group_member_role`, `group_path`, and `TagSummaryRead[]` tags
+- `FilterGroupRead` for `/filter-groups` with recursive include/exclude rule trees and plain-language summaries
 - `RuntimeSettingsRead` for `/settings`
 
 ## Core Services
@@ -61,6 +63,10 @@ Important read models:
 - `backend/services/accounts.py`
 - `backend/services/entries.py`
   - owns typed entry create/update command workflows built around `EntityRef`/`UserRef` service refs, entity/user/group resolution, and soft-delete cleanup
+- `backend/services/filter_groups.py`
+  - owns default filter-group provisioning, principal-scoped filter-group CRUD, and persisted rule definitions
+- `backend/services/filter_group_rules.py`
+  - owns recursive filter-rule evaluation plus plain-language rule summaries
 - `backend/services/entities.py`
 - `backend/services/users.py`
 - `backend/services/groups.py`
@@ -71,11 +77,11 @@ Important read models:
 - `backend/services/finance.py`
   - owns reconciliation math and dashboard analytics sections:
     - configured-currency monthly KPIs
-    - daily vs non-daily spend series
+    - filter-group-powered daily and monthly spend series
     - monthly trend rollups
     - from/to/tag breakdowns
     - weekday distribution
-    - current-month projection
+    - current-month projection including projected filter-group totals
 - `backend/services/crud_policy.py`
   - shared validation, uniqueness/conflict checks, and policy-violation translation helpers
 - `backend/services/access_scope.py`
@@ -125,6 +131,7 @@ Core routers:
 - `entries.py`
 - `groups.py`
 - `dashboard.py`
+- `filter_groups.py`
 - `users.py`
 - `entities.py`
 - `tags.py`
@@ -147,7 +154,8 @@ Router behavior:
 - empty PATCH payloads for account, entity, tag, group, and user mutations are rejected consistently during request validation
 - `POST /groups/{group_id}/members` accepts one typed `target` object (`entry` vs `child_group`) instead of sibling mutually-exclusive top-level ids
 - `dashboard.py` is principal-scoped by visible accounts and entries
-- `accounts.py` includes principal-scoped account delete plus snapshot create/list/delete and reconciliation handlers
+- `filter_groups.py` provisions and persists per-principal default filter groups on read, allows rule edits for defaults, and forbids renaming or deleting default group identities
+- `accounts.py` includes principal-scoped delete in addition to create, update, snapshots, and reconciliation
 - `entities.py` includes admin-only delete for non-account entities and returns `409` for account-backed roots
 - `tags.py` includes admin-only delete and succeeds even when entries still reference the tag
 - `entities.py`, `tags.py`, and `taxonomies.py` mutations require admin principal

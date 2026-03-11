@@ -4,7 +4,7 @@ from sqlalchemy import Select, or_, select, true
 from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal, is_admin_principal
-from backend.models_finance import Account, Entry, EntryGroup, User
+from backend.models_finance import Account, Entry, EntryGroup, FilterGroup, User
 from backend.services.crud_policy import PolicyViolation
 
 
@@ -39,6 +39,10 @@ def entry_owner_filter(principal: RequestPrincipal):
 
 def group_owner_filter(principal: RequestPrincipal):
     return owner_user_filter(EntryGroup.owner_user_id, principal)
+
+
+def filter_group_owner_filter(principal: RequestPrincipal):
+    return FilterGroup.owner_user_id == principal.user_id
 
 
 def get_account_for_principal_or_404(
@@ -157,6 +161,23 @@ def load_group_for_principal(
     if group is None:
         raise PolicyViolation.not_found("Group not found")
     return group
+
+
+def load_filter_group_for_principal(
+    db: Session,
+    *,
+    filter_group_id: str,
+    principal: RequestPrincipal,
+) -> FilterGroup:
+    filter_group = db.scalar(
+        select(FilterGroup).where(
+            FilterGroup.id == filter_group_id,
+            filter_group_owner_filter(principal),
+        )
+    )
+    if filter_group is None:
+        raise PolicyViolation.not_found("Filter group not found")
+    return filter_group
 
 
 def ensure_principal_can_assign_user(

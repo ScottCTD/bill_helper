@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -9,6 +9,7 @@ from backend.contracts_groups import GroupCreateCommand, GroupMemberCreateComman
 from backend.contracts_users import UserCreateCommand, UserPatch
 from backend.enums_finance import EntryKind, GroupMemberRole, GroupType
 from backend.validation.contract_fields import NonEmptyPatchModel
+from backend.validation.finance_names import normalize_tag_name
 
 
 class TagSummaryRead(BaseModel):
@@ -338,6 +339,101 @@ class GroupSummaryRead(BaseModel):
     last_occurred_at: date | None = None
 
 
+FilterRuleField = Literal["entry_kind", "tags", "is_internal_transfer"]
+FilterRuleConditionOperator = Literal["is", "has_any", "has_none"]
+FilterRuleLogicalOperator = Literal["AND", "OR"]
+
+
+class FilterRuleCondition(BaseModel):
+    type: Literal["condition"] = "condition"
+    field: FilterRuleField
+    operator: FilterRuleConditionOperator
+    value: str | bool | list[str]
+
+    @model_validator(mode="after")
+    def validate_condition(self) -> FilterRuleCondition:
+        if self.field == "entry_kind":
+            if self.operator != "is":
+                raise ValueError("entry_kind supports only the 'is' operator")
+            if not isinstance(self.value, str):
+                raise ValueError("entry_kind condition value must be a string")
+            EntryKind(self.value)
+            return self
+
+        if self.field == "is_internal_transfer":
+            if self.operator != "is":
+                raise ValueError("is_internal_transfer supports only the 'is' operator")
+            if not isinstance(self.value, bool):
+                raise ValueError("is_internal_transfer condition value must be a boolean")
+            return self
+
+        if self.field == "tags":
+            if self.operator not in {"has_any", "has_none"}:
+                raise ValueError("tags support only 'has_any' or 'has_none' operators")
+            if not isinstance(self.value, list) or not self.value:
+                raise ValueError("tags condition value must be a non-empty list")
+            normalized_values = [normalize_tag_name(str(item)) for item in self.value if str(item).strip()]
+            normalized_values = sorted({item for item in normalized_values if item})
+            if not normalized_values:
+                raise ValueError("tags condition value must include at least one tag")
+            self.value = normalized_values
+            return self
+
+        raise ValueError(f"Unsupported filter condition field '{self.field}'")
+
+
+class FilterRuleGroup(BaseModel):
+    type: Literal["group"] = "group"
+    operator: FilterRuleLogicalOperator
+    children: list["FilterRuleNode"] = Field(default_factory=list, min_length=1)
+
+
+FilterRuleNode = Annotated[
+    FilterRuleCondition | FilterRuleGroup,
+    Field(discriminator="type"),
+]
+
+
+class FilterGroupRule(BaseModel):
+    include: FilterRuleGroup
+    exclude: FilterRuleGroup | None = None
+
+
+FilterRuleGroup.model_rebuild()
+
+
+class FilterGroupCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=2000)
+    color: str | None = Field(default=None, max_length=20)
+    rule: FilterGroupRule
+
+
+class FilterGroupUpdate(NonEmptyPatchModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=2000)
+    color: str | None = Field(default=None, max_length=20)
+    rule: FilterGroupRule | None = None
+
+
+class FilterGroupRead(BaseModel):
+    id: str
+    key: str
+    name: str
+    description: str | None = None
+    color: str | None = None
+    is_default: bool
+    position: int
+    rule: FilterGroupRule
+    rule_summary: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class DailyExpensePoint(BaseModel):
     date: date
     currency_code: str
@@ -354,26 +450,31 @@ class DashboardKpisRead(BaseModel):
     expense_total_minor: int
     income_total_minor: int
     net_total_minor: int
-    daily_expense_total_minor: int
-    non_daily_expense_total_minor: int
-    average_daily_expense_minor: int
-    median_daily_expense_minor: int
-    daily_spending_days: int
+    average_expense_day_minor: int
+    median_expense_day_minor: int
+    spending_days: int
+
+
+class DashboardFilterGroupSummary(BaseModel):
+    filter_group_id: str
+    key: str
+    name: str
+    color: str | None = None
+    total_minor: int
+    share: float
 
 
 class DashboardDailySpendingPoint(BaseModel):
     date: date
     expense_total_minor: int
-    daily_expense_minor: int
-    non_daily_expense_minor: int
+    filter_group_totals: dict[str, int] = Field(default_factory=dict)
 
 
 class DashboardMonthlyTrendPoint(BaseModel):
     month: str
     expense_total_minor: int
     income_total_minor: int
-    daily_expense_minor: int
-    non_daily_expense_minor: int
+    filter_group_totals: dict[str, int] = Field(default_factory=dict)
 
 
 class DashboardBreakdownItem(BaseModel):
@@ -393,7 +494,7 @@ class DashboardLargestExpenseItem(BaseModel):
     name: str
     to_entity: str | None = None
     amount_minor: int
-    is_daily: bool
+    matching_filter_group_keys: list[str] = Field(default_factory=list)
 
 
 class DashboardProjectionRead(BaseModel):
@@ -403,12 +504,18 @@ class DashboardProjectionRead(BaseModel):
     spent_to_date_minor: int
     projected_total_minor: int | None = None
     projected_remaining_minor: int | None = None
+    projected_filter_group_totals: dict[str, int] = Field(default_factory=dict)
+
+
+class DashboardTimelineRead(BaseModel):
+    months: list[str] = Field(default_factory=list)
 
 
 class DashboardRead(BaseModel):
     month: str
     currency_code: str
     kpis: DashboardKpisRead
+    filter_groups: list[DashboardFilterGroupSummary]
     daily_spending: list[DashboardDailySpendingPoint]
     monthly_trend: list[DashboardMonthlyTrendPoint]
     spending_by_from: list[DashboardBreakdownItem]

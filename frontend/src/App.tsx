@@ -16,6 +16,11 @@ const DashboardPage = lazy(async () => {
   return { default: module.DashboardPage };
 });
 
+const FilterGroupsPage = lazy(async () => {
+  const module = await import("./pages/FilterGroupsPage");
+  return { default: module.FilterGroupsPage };
+});
+
 const EntriesPage = lazy(async () => {
   const module = await import("./pages/EntriesPage");
   return { default: module.EntriesPage };
@@ -51,9 +56,16 @@ const SettingsPage = lazy(async () => {
   return { default: module.SettingsPage };
 });
 
+function defaultSidebarCollapsed() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.innerWidth <= 768;
+}
+
 export function App() {
   const { principalName } = usePrincipalSession();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(defaultSidebarCollapsed);
   const { panelWidth: sidebarWidth, handleMouseDown: handleSidebarResizeMouseDown } = useResizablePanel({
     storageKey: "app-sidebar-width",
     defaultWidth: 224,
@@ -91,6 +103,7 @@ export function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/filters" element={<FilterGroupsPage />} />
               <Route path="/entries" element={<EntriesPage />} />
               <Route path="/entities" element={<EntitiesPage />} />
               <Route path="/entries/:entryId" element={<EntryDetailPage />} />

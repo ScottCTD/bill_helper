@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 import { DeleteIconButton } from "../components/DeleteIconButton";
 import { EntryEditorModal, type EntryEditorSubmitPayload } from "../components/EntryEditorModal";
@@ -19,6 +20,7 @@ import {
   listCurrencies,
   listEntities,
   listEntries,
+  listFilterGroups,
   listGroups,
   listTags,
   listUsers,
@@ -90,11 +92,14 @@ function entryFlowLabel(fromEntity: string | null, toEntity: string | null): { d
 
 export function EntriesPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialFilterGroupId = searchParams.get("filter_group_id") ?? "";
   const [filters, setFilters] = useState({
     kind: "",
     tags: [] as string[],
     currencies: [] as string[],
-    source: ""
+    source: "",
+    filterGroupId: initialFilterGroupId
   });
   const [editorState, setEditorState] = useState<EditorState>(null);
 
@@ -107,15 +112,20 @@ export function EntriesPage() {
     queryFn: listGroups,
     enabled: editorState !== null
   });
+  const filterGroupsQuery = useQuery({
+    queryKey: queryKeys.filterGroups.list,
+    queryFn: listFilterGroups
+  });
   const tagsQuery = useQuery({ queryKey: queryKeys.properties.tags, queryFn: listTags });
   const entryListFilters = useMemo(
     () => ({
       kind: filters.kind || undefined,
       source: filters.source || undefined,
+      filter_group_id: filters.filterGroupId || undefined,
       limit: 200,
       offset: 0
     }),
-    [filters.kind, filters.source]
+    [filters.filterGroupId, filters.kind, filters.source]
   );
   const entriesQuery = useQuery({
     queryKey: queryKeys.entries.list(entryListFilters),
@@ -195,6 +205,22 @@ export function EntriesPage() {
       return true;
     });
   }, [entriesQuery.data?.items, filters.currencies, filters.tags]);
+
+  useEffect(() => {
+    const nextFilterGroupId = searchParams.get("filter_group_id") ?? "";
+    setFilters((state) => (state.filterGroupId === nextFilterGroupId ? state : { ...state, filterGroupId: nextFilterGroupId }));
+  }, [searchParams]);
+
+  function updateFilterGroupSelection(nextFilterGroupId: string) {
+    setFilters((state) => ({ ...state, filterGroupId: nextFilterGroupId }));
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (nextFilterGroupId) {
+      nextSearchParams.set("filter_group_id", nextFilterGroupId);
+    } else {
+      nextSearchParams.delete("filter_group_id");
+    }
+    setSearchParams(nextSearchParams);
+  }
 
   function handleEditorSubmit(payload: EntryEditorSubmitPayload) {
     if (editorState?.mode === "edit") {
@@ -277,6 +303,17 @@ export function EntriesPage() {
               <label className="field min-w-[260px] grow">
                 <span>Source text</span>
                 <Input value={filters.source} onChange={(event) => setFilters((state) => ({ ...state, source: event.target.value }))} />
+              </label>
+              <label className="field min-w-[180px]">
+                <span>Filter group</span>
+                <NativeSelect value={filters.filterGroupId} onChange={(event) => updateFilterGroupSelection(event.target.value)}>
+                  <option value="">All groups</option>
+                  {(filterGroupsQuery.data ?? []).map((filterGroup) => (
+                    <option key={filterGroup.id} value={filterGroup.id}>
+                      {filterGroup.name}
+                    </option>
+                  ))}
+                </NativeSelect>
               </label>
             </div>
             <div className="table-toolbar-action filter-action">

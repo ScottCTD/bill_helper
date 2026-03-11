@@ -45,9 +45,10 @@ Primary tables:
 - `entry_groups`: first-class named typed groups.
 - `entry_group_members`: direct membership rows connecting a group to either an entry or a child group.
 - `accounts`, `account_snapshots`: account metadata and reconciliation checkpoints.
-- `users`: normalized owners used by entries/accounts/groups.
+- `users`: normalized owners used by entries/accounts/groups/filter groups.
 - `entities`: normalized names for `from`/`to` and account-linked entities.
 - `tags`, `entry_tags`: tag catalog and many-to-many entry mapping.
+- `filter_groups`: per-user saved analytics filters with recursive rule definitions.
 - `taxonomies`, `taxonomy_terms`, `taxonomy_assignments`: reusable categorical system for entities/tags.
 
 Agent review tables:
@@ -91,17 +92,26 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 1. Frontend calls `/api/v1/dashboard?month=YYYY-MM` and account reconciliation endpoints.
 2. Finance service computes:
    - runtime-configured currency monthly KPIs
-   - daily spending split (daily vs non-daily tag classification)
+   - saved-filter-group month totals
+   - daily and monthly expense series grouped by saved filter groups
    - monthly trend, breakdowns (`from`, `to`, `tag`)
    - weekday distribution, largest expenses, projection
    - account reconciliation deltas
 3. Frontend renders tabbed interactive charts/tables from the aggregated payload.
+
+### Filter-Group Configuration Path
+
+1. Frontend calls `/api/v1/filter-groups`.
+2. Backend provisions the caller's built-in default groups if they do not exist yet.
+3. Users inspect or edit recursive include/exclude rules with nested `AND`/`OR` groups.
+4. Dashboard reads consume those saved definitions on later requests.
 
 ## Module Map
 
 - API routers:
   - `backend/routers/entries.py`
   - `backend/routers/groups.py`
+  - `backend/routers/filter_groups.py`
   - `backend/routers/dashboard.py`
   - `backend/routers/accounts.py`
   - `backend/routers/agent.py`
@@ -113,6 +123,8 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `backend/services/users.py`
   - `backend/services/runtime_settings.py`
   - `backend/services/taxonomy.py`
+  - `backend/services/filter_groups.py`
+  - `backend/services/filter_group_rules.py`
   - `backend/services/finance.py`
 - Agent services:
   - `backend/services/agent/runtime.py`
@@ -176,6 +188,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `0024_entity_root_accounts`
   - `0025_user_memory_json_list`
   - `0026_entry_groups_v2`
+  - `0032_add_filter_groups`
 - Operational commands:
   - `uv run alembic upgrade head`
   - `uv run bill-helper-api`

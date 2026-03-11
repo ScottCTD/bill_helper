@@ -78,6 +78,12 @@ export function invalidateTagReadModels(queryClient: QueryClient): void {
   queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
 }
 
+export function invalidateFilterGroupReadModels(queryClient: QueryClient): void {
+  queryClient.invalidateQueries({ queryKey: queryKeys.filterGroups.all });
+  queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+  queryClient.invalidateQueries({ queryKey: queryKeys.entries.all });
+}
+
 export function invalidateUserReadModels(queryClient: QueryClient): void {
   queryClient.invalidateQueries({ queryKey: queryKeys.properties.users });
   queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all });

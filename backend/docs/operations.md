@@ -30,6 +30,10 @@
 - `0026_entry_groups_v2`
 - `0027_add_agent_bulk_concurrency_setting`
 - `0028_add_available_agent_models_to_runtime_settings`
+- `0029_add_agent_run_surface`
+- `0030_add_account_agent_change_types`
+- `0031_add_user_is_admin`
+- `0032_add_filter_groups`
 
 Commands:
 
@@ -62,6 +66,7 @@ Current baseline noted in docs: `backend/tests/test_agent.py` was at `76 passed`
 - groups are first-class records after `0026_entry_groups_v2`; topology is derived from direct membership plus `group_type`
 - deleting an account removes its snapshots, preserves denormalized entry labels, and clears linked account or entity FKs
 - dashboard analytics exclude internal transfers when both endpoints resolve to account-backed entity roots
+- dashboard analytics now provision and persist per-user default filter groups on first dashboard/filter-group read
 - taxonomy defaults (`entity_category`, `tag_type`) are auto-provisioned by service logic when missing
 
 ## Constraints And Known Limitations
@@ -74,3 +79,4 @@ Current baseline noted in docs: `backend/tests/test_agent.py` was at `76 passed`
 - no autonomous or scheduled agent runs
 - taxonomy assignment storage uses string `subject_id` values without cross-table FK enforcement
 - group nesting depth is limited to one and edges are derived only; there is no explicit edge editing surface
+- filter-group logic currently supports `entry_kind`, tag inclusion/exclusion, and `is_internal_transfer`; richer fields need additional rule operators

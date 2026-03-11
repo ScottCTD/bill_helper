@@ -27,6 +27,17 @@
     --success-foreground: 145 56% 16%;
     --warning: 31 82% 46%;
     --warning-foreground: 36 92% 12%;
+    --chart-income: 77 144 142;
+    --chart-destination: 199 109 94;
+    --chart-source: 139 116 181;
+    --chart-net: 76 120 168;
+    --chart-expense: 176 125 71;
+    --chart-segment-1: 76 120 168;
+    --chart-segment-2: 176 125 71;
+    --chart-segment-3: 77 144 142;
+    --chart-segment-4: 139 116 181;
+    --chart-segment-5: 199 109 94;
+    --chart-segment-6: 122 135 153;
     --scrollbar-track: hsl(var(--background) / 0);
     --scrollbar-thumb: hsl(var(--muted-foreground) / 0.28);
     --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.42);
@@ -57,6 +68,17 @@
     --success-foreground: 145 62% 88%;
     --warning: 36 92% 52%;
     --warning-foreground: 36 92% 14%;
+    --chart-income: 77 144 142;
+    --chart-destination: 199 109 94;
+    --chart-source: 139 116 181;
+    --chart-net: 76 120 168;
+    --chart-expense: 176 125 71;
+    --chart-segment-1: 76 120 168;
+    --chart-segment-2: 176 125 71;
+    --chart-segment-3: 77 144 142;
+    --chart-segment-4: 139 116 181;
+    --chart-segment-5: 199 109 94;
+    --chart-segment-6: 122 135 153;
     --scrollbar-thumb: hsl(var(--muted-foreground) / 0.4);
     --scrollbar-thumb-hover: hsl(var(--muted-foreground) / 0.56);
   }
@@ -316,10 +338,15 @@
 
   .app-main-padded {
     @apply overflow-y-auto;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top left, hsl(var(--accent) / 0.9), transparent 24rem),
+      radial-gradient(circle at top right, hsl(var(--success) / 0.09), transparent 20rem),
+      linear-gradient(180deg, hsl(var(--muted) / 0.45), hsl(var(--background)));
   }
 
   .app-content {
-    @apply mx-auto max-w-[1100px] px-6 py-6 md:px-8 md:py-8;
+    @apply relative mx-auto max-w-[1100px] px-6 py-6 md:px-8 md:py-8;
   }
 
   @media (max-width: 768px) {
@@ -342,6 +369,33 @@
 
     .app-sidebar-resize-handle {
       @apply hidden;
+    }
+
+    .dashboard-page-layout {
+      @apply grid-cols-1;
+    }
+
+    .dashboard-page-rail {
+      @apply order-first;
+    }
+
+    .dashboard-timeline-panel {
+      @apply h-auto py-0;
+    }
+
+    .dashboard-timeline-viewport {
+      @apply h-auto;
+    }
+
+    .dashboard-month-timeline-vertical {
+      @apply max-h-none h-auto flex-row overflow-x-auto overflow-y-hidden pr-0 pb-1;
+      padding-top: 0;
+      padding-bottom: 0;
+      scroll-snap-type: x mandatory;
+    }
+
+    .dashboard-month-timeline-vertical .dashboard-month-chip {
+      @apply w-auto min-w-[5.5rem];
     }
   }
 
@@ -410,6 +464,140 @@
 
   .dashboard-tab-active {
     @apply shadow-sm;
+  }
+
+  .dashboard-page-layout {
+    @apply grid gap-6;
+  }
+
+  .dashboard-toolbar {
+    @apply items-end;
+  }
+
+  .dashboard-view-toggle {
+    @apply inline-flex w-full rounded-xl border border-border/75 bg-muted/35 p-1;
+  }
+
+  .dashboard-view-toggle-button {
+    @apply inline-flex flex-1 items-center justify-center rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors;
+  }
+
+  .dashboard-view-toggle-button-active {
+    @apply bg-background text-foreground shadow-sm;
+  }
+
+  .dashboard-timeline-panel {
+    @apply h-full py-5;
+    pointer-events: auto;
+  }
+
+  .dashboard-page-rail {
+    @apply xl:pointer-events-none xl:fixed xl:right-2 xl:top-0 xl:z-20 xl:h-screen xl:w-24;
+  }
+
+  .dashboard-timeline-viewport {
+    @apply h-full min-h-0 overflow-hidden;
+    mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
+  }
+
+  .dashboard-month-timeline {
+    @apply flex min-w-0 gap-3 overflow-x-auto pb-1;
+    scrollbar-width: thin;
+  }
+
+  .dashboard-month-timeline-vertical {
+    @apply h-full flex-col overflow-x-hidden overflow-y-auto;
+    padding-top: calc(50vh - 1.75rem);
+    padding-bottom: calc(50vh - 1.75rem);
+    overscroll-behavior-y: contain;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    scroll-padding-block: 50%;
+    scroll-snap-type: y mandatory;
+  }
+
+  .dashboard-month-timeline-vertical::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dashboard-month-chip {
+    @apply shrink-0 rounded-2xl border border-border/55 bg-background/85 px-3 py-2 text-left shadow-sm backdrop-blur-sm transition-colors hover:border-primary/25 hover:bg-accent/75;
+    min-width: 4.75rem;
+    scroll-snap-align: center;
+  }
+
+  .dashboard-month-timeline-vertical .dashboard-month-chip {
+    @apply w-full min-w-0;
+  }
+
+  .dashboard-month-timeline-vertical:focus-visible {
+    @apply rounded-2xl outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  .dashboard-month-chip-active {
+    @apply border-foreground/15 bg-accent shadow-md;
+  }
+
+  .dashboard-month-chip-label {
+    @apply block text-sm font-medium text-foreground;
+  }
+
+  .dashboard-month-chip-year {
+    @apply block text-[11px] text-muted-foreground;
+  }
+
+  .dashboard-timeline-empty {
+    @apply flex min-h-24 items-center justify-center rounded-2xl border border-dashed border-border/75 bg-background/50 px-4 text-center text-sm text-muted-foreground;
+  }
+
+  @media (max-width: 768px) {
+    .dashboard-timeline-panel {
+      @apply h-auto py-0;
+    }
+
+    .dashboard-timeline-viewport {
+      @apply h-auto;
+      mask-image: none;
+    }
+
+    .dashboard-month-timeline-vertical {
+      @apply max-h-none h-auto flex-row overflow-x-auto overflow-y-hidden pr-0 pb-1;
+      padding-top: 0;
+      padding-bottom: 0;
+      scroll-snap-type: x mandatory;
+    }
+
+    .dashboard-month-timeline-vertical .dashboard-month-chip {
+      @apply w-auto min-w-[5.5rem];
+    }
+  }
+
+  .dashboard-comparison-grid {
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-3;
+  }
+
+  .dashboard-comparison-card {
+    @apply grid gap-3 rounded-xl border border-border/70 bg-muted/10 p-4;
+  }
+
+  .dashboard-scope-note {
+    @apply rounded-xl border border-border/75 bg-muted/20 px-4 py-3 text-sm text-foreground/85;
+  }
+
+  .dashboard-delta {
+    @apply text-sm font-medium;
+  }
+
+  .dashboard-delta-up {
+    @apply text-warning;
+  }
+
+  .dashboard-delta-down {
+    @apply text-success;
+  }
+
+  .dashboard-delta-flat {
+    @apply text-muted-foreground;
   }
 
   .settings-tab-list {
