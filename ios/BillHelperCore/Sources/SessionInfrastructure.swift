@@ -49,6 +49,10 @@ protocol SessionProviding {
     var currentSession: AuthSession? { get }
 }
 
+struct StaticSessionProvider: SessionProviding {
+    let currentSession: AuthSession?
+}
+
 protocol SessionStorage {
     func load() throws -> AuthSession?
     func save(_ session: AuthSession?) throws
@@ -142,9 +146,43 @@ final class InMemorySessionStorage: SessionStorage {
     }
 }
 
-final class SessionStore: SessionProviding, @unchecked Sendable {
+protocol AppPreferencesStorage {
+    func loadBaseURL() -> URL?
+    func saveBaseURL(_ url: URL?) throws
+}
+
+enum AppPreferencesError: Error, Equatable {
+    case invalidURLString
+}
+
+final class UserDefaultsAppPreferencesStorage: AppPreferencesStorage {
+    private let defaults: UserDefaults
+    private let baseURLKey: String
+
+    init(defaults: UserDefaults = .standard, baseURLKey: String = "com.billhelper.ios.apiBaseURL") {
+        self.defaults = defaults
+        self.baseURLKey = baseURLKey
+    }
+
+    func loadBaseURL() -> URL? {
+        guard let rawValue = defaults.string(forKey: baseURLKey), !rawValue.isEmpty else {
+            return nil
+        }
+        return URL(string: rawValue)
+    }
+
+    func saveBaseURL(_ url: URL?) throws {
+        if let url {
+            defaults.set(url.absoluteString, forKey: baseURLKey)
+        } else {
+            defaults.removeObject(forKey: baseURLKey)
+        }
+    }
+}
+
+final class SessionStore: ObservableObject, SessionProviding, @unchecked Sendable {
     private let storage: SessionStorage
-    private(set) var currentSession: AuthSession?
+    @Published private(set) var currentSession: AuthSession?
 
     init(storage: SessionStorage, initialSession: AuthSession? = nil) {
         self.storage = storage

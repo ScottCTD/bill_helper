@@ -84,11 +84,11 @@ struct URLSessionHTTPTransport: HTTPTransport {
 }
 
 struct APIClient: @unchecked Sendable {
-    private let baseURL: URL
-    private let transport: HTTPTransport
-    private let sessionProvider: SessionProviding?
-    private let decoder: JSONDecoder
-    private let encoder: JSONEncoder
+    let baseURL: URL
+    let transport: HTTPTransport
+    let sessionProvider: SessionProviding?
+    let decoder: JSONDecoder
+    let encoder: JSONEncoder
 
     init(
         baseURL: URL,
@@ -102,18 +102,6 @@ struct APIClient: @unchecked Sendable {
         self.sessionProvider = sessionProvider
         self.decoder = decoder
         self.encoder = encoder
-    }
-
-    func dashboard(month: String) async throws -> Dashboard {
-        try await perform(path: "/dashboard", queryItems: [URLQueryItem(name: "month", value: month)])
-    }
-
-    func listEntries(query: EntryListQuery = EntryListQuery()) async throws -> EntryListResponse {
-        try await perform(path: "/entries", queryItems: query.queryItems())
-    }
-
-    func runtimeSettings() async throws -> RuntimeSettings {
-        try await perform(path: "/settings")
     }
 
     func listAgentThreads() async throws -> [AgentThreadSummary] {
@@ -196,7 +184,7 @@ struct APIClient: @unchecked Sendable {
         )
     }
 
-    private func perform<Response: Decodable>(
+    func perform<Response: Decodable>(
         path: String,
         method: String = "GET",
         queryItems: [URLQueryItem] = [],
@@ -222,7 +210,33 @@ struct APIClient: @unchecked Sendable {
         return try decoder.decode(Response.self, from: response.data)
     }
 
-    private func makeRequest(
+    func performWithoutResponse(
+        path: String,
+        method: String = "GET",
+        queryItems: [URLQueryItem] = [],
+        headers: [String: String] = [:],
+        body: Data? = nil,
+        contentType: String? = "application/json"
+    ) async throws -> HTTPResponse {
+        let request = try makeRequest(
+            path: path,
+            method: method,
+            queryItems: queryItems,
+            headers: headers,
+            body: body,
+            contentType: contentType
+        )
+        let response = try await transport.response(for: request)
+        guard (200 ..< 300).contains(response.statusCode) else {
+            throw APIError.requestFailed(
+                statusCode: response.statusCode,
+                message: Self.extractErrorMessage(from: response.data, statusCode: response.statusCode)
+            )
+        }
+        return response
+    }
+
+    func makeRequest(
         path: String,
         method: String,
         queryItems: [URLQueryItem] = [],
@@ -263,7 +277,7 @@ struct APIClient: @unchecked Sendable {
         return request
     }
 
-    private static func extractErrorMessage(from data: Data, statusCode: Int) -> String {
+    static func extractErrorMessage(from data: Data, statusCode: Int) -> String {
         guard !data.isEmpty else {
             return "Request failed (\(statusCode))."
         }

@@ -8,19 +8,29 @@ private let agentMessageMarkdownLogger = Logger(subsystem: "com.billhelper.ios",
 struct AgentFeatureClient {
     var listThreads: () async throws -> [AgentThreadSummary]
     var createThread: (_ title: String?) async throws -> AgentThread
+    var renameThread: (_ threadID: String, _ title: String) async throws -> AgentThread
+    var deleteThread: (_ threadID: String) async throws -> Void
     var loadThread: (_ threadId: String) async throws -> AgentThreadDetail
+    var loadToolCall: (_ toolCallID: String) async throws -> AgentToolCall
+    var loadAttachment: (_ attachmentID: String) async throws -> AgentAttachmentResource
     var startMessageRun: (_ threadId: String, _ content: String, _ attachments: [AttachmentUpload]) -> AsyncThrowingStream<AgentRunUpdate, Error>
     var approveChange: (_ itemId: String) async throws -> AgentChangeItem
     var rejectChange: (_ itemId: String) async throws -> AgentChangeItem
+    var reopenChange: (_ itemId: String) async throws -> AgentChangeItem
 
     static func live(apiClient: APIClient, transport: AgentRunTransport) -> AgentFeatureClient {
         AgentFeatureClient(
             listThreads: { try await apiClient.listAgentThreads() },
             createThread: { try await apiClient.createAgentThread(title: $0) },
+            renameThread: { try await apiClient.renameAgentThread(id: $0, title: $1).asThread },
+            deleteThread: { try await apiClient.deleteAgentThread(id: $0) },
             loadThread: { try await apiClient.agentThread(id: $0) },
+            loadToolCall: { try await apiClient.agentToolCall(id: $0) },
+            loadAttachment: { try await apiClient.agentAttachment(id: $0) },
             startMessageRun: { transport.startMessageRun(threadId: $0, content: $1, attachments: $2) },
             approveChange: { try await apiClient.approveChangeItem(id: $0) },
-            rejectChange: { try await apiClient.rejectChangeItem(id: $0) }
+            rejectChange: { try await apiClient.rejectChangeItem(id: $0) },
+            reopenChange: { try await apiClient.reopenChangeItem(id: $0) }
         )
     }
 }
@@ -348,8 +358,11 @@ final class AgentThreadDetailViewModel: ObservableObject {
             threadId: run.threadId,
             userMessageId: run.userMessageId,
             assistantMessageId: run.assistantMessageId,
+            terminalAssistantReply: run.terminalAssistantReply,
             status: run.status,
             modelName: run.modelName,
+            surface: run.surface,
+            replySurface: run.replySurface,
             contextTokens: run.contextTokens,
             inputTokens: run.inputTokens,
             outputTokens: run.outputTokens,
@@ -396,13 +409,15 @@ final class AgentThreadDetailViewModel: ObservableObject {
 struct AgentRootView: View {
     let configuration: AppConfiguration
     let client: AgentFeatureClient
+    @Binding private var deepLink: AppDeepLink?
 
     @StateObject private var viewModel: AgentThreadListViewModel
     @State private var selectedThread: AgentThreadSummary?
 
-    init(configuration: AppConfiguration, client: AgentFeatureClient) {
+    init(configuration: AppConfiguration, client: AgentFeatureClient, deepLink: Binding<AppDeepLink?>) {
         self.configuration = configuration
         self.client = client
+        _deepLink = deepLink
         _viewModel = StateObject(wrappedValue: AgentThreadListViewModel(client: client))
     }
 
@@ -465,6 +480,13 @@ struct AgentRootView: View {
         .task {
             await viewModel.loadIfNeeded()
         }
+        .onChange(of: deepLink) { _, newValue in
+            guard case .agentThread(let id)? = newValue else { return }
+            if let matched = viewModel.threads.first(where: { $0.id == id }) {
+                selectedThread = matched
+                deepLink = nil
+            }
+        }
         .navigationDestination(item: $selectedThread) { thread in
             AgentThreadDetailView(thread: thread, client: client) {
                 Task {
@@ -489,6 +511,12 @@ struct AgentRootView: View {
                 .disabled(viewModel.isCreatingThread)
             }
         }
+    }
+}
+
+private extension AgentThread {
+    var asThread: AgentThread {
+        self
     }
 }
 

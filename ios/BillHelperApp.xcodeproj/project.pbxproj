@@ -14,6 +14,8 @@
 		A1B2C3D40100000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000015 /* Assets.xcassets */; };
 		A1B2C3D40100000000000006 /* AppConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000016 /* AppConfigurationTests.swift */; };
 		A1B2C3D40100000000000007 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000019 /* XCTest.framework */; };
+		A1B2C3D40100000000000021 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000031 /* AppState.swift */; };
+		A1B2C3D40100000000000022 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000032 /* OnboardingView.swift */; };
 			D1E2F3A40100000000000001 /* AgentFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A40100000000000011 /* AgentFeature.swift */; };
 			D1E2F3A40100000000000002 /* AgentFeatureViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A40100000000000012 /* AgentFeatureViewModelTests.swift */; };
 			C1D2E3F40100000000000001 /* DashboardEntriesFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F40100000000000011 /* DashboardEntriesFeatures.swift */; };
@@ -27,6 +29,14 @@
 			B1C2D3E40100000000000007 /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000017 /* APIClientTests.swift */; };
 			B1C2D3E40100000000000008 /* UploadSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000018 /* UploadSupportTests.swift */; };
 			B1C2D3E40100000000000009 /* AgentRunTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000019 /* AgentRunTransportTests.swift */; };
+			B1C2D3E40100000000000030 /* FinanceCatalogModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000020 /* FinanceCatalogModels.swift */; };
+			B1C2D3E40100000000000031 /* FinanceLedgerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000021 /* FinanceLedgerModels.swift */; };
+			B1C2D3E40100000000000032 /* FinanceFilterGroupModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000022 /* FinanceFilterGroupModels.swift */; };
+			B1C2D3E40100000000000033 /* FinanceDashboardModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000023 /* FinanceDashboardModels.swift */; };
+			B1C2D3E40100000000000034 /* FinanceSettingsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000024 /* FinanceSettingsModels.swift */; };
+			B1C2D3E40100000000000035 /* APIClient+Finance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000025 /* APIClient+Finance.swift */; };
+			B1C2D3E40100000000000036 /* APIClient+Catalogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000026 /* APIClient+Catalogs.swift */; };
+			B1C2D3E40100000000000037 /* APIClient+AgentExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E40100000000000027 /* APIClient+AgentExtensions.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -49,6 +59,8 @@
 		A1B2C3D40100000000000017 /* BillHelperApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BillHelperApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D40100000000000018 /* BillHelperAPITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BillHelperAPITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D40100000000000019 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		A1B2C3D40100000000000031 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		A1B2C3D40100000000000032 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 			D1E2F3A40100000000000011 /* AgentFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFeature.swift; sourceTree = "<group>"; };
 			D1E2F3A40100000000000012 /* AgentFeatureViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentFeatureViewModelTests.swift; sourceTree = "<group>"; };
 			C1D2E3F40100000000000011 /* DashboardEntriesFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardEntriesFeatures.swift; sourceTree = "<group>"; };
@@ -62,6 +74,14 @@
 			B1C2D3E40100000000000017 /* APIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientTests.swift; sourceTree = "<group>"; };
 			B1C2D3E40100000000000018 /* UploadSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadSupportTests.swift; sourceTree = "<group>"; };
 			B1C2D3E40100000000000019 /* AgentRunTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRunTransportTests.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000020 /* FinanceCatalogModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceCatalogModels.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000021 /* FinanceLedgerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceLedgerModels.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000022 /* FinanceFilterGroupModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceFilterGroupModels.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000023 /* FinanceDashboardModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceDashboardModels.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000024 /* FinanceSettingsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceSettingsModels.swift; sourceTree = "<group>"; };
+			B1C2D3E40100000000000025 /* APIClient+Finance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Finance.swift"; sourceTree = "<group>"; };
+			B1C2D3E40100000000000026 /* APIClient+Catalogs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Catalogs.swift"; sourceTree = "<group>"; };
+			B1C2D3E40100000000000027 /* APIClient+AgentExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+AgentExtensions.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +130,8 @@
 				A1B2C3D40100000000000011 /* BillHelperApp.swift */,
 				A1B2C3D40100000000000012 /* AppConfiguration.swift */,
 				A1B2C3D40100000000000013 /* AppShellView.swift */,
+				A1B2C3D40100000000000031 /* AppState.swift */,
+				A1B2C3D40100000000000032 /* OnboardingView.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -182,10 +204,18 @@
 			isa = PBXGroup;
 			children = (
 					B1C2D3E40100000000000011 /* FinanceModels.swift */,
+					B1C2D3E40100000000000020 /* FinanceCatalogModels.swift */,
+					B1C2D3E40100000000000021 /* FinanceLedgerModels.swift */,
+					B1C2D3E40100000000000022 /* FinanceFilterGroupModels.swift */,
+					B1C2D3E40100000000000023 /* FinanceDashboardModels.swift */,
+					B1C2D3E40100000000000024 /* FinanceSettingsModels.swift */,
 					B1C2D3E40100000000000012 /* AgentModels.swift */,
 					B1C2D3E40100000000000013 /* SessionInfrastructure.swift */,
 					B1C2D3E40100000000000014 /* UploadSupport.swift */,
 					B1C2D3E40100000000000015 /* APIClient.swift */,
+					B1C2D3E40100000000000025 /* APIClient+Finance.swift */,
+					B1C2D3E40100000000000026 /* APIClient+Catalogs.swift */,
+					B1C2D3E40100000000000027 /* APIClient+AgentExtensions.swift */,
 					B1C2D3E40100000000000016 /* AgentRunTransport.swift */,
 			);
 			path = Sources;
@@ -284,14 +314,24 @@
 				A1B2C3D40100000000000001 /* BillHelperApp.swift in Sources */,
 				A1B2C3D40100000000000002 /* AppConfiguration.swift in Sources */,
 				A1B2C3D40100000000000003 /* AppShellView.swift in Sources */,
+				A1B2C3D40100000000000021 /* AppState.swift in Sources */,
+				A1B2C3D40100000000000022 /* OnboardingView.swift in Sources */,
 					D1E2F3A40100000000000001 /* AgentFeature.swift in Sources */,
 					C1D2E3F40100000000000001 /* DashboardEntriesFeatures.swift in Sources */,
 				A1B2C3D40100000000000004 /* PlaceholderFeatures.swift in Sources */,
 					B1C2D3E40100000000000001 /* FinanceModels.swift in Sources */,
+					B1C2D3E40100000000000030 /* FinanceCatalogModels.swift in Sources */,
+					B1C2D3E40100000000000031 /* FinanceLedgerModels.swift in Sources */,
+					B1C2D3E40100000000000032 /* FinanceFilterGroupModels.swift in Sources */,
+					B1C2D3E40100000000000033 /* FinanceDashboardModels.swift in Sources */,
+					B1C2D3E40100000000000034 /* FinanceSettingsModels.swift in Sources */,
 					B1C2D3E40100000000000002 /* AgentModels.swift in Sources */,
 					B1C2D3E40100000000000003 /* SessionInfrastructure.swift in Sources */,
 					B1C2D3E40100000000000004 /* UploadSupport.swift in Sources */,
 					B1C2D3E40100000000000005 /* APIClient.swift in Sources */,
+					B1C2D3E40100000000000035 /* APIClient+Finance.swift in Sources */,
+					B1C2D3E40100000000000036 /* APIClient+Catalogs.swift in Sources */,
+					B1C2D3E40100000000000037 /* APIClient+AgentExtensions.swift in Sources */,
 					B1C2D3E40100000000000006 /* AgentRunTransport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

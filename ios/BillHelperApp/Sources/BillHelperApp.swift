@@ -2,11 +2,14 @@ import SwiftUI
 
 @main
 struct BillHelperApp: App {
-    private let composition = AppComposition.live()
+    @StateObject private var composition = AppComposition.live()
 
     var body: some Scene {
         WindowGroup {
-            AppShellView(composition: composition)
+            AppRootView(composition: composition)
+                .task {
+                    await composition.restoreIfNeeded()
+                }
         }
     }
 }

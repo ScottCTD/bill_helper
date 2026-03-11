@@ -1,8 +1,4 @@
 import Foundation
-import os
-import SwiftUI
-
-private let appCompositionLogger = Logger(subsystem: "com.billhelper.ios", category: "AppComposition")
 
 enum BillHelperEnvironment: String, CaseIterable, Equatable {
     case local
@@ -34,49 +30,5 @@ struct AppConfiguration: Equatable {
         let apiBaseURL = apiBaseURLValue.flatMap(URL.init(string:)) ?? defaultAPIBaseURL
 
         return AppConfiguration(environment: environment, apiBaseURL: apiBaseURL)
-    }
-}
-
-struct AppComposition {
-    let configuration: AppConfiguration
-    let sessionStore: SessionStore
-    let apiClient: APIClient
-    let agentRunTransport: AgentRunTransport
-
-    @MainActor @ViewBuilder var dashboardRoot: some View {
-        DashboardRootView(apiClient: apiClient)
-    }
-
-    @MainActor @ViewBuilder var entriesRoot: some View {
-        EntriesRootView(apiClient: apiClient)
-    }
-
-    @MainActor @ViewBuilder var agentRoot: some View {
-        AgentPlaceholderView(
-            configuration: configuration,
-            client: .live(apiClient: apiClient, transport: agentRunTransport)
-        )
-    }
-
-    static func live(
-        configuration: AppConfiguration = .resolve(),
-        sessionStorage: SessionStorage = KeychainSessionStorage()
-    ) -> AppComposition {
-        let sessionStore = SessionStore(storage: sessionStorage)
-        do {
-            try sessionStore.restore()
-        } catch {
-            appCompositionLogger.error(
-                "Failed to restore persisted session during app startup: \(String(describing: error), privacy: .public)"
-            )
-        }
-        let apiClient = APIClient(baseURL: configuration.apiBaseURL, sessionProvider: sessionStore)
-        let agentRunTransport = AgentRunTransport(apiClient: apiClient)
-        return AppComposition(
-            configuration: configuration,
-            sessionStore: sessionStore,
-            apiClient: apiClient,
-            agentRunTransport: agentRunTransport
-        )
     }
 }

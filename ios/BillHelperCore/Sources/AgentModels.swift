@@ -211,8 +211,11 @@ struct AgentRun: Codable, Equatable, Sendable {
     let threadId: String
     let userMessageId: String
     let assistantMessageId: String?
+    let terminalAssistantReply: String?
     let status: AgentRunStatus
     let modelName: String
+    let surface: String
+    let replySurface: String
     let contextTokens: Int?
     let inputTokens: Int?
     let outputTokens: Int?
