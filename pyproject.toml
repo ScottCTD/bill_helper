@@ -33,6 +33,9 @@ build-backend = "hatchling.build"
 [tool.uv]
 package = true
 
+[tool.uv.sources]
+desloppify = { path = "../desloppify", editable = true }
+
 [tool.hatch.build.targets.wheel]
 packages = ["backend", "telegram"]
 
