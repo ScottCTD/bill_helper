@@ -73,6 +73,16 @@ def proposal_summary(item: AgentChangeItem) -> str:
         return f"update account name={payload.get('name')} patch={payload.get('patch') or {}}"
     if change_type == AgentChangeType.DELETE_ACCOUNT.value:
         return f"delete account name={payload.get('name')}"
+    if change_type == AgentChangeType.CREATE_SNAPSHOT.value:
+        return (
+            f"create snapshot account_id={payload.get('account_id')} date={payload.get('snapshot_at')} "
+            f"balance_minor={payload.get('balance_minor')}"
+        )
+    if change_type == AgentChangeType.DELETE_SNAPSHOT.value:
+        return (
+            f"delete snapshot account_id={payload.get('account_id')} "
+            f"snapshot_id={payload.get('snapshot_id')}"
+        )
     return f"{change_type} payload={payload}"
 
 

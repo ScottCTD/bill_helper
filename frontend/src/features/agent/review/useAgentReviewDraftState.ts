@@ -11,6 +11,8 @@ import {
   buildGroupMembershipReviewDraft,
   buildGroupOverrideState,
   buildGroupReviewDraft,
+  buildSnapshotOverrideState,
+  buildSnapshotReviewDraft,
   buildTagOverrideState,
   buildTagReviewDraft,
   type AccountReviewDraft,
@@ -19,6 +21,7 @@ import {
   type GroupMembershipReviewDraft,
   type GroupReviewDraft,
   type ReviewOverrideState,
+  type SnapshotReviewDraft,
   type TagReviewDraft
 } from "./drafts";
 import type { ThreadReviewItem } from "./model";
@@ -29,6 +32,7 @@ export interface ReviewActiveDrafts {
   activeEntryDraft: EntryReviewDraft | null;
   activeGroupDraft: GroupReviewDraft | null;
   activeGroupMembershipDraft: GroupMembershipReviewDraft | null;
+  activeSnapshotDraft: SnapshotReviewDraft | null;
   activeTagDraft: TagReviewDraft | null;
 }
 
@@ -44,6 +48,7 @@ export function useAgentReviewDraftState({
   const [entryDrafts, setEntryDrafts] = useState<Record<string, EntryReviewDraft>>({});
   const [tagDrafts, setTagDrafts] = useState<Record<string, TagReviewDraft>>({});
   const [accountDrafts, setAccountDrafts] = useState<Record<string, AccountReviewDraft>>({});
+  const [snapshotDrafts, setSnapshotDrafts] = useState<Record<string, SnapshotReviewDraft>>({});
   const [entityDrafts, setEntityDrafts] = useState<Record<string, EntityReviewDraft>>({});
   const [groupDrafts, setGroupDrafts] = useState<Record<string, GroupReviewDraft>>({});
   const [groupMembershipDrafts, setGroupMembershipDrafts] = useState<Record<string, GroupMembershipReviewDraft>>({});
@@ -52,6 +57,7 @@ export function useAgentReviewDraftState({
     setEntryDrafts({});
     setTagDrafts({});
     setAccountDrafts({});
+    setSnapshotDrafts({});
     setEntityDrafts({});
     setGroupDrafts({});
     setGroupMembershipDrafts({});
@@ -75,6 +81,12 @@ export function useAgentReviewDraftState({
           accountDrafts[reviewItem.item.id] ?? buildAccountReviewDraft(reviewItem.item)
         );
       }
+      if (reviewItem.item.change_type === "create_snapshot") {
+        return buildSnapshotOverrideState(
+          reviewItem.item,
+          snapshotDrafts[reviewItem.item.id] ?? buildSnapshotReviewDraft(reviewItem.item)
+        );
+      }
       if (reviewItem.item.change_type === "create_entity" || reviewItem.item.change_type === "update_entity") {
         return buildEntityOverrideState(
           reviewItem.item,
@@ -92,7 +104,7 @@ export function useAgentReviewDraftState({
       }
       return { hasChanges: false, validationError: null };
     },
-    [accountDrafts, defaultCurrencyCode, entityDrafts, entryDrafts, groupDrafts, groupMembershipDrafts, tagDrafts]
+    [accountDrafts, defaultCurrencyCode, entityDrafts, entryDrafts, groupDrafts, groupMembershipDrafts, snapshotDrafts, tagDrafts]
   );
 
   const activeDrafts = useMemo<ReviewActiveDrafts>(
@@ -100,6 +112,10 @@ export function useAgentReviewDraftState({
       activeAccountDraft:
         activeReviewItem && (activeReviewItem.item.change_type === "create_account" || activeReviewItem.item.change_type === "update_account")
           ? accountDrafts[activeReviewItem.item.id] ?? buildAccountReviewDraft(activeReviewItem.item)
+          : null,
+      activeSnapshotDraft:
+        activeReviewItem && activeReviewItem.item.change_type === "create_snapshot"
+          ? snapshotDrafts[activeReviewItem.item.id] ?? buildSnapshotReviewDraft(activeReviewItem.item)
           : null,
       activeEntityDraft:
         activeReviewItem && (activeReviewItem.item.change_type === "create_entity" || activeReviewItem.item.change_type === "update_entity")
@@ -130,6 +146,7 @@ export function useAgentReviewDraftState({
       entryDrafts,
       groupDrafts,
       groupMembershipDrafts,
+      snapshotDrafts,
       tagDrafts
     ]
   );
@@ -152,6 +169,15 @@ export function useAgentReviewDraftState({
         return;
       }
       setEntityDrafts((current) => ({
+        ...current,
+        [activeReviewItem.item.id]: nextDraft
+      }));
+    },
+    setActiveSnapshotDraft(nextDraft: SnapshotReviewDraft) {
+      if (!activeReviewItem) {
+        return;
+      }
+      setSnapshotDrafts((current) => ({
         ...current,
         [activeReviewItem.item.id]: nextDraft
       }));

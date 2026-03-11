@@ -16,6 +16,15 @@ PROPOSAL_MUTABLE_ROOTS: dict[AgentChangeType, set[str]] = {
     AgentChangeType.CREATE_ACCOUNT: {"name", "currency_code", "is_active", "markdown_body"},
     AgentChangeType.UPDATE_ACCOUNT: {"name", "patch"},
     AgentChangeType.DELETE_ACCOUNT: {"name"},
+    AgentChangeType.CREATE_SNAPSHOT: {
+        "account_id",
+        "account_name",
+        "currency_code",
+        "snapshot_at",
+        "balance_minor",
+        "note",
+    },
+    AgentChangeType.DELETE_SNAPSHOT: {"account_id", "account_name", "currency_code", "snapshot_id"},
     AgentChangeType.CREATE_ENTRY: {
         "kind",
         "date",

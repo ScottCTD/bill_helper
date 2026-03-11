@@ -3,7 +3,8 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models_finance import Tag
+from backend.models_finance import Account, Tag
+from backend.services.account_snapshots import create_account_snapshot, delete_account_snapshot
 from backend.services.accounts import (
     create_account_root,
     delete_account_and_entity_root,
@@ -14,6 +15,8 @@ from backend.services.agent.apply.common import AppliedResource, resolve_current
 from backend.services.agent.change_contracts.catalog import (
     CreateAccountPayload,
     CreateEntityPayload,
+    SnapshotCreatePayload,
+    SnapshotDeletePayload,
     CreateTagPayload,
     DeleteAccountPayload,
     DeleteEntityPayload,
@@ -164,3 +167,27 @@ def apply_delete_account(db: Session, payload: DeleteAccountPayload, actor_name:
     resource_id = account.id
     delete_account_and_entity_root(db, account=account)
     return AppliedResource(resource_type="account", resource_id=resource_id)
+
+
+def apply_create_snapshot(db: Session, payload: SnapshotCreatePayload, actor_name: str) -> AppliedResource:
+    account = db.scalar(select(Account).where(Account.id == payload.account_id))
+    if account is None:
+        raise ValueError("Account not found")
+
+    snapshot = create_account_snapshot(
+        db,
+        account=account,
+        snapshot_at=payload.snapshot_at,
+        balance_minor=payload.balance_minor,
+        note=payload.note,
+    )
+    return AppliedResource(resource_type="snapshot", resource_id=snapshot.id)
+
+
+def apply_delete_snapshot(db: Session, payload: SnapshotDeletePayload, actor_name: str) -> AppliedResource:
+    account = db.scalar(select(Account).where(Account.id == payload.account_id))
+    if account is None:
+        raise ValueError("Account not found")
+
+    delete_account_snapshot(db, account=account, snapshot_id=payload.snapshot_id)
+    return AppliedResource(resource_type="snapshot", resource_id=payload.snapshot_id)

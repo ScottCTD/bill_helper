@@ -81,6 +81,28 @@ class ListAccountsArgs(BaseModel):
     )
 
 
+class ListSnapshotsArgs(BaseModel):
+    account_id: str = Field(
+        min_length=4,
+        max_length=36,
+        description="Existing account id from list_accounts.",
+    )
+    limit: int = Field(
+        default=20,
+        ge=1,
+        description="Max snapshots to return. No upper bound; be cautious with very large values.",
+    )
+
+
+class GetReconciliationArgs(BaseModel):
+    account_id: str = Field(
+        min_length=4,
+        max_length=36,
+        description="Existing account id from list_accounts.",
+    )
+    as_of: DateValue | None = Field(default=None, description=_DATE_DESC)
+
+
 class ListGroupsArgs(BaseModel):
     group_id: str | None = Field(
         default=None,
@@ -119,14 +141,14 @@ class ListGroupsArgs(BaseModel):
         return self
 
 
-ProposalType = Literal["entry", "tag", "entity", "account", "group"]
+ProposalType = Literal["entry", "tag", "entity", "account", "snapshot", "group"]
 ProposalAction = Literal["create", "update", "delete"]
 
 
 class ListProposalsArgs(BaseModel):
     proposal_type: ProposalType | None = Field(
         default=None,
-        description="Filter by proposal domain: entry, account, group, tag, or entity.",
+        description="Filter by proposal domain: entry, account, snapshot, group, tag, or entity.",
     )
     proposal_status: AgentChangeStatus | None = Field(
         default=None,

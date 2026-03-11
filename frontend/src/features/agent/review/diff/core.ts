@@ -26,9 +26,11 @@ const ENTRY_FIELD_ORDER: Record<string, number> = {
 
 const FIELD_LABELS: Record<string, string> = {
   amount_minor: "amount",
+  balance_minor: "balance",
   currency_code: "currency",
   is_active: "active",
   from_entity: "from",
+  snapshot_at: "date",
   to_entity: "to",
   markdown_body: "notes",
   markdown_notes: "notes",

@@ -15,6 +15,7 @@ import type {
   GroupReviewDraft,
   JsonRecord,
   ReviewOverrideState,
+  SnapshotReviewDraft,
   TagReviewDraft
 } from "./types";
 
@@ -28,6 +29,12 @@ interface AccountRecord {
   currency_code: string;
   is_active: boolean;
   markdown_body: string | null;
+}
+
+interface SnapshotRecord {
+  snapshot_at: string;
+  balance_minor: number;
+  note: string | null;
 }
 
 interface EntityRecord {
@@ -61,6 +68,14 @@ function normalizeAccountRecord(record: AccountRecord): AccountRecord {
   };
 }
 
+function normalizeSnapshotRecord(record: SnapshotRecord): SnapshotRecord {
+  return {
+    snapshot_at: normalizeRequiredText(record.snapshot_at),
+    balance_minor: record.balance_minor,
+    note: normalizeOptionalText(record.note ?? "")
+  };
+}
+
 function normalizeEntityRecord(record: EntityRecord): EntityRecord {
   return {
     name: normalizeRequiredText(record.name),
@@ -88,6 +103,14 @@ function buildCreateAccountRecord(payload: JsonRecord): AccountRecord {
     currency_code: asString(payload.currency_code),
     is_active: typeof payload.is_active === "boolean" ? payload.is_active : true,
     markdown_body: asNullableString(payload.markdown_body)
+  });
+}
+
+function buildCreateSnapshotRecord(payload: JsonRecord): SnapshotRecord {
+  return normalizeSnapshotRecord({
+    snapshot_at: asString(payload.snapshot_at),
+    balance_minor: typeof payload.balance_minor === "number" ? payload.balance_minor : 0,
+    note: asNullableString(payload.note)
   });
 }
 
@@ -204,6 +227,19 @@ export function buildAccountReviewDraft(item: AgentChangeItem): AccountReviewDra
   };
 }
 
+function formatBalanceMajor(balanceMinor: number): string {
+  return (balanceMinor / 100).toFixed(2);
+}
+
+export function buildSnapshotReviewDraft(item: AgentChangeItem): SnapshotReviewDraft {
+  const record = buildCreateSnapshotRecord(item.payload_json);
+  return {
+    snapshotAt: record.snapshot_at,
+    balanceMajor: formatBalanceMajor(record.balance_minor),
+    note: record.note ?? ""
+  };
+}
+
 export function buildEntityReviewDraft(item: AgentChangeItem): EntityReviewDraft {
   const record =
     item.change_type === "update_entity" ? buildUpdateEntityEffectiveRecord(item.payload_json) : buildCreateEntityRecord(item.payload_json);
@@ -305,6 +341,40 @@ export function buildAccountOverrideState(item: AgentChangeItem, draft: AccountR
       name: asString(item.payload_json.name),
       patch: buildSimplePatch(ACCOUNT_UPDATE_KEYS, currentRecord, normalizedRecord, asRecord(item.payload_json.patch))
     },
+    validationError: null
+  };
+}
+
+export function buildSnapshotOverrideState(item: AgentChangeItem, draft: SnapshotReviewDraft): ReviewOverrideState {
+  const normalizedDate = normalizeRequiredText(draft.snapshotAt);
+  if (!normalizedDate) {
+    return { hasChanges: false, validationError: "Snapshot date is required." };
+  }
+
+  const parsedBalance = Number(draft.balanceMajor);
+  if (!Number.isFinite(parsedBalance)) {
+    return { hasChanges: false, validationError: "Balance must be a valid number." };
+  }
+
+  const normalizedRecord = normalizeSnapshotRecord({
+    snapshot_at: normalizedDate,
+    balance_minor: Math.round(parsedBalance * 100),
+    note: draft.note
+  });
+  const baseRecord = buildCreateSnapshotRecord(item.payload_json);
+  const hasChanges = !recordsEqual(baseRecord, normalizedRecord);
+  return {
+    hasChanges,
+    payloadOverride: hasChanges
+      ? {
+          account_id: asString(item.payload_json.account_id),
+          account_name: asString(item.payload_json.account_name),
+          currency_code: asString(item.payload_json.currency_code),
+          snapshot_at: normalizedRecord.snapshot_at,
+          balance_minor: normalizedRecord.balance_minor,
+          note: normalizedRecord.note
+        }
+      : undefined,
     validationError: null
   };
 }

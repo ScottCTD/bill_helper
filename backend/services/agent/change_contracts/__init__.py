@@ -26,6 +26,8 @@ CHANGE_PAYLOAD_MODELS: dict[AgentChangeType, type[BaseModel]] = {
     AgentChangeType.CREATE_ACCOUNT: catalog_contracts.CreateAccountPayload,
     AgentChangeType.UPDATE_ACCOUNT: catalog_contracts.UpdateAccountPayload,
     AgentChangeType.DELETE_ACCOUNT: catalog_contracts.DeleteAccountPayload,
+    AgentChangeType.CREATE_SNAPSHOT: catalog_contracts.SnapshotCreatePayload,
+    AgentChangeType.DELETE_SNAPSHOT: catalog_contracts.SnapshotDeletePayload,
     AgentChangeType.CREATE_ENTRY: entry_contracts.CreateEntryPayload,
     AgentChangeType.UPDATE_ENTRY: entry_contracts.UpdateEntryPayload,
     AgentChangeType.DELETE_ENTRY: entry_contracts.DeleteEntryPayload,
@@ -48,6 +50,8 @@ type ChangePayloadModel = (
     | catalog_contracts.CreateAccountPayload
     | catalog_contracts.UpdateAccountPayload
     | catalog_contracts.DeleteAccountPayload
+    | catalog_contracts.SnapshotCreatePayload
+    | catalog_contracts.SnapshotDeletePayload
     | entry_contracts.CreateEntryPayload
     | entry_contracts.UpdateEntryPayload
     | entry_contracts.DeleteEntryPayload

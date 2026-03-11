@@ -26,6 +26,12 @@ export interface AccountReviewDraft {
   markdownBody: string;
 }
 
+export interface SnapshotReviewDraft {
+  snapshotAt: string;
+  balanceMajor: string;
+  note: string;
+}
+
 export interface EntityReviewDraft {
   name: string;
   category: string;

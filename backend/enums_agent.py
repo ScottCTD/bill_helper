@@ -48,6 +48,8 @@ class AgentChangeType(StrEnum):
     CREATE_ACCOUNT = "create_account"
     UPDATE_ACCOUNT = "update_account"
     DELETE_ACCOUNT = "delete_account"
+    CREATE_SNAPSHOT = "create_snapshot"
+    DELETE_SNAPSHOT = "delete_snapshot"
     CREATE_GROUP = "create_group"
     UPDATE_GROUP = "update_group"
     DELETE_GROUP = "delete_group"

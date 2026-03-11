@@ -46,7 +46,7 @@ export function AccountsTableSection(props: AccountsTableSectionProps) {
         <div className="table-shell-header">
           <div>
             <h2 className="table-shell-title">Accounts</h2>
-            <p className="table-shell-subtitle">Select a row to manage snapshots and reconciliation.</p>
+            <p className="table-shell-subtitle">Double-click a row to manage details, reconciliation, and snapshots.</p>
           </div>
         </div>
 

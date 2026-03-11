@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 
 import { Badge } from "../../../components/ui/badge";
+import { formatMinor } from "../../../lib/format";
 import { cn } from "../../../lib/utils";
 import {
   ReviewAccountEditor,
   ReviewEntityEditor,
   ReviewEntryEditor,
+  ReviewSnapshotEditor,
   ReviewGroupEditor,
   ReviewGroupMembershipEditor,
   ReviewTagEditor
@@ -36,9 +38,34 @@ function ReviewEditSection({ description, children }: ReviewEditSectionProps) {
   );
 }
 
+function SnapshotContextPanel({
+  title,
+  lines
+}: {
+  title: string;
+  lines: string[];
+}) {
+  if (lines.length === 0) {
+    return null;
+  }
+  return (
+    <section className="agent-review-panel-section">
+      <div className="agent-review-section-heading">
+        <h4>{title}</h4>
+      </div>
+      <div className="space-y-2 text-sm text-muted-foreground">
+        {lines.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function ReviewActiveItemCard({ controller, isBusy = false }: ReviewActiveItemCardProps) {
   const activeReviewItem = controller.activeReviewItem;
   const diffPreview = controller.diffPreview;
+  const snapshotReviewContext = controller.editorResources.snapshotReviewContext;
 
   if (!activeReviewItem || !diffPreview) {
     return (
@@ -181,6 +208,35 @@ export function ReviewActiveItemCard({ controller, isBusy = false }: ReviewActiv
           </ReviewEditSection>
         ) : null}
 
+        {controller.isActiveEditable && controller.activeDrafts.activeSnapshotDraft ? (
+          <ReviewEditSection description={buildReviewHeading(controller.isActivePending, "snapshot")}>
+            <ReviewSnapshotEditor
+              draft={controller.activeDrafts.activeSnapshotDraft}
+              accountName={snapshotReviewContext.accountName ?? "Unknown account"}
+              currencyCode={snapshotReviewContext.currencyCode ?? "USD"}
+              validationError={controller.activeOverrideState.validationError}
+              isDisabled={isBusy || controller.isBatchRunning}
+              onDraftChange={controller.setActiveSnapshotDraft}
+            />
+          </ReviewEditSection>
+        ) : null}
+
+        {activeReviewItem.item.change_type === "create_snapshot" ? (
+          <SnapshotContextPanel
+            title="Nearby snapshots"
+            lines={[
+              snapshotReviewContext.previousSnapshot
+                ? `Previous snapshot: ${snapshotReviewContext.previousSnapshot.snapshot_at} (${formatMinor(snapshotReviewContext.previousSnapshot.balance_minor, snapshotReviewContext.currencyCode ?? "USD")})`
+                : "Previous snapshot: none",
+              snapshotReviewContext.nextSnapshot
+                ? `Next snapshot: ${snapshotReviewContext.nextSnapshot.snapshot_at} (${formatMinor(snapshotReviewContext.nextSnapshot.balance_minor, snapshotReviewContext.currencyCode ?? "USD")})`
+                : "Next snapshot: none",
+              ...(snapshotReviewContext.reconciliationSummary ? [snapshotReviewContext.reconciliationSummary] : []),
+              ...(snapshotReviewContext.loadError ? [`Context load error: ${snapshotReviewContext.loadError}`] : [])
+            ]}
+          />
+        ) : null}
+
         {controller.isActiveEditable && controller.activeDrafts.activeEntityDraft ? (
           <ReviewEditSection description={buildReviewHeading(controller.isActivePending, "entity")}>
             <ReviewEntityEditor
@@ -248,6 +304,22 @@ export function ReviewActiveItemCard({ controller, isBusy = false }: ReviewActiv
                 ? "Delete-group proposals are not reviewer-editable in v1."
                 : "Remove-member proposals are not reviewer-editable in v1."}
             </p>
+          </section>
+        ) : null}
+
+        {activeReviewItem.item.change_type === "delete_snapshot" ? (
+          <section className="agent-review-panel-section">
+            <div className="agent-review-section-heading">
+              <h4>Impact</h4>
+              <p>Deleting a snapshot changes the interval boundaries used for reconciliation.</p>
+            </div>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              {snapshotReviewContext.impactLines.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+              {snapshotReviewContext.reconciliationSummary ? <p>{snapshotReviewContext.reconciliationSummary}</p> : null}
+              {snapshotReviewContext.loadError ? <p>Context load error: {snapshotReviewContext.loadError}</p> : null}
+            </div>
           </section>
         ) : null}
 

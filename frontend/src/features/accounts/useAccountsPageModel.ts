@@ -17,7 +17,7 @@ import {
 import { invalidateAccountReadModels } from "../../lib/queryInvalidation";
 import { queryKeys } from "../../lib/queryKeys";
 import type { Account } from "../../lib/types";
-import { buildEditForm, normalizeNullableMarkdown, normalizeOptionalText } from "./helpers";
+import { buildEditForm, buildSnapshotDeletionImpact, normalizeNullableMarkdown, normalizeOptionalText } from "./helpers";
 import { ACCOUNT_FORM_DEFAULTS, TODAY_ISO, type AccountFormState, type SnapshotFormState } from "./types";
 
 export function useAccountsPageModel() {
@@ -121,17 +121,35 @@ export function useAccountsPageModel() {
     setEditForm(buildEditForm(editingAccount, currentUserId));
   }, [currentUserId, editingAccount]);
 
+  useEffect(() => {
+    if (!editingAccountId) {
+      setSnapshotForm({
+        snapshot_at: TODAY_ISO,
+        balance_major: "",
+        note: ""
+      });
+      setSnapshotFormError(null);
+      return;
+    }
+    setSnapshotForm({
+      snapshot_at: TODAY_ISO,
+      balance_major: "",
+      note: ""
+    });
+    setSnapshotFormError(null);
+  }, [editingAccountId]);
+
   const snapshotsQuery = useQuery({
-    queryKey: queryKeys.accounts.snapshots(selectedAccountId),
-    queryFn: () => listSnapshots(selectedAccountId),
-    enabled: Boolean(selectedAccountId)
+    queryKey: queryKeys.accounts.snapshots(editingAccountId ?? ""),
+    queryFn: () => listSnapshots(editingAccountId ?? ""),
+    enabled: Boolean(editingAccountId)
   });
   const deletingSnapshot = snapshotsQuery.data?.find((snapshot) => snapshot.id === deletingSnapshotId) ?? null;
 
   const reconciliationQuery = useQuery({
-    queryKey: queryKeys.accounts.reconciliation(selectedAccountId),
-    queryFn: () => getReconciliation(selectedAccountId),
-    enabled: Boolean(selectedAccountId)
+    queryKey: queryKeys.accounts.reconciliation(editingAccountId ?? ""),
+    queryFn: () => getReconciliation(editingAccountId ?? ""),
+    enabled: Boolean(editingAccountId)
   });
 
   const createAccountMutation = useMutation({
@@ -223,7 +241,7 @@ export function useAccountsPageModel() {
 
   function onCreateSnapshot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedAccountId) {
+    if (!editingAccountId) {
       return;
     }
 
@@ -240,7 +258,7 @@ export function useAccountsPageModel() {
 
     setSnapshotFormError(null);
     createSnapshotMutation.mutate({
-      accountId: selectedAccountId,
+      accountId: editingAccountId,
       snapshot_at: snapshotForm.snapshot_at,
       balance_minor: Math.round(parsedBalance * 100),
       note: normalizeOptionalText(snapshotForm.note)
@@ -266,6 +284,7 @@ export function useAccountsPageModel() {
   function onEditDialogOpenChange(open: boolean) {
     if (!open) {
       setEditingAccountId(null);
+      createSnapshotMutation.reset();
     }
   }
 
@@ -308,6 +327,14 @@ export function useAccountsPageModel() {
     });
   }
 
+  const deleteSnapshotImpactWarnings =
+    deletingSnapshot && snapshotsQuery.data
+      ? buildSnapshotDeletionImpact(snapshotsQuery.data, deletingSnapshot.id)
+      : [
+          "This action cannot be undone.",
+          "Reconciliation history will update immediately after the snapshot is removed."
+        ];
+
   return {
     selectedAccountId,
     selectedAccount,
@@ -339,6 +366,7 @@ export function useAccountsPageModel() {
       reconciliationQuery,
       snapshotsQuery
     },
+    deleteSnapshotImpactWarnings,
     mutations: {
       createAccountMutation,
       updateAccountMutation,

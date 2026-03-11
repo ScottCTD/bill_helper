@@ -42,6 +42,23 @@ def test_validate_change_payload_normalizes_create_account_contract() -> None:
     assert parsed.markdown_body == "Trip spending only"
 
 
+def test_validate_change_payload_normalizes_create_snapshot_contract() -> None:
+    payload = {
+        "account_id": "acc-1234",
+        "account_name": "Travel Card",
+        "currency_code": "cad",
+        "snapshot_at": "2026-03-11",
+        "balance_minor": -12345,
+        "note": "Statement close",
+    }
+
+    parsed = validate_change_payload(AgentChangeType.CREATE_SNAPSHOT, payload)
+    assert parsed.account_id == "acc-1234"
+    assert parsed.account_name == "Travel Card"
+    assert parsed.currency_code == "cad"
+    assert parsed.balance_minor == -12345
+
+
 def test_validate_patch_map_paths_rejects_non_mutable_roots() -> None:
     with pytest.raises(ValueError):
         validate_patch_map_paths(

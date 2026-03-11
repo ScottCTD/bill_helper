@@ -38,6 +38,8 @@ _METADATA_BY_CHANGE_TYPE: dict[str, ProposalMetadata] = {
     AgentChangeType.CREATE_ACCOUNT.value: ProposalMetadata("create", "account", "propose_create_account"),
     AgentChangeType.UPDATE_ACCOUNT.value: ProposalMetadata("update", "account", "propose_update_account"),
     AgentChangeType.DELETE_ACCOUNT.value: ProposalMetadata("delete", "account", "propose_delete_account"),
+    AgentChangeType.CREATE_SNAPSHOT.value: ProposalMetadata("create", "snapshot", "propose_create_snapshot"),
+    AgentChangeType.DELETE_SNAPSHOT.value: ProposalMetadata("delete", "snapshot", "propose_delete_snapshot"),
 }
 
 

@@ -627,6 +627,15 @@ def test_system_prompt_uses_duplicate_enrichment_before_create():
     assert "prefer propose_update_entry for the existing entry instead of propose_create_entry." in prompt
 
 
+def test_system_prompt_mentions_snapshot_and_reconciliation_tools():
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+    assert "Use propose_create_snapshot" in prompt
+    assert "use list_snapshots" in prompt
+    assert "Use get_reconciliation" in prompt
+
+
 def test_system_prompt_requires_canonical_name_normalization_examples():
     from backend.services.agent.prompts import system_prompt
 
@@ -1011,6 +1020,10 @@ def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
     assert "propose_create_account" in names
     assert "propose_update_account" in names
     assert "propose_delete_account" in names
+    assert "list_snapshots" in names
+    assert "get_reconciliation" in names
+    assert "propose_create_snapshot" in names
+    assert "propose_delete_snapshot" in names
     assert "update_pending_proposal" in names
     assert "remove_pending_proposal" in names
 

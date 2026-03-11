@@ -5,15 +5,21 @@ from backend.services.agent.read_tools.catalog import (
     list_entities,
     list_tags,
 )
+from backend.services.agent.read_tools.accounts import (
+    get_reconciliation,
+    list_snapshots,
+)
 from backend.services.agent.read_tools.entries import list_entries
 from backend.services.agent.read_tools.groups import list_groups
 from backend.services.agent.read_tools.proposals import list_proposals
 from backend.services.agent.tool_args.read import (
+    GetReconciliationArgs,
     ListAccountsArgs,
     ListEntitiesArgs,
     ListEntriesArgs,
     ListGroupsArgs,
     ListProposalsArgs,
+    ListSnapshotsArgs,
     ListTagsArgs,
 )
 from backend.services.agent.tool_runtime_support.definitions import AgentToolDefinition
@@ -46,11 +52,33 @@ READ_TOOLS: dict[str, AgentToolDefinition] = {
         description=(
             "List/query accounts by name, currency_code, and active status. "
             "Use this for account discovery, account edits, and account deletions. "
-            "Returned records include name, currency_code, is_active, and compact markdown_body notes. "
+            "Returned records include account_id, name, currency_code, is_active, and compact markdown_body notes. "
             "This tool is read-only."
         ),
         args_model=ListAccountsArgs,
         handler=list_accounts,
+    ),
+    "list_snapshots": AgentToolDefinition(
+        name="list_snapshots",
+        description=(
+            "List snapshots for one account by account_id, newest first. "
+            "Use this before proposing snapshot deletion or explaining snapshot history. "
+            "Each returned record includes snapshot_id, date, balance_minor, note, and created_at. "
+            "This tool is read-only."
+        ),
+        args_model=ListSnapshotsArgs,
+        handler=list_snapshots,
+    ),
+    "get_reconciliation": AgentToolDefinition(
+        name="get_reconciliation",
+        description=(
+            "Compute interval-based reconciliation for one account by account_id. "
+            "Closed intervals compare tracked_change against bank_change between consecutive snapshots; "
+            "the latest open interval shows tracked_change since the last snapshot. "
+            "Use this to explain mismatched periods or missing transactions. This tool is read-only."
+        ),
+        args_model=GetReconciliationArgs,
+        handler=get_reconciliation,
     ),
     "list_entities": AgentToolDefinition(
         name="list_entities",

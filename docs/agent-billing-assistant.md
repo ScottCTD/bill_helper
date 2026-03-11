@@ -568,7 +568,7 @@ entities: name (category or uncategorized); ...
 
 #### `list_accounts` (read)
 
-**Description:** List/query actual accounts by name, currency, or active status. Use this for account grounding before proposing account create, update, or delete changes. This tool is read-only.
+**Description:** List/query actual accounts by name, currency, or active status. Use this for account grounding before proposing account create, update, delete, or snapshot changes. Returned rows include `account_id`. This tool is read-only.
 
 **Arguments:**
 
@@ -586,7 +586,7 @@ entities: name (category or uncategorized); ...
 ```
 OK
 summary: returned N of M matching accounts
-accounts: name (CAD, active); ...
+accounts: account_id=... name (CAD; active); ...
 ```
 
 `N` = count returned (limited by `limit`); `M` = total matching.
@@ -644,6 +644,68 @@ accounts: name (CAD, active); ...
 
 
 **Expected output:** `OK` with status and preview, including impacted-entry and snapshot counts. Returns `ERROR` only if the account is not found.
+
+---
+
+#### `list_snapshots` (read)
+
+**Description:** List snapshots for one account by `account_id`, newest first. Use this before proposing snapshot deletion or explaining checkpoint history. This tool is read-only.
+
+**Arguments:**
+
+| Parameter | Type | Required | Default | Constraints |
+| --------- | ---- | -------- | ------- | ----------- |
+| `account_id` | string | yes | n/a | existing account id |
+| `limit` | integer | no | 20 | ≥1 |
+
+**Expected output:** `OK` with snapshot rows including `snapshot_id`, `snapshot_at`, `balance_minor`, `note`, and `created_at`.
+
+---
+
+#### `get_reconciliation` (read)
+
+**Description:** Compute interval-based reconciliation for one account by `account_id`. Closed intervals compare tracked change against bank change between consecutive snapshots, and the final open interval shows tracked activity since the latest checkpoint.
+
+**Arguments:**
+
+| Parameter | Type | Required | Default | Constraints |
+| --------- | ---- | -------- | ------- | ----------- |
+| `account_id` | string | yes | n/a | existing account id |
+| `as_of` | string \| null | no | today | ISO date |
+
+**Expected output:** `OK` with a summary plus the full interval list in `output_json.reconciliation`.
+
+---
+
+#### `propose_create_snapshot` (proposal)
+
+**Description:** Create a review-gated proposal to add a balance snapshot for an existing account. The tool takes `balance` in major units and converts it to `balance_minor` before storing the review payload.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+| --------- | ---- | -------- | ----------- |
+| `account_id` | string | yes | existing account id |
+| `snapshot_at` | string | yes | ISO date |
+| `balance` | number | yes | major currency units |
+| `note` | string \| null | no | optional note |
+
+**Expected output:** `OK` with the normalized review payload preview. Returns `ERROR` only if the account is not found.
+
+---
+
+#### `propose_delete_snapshot` (proposal)
+
+**Description:** Create a review-gated proposal to delete an existing account snapshot by `account_id` and `snapshot_id`. Use `list_snapshots` first so the proposal targets the exact checkpoint.
+
+**Arguments:**
+
+| Parameter | Type | Required | Constraints |
+| --------- | ---- | -------- | ----------- |
+| `account_id` | string | yes | existing account id |
+| `snapshot_id` | string | yes | existing snapshot id for that account |
+
+**Expected output:** `OK` with the target snapshot plus impact preview fields (`previous_snapshot`, `next_snapshot`, `snapshot_count`). Returns `ERROR` only if the account or snapshot is not found.
 
 ---
 

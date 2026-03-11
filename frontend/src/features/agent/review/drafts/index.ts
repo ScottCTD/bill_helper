@@ -5,6 +5,7 @@ export type {
   GroupMembershipReviewDraft,
   GroupReviewDraft,
   ReviewOverrideState,
+  SnapshotReviewDraft,
   TagReviewDraft
 } from "./types";
 export { buildEntryReviewDraft, buildEntryReviewDraftFromPreview, buildEntryOverrideState, uniqueEntityOptionNames } from "./entries";
@@ -15,6 +16,8 @@ export {
   buildEntityReviewDraft,
   buildGroupOverrideState,
   buildGroupReviewDraft,
+  buildSnapshotOverrideState,
+  buildSnapshotReviewDraft,
   buildTagOverrideState,
   buildTagReviewDraft
 } from "./catalog";

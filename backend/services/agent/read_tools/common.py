@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import or_, select
+from sqlalchemy.orm import selectinload
+
+from backend.auth.dev_session import is_admin_principal_name
 from backend.models_finance import Account, Entity, Entry
 from backend.services.agent.group_references import (
     GroupMemberPublicRecord,
@@ -57,6 +61,7 @@ def format_entry_record(record: dict[str, Any]) -> str:
 
 def account_to_record(account: Account) -> dict[str, Any]:
     return {
+        "account_id": account.id,
         "name": account.name,
         "currency_code": account.currency_code,
         "is_active": account.is_active,
@@ -70,8 +75,26 @@ def format_account_record(record: dict[str, Any]) -> str:
         notes = " / ".join(line.strip() for line in notes.splitlines() if line.strip())
     notes_text = f"; notes: {notes}" if notes else ""
     return (
-        f"{record.get('name')} ({record.get('currency_code')}; "
+        f"account_id={record.get('account_id')} {record.get('name')} ({record.get('currency_code')}; "
         f"{'active' if record.get('is_active') else 'inactive'}{notes_text})"
+    )
+
+
+def get_account_by_id_for_tool_context(context: ToolContext, account_id: str) -> Account | None:
+    principal_name, principal_user_id = tool_principal_scope(context)
+
+    conditions = [Account.id == account_id]
+    if not is_admin_principal_name(principal_name):
+        if principal_user_id is None:
+            conditions.append(Account.owner_user_id.is_(None))
+        else:
+            conditions.append(or_(Account.owner_user_id == principal_user_id, Account.owner_user_id.is_(None)))
+
+    return context.db.scalar(
+        select(Account)
+        .join(Entity, Entity.id == Account.id)
+        .where(*conditions)
+        .options(selectinload(Account.entity))
     )
 
 
