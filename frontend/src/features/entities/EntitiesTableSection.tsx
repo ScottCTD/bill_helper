@@ -145,7 +145,9 @@ export function EntitiesTableSection(props: EntitiesTableSectionProps) {
             <TableBody>
               {entities.map((entity) => (
                 <TableRow key={entity.id} className="cursor-pointer" onDoubleClick={() => onStartEditEntity(entity)}>
-                  <TableCell>{entity.name}</TableCell>
+                  <TableCell>
+                    <span className="entities-name">{entity.name}</span>
+                  </TableCell>
                   <TableCell>{entity.category || "(none)"}</TableCell>
                   <TableCell className="text-right whitespace-nowrap">{netAmountLabel(entity)}</TableCell>
                   <TableCell className="icon-action-column">

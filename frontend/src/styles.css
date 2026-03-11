@@ -464,6 +464,10 @@
     @apply m-0 text-sm text-muted-foreground;
   }
 
+  .entities-name {
+    @apply block truncate font-medium text-foreground;
+  }
+
   .table-inline-form {
     @apply flex flex-wrap items-end gap-4 rounded-xl border border-border/75 bg-muted/20 p-3;
   }
@@ -815,7 +819,7 @@
   }
 
   .groups-browser-group-name {
-    @apply line-clamp-2 font-semibold text-foreground;
+    @apply line-clamp-2 font-medium text-foreground;
   }
 
   .groups-summary-id {
