@@ -18,6 +18,42 @@ This package contains the Bill Helper Telegram private-chat transport. It keeps 
 - backend adapter: `telegram/bill_helper_api.py`
 - per-chat state store: `telegram/state.py`
 
+## Implemented features and endpoints
+
+### User-facing Telegram features
+
+- private-chat bot commands:
+  - `/start`: intro and quick help
+  - `/help`: command list plus supported upload types
+  - `/new`: create and switch to a fresh backend thread
+  - `/reset`: start a fresh thread without deleting older ones
+  - `/threads`: list recent backend threads
+  - `/use <number|thread-uuid>`: switch the active thread
+  - `/model [provider/model]`: show or update the shared backend `agent_model`
+  - `/stop`: interrupt the active run for the current chat
+  - `/status`: show the current model, active thread, and run state
+- non-command private-chat messages are forwarded into the active Bill Helper thread
+- if a chat does not have an active thread yet, Telegram creates one automatically on the first message
+- supported uploads: text, photos, image documents, and PDFs
+- when a backend run stays in `running`, Telegram sends a temporary status reply and polls until a terminal result is available
+- final replies are sent back as Telegram-safe HTML chunks
+
+### Telegram transport HTTP endpoints
+
+- `GET /healthz`: webhook-process health check
+- `POST /telegram/webhook`: Telegram update receiver for webhook mode; requires `X-Telegram-Bot-Api-Secret-Token`
+
+### Backend API endpoints used by the Telegram transport
+
+- `GET /agent/threads`: list recent threads for `/threads` and `/use <number>`
+- `POST /agent/threads`: create a new thread for `/new`, `/reset`, or first-message auto-creation
+- `GET /agent/threads/{thread_id}`: validate or load the selected active thread
+- `POST /agent/threads/{thread_id}/messages`: send Telegram text/files into an existing thread; includes `surface=telegram`
+- `GET /agent/runs/{run_id}?surface=telegram`: poll active runs until completion
+- `POST /agent/runs/{run_id}/interrupt`: implement `/stop`
+- `GET /settings`: read runtime settings for `/status`, `/model`, and attachment limits
+- `PATCH /settings`: update the shared backend `agent_model` for `/model <provider/model>`
+
 ## Local development
 
 ### Configure a bot and start polling
