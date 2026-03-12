@@ -204,7 +204,7 @@ describe("AccountsPage", () => {
     await userEvent.dblClick(row);
     const editDialog = await screen.findByRole("dialog", { name: "Main" });
     expect(within(editDialog).getByLabelText("Name")).toHaveValue("Main");
-    expect(within(editDialog).getByLabelText("Owner")).toHaveValue("user-1");
+    expect(within(editDialog).queryByLabelText("Owner")).not.toBeInTheDocument();
     expect(within(editDialog).getByRole("heading", { name: "Reconciliation" })).toBeInTheDocument();
     expect(within(editDialog).getByRole("heading", { name: "Snapshot history" })).toBeInTheDocument();
     expect(within(editDialog).getByRole("heading", { name: "Add snapshot" })).toBeInTheDocument();

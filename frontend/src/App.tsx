@@ -4,7 +4,6 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { useAuth } from "./features/auth";
 import { useResizablePanel } from "./hooks/useResizablePanel";
-import { cn } from "./lib/utils";
 
 const HomePage = lazy(async () => {
   const module = await import("./pages/HomePage");
@@ -85,7 +84,6 @@ function ProtectedShell() {
     edge: "left"
   });
   const location = useLocation();
-  const isAgentPage = location.pathname === "/";
 
   useEffect(() => {
     if (!(appMainRef.current instanceof HTMLElement)) {
@@ -141,8 +139,8 @@ function ProtectedShell() {
         />
       ) : null}
 
-      <main ref={appMainRef} className={cn("app-main", !isAgentPage && "app-main-padded")}>
-        <div className={cn(!isAgentPage && "app-content")}>
+      <main ref={appMainRef} className="app-main app-main-padded">
+        <div className="app-content">
           {auth.session.is_admin_impersonation ? (
             <div className="impersonation-banner">
               Impersonating {auth.session.user.name}. Log out when you want to end this session.

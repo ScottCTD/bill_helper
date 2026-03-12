@@ -13,6 +13,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { useAuth } from "../features/auth";
 import {
   addGroupMember,
   createGroup,
@@ -66,6 +67,7 @@ function rowKeyDownHandler(event: React.KeyboardEvent<HTMLTableRowElement>, onOp
 }
 
 export function GroupsPage() {
+  const auth = useAuth();
   const queryClient = useQueryClient();
   const [groupSearch, setGroupSearch] = useState("");
   const deferredGroupSearch = useDeferredValue(groupSearch);
@@ -233,10 +235,7 @@ export function GroupsPage() {
     return groupsById.get(selectedGroupSummary.parent_group_id) ?? null;
   }, [groupsById, selectedGroupSummary]);
 
-  const currentUserId = useMemo(
-    () => usersQuery.data?.find((user) => user.is_current_user)?.id ?? "",
-    [usersQuery.data]
-  );
+  const currentUserId = auth.session?.user.id ?? usersQuery.data?.find((user) => user.is_current_user)?.id ?? "";
 
   const entryOptions = useMemo(() => {
     return (entryPickerQuery.data?.items ?? [])
@@ -447,7 +446,6 @@ export function GroupsPage() {
         entry={editingEntryQuery.data ?? null}
         currencies={currenciesQuery.data ?? []}
         entities={entitiesQuery.data ?? []}
-        users={usersQuery.data ?? []}
         groups={groupsQuery.data ?? []}
         tags={tagsQuery.data ?? []}
         currentUserId={currentUserId}

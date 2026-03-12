@@ -64,31 +64,23 @@
   }
 
   .sidebar-footer {
-    @apply border-t border-border/85 px-3 py-3;
+    @apply grid gap-3 border-t border-border/85 px-3 py-3;
   }
 
   .sidebar-session-card {
-    @apply grid gap-3 rounded-lg border border-border bg-secondary/55 p-3;
+    @apply flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/55 p-3;
   }
 
   .sidebar-session-copy {
-    @apply grid gap-1;
-  }
-
-  .sidebar-session-title {
-    @apply m-0 text-[12px] font-medium text-muted-foreground;
+    @apply min-w-0;
   }
 
   .sidebar-session-subtitle {
-    @apply m-0 text-sm text-foreground/85;
-  }
-
-  .sidebar-session-form {
-    @apply grid gap-2;
+    @apply m-0 truncate text-sm font-medium text-foreground/85;
   }
 
   .sidebar-session-actions {
-    @apply flex items-center gap-2;
+    @apply flex flex-shrink-0 items-center gap-2;
   }
 
   .session-gate {

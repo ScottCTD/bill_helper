@@ -43,7 +43,6 @@ describe("EntryEditorModal", () => {
         entry={entryFixture}
         currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
         entities={[{ id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }]}
-        users={[{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true }]}
         groups={[]}
         tags={[]}
         currentUserId="user-1"
@@ -68,7 +67,6 @@ describe("EntryEditorModal", () => {
         entry={entryFixture}
         currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
         entities={[{ id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }]}
-        users={[{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true }]}
         groups={[]}
         tags={[]}
         currentUserId="user-1"
@@ -92,7 +90,6 @@ describe("EntryEditorModal", () => {
         entry={null}
         currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
         entities={[]}
-        users={[{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true }]}
         groups={[
           {
             id: "group-1",
@@ -146,7 +143,6 @@ describe("EntryEditorModal", () => {
         entry={entryFixture}
         currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
         entities={[{ id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }]}
-        users={[{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true }]}
         groups={[]}
         tags={[]}
         currentUserId="user-1"
@@ -177,7 +173,10 @@ describe("EntryEditorModal", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("renders only explicit owner choices with no blank fallback option", () => {
+  it("keeps owner implicit and submits the current user id", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
     render(
       <EntryEditorModal
         isOpen
@@ -185,22 +184,31 @@ describe("EntryEditorModal", () => {
         entry={null}
         currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
         entities={[]}
-        users={[
-          { id: "user-1", name: "Alice", is_admin: false, is_current_user: true },
-          { id: "user-2", name: "Bob", is_admin: false, is_current_user: false }
-        ]}
         groups={[]}
         tags={[]}
         currentUserId="user-1"
         defaultCurrencyCode="CAD"
         isSaving={false}
         onClose={() => {}}
-        onSubmit={() => {}}
+        onSubmit={onSubmit}
       />
     );
 
-    expect(screen.getByLabelText("Owner")).toHaveValue("user-1");
-    expect(screen.queryByRole("option", { name: "(none)" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Owner")).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Name"), "Lunch");
+    await user.type(screen.getByLabelText("Amount"), "12.50");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner_user_id: "user-1",
+          name: "Lunch",
+          amount_minor: 1250
+        })
+      )
+    );
   });
 
   it("submits when re-linking a preserved missing label to an existing entity with the same name", async () => {
@@ -234,7 +242,6 @@ describe("EntryEditorModal", () => {
             entry_count: 1
           }
         ]}
-        users={[{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true }]}
         groups={[]}
         tags={[]}
         currentUserId="user-1"

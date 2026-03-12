@@ -141,7 +141,7 @@ Behavior:
 
 - admin principals receive all users
 - non-admin principals receive only their own row
-- used by owner selectors in finance forms; user mutation routes live under `/admin`
+- kept as an authenticated user visibility read; user mutation routes live under `/admin`
 
 ### `POST /users/me/change-password`
 

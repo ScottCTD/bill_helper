@@ -14,6 +14,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { NativeSelect } from "../components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { useAuth } from "../features/auth";
 import {
   createEntry,
   deleteEntry,
@@ -95,6 +96,7 @@ function entryFlowLabel(fromEntity: string | null, toEntity: string | null): { d
 }
 
 export function EntriesPage() {
+  const auth = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -152,10 +154,7 @@ export function EntriesPage() {
     enabled: Boolean(editingEntryId)
   });
 
-  const currentUserId = useMemo(
-    () => usersQuery.data?.find((user) => user.is_current_user)?.id ?? "",
-    [usersQuery.data]
-  );
+  const currentUserId = auth.session?.user.id ?? usersQuery.data?.find((user) => user.is_current_user)?.id ?? "";
 
   const createEntryMutation = useMutation({
     mutationFn: createEntry,
@@ -484,7 +483,6 @@ export function EntriesPage() {
         entry={editorState?.mode === "edit" ? editingEntryQuery.data ?? null : null}
         currencies={currenciesQuery.data ?? []}
         entities={entitiesQuery.data ?? []}
-        users={usersQuery.data ?? []}
         groups={groupsQuery.data ?? []}
         tags={tagsQuery.data ?? []}
         currentUserId={currentUserId}

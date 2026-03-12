@@ -33,6 +33,7 @@
 - entry create/edit modal includes a compact swap icon control between the `from` and `to` selectors to swap both field values in one click
 - entry create/edit modal tag picking supports fuzzy search and ranks the strongest matches first before falling back to create-new
 - entry create/edit modal treats re-selecting a same-name existing entity as a real relink, so preserved missing labels can be restored without renaming the field
+- entry create/edit modal does not expose owner controls; submitted entries stay bound to the authenticated user's current scope
 
 ### `frontend/src/pages/EntryDetailPage.tsx`
 
@@ -83,7 +84,7 @@
 - create, edit, and delete flows are dialog-driven
 - account rows single-select on click and open edit on double-click; delete remains the only explicit row action and is rendered as a compact icon button
 - account ids are shared entity-root ids; generic entity management does not expose them as editable entity rows
-- account creation still edits `Owner`, `Name`, `Currency`, and `Notes`
+- account creation edits `Name`, `Currency`, and `Notes`; owner is implicit from the authenticated user's current scope
 - the account edit modal is untabbed and fixed-height: a compact top details form (`Name`, `Currency`, `Active`, `Notes`) sits above a two-column lower workspace
 - the lower workspace keeps reconciliation and snapshot history in the left internal scroll column, with snapshot creation isolated in a compact right-side panel
 - legacy `institution` and `type` fields are removed
@@ -157,7 +158,7 @@
 - settings changes invalidate dependent query surfaces
 - query, mutation, and form orchestration live in `frontend/src/features/settings/useSettingsPageModel.ts`
 - reusable runtime-settings parsing and payload validation live in `frontend/src/features/settings/formState.ts`
-- `General` groups read-only identity context, self-service password change, and ledger default currencies
+- `General` groups ledger default currencies and the reset-to-server-default action
 - `Agent` groups memory/models, provider overrides, run limits, bulk and attachment limits, and reliability into separate sections
 - section UI is split across `SettingsToolbar.tsx`, `SettingsGeneralSection.tsx`, `SettingsAgentSection.tsx`, and `ResetSettingsDialog.tsx`
 - `Agent memory` lives under the `Agent` tab, is edited as one item per line, persists as a list of strings, and is sent to every backend agent system prompt

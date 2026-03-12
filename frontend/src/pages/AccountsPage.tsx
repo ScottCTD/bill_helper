@@ -54,7 +54,6 @@ export function AccountsPage() {
         onEditFormChange={model.setEditForm}
         onCreateAccount={model.actions.onCreateAccount}
         onUpdateAccount={model.actions.onUpdateAccount}
-        users={model.queries.usersQuery.data}
         currencies={model.currencies}
         editingAccount={model.editingAccount}
         reconciliation={model.queries.reconciliationQuery.data}

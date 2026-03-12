@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { changeMyPassword, getRuntimeSettings, listCurrencies, updateRuntimeSettings } from "../../lib/api";
+import { getRuntimeSettings, listCurrencies, updateRuntimeSettings } from "../../lib/api";
 import { invalidateRuntimeSettingsReadModels } from "../../lib/queryInvalidation";
 import { queryKeys } from "../../lib/queryKeys";
 import { buildSettingsFormState, buildSettingsUpdatePayload, RESET_RUNTIME_SETTINGS_PAYLOAD } from "./formState";
@@ -18,14 +18,8 @@ export function useSettingsPageModel() {
   const [formState, setFormState] = useState<SettingsFormState | null>(null);
   const [initialState, setInitialState] = useState<SettingsFormState | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({
-    current_password: "",
-    new_password: "",
-    confirm_new_password: "",
-  });
 
   const updateMutation = useMutation({
     mutationFn: updateRuntimeSettings,
@@ -38,21 +32,6 @@ export function useSettingsPageModel() {
     },
     onError: (error) => {
       setFormError((error as Error).message);
-    },
-  });
-
-  const changePasswordMutation = useMutation({
-    mutationFn: changeMyPassword,
-    onSuccess: () => {
-      setPasswordForm({
-        current_password: "",
-        new_password: "",
-        confirm_new_password: "",
-      });
-      setPasswordError(null);
-    },
-    onError: (error) => {
-      setPasswordError((error as Error).message);
     },
   });
 
@@ -105,29 +84,6 @@ export function useSettingsPageModel() {
     updateMutation.mutate(RESET_RUNTIME_SETTINGS_PAYLOAD);
   }
 
-  function patchPasswordForm(
-    field: "current_password" | "new_password" | "confirm_new_password",
-    value: string
-  ) {
-    setPasswordForm((state) => ({ ...state, [field]: value }));
-  }
-
-  function submitPasswordChange() {
-    setPasswordError(null);
-    if (!passwordForm.current_password || !passwordForm.new_password) {
-      setPasswordError("Current and new password are required.");
-      return;
-    }
-    if (passwordForm.new_password !== passwordForm.confirm_new_password) {
-      setPasswordError("New password confirmation does not match.");
-      return;
-    }
-    changePasswordMutation.mutate({
-      current_password: passwordForm.current_password,
-      new_password: passwordForm.new_password,
-    });
-  }
-
   function confirmResetOverrides() {
     setIsResetDialogOpen(false);
     resetOverrides();
@@ -136,8 +92,6 @@ export function useSettingsPageModel() {
   return {
     formState,
     formError,
-    passwordForm,
-    passwordError,
     activeTab,
     isDirty,
     isResetDialogOpen,
@@ -147,12 +101,9 @@ export function useSettingsPageModel() {
       currenciesQuery,
     },
     mutation: updateMutation,
-    passwordMutation: changePasswordMutation,
     actions: {
       setActiveTab,
       patchFormState,
-      patchPasswordForm,
-      submitPasswordChange,
       submitSettings,
       setIsResetDialogOpen,
       confirmResetOverrides,
