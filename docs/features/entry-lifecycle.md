@@ -18,6 +18,7 @@ This doc is the fast path for understanding how entries are created, edited, gro
 ## Manual Entry Flow
 
 1. UI submit from `frontend/src/components/EntryEditorModal.tsx`.
+   - the modal exposes a compact swap icon control that swaps the `from` and `to` entity fields in place before submit
 2. Optional direct-group assignment is chosen in the same modal. `SPLIT` targets also require a split role.
 3. Request via `frontend/src/lib/api.ts` (`createEntry` or `updateEntry`).
 4. HTTP boundary in `backend/routers/entries.py` parses request models and maps service policy failures to HTTP responses.

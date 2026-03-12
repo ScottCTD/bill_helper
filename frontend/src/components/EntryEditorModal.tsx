@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ArrowLeftRight } from "lucide-react";
 
 import type { Currency, Entity, Entry, EntryKind, GroupMemberRole, GroupSummary, Tag, User } from "../lib/types";
 import { CreatableSingleSelect, type CreatableSingleSelectChangeMeta } from "./CreatableSingleSelect";
 import { MarkdownBlockEditor } from "./MarkdownBlockEditor";
 import { SingleSelect } from "./SingleSelect";
 import { TagMultiSelect } from "./TagMultiSelect";
+import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
@@ -426,6 +428,16 @@ export function EntryEditorModal({
     submitCurrentForm();
   }
 
+  function handleSwapFromAndTo() {
+    setFormState((state) => ({
+      ...state,
+      from_entity_value: state.to_entity_value,
+      to_entity_value: state.from_entity_value,
+      from_entity_selected_id: state.to_entity_selected_id,
+      to_entity_selected_id: state.from_entity_selected_id
+    }));
+  }
+
   return (
     <Dialog
       open={isOpen}
@@ -544,6 +556,17 @@ export function EntryEditorModal({
                       }))
                     }
                   />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 rounded-full"
+                    aria-label="Swap from and to"
+                    disabled={isSaving}
+                    onClick={handleSwapFromAndTo}
+                  >
+                    <ArrowLeftRight className="h-4 w-4" />
+                  </Button>
                   <span className="entry-property-inline-label">To:</span>
                   <CreatableSingleSelect
                     ariaLabel="To"

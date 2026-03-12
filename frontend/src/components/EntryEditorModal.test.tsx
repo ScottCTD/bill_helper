@@ -109,6 +109,49 @@ describe("EntryEditorModal", () => {
     expect(screen.getByRole("button", { name: "Split role" })).toBeInTheDocument();
   });
 
+  it("swaps the from and to values before submit", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const onClose = vi.fn();
+
+    render(
+      <EntryEditorModal
+        isOpen
+        mode="edit"
+        entry={entryFixture}
+        currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
+        entities={[{ id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }]}
+        users={[{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true }]}
+        groups={[]}
+        tags={[]}
+        currentUserId="user-1"
+        defaultCurrencyCode="CAD"
+        isSaving={false}
+        onClose={onClose}
+        onSubmit={onSubmit}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Swap from and to" }));
+
+    expect(screen.getByLabelText("From")).toHaveValue("Cafe");
+    expect(screen.getByLabelText("To")).toHaveValue("Checking");
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from_entity_id: "entity-2",
+          from_entity: null,
+          to_entity_id: null,
+          to_entity: "Checking"
+        })
+      )
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("submits when re-linking a preserved missing label to an existing entity with the same name", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
