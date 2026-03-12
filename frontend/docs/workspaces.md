@@ -7,6 +7,7 @@
   - `WorkspaceSection` for the primary table/form surface
   - `WorkspaceToolbar` for filters, search, and compact actions
   - `StatBlock` for dense metric summaries where a card grid would be too decorative
+- the shared app scroll container reserves vertical scrollbar gutter space even when a page does not overflow, so route-level content edges stay aligned across pages like `Agent`, `Filters`, and `Entries`; the route scrollbar thumb stays visually hidden at rest and only appears during active page scrolling
 - settings remains the exception in structure because its sticky toolbar is still the primary page header pattern
 
 ## Entries

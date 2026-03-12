@@ -78,7 +78,7 @@ Key ownership boundaries:
 
 - `tokens.css`: semantic theme variables, chart colors, radii, and elevation tokens
 - `base.css`: Tailwind layers, reset styles, global typography, scrollbars, and element defaults
-- `shell.css`: app shell, sidebar, content frame, page headers, and top-level layout helpers
+- `shell.css`: app shell, sidebar, content frame, page headers, top-level layout helpers, and the main route scroll container behavior that keeps page widths stable when some routes need vertical scrollbars and others do not while auto-hiding the route scrollbar thumb until active scrolling begins
 - `workspaces.css`: shared workspace sections, table/form patterns, settings, entries, properties, and groups
 - `dashboard.css`: dashboard controls, timeline rail, comparison cards, and dashboard-only layout
 - `overlays.css`: entry editor, select/tag controls, tooltip, and notification surfaces

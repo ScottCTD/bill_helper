@@ -14,9 +14,10 @@ import { AgentThreadReviewModal } from "./review/AgentThreadReviewModal";
 interface AgentPanelProps {
   isOpen: boolean;
   onClose?: () => void;
+  embedded?: boolean;
 }
 
-export function AgentPanel({ isOpen }: AgentPanelProps) {
+export function AgentPanel({ isOpen, embedded = false }: AgentPanelProps) {
   const controller = useAgentPanelController({ isOpen });
 
   if (!isOpen) {
@@ -25,7 +26,7 @@ export function AgentPanel({ isOpen }: AgentPanelProps) {
 
   return (
     <>
-      <aside className="agent-panel agent-panel-page" aria-label="Agent panel">
+      <aside className={embedded ? "agent-panel agent-panel-embedded" : "agent-panel agent-panel-page"} aria-label="Agent panel">
         <header className="agent-panel-header">
           <div className="agent-panel-header-top">
             <h2>Bill Assistant</h2>

@@ -4,11 +4,13 @@
 
 - `frontend/src/features/agent/AgentPanel.tsx`
 - used as the primary AI page via `frontend/src/pages/HomePage.tsx`
-- the home route now adds the shared `PageHeader` above the agent panel so the AI workspace sits inside the same route-level shell contract as the ledger pages
+- the home route now adds the shared `PageHeader` plus the shared outer workspace card shell above the agent panel so the AI workspace sits inside the same route-level shell contract as the ledger pages
 - acts as a render shell that wires the header, timeline, composer, thread rail, review modal, and preview dialog together
 - stateful coordination now lives in `frontend/src/features/agent/panel/useAgentPanelController.ts`, which composes `useAgentPanelQueries.ts` for thread/runtime queries, `useAgentThreadActions.ts` for thread/review mutations plus cache helpers, and `useAgentComposerRuntime.ts` for composer/panel coordination; stream hydration/state lives in `useAgentComposerStreamState.ts`, send-stop orchestration lives in `useAgentComposerActions.ts`, and pure panel helpers live in `frontend/src/features/agent/panel/helpers.ts`
 - page header uses the static title `Bill Assistant`; model selection stays in the composer dropdown instead of the title row
 - visual styling now follows the same compact neutral workspace system as the rest of the app: the agent panel is no longer a full-screen bespoke surface with separate page chrome
+- the route-level border now comes from the same shared workspace shell used by the ledger pages; the agent panel renders borderless inside that shell
+- the main conversation column stays width-capped for readability but is left-aligned to the shared workspace inset instead of centering within the panel
 
 Supporting modules include:
 

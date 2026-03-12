@@ -1,4 +1,5 @@
 import { PageHeader } from "../components/layout/PageHeader";
+import { WorkspaceSection } from "../components/layout/WorkspaceSection";
 import { AgentPanel } from "../features/agent/AgentPanel";
 
 export function HomePage() {
@@ -8,7 +9,9 @@ export function HomePage() {
         title="Agent Workspace"
         description="Threads, attachments, and review."
       />
-      <AgentPanel isOpen />
+      <WorkspaceSection className="agent-workspace-shell" contentClassName="agent-workspace-shell-body">
+        <AgentPanel isOpen embedded />
+      </WorkspaceSection>
     </div>
   );
 }

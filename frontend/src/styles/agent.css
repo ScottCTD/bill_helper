@@ -4,7 +4,11 @@
   }
 
   .agent-panel-page {
-    @apply relative h-full min-h-0 overflow-hidden;
+    @apply relative h-full min-h-0 w-full overflow-hidden;
+  }
+
+  .agent-panel-embedded {
+    @apply relative h-full min-h-0 w-full overflow-hidden rounded-none border-0 shadow-none;
   }
 
   .agent-panel-header {
@@ -197,7 +201,7 @@
   }
 
   .agent-thread-main {
-    @apply mx-auto h-full w-full max-w-[74rem] px-6 pt-5;
+    @apply mr-auto h-full w-full max-w-[74rem] px-5 pt-5;
   }
 
   .agent-timeline-scroll-wrapper {
@@ -966,6 +970,15 @@
   .agent-page {
     @apply h-full min-h-0 overflow-hidden;
     grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .agent-workspace-shell {
+    @apply grid min-h-0 overflow-hidden border-border/90;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .agent-workspace-shell-body {
+    @apply h-full min-h-0 !p-0 !pt-0;
   }
 
   .agent-composer {

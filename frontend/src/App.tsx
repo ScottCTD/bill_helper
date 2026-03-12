@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 
 import { Sidebar } from "./components/Sidebar";
@@ -65,6 +65,7 @@ function defaultSidebarCollapsed() {
 export function App() {
   const { principalName } = usePrincipalSession();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(defaultSidebarCollapsed);
+  const appMainRef = useRef<HTMLElement | null>(null);
   const { panelWidth: sidebarWidth, handleMouseDown: handleSidebarResizeMouseDown } = useResizablePanel({
     storageKey: "app-sidebar-width",
     defaultWidth: 224,
@@ -72,6 +73,35 @@ export function App() {
     maxWidth: 320,
     edge: "left"
   });
+
+  useEffect(() => {
+    if (!(appMainRef.current instanceof HTMLElement)) {
+      return;
+    }
+    const element: HTMLElement = appMainRef.current;
+
+    let clearScrollStateTimeout: number | null = null;
+
+    function markScrolling() {
+      element.classList.add("app-main-scroll-active");
+      if (clearScrollStateTimeout !== null) {
+        window.clearTimeout(clearScrollStateTimeout);
+      }
+      clearScrollStateTimeout = window.setTimeout(() => {
+        element.classList.remove("app-main-scroll-active");
+        clearScrollStateTimeout = null;
+      }, 420);
+    }
+
+    element.addEventListener("scroll", markScrolling, { passive: true });
+    return () => {
+      element.removeEventListener("scroll", markScrolling);
+      if (clearScrollStateTimeout !== null) {
+        window.clearTimeout(clearScrollStateTimeout);
+      }
+      element.classList.remove("app-main-scroll-active");
+    };
+  }, []);
 
   if (!principalName) {
     return <PrincipalSessionGate />;
@@ -94,7 +124,7 @@ export function App() {
         />
       ) : null}
 
-      <main className="app-main app-main-padded">
+      <main ref={appMainRef} className="app-main app-main-padded">
         <div className="app-content">
           <Suspense fallback={<p>Loading page...</p>}>
             <Routes>
