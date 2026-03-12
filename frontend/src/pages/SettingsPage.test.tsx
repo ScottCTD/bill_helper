@@ -110,6 +110,11 @@ describe("SettingsPage", () => {
     expect(screen.getByLabelText("Available models")).toHaveValue(
       "bedrock/us.anthropic.claude-sonnet-4-6\nopenai/gpt-4.1-mini\nopenrouter/qwen/qwen3.5-27b"
     );
+    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "bedrock/us.anthropic.claude-sonnet-4-6",
+      "openai/gpt-4.1-mini",
+      "openrouter/qwen/qwen3.5-27b",
+    ]);
   });
 
   it("clears stored provider override when the toggle is turned off and saved", async () => {
@@ -221,13 +226,13 @@ describe("SettingsPage", () => {
     const defaultModelInput = await screen.findByLabelText("Default model");
     const availableModelsInput = screen.getByLabelText("Available models");
 
-    await userEvent.clear(defaultModelInput);
-    await userEvent.type(defaultModelInput, "google/gemini-2.5-pro");
+    await userEvent.selectOptions(defaultModelInput, "openai/gpt-4.1-mini");
     await userEvent.clear(availableModelsInput);
     await userEvent.type(
       availableModelsInput,
-      "openai/gpt-4.1-mini\n\nbedrock/us.anthropic.claude-sonnet-4-6\nopenai/gpt-4.1-mini"
+      "openai/gpt-4.1-mini\n\ngoogle/gemini-2.5-pro\nbedrock/us.anthropic.claude-sonnet-4-6\nopenai/gpt-4.1-mini"
     );
+    await userEvent.selectOptions(defaultModelInput, "google/gemini-2.5-pro");
     fireEvent.submit(document.getElementById("runtime-settings-form") as HTMLFormElement);
 
     await waitFor(() => {
@@ -236,9 +241,31 @@ describe("SettingsPage", () => {
     expect(vi.mocked(updateRuntimeSettings).mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         agent_model: "google/gemini-2.5-pro",
-        available_agent_models: ["openai/gpt-4.1-mini", "bedrock/us.anthropic.claude-sonnet-4-6"],
+        available_agent_models: [
+          "openai/gpt-4.1-mini",
+          "google/gemini-2.5-pro",
+          "bedrock/us.anthropic.claude-sonnet-4-6",
+        ],
       })
     );
+  });
+
+  it("moves the default model to the first remaining option when the selected model is removed from the available list", async () => {
+    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
+    vi.mocked(getRuntimeSettings).mockResolvedValue(baseSettingsFixture);
+
+    renderWithQueryClient(<SettingsPage />);
+
+    await openAgentTab();
+    const defaultModelInput = await screen.findByLabelText("Default model");
+    const availableModelsInput = screen.getByLabelText("Available models");
+
+    expect(defaultModelInput).toHaveValue("openrouter/qwen/qwen3.5-27b");
+
+    await userEvent.clear(availableModelsInput);
+    await userEvent.type(availableModelsInput, "bedrock/us.anthropic.claude-sonnet-4-6\nopenai/gpt-4.1-mini");
+
+    expect(defaultModelInput).toHaveValue("bedrock/us.anthropic.claude-sonnet-4-6");
   });
 
   it("saves Bulk mode max concurrent threads", async () => {

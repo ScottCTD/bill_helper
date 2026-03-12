@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from "react";
+import type { FormEvent } from "react";
 
 import type { Account, Reconciliation, Snapshot, User } from "../../lib/types";
 import { Button } from "../../components/ui/button";
@@ -16,10 +16,9 @@ import { FormField } from "../../components/ui/form-field";
 import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
 import { ReconciliationSection } from "./ReconciliationSection";
-import { SnapshotsSection } from "./SnapshotsSection";
+import { SnapshotCreatePanel } from "./SnapshotCreatePanel";
+import { SnapshotHistoryTable } from "./SnapshotHistoryTable";
 import type { AccountFormState, SnapshotFormState } from "./types";
-
-type AccountEditTab = "details" | "reconciliation" | "snapshots";
 
 interface AccountDialogsProps {
   createDialogOpen: boolean;
@@ -54,22 +53,6 @@ interface AccountDialogsProps {
   isUpdating: boolean;
   onResetCreateMutationError: () => void;
   onResetUpdateMutationError: () => void;
-}
-
-function EditDialogTabButton({
-  active,
-  label,
-  onClick
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <Button type="button" size="sm" variant={active ? "default" : "outline"} onClick={onClick}>
-      {label}
-    </Button>
-  );
 }
 
 export function AccountDialogs(props: AccountDialogsProps) {
@@ -107,13 +90,6 @@ export function AccountDialogs(props: AccountDialogsProps) {
     onResetCreateMutationError,
     onResetUpdateMutationError
   } = props;
-  const [editTab, setEditTab] = useState<AccountEditTab>("details");
-
-  useEffect(() => {
-    if (editDialogOpen) {
-      setEditTab("details");
-    }
-  }, [editDialogOpen, editingAccount?.id]);
 
   const createMarkdownResetKey = `account-create-${createDialogOpen ? "open" : "closed"}`;
   const editMarkdownResetKey = `account-edit-${editingAccount?.id ?? "none"}-${editDialogOpen ? "open" : "closed"}`;
@@ -200,39 +176,15 @@ export function AccountDialogs(props: AccountDialogsProps) {
           }
         }}
       >
-        <DialogContent className="max-w-5xl">
+        <DialogContent className="account-edit-dialog max-w-6xl overflow-hidden">
           <DialogHeader>
             <DialogTitle>{editingAccount ? editingAccount.name : "Edit Account"}</DialogTitle>
-            <DialogDescription>Manage account details, interval reconciliation, and balance snapshots in one place.</DialogDescription>
+            <DialogDescription>Account details, reconciliation, and snapshots in one workspace.</DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-wrap gap-2">
-            <EditDialogTabButton active={editTab === "details"} label="Details" onClick={() => setEditTab("details")} />
-            <EditDialogTabButton
-              active={editTab === "reconciliation"}
-              label="Reconciliation"
-              onClick={() => setEditTab("reconciliation")}
-            />
-            <EditDialogTabButton active={editTab === "snapshots"} label="Snapshots" onClick={() => setEditTab("snapshots")} />
-          </div>
-
-          {editTab === "details" ? (
-            <form className="grid gap-4" onSubmit={onUpdateAccount}>
-              <div className="form-grid">
-                <FormField label="Owner">
-                  <NativeSelect
-                    value={editForm.owner_user_id}
-                    onChange={(event) => onEditFormChange({ ...editForm, owner_user_id: event.target.value })}
-                  >
-                    <option value="">(none)</option>
-                    {users?.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.name}
-                        {user.is_current_user ? " (Current User)" : ""}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                </FormField>
+          <div className="account-edit-layout">
+            <form id="account-edit-form" className="account-edit-details-card" onSubmit={onUpdateAccount}>
+              <div className="account-edit-details-grid">
                 <FormField label="Name">
                   <Input required value={editForm.name} onChange={(event) => onEditFormChange({ ...editForm, name: event.target.value })} />
                 </FormField>
@@ -249,77 +201,76 @@ export function AccountDialogs(props: AccountDialogsProps) {
                   </NativeSelect>
                 </FormField>
                 <FormField label="Active">
-                  <label className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm">
+                  <label className="account-edit-active-toggle">
                     <Checkbox
                       checked={editForm.is_active}
                       onCheckedChange={(checked) => onEditFormChange({ ...editForm, is_active: checked === true })}
                     />
-                    <span>{editForm.is_active ? "Active account" : "Inactive account"}</span>
+                    <span>{editForm.is_active ? "Active" : "Inactive"}</span>
                   </label>
                 </FormField>
+                <div className="account-edit-notes">
+                  <div className="grid gap-2 text-sm">
+                    <p className="text-sm font-medium leading-none">Notes</p>
+                    <MarkdownBlockEditor
+                      markdown={editForm.markdown_body}
+                      resetKey={editMarkdownResetKey}
+                      disabled={isUpdating || !editingAccount}
+                      onChange={(markdown) => onEditFormChange({ ...editForm, markdown_body: markdown })}
+                    />
+                  </div>
+                </div>
               </div>
-              <section className="entry-editor-markdown">
-                <div className="grid gap-2 text-sm">
-                  <p className="text-sm font-medium leading-none">Notes</p>
-                  <MarkdownBlockEditor
-                    markdown={editForm.markdown_body}
-                    resetKey={editMarkdownResetKey}
-                    disabled={isUpdating || !editingAccount}
-                    onChange={(markdown) => onEditFormChange({ ...editForm, markdown_body: markdown })}
-                  />
-                  <p className="text-xs text-muted-foreground">Optional markdown notes for account context and agent prompts.</p>
+            </form>
+
+            <div className="account-edit-workspace">
+              <section className="account-edit-history-column">
+                <div className="account-edit-history-scroll scroll-surface">
+                  <section className="account-edit-section">
+                    <h3 className="text-base font-semibold">Reconciliation</h3>
+                    <ReconciliationSection
+                      account={editingAccount}
+                      reconciliation={reconciliation}
+                      isLoading={reconciliationIsLoading}
+                      errorMessage={reconciliationErrorMessage}
+                    />
+                  </section>
+                  <section className="account-edit-section">
+                    <SnapshotHistoryTable
+                      selectedAccount={editingAccount}
+                      snapshots={snapshots}
+                      isLoading={snapshotsIsLoading}
+                      errorMessage={snapshotsErrorMessage}
+                      onDeleteSnapshot={onDeleteSnapshot}
+                    />
+                  </section>
                 </div>
               </section>
-              {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onEditDialogOpenChange(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isUpdating || !editingAccount}>
-                  {isUpdating ? "Saving..." : "Save changes"}
-                </Button>
-              </DialogFooter>
-            </form>
-          ) : null}
 
-          {editTab === "reconciliation" ? (
-            <div className="space-y-4">
-              <ReconciliationSection
-                account={editingAccount}
-                reconciliation={reconciliation}
-                isLoading={reconciliationIsLoading}
-                errorMessage={reconciliationErrorMessage}
-              />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onEditDialogOpenChange(false)}>
-                  Close
-                </Button>
-              </DialogFooter>
+              <aside className="account-edit-sidebar">
+                <SnapshotCreatePanel
+                  selectedAccount={editingAccount}
+                  snapshotForm={snapshotForm}
+                  onSnapshotFormChange={onSnapshotFormChange}
+                  onCreateSnapshot={onCreateSnapshot}
+                  formErrorMessage={snapshotFormErrorMessage}
+                  createErrorMessage={snapshotCreateErrorMessage}
+                  isCreating={snapshotIsCreating}
+                />
+              </aside>
             </div>
-          ) : null}
 
-          {editTab === "snapshots" ? (
-            <div className="space-y-4">
-              <SnapshotsSection
-                selectedAccount={editingAccount}
-                snapshotForm={snapshotForm}
-                onSnapshotFormChange={onSnapshotFormChange}
-                onCreateSnapshot={onCreateSnapshot}
-                onDeleteSnapshot={onDeleteSnapshot}
-                snapshots={snapshots}
-                isLoading={snapshotsIsLoading}
-                errorMessage={snapshotsErrorMessage}
-                formErrorMessage={snapshotFormErrorMessage}
-                createErrorMessage={snapshotCreateErrorMessage}
-                isCreating={snapshotIsCreating}
-              />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onEditDialogOpenChange(false)}>
-                  Close
-                </Button>
-              </DialogFooter>
-            </div>
-          ) : null}
+            {updateErrorMessage ? <p className="error">{updateErrorMessage}</p> : null}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onEditDialogOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button form="account-edit-form" type="submit" disabled={isUpdating || !editingAccount}>
+                {isUpdating ? "Saving..." : "Save changes"}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </>

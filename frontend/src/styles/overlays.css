@@ -1,0 +1,380 @@
+@layer components {
+  .entry-editor-sheet {
+    @apply gap-3 border-border bg-popover p-5 shadow-[var(--shadow-lg)] sm:p-6;
+  }
+
+  .entry-editor-header {
+    @apply space-y-1;
+  }
+
+  .entry-editor-page {
+    @apply grid gap-3;
+  }
+
+  .entry-property-line {
+    @apply grid grid-cols-[84px_minmax(0,1fr)] items-center gap-2;
+  }
+
+  .entry-property-line-group,
+  .entry-property-line-tags,
+  .entry-property-line-notes {
+    @apply items-start;
+  }
+
+  .entry-property-line-tags .tag-multiselect {
+    @apply w-full;
+  }
+
+  .entry-property-label {
+    @apply pt-0.5 text-sm font-medium text-muted-foreground;
+  }
+
+  .entry-property-group {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .entry-property-group > .single-select {
+    min-width: 132px;
+    max-width: 170px;
+  }
+
+  .entry-property-group-kind,
+  .entry-property-group-from-to,
+  .entry-property-group-owner {
+    @apply flex-nowrap;
+  }
+
+  .entry-property-group-from-to > .creatable-select {
+    @apply min-w-0 flex-1;
+  }
+
+  .entry-property-group-group {
+    @apply flex-wrap gap-2 md:flex-nowrap;
+  }
+
+  .entry-property-group-group > .single-select:first-child {
+    @apply min-w-0 flex-1;
+    max-width: none;
+  }
+
+  .entry-property-input-owner {
+    @apply min-w-0 flex-1;
+  }
+
+  .entry-property-inline-label {
+    @apply whitespace-nowrap text-sm font-medium text-muted-foreground;
+  }
+
+  .entry-property-input {
+    @apply w-full;
+  }
+
+  .entry-property-input-sm {
+    @apply w-full min-w-[130px] max-w-[180px];
+  }
+
+  .entry-property-input-xs {
+    @apply w-full min-w-[76px] max-w-[92px];
+  }
+
+  .entry-editor-markdown {
+    @apply min-w-0 pt-1.5;
+  }
+
+  .entry-editor-blocknote {
+    @apply overflow-hidden rounded-md border border-border bg-card;
+  }
+
+  .entry-editor-blocknote .bn-container {
+    min-height: 360px;
+    background: hsl(var(--card));
+    --bn-colors-editor-background: hsl(var(--card));
+    --bn-colors-menu-background: hsl(var(--card));
+    --bn-colors-tooltip-background: hsl(var(--card));
+    --bn-colors-hovered-background: hsl(var(--secondary));
+    --bn-font-family:
+      "Public Sans",
+      "Segoe UI Variable Text",
+      "Segoe UI",
+      "Helvetica Neue",
+      Arial,
+      sans-serif;
+  }
+
+  .entry-editor-blocknote .bn-editor,
+  .entry-editor-blocknote .ProseMirror {
+    background: hsl(var(--card));
+  }
+
+  .account-edit-dialog {
+    height: min(88vh, 860px);
+  }
+
+  .account-edit-layout {
+    @apply flex min-h-0 flex-1 flex-col gap-4;
+  }
+
+  .account-edit-details-card {
+    @apply rounded-lg border border-border/75 bg-secondary/20 p-4;
+  }
+
+  .account-edit-details-grid {
+    @apply grid gap-4 md:grid-cols-3;
+  }
+
+  .account-edit-active-toggle {
+    @apply inline-flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm text-foreground transition-colors hover:bg-secondary/55;
+  }
+
+  .account-edit-active-toggle:has(button[data-state="checked"]),
+  .account-edit-active-toggle:has(button[data-state="indeterminate"]) {
+    @apply border-primary/30 bg-primary/10;
+  }
+
+  .account-edit-notes {
+    @apply md:col-span-3;
+  }
+
+  .account-edit-notes .entry-editor-blocknote .bn-container,
+  .account-edit-notes textarea {
+    min-height: 11rem;
+  }
+
+  .account-edit-notes textarea {
+    min-height: 11rem !important;
+  }
+
+  .account-edit-workspace {
+    @apply flex min-h-0 flex-1 flex-col gap-4 lg:flex-row;
+  }
+
+  .account-edit-history-column {
+    @apply flex-1 min-h-0 rounded-lg border border-border/75 bg-secondary/20 lg:basis-2/3 lg:flex-1;
+  }
+
+  .account-edit-history-scroll {
+    @apply flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-4;
+  }
+
+  .account-edit-section {
+    @apply grid gap-4;
+  }
+
+  .account-edit-sidebar {
+    @apply shrink-0 rounded-lg border border-border/75 bg-secondary/20 p-4 lg:basis-1/3 lg:flex-1;
+  }
+
+  .tag-multiselect,
+  .single-select,
+  .creatable-select {
+    @apply relative;
+  }
+
+  .single-select-control {
+    @apply flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm shadow-none transition-colors hover:bg-secondary/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted/50 disabled:opacity-60;
+  }
+
+  .single-select-value {
+    @apply text-foreground;
+  }
+
+  .single-select-placeholder {
+    @apply text-muted-foreground;
+  }
+
+  .single-select-caret {
+    @apply h-4 w-4 text-muted-foreground;
+  }
+
+  .single-select-menu,
+  .creatable-select-menu,
+  .tag-multiselect-menu {
+    @apply max-h-56 overflow-auto rounded-lg border border-border bg-popover p-1 shadow-[var(--shadow-lg)];
+  }
+
+  .single-select-option,
+  .creatable-select-option,
+  .tag-multiselect-option {
+    @apply flex w-full items-center gap-2 rounded-md border border-transparent bg-transparent px-2.5 py-2 text-left text-sm;
+  }
+
+  .tag-multiselect-option {
+    @apply justify-between gap-3;
+  }
+
+  .single-select-option:hover,
+  .creatable-select-option:hover,
+  .tag-multiselect-option:hover {
+    @apply bg-accent text-accent-foreground;
+  }
+
+  .single-select-option.is-selected,
+  .creatable-select-option.is-selected,
+  .tag-multiselect-option.is-selected {
+    @apply border-primary/30 bg-accent;
+  }
+
+  .single-select-check {
+    @apply h-3.5 w-3.5 text-primary opacity-0;
+  }
+
+  .single-select-check.is-visible {
+    @apply opacity-100;
+  }
+
+  .single-select.is-disabled .single-select-control,
+  .creatable-select.is-disabled .creatable-select-control,
+  .tag-multiselect.is-disabled .tag-multiselect-control {
+    @apply bg-muted/60;
+  }
+
+  .creatable-select-control {
+    @apply flex h-10 w-full items-center rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-none transition-colors hover:bg-secondary/55 focus-within:ring-2 focus-within:ring-ring disabled:opacity-60;
+  }
+
+  .creatable-select-input {
+    @apply min-w-0 flex-1 border-none bg-transparent p-0 text-sm outline-none;
+  }
+
+  .creatable-select-input:disabled {
+    @apply cursor-not-allowed text-muted-foreground;
+  }
+
+  .creatable-select-toggle {
+    @apply inline-flex h-6 w-6 items-center justify-center rounded-md border-none bg-transparent p-0 opacity-75 transition hover:bg-accent hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .tag-multiselect-control {
+    @apply flex min-h-[2.5rem] w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-none transition-colors hover:bg-secondary/55;
+    cursor: text;
+  }
+
+  .tag-multiselect-control:focus-within {
+    @apply ring-2 ring-ring;
+  }
+
+  .tag-multiselect-input {
+    @apply min-w-[100px] flex-1 rounded-none border-none bg-transparent px-1 py-0.5 text-sm shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0;
+  }
+
+  .tag-chip {
+    @apply inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1 text-[11px] font-medium;
+  }
+
+  .tag-chip-color {
+    @apply h-2.5 w-2.5 rounded-full border border-black/10;
+  }
+
+  .tag-chip-remove {
+    @apply inline-flex h-5 w-5 items-center justify-center rounded-md bg-transparent opacity-65 transition hover:bg-accent hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    border: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .tag-chip-remove:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
+  .tag-chip-close {
+    @apply text-base leading-none;
+  }
+
+  .tag-option-label {
+    @apply inline-flex items-center gap-2;
+  }
+
+  .tag-option-color {
+    @apply h-2.5 w-2.5 rounded-full border border-black/10;
+  }
+
+  .tag-option-check {
+    @apply text-xs font-semibold text-primary;
+  }
+
+  .tag-multiselect-empty {
+    @apply m-2 text-xs text-muted-foreground;
+  }
+
+  .tooltip-root {
+    @apply relative inline-flex;
+  }
+
+  .tooltip-content {
+    @apply pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden w-64 -translate-x-1/2 rounded-lg border border-border bg-popover/95 px-3 py-2 text-left text-xs leading-5 text-popover-foreground shadow-[var(--shadow-lg)];
+  }
+
+  .tooltip-content-open {
+    @apply block;
+  }
+
+  .notification-viewport {
+    @apply pointer-events-none fixed right-4 top-4 z-[100] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2;
+  }
+
+  .notification-toast {
+    @apply pointer-events-auto grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-xl border border-border bg-popover/95 px-4 py-3 text-sm text-popover-foreground shadow-[var(--shadow-lg)];
+    animation: notification-toast-enter 220ms ease-out;
+  }
+
+  .notification-toast-info {
+    @apply border-border;
+  }
+
+  .notification-toast-success {
+    @apply border-success/20 bg-success/10;
+  }
+
+  .notification-toast-error {
+    @apply border-destructive/20 bg-destructive/10;
+  }
+
+  .notification-toast-icon {
+    @apply mt-0.5 text-muted-foreground;
+  }
+
+  .notification-toast-success .notification-toast-icon {
+    @apply text-success;
+  }
+
+  .notification-toast-error .notification-toast-icon {
+    @apply text-destructive;
+  }
+
+  .notification-toast-copy {
+    @apply min-w-0;
+  }
+
+  .notification-toast-title {
+    @apply truncate text-sm font-semibold leading-5 text-popover-foreground;
+  }
+
+  .notification-toast-description {
+    @apply mt-0.5 text-xs leading-5 text-muted-foreground;
+  }
+
+  .notification-toast-dismiss {
+    @apply mt-0.5 !h-6 !w-6 rounded-md text-muted-foreground hover:bg-background hover:text-foreground;
+  }
+
+  @keyframes notification-toast-enter {
+    from {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.98);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @media (max-width: 760px) {
+    .entry-property-group-kind,
+    .entry-property-group-from-to,
+    .entry-property-group-owner,
+    .entry-property-group-group {
+      @apply flex-wrap;
+    }
+  }
+}

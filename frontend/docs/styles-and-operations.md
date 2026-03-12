@@ -2,10 +2,17 @@
 
 ## Existing Shared Components
 
+- `layout/PageHeader.tsx`
+- `layout/WorkspaceSection.tsx`
+- `layout/WorkspaceToolbar.tsx`
+- `layout/StatBlock.tsx`
+- `layout/EmptyState.tsx`
+- `layout/InlineStatusMessage.tsx`
 - `EntryEditorModal.tsx` (entry fields, direct-group picker, and conditional split-role picker)
 - `SingleSelect.tsx`
 - `CreatableSingleSelect.tsx`
 - `TagMultiSelect.tsx`
+- `hooks/useFloatingMenuPosition.ts`
 - `MarkdownBlockEditor.tsx`
 - `GroupGraphView.tsx`
 - `GroupEditorModal.tsx`
@@ -44,19 +51,40 @@
 - `frontend/src/features/agent/*`
 - `frontend/src/features/settings/*`
 
-## Styling (`frontend/src/styles.css`)
+## Visual Contract
 
-Includes:
+- Bill Helper now uses a compact "ledger workstation" visual system instead of the earlier soft SaaS styling.
+- The shared contract is:
+  - solid neutral canvas and card surfaces
+  - one deep ink-blue primary accent plus restrained semantic tones
+  - 8px base radii and stronger borders instead of blur-heavy softness
+  - Public Sans for UI/body and JetBrains Mono for code-adjacent metadata
+  - tabular numerals enabled by default for ledger and analytic surfaces
+- The home route still points to the agent workspace, but it now renders inside the same page header and content shell contract as the rest of the app.
 
-- Tailwind base, components, and utilities imports
-- CSS variable token layer
-- shared table surface classes
-- properties workspace classes
-- entries secondary-name line classes
-- dialog and form layout classes
-- dashboard tab classes
-- agent timeline and header styling
-- tokenized scrollbar styling and stable scrollbar gutters
+## Styling
+
+- `frontend/src/styles.css` is now only the import/root file.
+- Durable style ownership is split across:
+  - `frontend/src/styles/tokens.css`
+  - `frontend/src/styles/base.css`
+  - `frontend/src/styles/shell.css`
+  - `frontend/src/styles/workspaces.css`
+  - `frontend/src/styles/dashboard.css`
+  - `frontend/src/styles/overlays.css`
+  - `frontend/src/styles/agent.css`
+
+Key ownership boundaries:
+
+- `tokens.css`: semantic theme variables, chart colors, radii, and elevation tokens
+- `base.css`: Tailwind layers, reset styles, global typography, scrollbars, and element defaults
+- `shell.css`: app shell, sidebar, content frame, page headers, and top-level layout helpers
+- `workspaces.css`: shared workspace sections, table/form patterns, settings, entries, properties, and groups
+- `dashboard.css`: dashboard controls, timeline rail, comparison cards, and dashboard-only layout
+- `overlays.css`: entry editor, select/tag controls, tooltip, and notification surfaces
+- BlockNote-based markdown editor shells inherit the app card surface, so the full editor frame stays on one white panel instead of exposing the muted page canvas below the editable content
+- custom select/tag menus render in a floating portal anchored by `hooks/useFloatingMenuPosition.ts`, so short cards, empty states, and other clipped containers do not truncate the menu body
+- `agent.css`: agent panel, thread rail, timeline, composer, and review modal styling
 
 ## Design System And Config
 
@@ -64,6 +92,7 @@ Includes:
 - PostCSS config: `frontend/postcss.config.js`
 - shadcn manifest: `frontend/components.json`
 - utility merge helper: `frontend/src/lib/utils.ts`
+- font loading entrypoint: `frontend/index.html`
 
 ## Operational Impact
 

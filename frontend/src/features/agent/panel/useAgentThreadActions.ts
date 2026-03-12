@@ -187,16 +187,8 @@ export function useAgentThreadActions({
     return createThreadMutation.mutateAsync({});
   }
 
-  async function deleteThread(threadId: string, displayedThreads: AgentThreadSummary[] | undefined): Promise<boolean> {
-    const thread = (displayedThreads ?? []).find((item) => item.id === threadId);
-    const threadName = (thread?.title || "").trim() || "Untitled thread";
-    if (!window.confirm(`Delete "${threadName}"?\n\nThis removes its full message and run history.`)) {
-      return false;
-    }
-
-    setActionError(null);
+  async function deleteThread(threadId: string): Promise<void> {
     await deleteThreadMutation.mutateAsync(threadId);
-    return true;
   }
 
   async function renameThread(threadId: string, title: string) {

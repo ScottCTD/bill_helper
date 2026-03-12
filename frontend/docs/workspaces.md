@@ -1,12 +1,22 @@
 # Frontend Workspaces
 
+# Shared Page Chrome
+
+- the main ledger workspaces now share the same page vocabulary:
+  - `PageHeader` for the route-level title and summary
+  - `WorkspaceSection` for the primary table/form surface
+  - `WorkspaceToolbar` for filters, search, and compact actions
+  - `StatBlock` for dense metric summaries where a card grid would be too decorative
+- settings remains the exception in structure because its sticky toolbar is still the primary page header pattern
+
 ## Entries
 
 ### `frontend/src/pages/EntriesPage.tsx`
 
 - lists, filters, edits, and deletes entries
+- route shell now uses the shared page header plus one primary workspace section instead of wrapping the title in a card
 - create action is a compact `+` beside the `Source text` filter
-- `Tag` and `Currency` filters use chip-based multi-select controls
+- `Tag` and `Currency` filters use chip-based multi-select controls whose menus float above the workspace card instead of being clipped by empty or short table states
 - a `Filter group` selector syncs with the `filter_group_id` URL search param so deep links can open the entries list already scoped to one saved group
 - date column is fixed-width and no-wrap
 - name cells show the primary name plus a compact `from -> to` secondary line
@@ -17,6 +27,7 @@
 - rows show a `Missing entity` badge when preserved labels remain after entity or account deletion
 - entry create modal resolves default currency from runtime settings
 - entry create/edit modal includes a single direct-group picker; `SPLIT` groups also show a split-role picker
+- entry create/edit modal keeps the markdown notes editor inside the shared field grid with a labeled `Notes` row instead of a detached full-width block
 - entry create/edit modal includes a compact swap icon control between the `from` and `to` selectors to swap both field values in one click
 - entry create/edit modal tag picking supports fuzzy search and ranks the strongest matches first before falling back to create-new
 - entry create/edit modal treats re-selecting a same-name existing entity as a real relink, so preserved missing labels can be restored without renaming the field
@@ -36,6 +47,7 @@
 
 - dedicated first-class entity workspace at `/entities`
 - page is a thin orchestrator over `frontend/src/features/entities/*`
+- route shell now uses the shared page header plus one primary workspace section
 - generic entity management stays focused on non-account counterparties; account-backed entity roots remain managed from `Accounts`
 - table shows `Name`, `Category`, a net-money aggregate column, and icon-only row actions
 - rows open the edit dialog on double-click and keep delete isolated behind the compact trash action
@@ -48,6 +60,7 @@
 ### `frontend/src/pages/GroupsPage.tsx`
 
 - dedicated first-class group workspace at `/groups`
+- route shell now uses the shared page header plus one primary workspace section
 - organized around a broad searchable groups table first, with each row opening a dedicated group-detail modal on double-click and a fallback `View` action
 - browser table data comes from `GET /groups`
 - group detail modal content comes from `GET /groups/{group_id}`
@@ -63,13 +76,16 @@
 ### `frontend/src/pages/AccountsPage.tsx`
 
 - page is a thin orchestrator; domain state lives in `frontend/src/features/accounts/useAccountsPageModel.ts`
-- UI is split into `AccountsTableSection`, `ReconciliationSection`, `SnapshotsSection`, and `AccountDialogs`
+- route shell now uses the shared page header plus one primary workspace section
+- UI is split into `AccountsTableSection`, `ReconciliationSection`, `SnapshotHistoryTable`, `SnapshotCreatePanel`, and `AccountDialogs`
 - create, edit, and delete flows are dialog-driven
 - account rows single-select on click and open edit on double-click; delete remains the only explicit row action and is rendered as a compact icon button
 - account ids are shared entity-root ids; generic entity management does not expose them as editable entity rows
-- account dialogs edit `Owner`, `Name`, `Currency`, `Notes`, and `Active`
+- account creation still edits `Owner`, `Name`, `Currency`, and `Notes`
+- the account edit modal is untabbed and fixed-height: a compact top details form (`Name`, `Currency`, `Active`, `Notes`) sits above a two-column lower workspace
+- the lower workspace keeps reconciliation and snapshot history in the left internal scroll column, with snapshot creation isolated in a compact right-side panel
 - legacy `institution` and `type` fields are removed
-- reconciliation and snapshot side panels are driven by the selected table row
+- reconciliation and snapshot history inside the edit modal are driven by the selected row that opened it
 - snapshot history rows expose per-snapshot delete actions with confirmation
 - delete confirmation warns that snapshots are removed and preserved entry labels will surface missing-entity markers
 
@@ -78,6 +94,7 @@
 ### `frontend/src/pages/PropertiesPage.tsx`
 
 - page is a thin orchestrator over `frontend/src/features/properties/*`
+- route shell now uses the shared page header plus one primary workspace section
 - section navigation and content rendering are split into dedicated components
 - section state, form state, queries, and filtered data live in focused hooks
 - editable sections use modal-driven create and edit flows
@@ -93,22 +110,24 @@
 ### `frontend/src/pages/DashboardPage.tsx`
 
 - tabbed analytics surface with `Overview`, `Spending`, `Breakdowns`, and `Insights`
+- route shell now uses the shared page header, a shared control surface, and `StatBlock` summaries instead of bespoke metric cards for the top-line KPIs
 - includes an explicit `Month` / `Year` mode toggle
-- uses a floating page-level right-side timeline rail on desktop for month/year selection; the rail is visually reduced to floating date chips, stays fixed while the dashboard scrolls, and does not consume dashboard layout width
-- desktop wheel interaction is discrete: one wheel gesture advances one visible month or year, and only expense-bearing months/years appear in the rail
+- uses a dedicated right-side timeline rail on wide screens for month/year selection, with centered snap-scrolling so the active month or year stays visually anchored
+- desktop wheel interaction is discrete: one wheel gesture advances one visible month or year with a smooth centered transition, and only expense-bearing months/years appear in the rail
 - on small screens the timeline falls back to a compact horizontal strip above the dashboard content
 - yearly mode moves annual trend charts into the active dashboard view instead of hiding them only inside `Insights`
 - uses Recharts with measured containers so charts render only after non-zero dimensions are available
 - dashboard totals and charts exclude internal transfers when both endpoints resolve to account-backed entity roots
 - monthly classification is driven by saved filter groups, including yearly views that fan out to month-scoped dashboard reads for the selected and previous years
-- the monthly and yearly `Income vs Expense Trend` charts render income as a standalone bar and expense as stacked filter-group segments
+- the monthly and yearly `Income vs Expense Trend` charts render income as a standalone bar and expense as stacked filter-group segments using a restrained dashboard-specific palette rather than raw saved filter-group colors
 - `Insights` is intentionally reduced to the largest-expenses table only; month mode shows the current month while year mode aggregates the selected year's largest expenses
 
-## Filter
+## Filters
 
 ### `frontend/src/pages/FilterGroupsPage.tsx`
 
 - dedicated first-class filter-group workspace at `/filters`
+- route shell now uses the shared page header plus one primary workspace section
 - page shell delegates the actual CRUD surface to `frontend/src/features/filterGroups/FilterGroupsManager.tsx`
 - each saved group exposes a direct `View matching entries` link that opens the entries workspace scoped to that group
 
@@ -126,6 +145,6 @@
 - `Agent` groups memory/models, provider overrides, run limits, bulk and attachment limits, and reliability into separate sections
 - section UI is split across `SettingsToolbar.tsx`, `SettingsGeneralSection.tsx`, `SettingsAgentSection.tsx`, and `ResetSettingsDialog.tsx`
 - `Agent memory` lives under the `Agent` tab, is edited as one item per line, persists as a list of strings, and is sent to every backend agent system prompt
-- `Default model` is edited separately from `Available models`; available models use one newline-separated identifier per line and preserve entered order
+- `Default model` is chosen from a dropdown sourced from `Available models`; available models still use one newline-separated identifier per line, preserve entered order, and fallback the default to the first remaining listed model if the current selection is removed
 - bulk concurrency is labeled around concurrent launches, while the per-message attachment limit explicitly calls out that Bulk mode still starts one fresh thread per attachment
 - agent provider overrides use a compact toggle; when off the custom endpoint/key fields are hidden and saving falls back to server env values from `.env` or process env

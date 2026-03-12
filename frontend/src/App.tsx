@@ -1,10 +1,9 @@
 import { Suspense, lazy, useState } from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 
 import { Sidebar } from "./components/Sidebar";
 import { PrincipalSessionGate, usePrincipalSession } from "./features/session";
 import { useResizablePanel } from "./hooks/useResizablePanel";
-import { cn } from "./lib/utils";
 
 const HomePage = lazy(async () => {
   const module = await import("./pages/HomePage");
@@ -73,8 +72,6 @@ export function App() {
     maxWidth: 320,
     edge: "left"
   });
-  const location = useLocation();
-  const isAgentPage = location.pathname === "/";
 
   if (!principalName) {
     return <PrincipalSessionGate />;
@@ -97,8 +94,8 @@ export function App() {
         />
       ) : null}
 
-      <main className={cn("app-main", !isAgentPage && "app-main-padded")}>
-        <div className={cn(!isAgentPage && "app-content")}>
+      <main className="app-main app-main-padded">
+        <div className="app-content">
           <Suspense fallback={<p>Loading page...</p>}>
             <Routes>
               <Route path="/" element={<HomePage />} />

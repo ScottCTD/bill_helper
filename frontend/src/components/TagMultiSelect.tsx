@@ -1,5 +1,7 @@
 import { KeyboardEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
+import { useFloatingMenuPosition } from "../hooks/useFloatingMenuPosition";
 import { resolveTagColor } from "../lib/tagColors";
 import type { Tag } from "../lib/types";
 
@@ -122,12 +124,17 @@ export function TagMultiSelect({
   createLabelPrefix = "Create"
 }: TagMultiSelectProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const controlRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const normalizedValue = useMemo(() => normalizeTagList(value), [value]);
   const [selectedValues, setSelectedValues] = useState<string[]>(normalizedValue);
   const selectedValuesRef = useRef<string[]>(selectedValues);
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const { menuRef, menuStyle } = useFloatingMenuPosition({
+    anchorRef: controlRef,
+    open: isOpen
+  });
 
   useEffect(() => {
     selectedValuesRef.current = selectedValues;
@@ -216,14 +223,15 @@ export function TagMultiSelect({
       if (!rootRef.current) {
         return;
       }
-      if (!rootRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+      if (rootRef.current.contains(event.target as Node) || menuRef.current?.contains(event.target as Node)) {
+        return;
       }
+      setIsOpen(false);
     };
 
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, []);
+  }, [menuRef]);
 
   function commitTags(update: (current: string[]) => string[]) {
     const current = selectedValuesRef.current;
@@ -344,7 +352,7 @@ export function TagMultiSelect({
 
   return (
     <div className={`tag-multiselect ${disabled ? "is-disabled" : ""}`} ref={rootRef}>
-      <div className="tag-multiselect-control" onClick={focusInput}>
+      <div className="tag-multiselect-control" onClick={focusInput} ref={controlRef}>
         {selected.map((tag, index) => (
           <span key={tag.key} className="tag-chip" style={{ borderColor: tag.color ?? undefined }}>
             <span className="tag-chip-color" style={{ backgroundColor: tag.color || "hsl(var(--muted))" }} />
@@ -381,51 +389,54 @@ export function TagMultiSelect({
         />
       </div>
 
-      {isOpen ? (
-        <div className="tag-multiselect-menu">
-          {filteredOptions.length === 0 && !creatableTag ? <p className="tag-multiselect-empty">No matching tags.</p> : null}
-          {filteredOptions.map((tag) => {
-            const key = normalizeTagName(tag.name);
-            const isSelected = selectedKeys.has(key);
-            return (
-              <button
-                key={key}
-                type="button"
-                className={`tag-multiselect-option ${isSelected ? "is-selected" : ""}`}
-                onPointerDown={(event) => {
-                  onOptionPointerDown(event, () => {
-                    toggleTag(tag.name);
-                  });
-                }}
-                onKeyDown={(event) => onActionKeyDown(event, () => toggleTag(tag.name))}
-                aria-pressed={isSelected}
-              >
-                <span className="tag-option-label">
-                  <span className="tag-option-color" style={{ backgroundColor: resolveTagColor(tag.name, tag.color) }} />
-                  {tag.name}
-                </span>
-                <span className="tag-option-check">{isSelected ? "✓" : ""}</span>
-              </button>
-            );
-          })}
-          {creatableTag ? (
-            <button
-              type="button"
-              className="tag-multiselect-option"
-              onPointerDown={(event) => {
-                onOptionPointerDown(event, () => {
-                  addTag(creatableTag);
-                });
-              }}
-              onKeyDown={(event) => onActionKeyDown(event, () => addTag(creatableTag))}
-            >
-              <span className="tag-option-label">
-                {createLabelPrefix} "{creatableTag}"
-              </span>
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      {isOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="tag-multiselect-menu" ref={menuRef} style={menuStyle}>
+              {filteredOptions.length === 0 && !creatableTag ? <p className="tag-multiselect-empty">No matching tags.</p> : null}
+              {filteredOptions.map((tag) => {
+                const key = normalizeTagName(tag.name);
+                const isSelected = selectedKeys.has(key);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`tag-multiselect-option ${isSelected ? "is-selected" : ""}`}
+                    onPointerDown={(event) => {
+                      onOptionPointerDown(event, () => {
+                        toggleTag(tag.name);
+                      });
+                    }}
+                    onKeyDown={(event) => onActionKeyDown(event, () => toggleTag(tag.name))}
+                    aria-pressed={isSelected}
+                  >
+                    <span className="tag-option-label">
+                      <span className="tag-option-color" style={{ backgroundColor: resolveTagColor(tag.name, tag.color) }} />
+                      {tag.name}
+                    </span>
+                    <span className="tag-option-check">{isSelected ? "✓" : ""}</span>
+                  </button>
+                );
+              })}
+              {creatableTag ? (
+                <button
+                  type="button"
+                  className="tag-multiselect-option"
+                  onPointerDown={(event) => {
+                    onOptionPointerDown(event, () => {
+                      addTag(creatableTag);
+                    });
+                  }}
+                  onKeyDown={(event) => onActionKeyDown(event, () => addTag(creatableTag))}
+                >
+                  <span className="tag-option-label">
+                    {createLabelPrefix} "{creatableTag}"
+                  </span>
+                </button>
+              ) : null}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

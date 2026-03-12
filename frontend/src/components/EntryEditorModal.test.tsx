@@ -35,6 +35,31 @@ const entryFixture: Entry = {
 };
 
 describe("EntryEditorModal", () => {
+  it("renders the markdown editor under a Notes field label", async () => {
+    render(
+      <EntryEditorModal
+        isOpen
+        mode="edit"
+        entry={entryFixture}
+        currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
+        entities={[{ id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }]}
+        users={[{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true }]}
+        groups={[]}
+        tags={[]}
+        currentUserId="user-1"
+        defaultCurrencyCode="CAD"
+        isSaving={false}
+        onClose={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    const notesLabel = await screen.findByText("Notes:");
+    expect(notesLabel).toBeInTheDocument();
+    expect(screen.getByTestId("markdown-editor")).toBeInTheDocument();
+    expect(notesLabel.closest(".entry-property-line")?.querySelector("[data-testid='markdown-editor']")).not.toBeNull();
+  });
+
   it("explains preserved missing-entity labels while editing", async () => {
     render(
       <EntryEditorModal

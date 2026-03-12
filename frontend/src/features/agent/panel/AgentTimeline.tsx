@@ -89,7 +89,14 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
 
             return (
               <Fragment key={message.id}>
-                <article className={cn("agent-message", isAssistant && "agent-message-assistant", isUser && "agent-message-user")}>
+                <article
+                  className={cn(
+                    "agent-message",
+                    isAssistant && "agent-message-assistant",
+                    isUser && "agent-message-user",
+                    messageRuns.length > 0 && "agent-message-activity"
+                  )}
+                >
                   <header>
                     <strong>{isUser ? "You" : isAssistant ? "Assistant" : message.role}</strong>
                     <span className="muted">{prettyDateTime(message.created_at)}</span>
@@ -174,7 +181,10 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
                         return null;
                       }
                       return (
-                        <article key={`${run.id}-unattached`} className="agent-message agent-message-assistant agent-message-working">
+                        <article
+                          key={`${run.id}-unattached`}
+                          className="agent-message agent-message-activity agent-message-assistant agent-message-working"
+                        >
                           <header>
                             <strong>Assistant</strong>
                             <span className="muted">{prettyDateTime(run.created_at)}</span>
@@ -225,7 +235,10 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
           ) : null}
 
           {shouldShowOptimisticAssistantBubble && pendingAssistantMessage ? (
-            <article className="agent-message agent-message-assistant agent-message-streaming" key={pendingAssistantMessage.id}>
+            <article
+              className="agent-message agent-message-activity agent-message-assistant agent-message-streaming"
+              key={pendingAssistantMessage.id}
+            >
               <header>
                 <strong>Assistant</strong>
                 <span className="muted">{prettyDateTime(pendingAssistantMessage.createdAt)}</span>
@@ -279,7 +292,10 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
               return null;
             }
             return (
-              <article key={`pending-run-${run.id}`} className="agent-message agent-message-assistant agent-message-working">
+              <article
+                key={`pending-run-${run.id}`}
+                className="agent-message agent-message-activity agent-message-assistant agent-message-working"
+              >
                 <header>
                   <strong>Assistant</strong>
                   <span className="muted">{prettyDateTime(run.created_at)}</span>

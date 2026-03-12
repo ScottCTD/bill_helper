@@ -15,6 +15,10 @@ import {
   YAxis
 } from "recharts";
 
+import { PageHeader } from "../components/layout/PageHeader";
+import { StatBlock } from "../components/layout/StatBlock";
+import { WorkspaceSection } from "../components/layout/WorkspaceSection";
+import { WorkspaceToolbar } from "../components/layout/WorkspaceToolbar";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -44,16 +48,7 @@ const CHART_COLORS = {
   source: "rgb(var(--chart-source))"
 };
 
-const PIE_COLORS = [
-  "hsl(var(--primary))",
-  "hsl(var(--success))",
-  "hsl(var(--warning))",
-  "hsl(var(--destructive))",
-  "hsl(var(--accent-foreground))",
-  "hsl(var(--muted-foreground))"
-];
-
-const MODERN_SEGMENT_COLORS = [
+const DASHBOARD_BAR_COLORS = [
   "rgb(var(--chart-segment-1))",
   "rgb(var(--chart-segment-2))",
   "rgb(var(--chart-segment-3))",
@@ -61,6 +56,21 @@ const MODERN_SEGMENT_COLORS = [
   "rgb(var(--chart-segment-5))",
   "rgb(var(--chart-segment-6))"
 ];
+
+const DASHBOARD_PIE_COLORS = [
+  "rgb(var(--chart-pie-1))",
+  "rgb(var(--chart-pie-2))",
+  "rgb(var(--chart-pie-3))",
+  "rgb(var(--chart-pie-4))",
+  "rgb(var(--chart-pie-5))",
+  "rgb(var(--chart-pie-6))"
+];
+
+const DASHBOARD_PIE_ANIMATION_PROPS = {
+  animationBegin: 0,
+  animationDuration: 420,
+  animationEasing: "ease-out" as const
+};
 
 const TIMELINE_WHEEL_LOCK_MS = 180;
 
@@ -93,16 +103,12 @@ function tooltipAmountWithName(currencyCode: string, value: unknown, name: strin
   return [tooltipAmount(currencyCode, value), String(name ?? "")];
 }
 
-function normalizeChartColor(color: string | null | undefined, index: number): string {
-  return color ?? PIE_COLORS[index % PIE_COLORS.length];
+function dashboardBarColor(index: number): string {
+  return DASHBOARD_BAR_COLORS[index % DASHBOARD_BAR_COLORS.length];
 }
 
-function modernSegmentColor(index: number): string {
-  return MODERN_SEGMENT_COLORS[index % MODERN_SEGMENT_COLORS.length];
-}
-
-function pastelPieColor(index: number): string {
-  return MODERN_SEGMENT_COLORS[index % MODERN_SEGMENT_COLORS.length];
+function dashboardPieColor(index: number): string {
+  return DASHBOARD_PIE_COLORS[index % DASHBOARD_PIE_COLORS.length];
 }
 
 function monthDate(monthKey: string): Date {
@@ -331,6 +337,7 @@ export function DashboardPage() {
   const timelineItemRefs = useRef(new Map<string, HTMLButtonElement>());
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const timelineWheelLockRef = useRef<number | null>(null);
+  const timelineScrollBehaviorRef = useRef<ScrollBehavior>("auto");
   const timelineQuery = useQuery({
     queryKey: queryKeys.dashboard.timeline,
     queryFn: getDashboardTimeline,
@@ -358,7 +365,15 @@ export function DashboardPage() {
   const monthTimelineIndex = timelineMonths.indexOf(month);
   const yearTimelineIndex = timelineYears.indexOf(String(selectedYear));
 
-  function centerTimelineItem(selectedItem: HTMLButtonElement) {
+  function setTimelineMonth(nextMonth: string, behavior: ScrollBehavior = "smooth") {
+    if (!nextMonth || nextMonth === month) {
+      return;
+    }
+    timelineScrollBehaviorRef.current = behavior;
+    setMonth(nextMonth);
+  }
+
+  function centerTimelineItem(selectedItem: HTMLButtonElement, behavior: ScrollBehavior = "auto") {
     const timelineScroller = timelineScrollRef.current;
     if (!timelineScroller) {
       return;
@@ -370,31 +385,23 @@ export function DashboardPage() {
 
     if (verticalScrollable) {
       const delta = itemRect.top + itemRect.height / 2 - (scrollerRect.top + scrollerRect.height / 2);
-      timelineScroller.scrollTop += delta;
+      const nextTop = timelineScroller.scrollTop + delta;
+      timelineScroller.scrollTo({ top: nextTop, behavior });
       return;
     }
 
     const delta = itemRect.left + itemRect.width / 2 - (scrollerRect.left + scrollerRect.width / 2);
-    timelineScroller.scrollLeft += delta;
+    const nextLeft = timelineScroller.scrollLeft + delta;
+    timelineScroller.scrollTo({ left: nextLeft, behavior });
   }
 
-  function registerTimelineItem(key: string, node: HTMLButtonElement | null, isActive: boolean) {
+  function registerTimelineItem(key: string, node: HTMLButtonElement | null) {
     if (!node) {
       timelineItemRefs.current.delete(key);
       return;
     }
 
     timelineItemRefs.current.set(key, node);
-    if (!isActive) {
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      centerTimelineItem(node);
-      requestAnimationFrame(() => {
-        centerTimelineItem(node);
-      });
-    });
   }
 
   function handleTimelineWheel(event: WheelEvent<HTMLDivElement>) {
@@ -431,7 +438,7 @@ export function DashboardPage() {
     }
     const fallbackMonth = timelineMonths[timelineMonths.length - 1];
     if (fallbackMonth !== month) {
-      setMonth(fallbackMonth);
+      setTimelineMonth(fallbackMonth, "auto");
     }
   }, [month, monthTimelineIndex, timelineMonths]);
 
@@ -442,7 +449,7 @@ export function DashboardPage() {
     const fallbackYear = timelineYears[timelineYears.length - 1];
     const fallbackMonth = pickTimelineMonthForYear(timelineMonths, fallbackYear, month);
     if (fallbackMonth && fallbackMonth !== month) {
-      setMonth(fallbackMonth);
+      setTimelineMonth(fallbackMonth, "auto");
     }
   }, [month, timelineMonths, timelineYears, viewMode, yearTimelineIndex]);
 
@@ -452,11 +459,11 @@ export function DashboardPage() {
       return;
     }
 
+    const behavior = timelineScrollBehaviorRef.current;
+    timelineScrollBehaviorRef.current = "auto";
+
     const firstFrame = requestAnimationFrame(() => {
-      centerTimelineItem(selectedItem);
-      requestAnimationFrame(() => {
-        centerTimelineItem(selectedItem);
-      });
+      centerTimelineItem(selectedItem, behavior);
     });
 
     return () => {
@@ -534,7 +541,7 @@ export function DashboardPage() {
       const nextIndex = Math.max(0, Math.min(timelineMonths.length - 1, currentIndex + step));
       const nextMonth = timelineMonths[nextIndex];
       if (nextMonth && nextMonth !== month) {
-        setMonth(nextMonth);
+        setTimelineMonth(nextMonth);
       }
       return;
     }
@@ -547,22 +554,20 @@ export function DashboardPage() {
     const nextYear = timelineYears[nextIndex];
     const nextMonth = pickTimelineMonthForYear(timelineMonths, nextYear, month);
     if (nextMonth && nextMonth !== month) {
-      setMonth(nextMonth);
+      setTimelineMonth(nextMonth);
     }
   }
 
   return (
     <div className="dashboard-page-layout">
       <div className="stack-lg min-w-0">
-        <Card>
-          <CardContent className="space-y-4 pt-6">
-            <div className="table-shell-header">
-              <div>
-                <h2 className="table-shell-title">Dashboard</h2>
-              </div>
-            </div>
+        <PageHeader
+          title="Dashboard"
+          description="Month and year ledger trends."
+        />
 
-            <div className="table-toolbar dashboard-toolbar">
+        <WorkspaceSection>
+            <WorkspaceToolbar className="dashboard-toolbar">
               <div className="field min-w-[220px]">
                 <span>View</span>
                 <div className="dashboard-view-toggle" role="tablist" aria-label="Dashboard period view">
@@ -590,7 +595,7 @@ export function DashboardPage() {
                 <span>Currency</span>
                 <p className="rounded-md border border-input bg-muted/30 px-3 py-2 text-sm font-medium">{data.currency_code}</p>
               </div>
-            </div>
+            </WorkspaceToolbar>
 
             <div className="dashboard-tab-list" role="tablist" aria-label="Dashboard sections">
               {DASHBOARD_TABS.map((tab) => (
@@ -611,50 +616,20 @@ export function DashboardPage() {
             </div>
 
             <p className="muted">{DASHBOARD_TABS.find((tab) => tab.id === activeTab)?.description}</p>
-          </CardContent>
-        </Card>
+        </WorkspaceSection>
 
         {activeTab === "overview" ? (
         <section className="stack-lg" role="tabpanel" id="dashboard-panel-overview" aria-labelledby="dashboard-tab-overview">
           {viewMode === "month" ? (
             <>
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Expense</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">{formatMinor(data.kpis.expense_total_minor, data.currency_code)}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Income</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">{formatMinor(data.kpis.income_total_minor, data.currency_code)}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Net</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">{formatMinor(data.kpis.net_total_minor, data.currency_code)}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      {primaryFilterGroup ? primaryFilterGroup.name : "Primary Group"}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">
-                      {primaryFilterGroup ? formatMinor(primaryFilterGroup.total_minor, data.currency_code) : "-"}
-                    </p>
-                  </CardContent>
-                </Card>
+                <StatBlock label="Expense" value={formatMinor(data.kpis.expense_total_minor, data.currency_code)} tone="warning" />
+                <StatBlock label="Income" value={formatMinor(data.kpis.income_total_minor, data.currency_code)} tone="success" />
+                <StatBlock label="Net" value={formatMinor(data.kpis.net_total_minor, data.currency_code)} />
+                <StatBlock
+                  label={primaryFilterGroup ? primaryFilterGroup.name : "Primary group"}
+                  value={primaryFilterGroup ? formatMinor(primaryFilterGroup.total_minor, data.currency_code) : "-"}
+                />
               </section>
 
               <section className="grid gap-4 xl:grid-cols-3">
@@ -678,7 +653,7 @@ export function DashboardPage() {
                               dataKey={group.key}
                               name={group.name}
                               stackId="expense-trend"
-                              fill={modernSegmentColor(index)}
+                              fill={dashboardBarColor(index)}
                             />
                           ))}
                         </BarChart>
@@ -695,14 +670,22 @@ export function DashboardPage() {
                     {displayGroups.length === 0 ? (
                       <p className="muted">No classified expense activity this month.</p>
                     ) : (
-                      <DashboardChartContainer>
-                        {({ width, height }) => (
-                          <PieChart width={width} height={height}>
-                            <Pie data={displayGroups} dataKey="total_minor" nameKey="name" innerRadius={56} outerRadius={90} paddingAngle={4}>
-                              {displayGroups.map((group, index) => (
-                                <Cell key={group.key} fill={pastelPieColor(index)} />
-                              ))}
-                            </Pie>
+                        <DashboardChartContainer>
+                          {({ width, height }) => (
+                            <PieChart width={width} height={height}>
+                              <Pie
+                                data={displayGroups}
+                                dataKey="total_minor"
+                                nameKey="name"
+                                innerRadius={56}
+                                outerRadius={90}
+                                paddingAngle={4}
+                                {...DASHBOARD_PIE_ANIMATION_PROPS}
+                              >
+                                {displayGroups.map((group, index) => (
+                                  <Cell key={group.key} fill={dashboardPieColor(index)} />
+                                ))}
+                              </Pie>
                             <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
                             <Legend />
                           </PieChart>
@@ -769,42 +752,13 @@ export function DashboardPage() {
           ) : (
             <>
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">{selectedYear} Expense</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">{formatMinor(selectedYearExpenseTotalMinor, data.currency_code)}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">{selectedYear} Income</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">{formatMinor(selectedYearIncomeTotalMinor, data.currency_code)}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">{selectedYear} Net</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">{formatMinor(selectedYearNetTotalMinor, data.currency_code)}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      {primaryFilterGroup ? `${primaryFilterGroup.name} (${selectedYear})` : "Primary Group"}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">
-                      {primaryFilterGroup ? formatMinor(yearlyPrimaryFilterGroupTotalMinor, data.currency_code) : "-"}
-                    </p>
-                  </CardContent>
-                </Card>
+                <StatBlock label={`${selectedYear} expense`} value={formatMinor(selectedYearExpenseTotalMinor, data.currency_code)} tone="warning" />
+                <StatBlock label={`${selectedYear} income`} value={formatMinor(selectedYearIncomeTotalMinor, data.currency_code)} tone="success" />
+                <StatBlock label={`${selectedYear} net`} value={formatMinor(selectedYearNetTotalMinor, data.currency_code)} />
+                <StatBlock
+                  label={primaryFilterGroup ? `${primaryFilterGroup.name} (${selectedYear})` : "Primary group"}
+                  value={primaryFilterGroup ? formatMinor(yearlyPrimaryFilterGroupTotalMinor, data.currency_code) : "-"}
+                />
               </section>
 
               <section className="grid gap-4 xl:grid-cols-3">
@@ -833,7 +787,7 @@ export function DashboardPage() {
                                 dataKey={group.key}
                                 name={group.name}
                                 stackId="yearly-expense-trend"
-                                fill={modernSegmentColor(index)}
+                                fill={dashboardBarColor(index)}
                               />
                             ))}
                           </BarChart>
@@ -864,7 +818,7 @@ export function DashboardPage() {
                             <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
                             <Bar dataKey="total_minor" name="Total" radius={[0, 6, 6, 0]}>
                               {yearlyDisplayGroups.map((group, index) => (
-                                <Cell key={group.key} fill={modernSegmentColor(index)} />
+                                <Cell key={group.key} fill={dashboardBarColor(index)} />
                               ))}
                             </Bar>
                           </BarChart>
@@ -899,7 +853,7 @@ export function DashboardPage() {
                                 <p className="font-medium">{group.name}</p>
                                 <p className="muted text-xs">{selectedYear}</p>
                               </div>
-                              <Badge variant="outline" style={{ borderColor: normalizeChartColor(group.color, index), color: normalizeChartColor(group.color, index) }}>
+                              <Badge variant="outline" style={{ borderColor: dashboardBarColor(index), color: dashboardBarColor(index) }}>
                                 {formatMinor(sumFilterGroupForMonths(selectedYearMonths, yearlyDashboardsByMonth, group.key), data.currency_code)}
                               </Badge>
                             </div>
@@ -911,11 +865,10 @@ export function DashboardPage() {
                                     <XAxis dataKey="month" />
                                     <YAxis tickFormatter={axisTick} />
                                     <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
-                                  <Bar dataKey="total_minor" name={group.name} fill={normalizeChartColor(group.color, index)} radius={[4, 4, 0, 0]} />
-                                  
-                                </BarChart>
-                              )}
-                            </DashboardChartContainer>
+                                    <Bar dataKey="total_minor" name={group.name} fill={dashboardBarColor(index)} radius={[4, 4, 0, 0]} />
+                                  </BarChart>
+                                )}
+                              </DashboardChartContainer>
                             </div>
                           </div>
                         );
@@ -934,30 +887,9 @@ export function DashboardPage() {
           {viewMode === "month" ? (
             <>
               <section className="grid gap-4 md:grid-cols-3">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Average Spend Day</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">{formatMinor(data.kpis.average_expense_day_minor, data.currency_code)}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Median Spend Day</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">{formatMinor(data.kpis.median_expense_day_minor, data.currency_code)}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Tracked Groups</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">{data.filter_groups.length}</p>
-                  </CardContent>
-                </Card>
+                <StatBlock label="Average spend day" value={formatMinor(data.kpis.average_expense_day_minor, data.currency_code)} />
+                <StatBlock label="Median spend day" value={formatMinor(data.kpis.median_expense_day_minor, data.currency_code)} />
+                <StatBlock label="Tracked groups" value={data.filter_groups.length} />
               </section>
 
               <Card>
@@ -980,8 +912,8 @@ export function DashboardPage() {
                             dataKey={group.key}
                             name={group.name}
                             stackId="expenses"
-                            stroke={modernSegmentColor(index)}
-                            fill={modernSegmentColor(index)}
+                            stroke={dashboardBarColor(index)}
+                            fill={dashboardBarColor(index)}
                             fillOpacity={0.18}
                             strokeWidth={2}
                           />
@@ -1011,7 +943,7 @@ export function DashboardPage() {
                               <p className="font-medium">{group.name}</p>
                               <p className="muted text-xs">{formatMonthLong(month)}</p>
                             </div>
-                            <Badge variant="outline" style={{ borderColor: normalizeChartColor(group.color, index), color: normalizeChartColor(group.color, index) }}>
+                            <Badge variant="outline" style={{ borderColor: dashboardBarColor(index), color: dashboardBarColor(index) }}>
                               {formatMinor(group.total_minor, data.currency_code)}
                             </Badge>
                           </div>
@@ -1033,30 +965,9 @@ export function DashboardPage() {
           ) : (
             <>
               <section className="grid gap-4 md:grid-cols-3">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Average Expense Month</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">{formatMinor(yearlyAverageExpenseMonthMinor, data.currency_code)}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Median Expense Month</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">{formatMinor(yearlyMedianExpenseMonthMinor, data.currency_code)}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Tracked Groups</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-semibold">{data.filter_groups.length}</p>
-                  </CardContent>
-                </Card>
+                <StatBlock label="Average expense month" value={formatMinor(yearlyAverageExpenseMonthMinor, data.currency_code)} />
+                <StatBlock label="Median expense month" value={formatMinor(yearlyMedianExpenseMonthMinor, data.currency_code)} />
+                <StatBlock label="Tracked groups" value={data.filter_groups.length} />
               </section>
 
               <Card>
@@ -1083,7 +994,7 @@ export function DashboardPage() {
                               dataKey={group.key}
                               name={group.name}
                               stackId="yearly-group-spend"
-                              fill={modernSegmentColor(index)}
+                              fill={dashboardBarColor(index)}
                               radius={[4, 4, 0, 0]}
                             />
                           ))}
@@ -1112,7 +1023,7 @@ export function DashboardPage() {
                               <p className="font-medium">{group.name}</p>
                               <p className="muted text-xs">{selectedYear}</p>
                             </div>
-                            <Badge variant="outline" style={{ borderColor: normalizeChartColor(group.color, index), color: normalizeChartColor(group.color, index) }}>
+                            <Badge variant="outline" style={{ borderColor: dashboardBarColor(index), color: dashboardBarColor(index) }}>
                               {formatMinor(currentTotalMinor, data.currency_code)}
                             </Badge>
                           </div>
@@ -1153,9 +1064,15 @@ export function DashboardPage() {
                 <DashboardChartContainer>
                   {({ width, height }) => (
                     <PieChart width={width} height={height}>
-                      <Pie data={data.spending_by_tag} dataKey="total_minor" nameKey="label" outerRadius={95}>
+                      <Pie
+                        data={data.spending_by_tag}
+                        dataKey="total_minor"
+                        nameKey="label"
+                        outerRadius={95}
+                        {...DASHBOARD_PIE_ANIMATION_PROPS}
+                      >
                         {data.spending_by_tag.map((item, index) => (
-                          <Cell key={item.label} fill={pastelPieColor(index)} />
+                          <Cell key={item.label} fill={dashboardPieColor(index)} />
                         ))}
                       </Pie>
                       <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
@@ -1288,10 +1205,10 @@ export function DashboardPage() {
                     return (
                       <button
                         key={monthKey}
-                        ref={(node) => registerTimelineItem(monthKey, node, isActive)}
+                        ref={(node) => registerTimelineItem(monthKey, node)}
                         type="button"
                         className={cn("dashboard-month-chip", isActive && "dashboard-month-chip-active")}
-                        onClick={() => setMonth(monthKey)}
+                        onClick={() => setTimelineMonth(monthKey)}
                         aria-pressed={isActive}
                       >
                         <span className="dashboard-month-chip-label">{formatMonthShort(monthKey)}</span>
@@ -1306,13 +1223,13 @@ export function DashboardPage() {
                     return (
                       <button
                         key={yearKey}
-                        ref={(node) => registerTimelineItem(yearKey, node, isActive)}
+                        ref={(node) => registerTimelineItem(yearKey, node)}
                         type="button"
                         className={cn("dashboard-month-chip", isActive && "dashboard-month-chip-active")}
                         onClick={() => {
                           const nextMonth = pickTimelineMonthForYear(timelineMonths, yearKey, month);
                           if (nextMonth) {
-                            setMonth(nextMonth);
+                            setTimelineMonth(nextMonth);
                           }
                         }}
                         aria-pressed={isActive}

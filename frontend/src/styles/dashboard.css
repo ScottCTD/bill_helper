@@ -1,0 +1,151 @@
+@layer components {
+  .dashboard-tab-list {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .dashboard-tab-button {
+    @apply rounded-md;
+  }
+
+  .dashboard-tab-active {
+    @apply border-primary/20 bg-primary/10 text-foreground shadow-none;
+  }
+
+  .dashboard-page-layout {
+    @apply grid gap-6;
+  }
+
+  .dashboard-toolbar {
+    @apply items-end;
+  }
+
+  .dashboard-view-toggle {
+    @apply inline-flex w-full rounded-lg border border-border bg-secondary p-1;
+  }
+
+  .dashboard-view-toggle-button {
+    @apply inline-flex flex-1 items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors;
+  }
+
+  .dashboard-view-toggle-button-active {
+    @apply bg-card text-foreground;
+  }
+
+  .dashboard-page-rail {
+    @apply xl:pointer-events-none xl:fixed xl:right-3 xl:top-0 xl:z-20 xl:h-screen xl:w-24;
+  }
+
+  .dashboard-timeline-panel {
+    @apply h-full py-5;
+    pointer-events: auto;
+  }
+
+  .dashboard-timeline-viewport {
+    @apply h-full min-h-0 overflow-hidden;
+    mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
+  }
+
+  .dashboard-month-timeline {
+    @apply flex min-w-0 gap-3 overflow-x-auto pb-1;
+    scrollbar-width: thin;
+  }
+
+  .dashboard-month-timeline-vertical {
+    @apply h-full flex-col overflow-x-hidden overflow-y-auto;
+    padding-top: calc(50vh - 1.9rem);
+    padding-bottom: calc(50vh - 1.9rem);
+    overscroll-behavior-y: contain;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    scroll-padding-block: 50%;
+    scroll-snap-type: y mandatory;
+  }
+
+  .dashboard-month-timeline-vertical::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dashboard-month-chip {
+    @apply shrink-0 rounded-xl border border-border/60 bg-background/90 px-3 py-2 text-left shadow-sm transition-[border-color,background-color,color,box-shadow] duration-150 hover:border-primary/25 hover:bg-accent/70;
+    min-width: 4.75rem;
+    scroll-snap-align: center;
+  }
+
+  .dashboard-month-timeline-vertical .dashboard-month-chip {
+    @apply w-full min-w-0;
+  }
+
+  .dashboard-month-timeline-vertical:focus-visible {
+    @apply rounded-xl outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  .dashboard-month-chip-active {
+    @apply border-primary/35 bg-accent shadow-md;
+  }
+
+  .dashboard-month-chip-label {
+    @apply block text-sm font-medium text-foreground;
+  }
+
+  .dashboard-month-chip-year {
+    @apply block text-[11px] text-muted-foreground;
+  }
+
+  .dashboard-timeline-empty {
+    @apply flex min-h-24 items-center justify-center rounded-xl border border-dashed border-border/75 bg-background/60 px-4 text-center text-sm text-muted-foreground;
+  }
+
+  .dashboard-comparison-grid {
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-3;
+  }
+
+  .dashboard-comparison-card {
+    @apply grid gap-3 rounded-lg border border-border bg-secondary/45 p-4;
+  }
+
+  .dashboard-scope-note {
+    @apply rounded-lg border border-border bg-secondary/55 px-4 py-3 text-sm text-foreground/85;
+  }
+
+  .dashboard-delta {
+    @apply text-sm font-medium;
+  }
+
+  .dashboard-delta-up {
+    @apply text-warning;
+  }
+
+  .dashboard-delta-down {
+    @apply text-success;
+  }
+
+  .dashboard-delta-flat {
+    @apply text-muted-foreground;
+  }
+
+  @media (max-width: 1280px) {
+    .dashboard-page-rail {
+      @apply order-first;
+    }
+
+    .dashboard-timeline-panel {
+      @apply h-auto py-0;
+    }
+
+    .dashboard-timeline-viewport {
+      @apply h-auto;
+      mask-image: none;
+    }
+
+    .dashboard-month-timeline-vertical {
+      @apply max-h-none h-auto flex-row overflow-x-auto overflow-y-hidden pb-1;
+      padding-top: 0;
+      padding-bottom: 0;
+      scroll-snap-type: x mandatory;
+    }
+
+    .dashboard-month-timeline-vertical .dashboard-month-chip {
+      @apply w-auto min-w-[5.5rem];
+    }
+  }
+}

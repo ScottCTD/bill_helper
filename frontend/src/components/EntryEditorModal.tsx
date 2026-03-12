@@ -672,14 +672,17 @@ export function EntryEditorModal({
               </div>
             </div>
 
-            <section className="entry-editor-markdown">
-              <MarkdownBlockEditor
-                markdown={formState.markdown_body}
-                resetKey={editorResetKey}
-                disabled={isSaving}
-                onChange={(markdown) => setFormState((state) => ({ ...state, markdown_body: markdown }))}
-              />
-            </section>
+            <div className="entry-property-line entry-property-line-notes">
+              <span className="entry-property-label">Notes:</span>
+              <div className="entry-editor-markdown">
+                <MarkdownBlockEditor
+                  markdown={formState.markdown_body}
+                  resetKey={editorResetKey}
+                  disabled={isSaving}
+                  onChange={(markdown) => setFormState((state) => ({ ...state, markdown_body: markdown }))}
+                />
+              </div>
+            </div>
 
             {isSaving ? <p className="muted">Saving entry...</p> : null}
             {validationError ? <p className="error">{validationError}</p> : null}

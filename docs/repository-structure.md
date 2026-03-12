@@ -207,7 +207,8 @@
   - `useAccountsPageModel.ts`: query/mutation orchestration, derived state, and action handlers.
   - `AccountsTableSection.tsx`: account table/search/selection UI.
   - `ReconciliationSection.tsx`: account reconciliation summary UI.
-  - `SnapshotsSection.tsx`: snapshot create/history UI.
+  - `SnapshotCreatePanel.tsx`: snapshot-create form shown in the account edit modal sidebar.
+  - `SnapshotHistoryTable.tsx`: snapshot history table shown in the account edit modal history column.
   - `AccountDialogs.tsx`: create/edit account dialog UI.
   - `helpers.ts`, `types.ts`: normalization helpers and local state contracts.
 - `properties/`

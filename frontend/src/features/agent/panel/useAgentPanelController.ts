@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 
 import { useResizablePanel } from "../../../hooks/useResizablePanel";
+import { displayThreadName } from "./format";
 import { useAgentComposerRuntime } from "./useAgentComposerRuntime";
 import { useAgentPanelQueries } from "./useAgentPanelQueries";
 import { useAgentThreadActions } from "./useAgentThreadActions";
@@ -14,6 +15,7 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
   const [isThreadReviewOpen, setIsThreadReviewOpen] = useState(false);
   const [isThreadPanelOpen, setIsThreadPanelOpen] = useState(true);
   const [isBulkLaunching, setIsBulkLaunching] = useState(false);
+  const [pendingDeleteThread, setPendingDeleteThread] = useState<{ id: string; name: string } | null>(null);
   const [streamHealthyThreadIds, setStreamHealthyThreadIds] = useState<string[]>([]);
   const { panelWidth, handleMouseDown: handleResizeMouseDown } = useResizablePanel({
     storageKey: "agent-thread-panel-width",
@@ -84,12 +86,30 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
 
   async function handleDeleteThread(threadId: string) {
     try {
-      const deleted = await actions.deleteThread(threadId, data.displayedThreads);
-      if (deleted) {
-        setIsThreadReviewOpen(false);
-      }
-    } catch (error) {
-      actions.setActionError((error as Error).message);
+      await actions.deleteThread(threadId);
+      setPendingDeleteThread(null);
+      setIsThreadReviewOpen(false);
+    } catch {
+      return;
+    }
+  }
+
+  function requestDeleteThread(threadId: string) {
+    const thread = data.displayedThreads?.find((item) => item.id === threadId);
+    actions.deleteThreadMutation.reset();
+    setPendingDeleteThread({
+      id: threadId,
+      name: thread ? displayThreadName(thread) : "Untitled thread"
+    });
+  }
+
+  function handleDeleteDialogOpenChange(open: boolean) {
+    if (actions.deleteThreadMutation.isPending) {
+      return;
+    }
+    if (!open) {
+      actions.deleteThreadMutation.reset();
+      setPendingDeleteThread(null);
     }
   }
 
@@ -154,7 +174,7 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
       isLoading: data.threadsQuery.isLoading,
       isOpen: isThreadPanelOpen,
       onDeleteThread(threadId: string) {
-        void handleDeleteThread(threadId);
+        requestDeleteThread(threadId);
       },
       onRenameThread: actions.renameThread,
       onSelectThread: setSelectedThreadId,
@@ -179,6 +199,21 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
       onReopenItem: actions.reopenItem,
       open: isThreadReviewOpen,
       runs: data.threadQuery.data?.runs ?? []
+    },
+    deleteDialog: {
+      confirmLabel: "Delete thread",
+      description: "This removes the full message and run history for this thread.",
+      errorMessage: actions.deleteThreadMutation.isError ? (actions.deleteThreadMutation.error as Error).message : null,
+      isPending: actions.deleteThreadMutation.isPending,
+      onConfirm() {
+        if (!pendingDeleteThread) {
+          return;
+        }
+        void handleDeleteThread(pendingDeleteThread.id);
+      },
+      onOpenChange: handleDeleteDialogOpenChange,
+      open: pendingDeleteThread !== null,
+      title: pendingDeleteThread ? `Delete ${pendingDeleteThread.name}?` : "Delete thread?"
     },
     previewDialog: runtime.previewDialog
   };

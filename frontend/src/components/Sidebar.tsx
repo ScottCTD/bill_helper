@@ -9,7 +9,7 @@ import { Button } from "./ui/button";
 const navItems = [
   { to: "/", label: "Agent", icon: Bot },
   { to: "/dashboard", label: "Dashboard", icon: Home },
-  { to: "/filters", label: "Filter", icon: SlidersHorizontal },
+  { to: "/filters", label: "Filters", icon: SlidersHorizontal },
   { to: "/entries", label: "Entries", icon: Layers3 },
   { to: "/entities", label: "Entities", icon: Building2 },
   { to: "/groups", label: "Groups", icon: Network },
@@ -77,9 +77,6 @@ export function Sidebar({ collapsed, width, onToggle }: SidebarProps) {
 
       {!collapsed && (
         <div className="sidebar-footer">
-          <p className="sidebar-footer-text">
-            Local-first ledger with AI review
-          </p>
           <PrincipalSessionCard />
         </div>
       )}

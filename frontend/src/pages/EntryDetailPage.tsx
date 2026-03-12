@@ -4,9 +4,10 @@ import { Link, useParams } from "react-router-dom";
 
 import { EntryEditorModal, type EntryEditorSubmitPayload } from "../components/EntryEditorModal";
 import { GroupGraphView } from "../components/GroupGraphView";
+import { PageHeader } from "../components/layout/PageHeader";
+import { WorkspaceSection } from "../components/layout/WorkspaceSection";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import {
   getEntry,
   getGroup,
@@ -95,15 +96,11 @@ export function EntryDetailPage() {
   const entry = entryQuery.data;
 
   return (
-    <div className="stack-lg">
-      <Card>
-        <CardHeader className="section-header gap-3">
-          <div>
-            <CardTitle>{entry.name}</CardTitle>
-            <CardDescription>
-              {entry.occurred_at} | {kindLabel(entry.kind)} {kindSymbol(entry.kind)} | {formatMinor(entry.amount_minor, entry.currency_code)}
-            </CardDescription>
-          </div>
+    <div className="page stack-lg">
+      <PageHeader
+        title={entry.name}
+        description={`${entry.occurred_at} | ${kindLabel(entry.kind)} ${kindSymbol(entry.kind)} | ${formatMinor(entry.amount_minor, entry.currency_code)}`}
+        actions={
           <div className="table-actions">
             <Button asChild variant="outline" size="sm">
               <Link to="/entries">Back to entries</Link>
@@ -112,14 +109,11 @@ export function EntryDetailPage() {
               Edit in popup
             </Button>
           </div>
-        </CardHeader>
-      </Card>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Entry Details</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 text-sm">
+      <WorkspaceSection title="Entry Details">
+        <div className="grid gap-3 text-sm">
           <div>
             <strong>From:</strong> {entry.from_entity || "(unspecified)"}
             {entry.from_entity_missing ? (
@@ -139,24 +133,23 @@ export function EntryDetailPage() {
           <div>
             <strong>Owner:</strong> {entry.owner || "(none)"}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </WorkspaceSection>
 
-      <Card>
-        <CardHeader className="section-header gap-3">
-          <div>
-            <CardTitle>Group Context</CardTitle>
-            <CardDescription>
-              {entry.direct_group
-                ? `Direct group: ${entry.direct_group.name} (${entry.direct_group.group_type})`
-                : "This entry is currently ungrouped."}
-            </CardDescription>
-          </div>
+      <WorkspaceSection
+        title="Group Context"
+        description={
+          entry.direct_group
+            ? `Direct group: ${entry.direct_group.name} (${entry.direct_group.group_type})`
+            : "This entry is currently ungrouped."
+        }
+        actions={
           <Button asChild variant="outline" size="sm">
             <Link to="/groups">Open groups workspace</Link>
           </Button>
-        </CardHeader>
-        <CardContent className="grid gap-3 text-sm">
+        }
+      >
+        <div className="grid gap-3 text-sm">
           {entry.direct_group ? (
             <>
               <div>
@@ -169,25 +162,22 @@ export function EntryDetailPage() {
           ) : (
             <p className="muted">Add this entry to a group from the groups workspace.</p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </WorkspaceSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Direct Group Graph</CardTitle>
-          <CardDescription>
-            {entry.direct_group
-              ? `Showing ${entry.direct_group.name} and its direct members.`
-              : "Grouped entries render here once the entry has a direct group."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <WorkspaceSection
+        title="Direct Group Graph"
+        description={
+          entry.direct_group
+            ? `Showing ${entry.direct_group.name} and its direct members.`
+            : "Grouped entries render here once the entry has a direct group."
+        }
+      >
           {!entry.direct_group ? <p className="muted">No direct group assigned.</p> : null}
           {entry.direct_group && groupQuery.isLoading ? <p>Loading group graph...</p> : null}
           {entry.direct_group && groupQuery.isError ? <p className="error">Unable to load group graph.</p> : null}
           {entry.direct_group && groupQuery.data ? <GroupGraphView graph={groupQuery.data} /> : null}
-        </CardContent>
-      </Card>
+      </WorkspaceSection>
 
       <EntryEditorModal
         isOpen={isEditorOpen}

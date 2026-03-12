@@ -6,9 +6,11 @@ import { EntryEditorModal, type EntryEditorSubmitPayload } from "../components/E
 import { GroupDetailModal } from "../components/GroupDetailModal";
 import { GroupEditorModal } from "../components/GroupEditorModal";
 import { GroupMemberEditorModal } from "../components/GroupMemberEditorModal";
+import { PageHeader } from "../components/layout/PageHeader";
+import { WorkspaceSection } from "../components/layout/WorkspaceSection";
+import { WorkspaceToolbar } from "../components/layout/WorkspaceToolbar";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import {
@@ -286,19 +288,14 @@ export function GroupsPage() {
   }
 
   return (
-    <div className="stack-lg">
-      <Card className="groups-browser-card">
-        <CardContent className="space-y-4 pt-6">
-          <div className="table-shell-header">
-            <div>
-              <h2 className="table-shell-title">Entry Groups</h2>
-              <p className="table-shell-subtitle">
-                Browse the full group catalog in one table, then double-click a row or use View to inspect the derived graph and manage direct members.
-              </p>
-            </div>
-          </div>
+    <div className="page stack-lg">
+      <PageHeader
+        title="Entry Groups"
+        description="Group topology and member details."
+      />
 
-          <div className="table-toolbar filter-row">
+      <WorkspaceSection className="groups-browser-card">
+        <WorkspaceToolbar className="filter-row">
             <div className="table-toolbar-filters">
               <label className="field min-w-[280px] grow">
                 <span>Search groups</span>
@@ -310,77 +307,76 @@ export function GroupsPage() {
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
+        </WorkspaceToolbar>
+
+        {groupsQuery.isLoading ? <p>Loading groups...</p> : null}
+        {groupsError ? <p className="error">{groupsError}</p> : null}
+
+        {!groupsQuery.isLoading && !groupsError && filteredGroups.length === 0 ? (
+          <div className="groups-empty-state">
+            <p className="groups-empty-title">No groups found</p>
+            <p className="muted">Try another filter or create a new group.</p>
           </div>
+        ) : null}
 
-          {groupsQuery.isLoading ? <p>Loading groups...</p> : null}
-          {groupsError ? <p className="error">{groupsError}</p> : null}
-
-          {!groupsQuery.isLoading && !groupsError && filteredGroups.length === 0 ? (
-            <div className="groups-empty-state">
-              <p className="groups-empty-title">No groups found</p>
-              <p className="muted">Try another filter or create a new group.</p>
-            </div>
-          ) : null}
-
-          {!groupsQuery.isLoading && !groupsError && filteredGroups.length > 0 ? (
-            <div className="groups-browser-table-shell">
-              <Table className="groups-browser-table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="groups-browser-group-column">Group</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Hierarchy</TableHead>
-                    <TableHead>Descendants</TableHead>
-                    <TableHead>Date range</TableHead>
-                    <TableHead className="groups-browser-action-column">
-                      <span className="sr-only">Open detail</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredGroups.map((group) => {
-                    const isActive = isDetailOpen && group.id === selectedGroupId;
-                    return (
-                      <TableRow
-                        key={group.id}
-                        className={cn("groups-browser-row", isActive && "is-active")}
-                        tabIndex={0}
-                        onDoubleClick={() => openGroupDetail(group.id)}
-                        onKeyDown={(event) => rowKeyDownHandler(event, () => openGroupDetail(group.id))}
-                      >
-                        <TableCell className="groups-browser-group-column">
-                          <div className="groups-browser-group-cell">
-                            <p className="groups-browser-group-name">{group.name}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{group.group_type}</Badge>
-                        </TableCell>
-                        <TableCell>{groupHierarchyLabel(group, groupsById)}</TableCell>
-                        <TableCell>{group.descendant_entry_count} entries</TableCell>
-                        <TableCell>{groupRangeLabel(group)}</TableCell>
-                        <TableCell className="groups-browser-action-column">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={isActive ? "secondary" : "ghost"}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openGroupDetail(group.id);
-                            }}
-                          >
-                            View
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+        {!groupsQuery.isLoading && !groupsError && filteredGroups.length > 0 ? (
+          <div className="groups-browser-table-shell">
+            <Table className="groups-browser-table">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="groups-browser-group-column">Group</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Hierarchy</TableHead>
+                  <TableHead>Descendants</TableHead>
+                  <TableHead>Date range</TableHead>
+                  <TableHead className="groups-browser-action-column">
+                    <span className="sr-only">Open detail</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredGroups.map((group) => {
+                  const isActive = isDetailOpen && group.id === selectedGroupId;
+                  return (
+                    <TableRow
+                      key={group.id}
+                      className={cn("groups-browser-row", isActive && "is-active")}
+                      tabIndex={0}
+                      onDoubleClick={() => openGroupDetail(group.id)}
+                      onKeyDown={(event) => rowKeyDownHandler(event, () => openGroupDetail(group.id))}
+                    >
+                      <TableCell className="groups-browser-group-column">
+                        <div className="groups-browser-group-cell">
+                          <p className="groups-browser-group-name">{group.name}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{group.group_type}</Badge>
+                      </TableCell>
+                      <TableCell>{groupHierarchyLabel(group, groupsById)}</TableCell>
+                      <TableCell>{group.descendant_entry_count} entries</TableCell>
+                      <TableCell>{groupRangeLabel(group)}</TableCell>
+                      <TableCell className="groups-browser-action-column">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isActive ? "secondary" : "ghost"}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openGroupDetail(group.id);
+                          }}
+                        >
+                          View
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        ) : null}
+      </WorkspaceSection>
 
       <GroupDetailModal
         isOpen={isDetailOpen}

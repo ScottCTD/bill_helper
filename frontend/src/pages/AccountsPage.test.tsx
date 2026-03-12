@@ -205,8 +205,10 @@ describe("AccountsPage", () => {
     await userEvent.dblClick(row);
     const editDialog = await screen.findByRole("dialog", { name: "Main" });
     expect(within(editDialog).getByLabelText("Name")).toHaveValue("Main");
-    expect(within(editDialog).getByRole("button", { name: "Reconciliation" })).toBeInTheDocument();
-    expect(within(editDialog).getByRole("button", { name: "Snapshots" })).toBeInTheDocument();
+    expect(within(editDialog).queryByLabelText("Owner")).not.toBeInTheDocument();
+    expect(within(editDialog).getByRole("heading", { name: "Reconciliation" })).toBeInTheDocument();
+    expect(within(editDialog).getByRole("heading", { name: "Snapshot history" })).toBeInTheDocument();
+    expect(within(editDialog).getByRole("heading", { name: "Add snapshot" })).toBeInTheDocument();
 
     await userEvent.click(within(editDialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => {
@@ -239,7 +241,6 @@ describe("AccountsPage", () => {
     await userEvent.dblClick(row);
 
     const editDialog = await screen.findByRole("dialog", { name: "Main" });
-    await userEvent.click(within(editDialog).getByRole("button", { name: "Snapshots" }));
     await userEvent.clear(within(editDialog).getByLabelText("Balance (CAD)"));
     await userEvent.type(within(editDialog).getByLabelText("Balance (CAD)"), "123.45");
     await userEvent.type(within(editDialog).getByLabelText("Note"), "manual");
@@ -304,7 +305,6 @@ describe("AccountsPage", () => {
     await userEvent.dblClick(row);
 
     const editDialog = await screen.findByRole("dialog", { name: "Main" });
-    await userEvent.click(within(editDialog).getByRole("button", { name: "Snapshots" }));
     await screen.findByText("manual");
     await userEvent.click(within(editDialog).getByRole("button", { name: "Delete snapshot 2026-02-16" }));
 
