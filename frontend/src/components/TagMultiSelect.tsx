@@ -18,6 +18,10 @@ function normalizeTagName(value: string) {
   return value.trim().toLowerCase();
 }
 
+function compactTagName(value: string) {
+  return normalizeTagName(value).replace(/[\s_-]+/g, "");
+}
+
 function normalizeTagList(values: string[]) {
   const normalizedTags: string[] = [];
   const seen = new Set<string>();
@@ -46,6 +50,65 @@ function removeFirstTag(values: string[], normalizedTagName: string) {
     return values;
   }
   return values.filter((_, currentIndex) => currentIndex !== removeIndex);
+}
+
+function fuzzyTagScore(tagName: string, query: string) {
+  const normalizedTagName = normalizeTagName(tagName);
+  const normalizedQuery = normalizeTagName(query);
+  if (!normalizedQuery) {
+    return 0;
+  }
+
+  if (normalizedTagName === normalizedQuery) {
+    return 1_000;
+  }
+
+  if (normalizedTagName.startsWith(normalizedQuery)) {
+    return 900 - (normalizedTagName.length - normalizedQuery.length);
+  }
+
+  const tagWords = normalizedTagName.split(/[\s_-]+/).filter(Boolean);
+  const wordPrefixIndex = tagWords.findIndex((word) => word.startsWith(normalizedQuery));
+  if (wordPrefixIndex >= 0) {
+    return 800 - wordPrefixIndex * 10 - (tagWords[wordPrefixIndex].length - normalizedQuery.length);
+  }
+
+  const containsIndex = normalizedTagName.indexOf(normalizedQuery);
+  if (containsIndex >= 0) {
+    return 700 - containsIndex * 10 - (normalizedTagName.length - normalizedQuery.length);
+  }
+
+  const compactTag = compactTagName(tagName);
+  const compactQuery = compactTagName(query);
+  if (!compactQuery) {
+    return null;
+  }
+
+  const matchedPositions: number[] = [];
+  let queryIndex = 0;
+  for (let tagIndex = 0; tagIndex < compactTag.length && queryIndex < compactQuery.length; tagIndex += 1) {
+    if (compactTag[tagIndex] !== compactQuery[queryIndex]) {
+      continue;
+    }
+    matchedPositions.push(tagIndex);
+    queryIndex += 1;
+  }
+
+  if (queryIndex < compactQuery.length) {
+    return null;
+  }
+
+  let contiguousPairs = 0;
+  for (let index = 1; index < matchedPositions.length; index += 1) {
+    if (matchedPositions[index] === matchedPositions[index - 1] + 1) {
+      contiguousPairs += 1;
+    }
+  }
+
+  const matchStart = matchedPositions[0];
+  const matchSpan = matchedPositions[matchedPositions.length - 1] - matchStart + 1;
+  const gapsInsideMatch = matchSpan - compactQuery.length;
+  return 500 - matchStart * 10 - gapsInsideMatch * 8 - (compactTag.length - compactQuery.length) + contiguousPairs * 20;
 }
 
 export function TagMultiSelect({
@@ -121,14 +184,17 @@ export function TagMultiSelect({
 
   const filteredOptions = useMemo(() => {
     const q = normalizeTagName(query);
+    if (!q) {
+      return effectiveOptions;
+    }
     return effectiveOptions
-      .filter((tag) => {
-        if (!q) {
-          return true;
-        }
-        return normalizeTagName(tag.name).includes(q);
-      })
-      .sort((left, right) => left.name.localeCompare(right.name));
+      .map((tag) => ({
+        tag,
+        score: fuzzyTagScore(tag.name, q)
+      }))
+      .filter((entry): entry is { tag: Tag; score: number } => entry.score !== null)
+      .sort((left, right) => right.score - left.score || left.tag.name.localeCompare(right.tag.name))
+      .map((entry) => entry.tag);
   }, [effectiveOptions, query]);
 
   const creatableTag = useMemo(() => {
