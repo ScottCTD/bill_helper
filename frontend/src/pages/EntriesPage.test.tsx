@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
@@ -245,5 +246,63 @@ describe("EntriesPage", () => {
         filter_group_id: "fg-1"
       })
     );
+  });
+
+  it("loads older entries when the user requests more rows", async () => {
+    const olderEntry: Entry = {
+      ...entryFixture,
+      id: "entry-2",
+      occurred_at: "2025-12-20",
+      name: "Rent",
+      amount_minor: 180000,
+      tags: []
+    };
+
+    vi.mocked(listEntries).mockImplementation(async (params) => {
+      const offset = params.offset ?? 0;
+      const limit = params.limit ?? 200;
+      if (offset === 0) {
+        return {
+          items: [entryFixture],
+          total: 2,
+          limit,
+          offset
+        };
+      }
+      return {
+        items: [olderEntry],
+        total: 2,
+        limit,
+        offset
+      };
+    });
+    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 2, is_placeholder: false }]);
+    vi.mocked(listEntities).mockResolvedValue([
+      { id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 2, account_count: 0, entry_count: 2 }
+    ]);
+    vi.mocked(listFilterGroups).mockResolvedValue([]);
+    vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: false, is_current_user: true }]);
+    vi.mocked(listTags).mockResolvedValue(entryFixture.tags.map((tag) => ({ ...tag })));
+    vi.mocked(getRuntimeSettings).mockResolvedValue(runtimeSettingsFixture);
+    vi.mocked(createEntry).mockResolvedValue(entryFixture);
+    vi.mocked(updateEntry).mockResolvedValue(entryFixture);
+    vi.mocked(deleteEntry).mockResolvedValue(undefined);
+
+    renderWithQueryClient(
+      <MemoryRouter>
+        <EntriesPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByText("Coffee");
+    expect(screen.queryByText("Rent")).not.toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Load more entries" }));
+
+    await screen.findByText("Rent");
+    expect(screen.getByText("Loaded all 2 entries.")).toBeInTheDocument();
+    expect(listEntries).toHaveBeenCalledWith(expect.objectContaining({ offset: 0, limit: 200 }));
+    expect(listEntries).toHaveBeenCalledWith(expect.objectContaining({ offset: 1, limit: 200 }));
   });
 });

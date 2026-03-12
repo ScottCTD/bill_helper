@@ -19,6 +19,7 @@
 - create action is a compact `+` beside the `Source text` filter
 - `Tag` and `Currency` filters use chip-based multi-select controls whose menus float above the workspace card instead of being clipped by empty or short table states
 - a `Filter group` selector syncs with the `filter_group_id` URL search param so deep links can open the entries list already scoped to one saved group
+- entry rows are loaded incrementally in backend-sized pages; reaching the bottom of the table auto-loads the next slice and a fallback `Load more` button remains visible while more rows exist
 - date column is fixed-width and no-wrap
 - name cells show the primary name plus a compact `from -> to` secondary line
 - amount cells combine the kind marker with the numeric value, reusing the existing `+ / - / ~` tone colors on the symbol itself with tight inline spacing

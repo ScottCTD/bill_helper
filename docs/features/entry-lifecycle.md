@@ -94,4 +94,5 @@ This doc is the fast path for understanding how entries are created, edited, gro
 - `SPLIT` groups require member roles and validate descendant entry kinds; `RECURRING` groups validate same-kind descendants and derive a chronological chain from representative dates.
 - `GroupGraphView.tsx` filters React Flow dev warning `002` locally because that warning is a false positive for this view; other graph warnings still surface.
 - Entries list date cells are rendered as no-wrap with a compact fixed width so `YYYY-MM-DD` values stay on one line.
+- Entries list reads `GET /entries` in incremental pages, auto-fetching the next page as the user nears the bottom of the workspace and exposing a fallback `Load more` control while additional rows remain.
 - Entries list name cells now render a compact secondary `from -> to` line under the primary name; long entity names are trimmed per side in `frontend/src/pages/EntriesPage.tsx` and styled by the `.entries-name-*` classes in `frontend/src/styles.css`.

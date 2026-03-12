@@ -379,6 +379,18 @@
     @apply text-xs text-muted-foreground;
   }
 
+  .entries-load-more-shell {
+    @apply flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border bg-secondary/35 px-4 py-3;
+  }
+
+  .entries-load-more-status {
+    @apply m-0 text-sm text-muted-foreground;
+  }
+
+  .entries-load-more-sentinel {
+    @apply h-px w-full;
+  }
+
   .properties-layout {
     @apply grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)];
   }

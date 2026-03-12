@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
@@ -37,6 +37,8 @@ type EditorState = { mode: "create" } | { mode: "edit"; entryId: string } | null
 const ENTRY_FLOW_LABEL_MAX_LENGTH = 18;
 const MISSING_ENTITY_LABEL = "(unspecified)";
 const MISSING_ENTITY_MARKER_LABEL = "Missing entity";
+const ENTRIES_PAGE_SIZE = 200;
+const ENTRIES_LOAD_AHEAD_ROOT_MARGIN = "360px 0px";
 
 function kindLabel(kind: string) {
   if (kind === "INCOME") return "Income";
@@ -95,6 +97,7 @@ function entryFlowLabel(fromEntity: string | null, toEntity: string | null): { d
 export function EntriesPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const initialFilterGroupId = searchParams.get("filter_group_id") ?? "";
   const [filters, setFilters] = useState({
     kind: "",
@@ -123,16 +126,23 @@ export function EntriesPage() {
     () => ({
       kind: filters.kind || undefined,
       source: filters.source || undefined,
-      filter_group_id: filters.filterGroupId || undefined,
-      limit: 200,
-      offset: 0
+      filter_group_id: filters.filterGroupId || undefined
     }),
     [filters.filterGroupId, filters.kind, filters.source]
   );
-  const entriesQuery = useQuery({
+  const entriesQuery = useInfiniteQuery({
     queryKey: queryKeys.entries.list(entryListFilters),
-    queryFn: () =>
-      listEntries(entryListFilters)
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      listEntries({
+        ...entryListFilters,
+        limit: ENTRIES_PAGE_SIZE,
+        offset: pageParam
+      }),
+    getNextPageParam: (lastPage, allPages) => {
+      const loadedCount = allPages.reduce((total, page) => total + page.items.length, 0);
+      return loadedCount < lastPage.total ? loadedCount : undefined;
+    }
   });
 
   const editingEntryId = editorState?.mode === "edit" ? editorState.entryId : "";
@@ -170,11 +180,19 @@ export function EntriesPage() {
     }
   });
 
+  const loadedEntries = useMemo(
+    () => entriesQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [entriesQuery.data]
+  );
+
+  const totalEntries = entriesQuery.data?.pages[entriesQuery.data.pages.length - 1]?.total ?? 0;
+  const loadedEntryCount = loadedEntries.length;
+
   const filterCurrencies = useMemo(() => {
     const codes = new Set((currenciesQuery.data ?? []).map((currency) => currency.code));
-    entriesQuery.data?.items.forEach((entry) => codes.add(entry.currency_code));
+    loadedEntries.forEach((entry) => codes.add(entry.currency_code));
     return Array.from(codes).sort();
-  }, [currenciesQuery.data, entriesQuery.data]);
+  }, [currenciesQuery.data, loadedEntries]);
 
   const currencyFilterOptions = useMemo(
     () =>
@@ -189,7 +207,7 @@ export function EntriesPage() {
   const filteredEntries = useMemo(() => {
     const selectedTagSet = new Set(filters.tags.map((tagName) => tagName.trim().toLowerCase()).filter(Boolean));
     const selectedCurrencySet = new Set(filters.currencies.map((currencyCode) => currencyCode.trim().toUpperCase()).filter(Boolean));
-    return (entriesQuery.data?.items ?? []).filter((entry) => {
+    return loadedEntries.filter((entry) => {
       if (selectedTagSet.size > 0) {
         const hasMatchingTag = entry.tags.some((tag) => selectedTagSet.has(tag.name.trim().toLowerCase()));
         if (!hasMatchingTag) {
@@ -206,7 +224,33 @@ export function EntriesPage() {
 
       return true;
     });
-  }, [entriesQuery.data?.items, filters.currencies, filters.tags]);
+  }, [filters.currencies, filters.tags, loadedEntries]);
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (
+      sentinel === null ||
+      !entriesQuery.hasNextPage ||
+      entriesQuery.isFetchingNextPage ||
+      typeof IntersectionObserver !== "function"
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (!entry?.isIntersecting) {
+          return;
+        }
+        void entriesQuery.fetchNextPage();
+      },
+      { rootMargin: ENTRIES_LOAD_AHEAD_ROOT_MARGIN }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [entriesQuery.fetchNextPage, entriesQuery.hasNextPage, entriesQuery.isFetchingNextPage]);
 
   useEffect(() => {
     const nextFilterGroupId = searchParams.get("filter_group_id") ?? "";
@@ -324,88 +368,112 @@ export function EntriesPage() {
           {entriesQuery.isError ? <p className="error">{(entriesQuery.error as Error).message}</p> : null}
 
           {entriesQuery.data ? (
-            <Table className="entries-table table-fixed">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="entries-date-column">Date</TableHead>
-                  <TableHead className="entries-name-column">Name</TableHead>
-                  <TableHead className="entries-amount-column">Amount</TableHead>
-                  <TableHead className="entries-tags-column">Tags</TableHead>
-                  <TableHead className="entries-actions-column">
-                    <span className="sr-only">Actions</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredEntries.map((entry) => {
-                  const flowLabel = entryFlowLabel(entry.from_entity, entry.to_entity);
+            <>
+              <Table className="entries-table table-fixed">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="entries-date-column">Date</TableHead>
+                    <TableHead className="entries-name-column">Name</TableHead>
+                    <TableHead className="entries-amount-column">Amount</TableHead>
+                    <TableHead className="entries-tags-column">Tags</TableHead>
+                    <TableHead className="entries-actions-column">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredEntries.map((entry) => {
+                    const flowLabel = entryFlowLabel(entry.from_entity, entry.to_entity);
 
-                  return (
-                    <TableRow
-                      key={entry.id}
-                      className="entries-table-row"
-                      onDoubleClick={() => setEditorState({ mode: "edit", entryId: entry.id })}
-                    >
-                      <TableCell className="entries-date-column">{entry.occurred_at}</TableCell>
-                      <TableCell className="entries-name-column entries-name-cell">
-                        <div className="entries-name-stack">
-                          <span className="entries-name-title">{entry.name}</span>
-                          {flowLabel ? (
-                            <span className="entries-name-flow" title={flowLabel.full}>
-                              {flowLabel.display}
-                            </span>
-                          ) : null}
-                          {entry.from_entity_missing || entry.to_entity_missing ? (
-                            <span>
-                              <Badge variant="outline">{MISSING_ENTITY_MARKER_LABEL}</Badge>
-                            </span>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="entries-amount-column">
-                        <span className="entries-amount-cell">
-                          <span className={`entries-amount-marker ${kindToneClass(entry.kind)}`} aria-hidden="true">
-                            {kindSymbol(entry.kind)}
-                          </span>
-                          <span className="sr-only">{kindLabel(entry.kind)}</span>
-                          <span className="entries-amount-value">{formatMinorCompact(entry.amount_minor)}</span>
-                          <span className="entries-amount-currency">{normalizedCurrencyCode(entry.currency_code)}</span>
-                        </span>
-                      </TableCell>
-                      <TableCell className="entries-tags-column">
-                        {entry.tags.length > 0 ? (
-                          <div className="entries-tag-list">
-                            {entry.tags.map((tag) => {
-                              const color = resolveTagColor(tag.name, tag.color);
-                              return (
-                                <Badge key={tag.id} variant="outline" className="entries-tag-pill" style={{ borderColor: color }} title={tag.name}>
-                                  <span className="entries-tag-pill-color" aria-hidden="true" style={{ backgroundColor: color }} />
-                                  <span className="entries-tag-pill-label">{tag.name}</span>
-                                </Badge>
-                              );
-                            })}
+                    return (
+                      <TableRow
+                        key={entry.id}
+                        className="entries-table-row"
+                        onDoubleClick={() => setEditorState({ mode: "edit", entryId: entry.id })}
+                      >
+                        <TableCell className="entries-date-column">{entry.occurred_at}</TableCell>
+                        <TableCell className="entries-name-column entries-name-cell">
+                          <div className="entries-name-stack">
+                            <span className="entries-name-title">{entry.name}</span>
+                            {flowLabel ? (
+                              <span className="entries-name-flow" title={flowLabel.full}>
+                                {flowLabel.display}
+                              </span>
+                            ) : null}
+                            {entry.from_entity_missing || entry.to_entity_missing ? (
+                              <span>
+                                <Badge variant="outline">{MISSING_ENTITY_MARKER_LABEL}</Badge>
+                              </span>
+                            ) : null}
                           </div>
-                        ) : (
-                          <span className="entries-tag-empty">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="entries-actions-column">
-                        <div className="table-actions">
-                          <DeleteIconButton
-                            label={`Delete entry ${entry.name}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              deleteEntryMutation.mutate(entry.id);
-                            }}
-                            onDoubleClick={(event) => event.stopPropagation()}
-                          />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                        </TableCell>
+                        <TableCell className="entries-amount-column">
+                          <span className="entries-amount-cell">
+                            <span className={`entries-amount-marker ${kindToneClass(entry.kind)}`} aria-hidden="true">
+                              {kindSymbol(entry.kind)}
+                            </span>
+                            <span className="sr-only">{kindLabel(entry.kind)}</span>
+                            <span className="entries-amount-value">{formatMinorCompact(entry.amount_minor)}</span>
+                            <span className="entries-amount-currency">{normalizedCurrencyCode(entry.currency_code)}</span>
+                          </span>
+                        </TableCell>
+                        <TableCell className="entries-tags-column">
+                          {entry.tags.length > 0 ? (
+                            <div className="entries-tag-list">
+                              {entry.tags.map((tag) => {
+                                const color = resolveTagColor(tag.name, tag.color);
+                                return (
+                                  <Badge key={tag.id} variant="outline" className="entries-tag-pill" style={{ borderColor: color }} title={tag.name}>
+                                    <span className="entries-tag-pill-color" aria-hidden="true" style={{ backgroundColor: color }} />
+                                    <span className="entries-tag-pill-label">{tag.name}</span>
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="entries-tag-empty">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="entries-actions-column">
+                          <div className="table-actions">
+                            <DeleteIconButton
+                              label={`Delete entry ${entry.name}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                deleteEntryMutation.mutate(entry.id);
+                              }}
+                              onDoubleClick={(event) => event.stopPropagation()}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+
+              <div className="entries-load-more-shell">
+                <p className="entries-load-more-status">
+                  {entriesQuery.hasNextPage
+                    ? `Loaded ${loadedEntryCount} of ${totalEntries} entries. Scroll to load more.`
+                    : totalEntries > 0
+                      ? `Loaded all ${totalEntries} entries.`
+                      : "No entries found."}
+                </p>
+                {entriesQuery.hasNextPage ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void entriesQuery.fetchNextPage()}
+                    disabled={entriesQuery.isFetchingNextPage}
+                    aria-label="Load more entries"
+                  >
+                    {entriesQuery.isFetchingNextPage ? "Loading more..." : "Load more"}
+                  </Button>
+                ) : null}
+                <div ref={loadMoreRef} className="entries-load-more-sentinel" aria-hidden="true" />
+              </div>
+            </>
           ) : null}
         </div>
       </WorkspaceSection>
