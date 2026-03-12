@@ -163,7 +163,7 @@ telegram/                 # PTB-based Telegram transport, package-local docs, en
 alembic/                  # Database migrations
 scripts/                  # Dev and seed scripts
 docs/                     # Extended documentation
-skills/                   # Project-local Codex skills and maintenance workflows
+skills/                   # Project-local Codex skills, including frontend-ui-builder
 ```
 
 ## Testing
