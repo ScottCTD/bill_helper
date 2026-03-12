@@ -106,12 +106,6 @@ export function EntitiesTableSection(props: EntitiesTableSectionProps) {
 
   return (
     <div className="table-shell">
-      <div className="table-shell-header">
-        <div>
-          <h2 className="table-shell-title">Entities</h2>
-          <p className="table-shell-subtitle">Manage counterparties and assign taxonomy-backed categories.</p>
-        </div>
-      </div>
       <div className="table-toolbar">
         <div className="table-toolbar-filters">
           <label className="field min-w-[220px] grow">

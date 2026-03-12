@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -251,6 +251,33 @@ describe("AgentPanel", () => {
 
     const countBadge = screen.getByText("2");
     expect(countBadge).toHaveClass("agent-panel-review-badge");
+  });
+
+  it("confirms thread deletion in the app dialog instead of using the browser confirm", async () => {
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockImplementation(() => true);
+
+    try {
+      renderWithQueryClient(<AgentPanel isOpen />);
+
+      await screen.findByRole("button", { name: "Review thread" });
+      await userEvent.click(screen.getByRole("button", { name: "Delete thread Review thread" }));
+
+      const deleteDialog = await screen.findByRole("dialog", { name: "Delete Review thread?" });
+      expect(within(deleteDialog).getByText("This removes the full message and run history for this thread.")).toBeInTheDocument();
+
+      await userEvent.click(within(deleteDialog).getByRole("button", { name: "Delete thread" }));
+
+      await waitFor(() => {
+        expect(api.deleteAgentThread).toHaveBeenCalled();
+      });
+      expect(vi.mocked(api.deleteAgentThread).mock.calls[0]?.[0]).toBe("thread-1");
+      expect(confirmSpy).not.toHaveBeenCalled();
+    } finally {
+      confirmSpy.mockRestore();
+    }
   });
 
   it("shows Bulk mode help only in a tooltip and still requires at least one file", async () => {

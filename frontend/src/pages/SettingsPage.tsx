@@ -20,7 +20,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="stack-lg">
+    <div className="page stack-lg">
       <SettingsToolbar
         activeTab={model.activeTab}
         onActiveTabChange={model.actions.setActiveTab}

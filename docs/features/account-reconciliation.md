@@ -21,11 +21,11 @@ This doc is the fast path for understanding account management UX, snapshot chec
 - Account creation is handled by the icon-only `+` action, which opens a modal.
 - Account edits are handled by double-clicking a table row, which opens the shared edit modal.
 - Account deletion starts from a subdued row-level delete action and is finalized in a confirmation dialog.
-- Account metadata now excludes legacy `institution` and `type`; dialogs focus on owner/name/currency/notes/active state.
+- Account metadata now excludes legacy `institution` and `type`; creation still captures owner/name/currency/notes while the edit modal trims the editable fields to name/currency/notes/active state.
 - Account create/edit modals include optional markdown notes (`markdown_body`) for richer account-level context.
-- The account edit modal now has dedicated `Details`, `Reconciliation`, and `Snapshots` tabs, so all account-specific state lives in one place.
+- The account edit modal is a fixed-height untabbed workspace: compact details stay at the top, the left column scrolls reconciliation plus snapshot history, and the right column holds the snapshot-create form.
 - Snapshot creation and deletion happen inside the account modal; each saved snapshot row exposes its own delete action with confirmation.
-- The reconciliation tab shows newest-first intervals, highlights the open interval separately, compresses reconciled intervals, and expands mismatched intervals.
+- The reconciliation section shows newest-first intervals, highlights the open interval separately, compresses reconciled intervals, and expands mismatched intervals.
 
 Delete semantics:
 
@@ -67,7 +67,8 @@ The `as_of` date still defaults to the server's current day when the query param
 - `frontend/src/features/accounts/useAccountsPageModel.ts`: query/mutation state, derived selection/filter state, and form orchestration.
 - `frontend/src/features/accounts/AccountsTableSection.tsx`: account table/search/selection UI.
 - `frontend/src/features/accounts/ReconciliationSection.tsx`: interval list UI inside the account modal.
-- `frontend/src/features/accounts/SnapshotsSection.tsx`: snapshot create/history UI inside the account modal.
+- `frontend/src/features/accounts/SnapshotCreatePanel.tsx`: compact snapshot-create form inside the account modal.
+- `frontend/src/features/accounts/SnapshotHistoryTable.tsx`: snapshot history table inside the account modal.
 - `frontend/src/features/accounts/AccountDialogs.tsx`: create/edit dialog UI.
 - `frontend/src/components/DeleteConfirmDialog.tsx`: shared destructive confirmation dialog primitive.
 - `frontend/src/lib/api.ts`: account/snapshot/reconciliation client methods.

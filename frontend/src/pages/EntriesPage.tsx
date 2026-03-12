@@ -6,9 +6,11 @@ import { useSearchParams } from "react-router-dom";
 import { DeleteIconButton } from "../components/DeleteIconButton";
 import { EntryEditorModal, type EntryEditorSubmitPayload } from "../components/EntryEditorModal";
 import { TagMultiSelect } from "../components/TagMultiSelect";
+import { PageHeader } from "../components/layout/PageHeader";
+import { WorkspaceSection } from "../components/layout/WorkspaceSection";
+import { WorkspaceToolbar } from "../components/layout/WorkspaceToolbar";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { NativeSelect } from "../components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
@@ -257,17 +259,11 @@ export function EntriesPage() {
   const editorLoadError = editingEntryQuery.isError ? (editingEntryQuery.error as Error).message : null;
 
   return (
-    <div className="stack-lg">
-      <Card>
-        <CardContent className="space-y-4 pt-6">
-          <div className="table-shell-header">
-            <div>
-              <h2 className="table-shell-title">Entries</h2>
-              <p className="table-shell-subtitle">Double-click a row to open the entry editor.</p>
-            </div>
-          </div>
+    <div className="page stack-lg">
+      <PageHeader title="Entries" description="Search and edit ledger rows." />
 
-          <div className="table-toolbar filter-row">
+      <WorkspaceSection>
+        <WorkspaceToolbar className="filter-row">
             <div className="table-toolbar-filters">
               <label className="field min-w-[160px]">
                 <span>Kind</span>
@@ -321,99 +317,98 @@ export function EntriesPage() {
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
-          </div>
+        </WorkspaceToolbar>
 
-          <div className="table-shell">
-            {entriesQuery.isLoading ? <p>Loading entries...</p> : null}
-            {entriesQuery.isError ? <p className="error">{(entriesQuery.error as Error).message}</p> : null}
+        <div className="table-shell">
+          {entriesQuery.isLoading ? <p>Loading entries...</p> : null}
+          {entriesQuery.isError ? <p className="error">{(entriesQuery.error as Error).message}</p> : null}
 
-            {entriesQuery.data ? (
-              <Table className="entries-table table-fixed">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="entries-date-column">Date</TableHead>
-                    <TableHead className="entries-name-column">Name</TableHead>
-                    <TableHead className="entries-amount-column">Amount</TableHead>
-                    <TableHead className="entries-tags-column">Tags</TableHead>
-                    <TableHead className="entries-actions-column">
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredEntries.map((entry) => {
-                    const flowLabel = entryFlowLabel(entry.from_entity, entry.to_entity);
+          {entriesQuery.data ? (
+            <Table className="entries-table table-fixed">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="entries-date-column">Date</TableHead>
+                  <TableHead className="entries-name-column">Name</TableHead>
+                  <TableHead className="entries-amount-column">Amount</TableHead>
+                  <TableHead className="entries-tags-column">Tags</TableHead>
+                  <TableHead className="entries-actions-column">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredEntries.map((entry) => {
+                  const flowLabel = entryFlowLabel(entry.from_entity, entry.to_entity);
 
-                    return (
-                      <TableRow
-                        key={entry.id}
-                        className="entries-table-row"
-                        onDoubleClick={() => setEditorState({ mode: "edit", entryId: entry.id })}
-                      >
-                        <TableCell className="entries-date-column">{entry.occurred_at}</TableCell>
-                        <TableCell className="entries-name-column entries-name-cell">
-                          <div className="entries-name-stack">
-                            <span className="entries-name-title">{entry.name}</span>
-                            {flowLabel ? (
-                              <span className="entries-name-flow" title={flowLabel.full}>
-                                {flowLabel.display}
-                              </span>
-                            ) : null}
-                            {entry.from_entity_missing || entry.to_entity_missing ? (
-                              <span>
-                                <Badge variant="outline">{MISSING_ENTITY_MARKER_LABEL}</Badge>
-                              </span>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell className="entries-amount-column">
-                          <span className="entries-amount-cell">
-                            <span className={`entries-amount-marker ${kindToneClass(entry.kind)}`} aria-hidden="true">
-                              {kindSymbol(entry.kind)}
+                  return (
+                    <TableRow
+                      key={entry.id}
+                      className="entries-table-row"
+                      onDoubleClick={() => setEditorState({ mode: "edit", entryId: entry.id })}
+                    >
+                      <TableCell className="entries-date-column">{entry.occurred_at}</TableCell>
+                      <TableCell className="entries-name-column entries-name-cell">
+                        <div className="entries-name-stack">
+                          <span className="entries-name-title">{entry.name}</span>
+                          {flowLabel ? (
+                            <span className="entries-name-flow" title={flowLabel.full}>
+                              {flowLabel.display}
                             </span>
-                            <span className="sr-only">{kindLabel(entry.kind)}</span>
-                            <span className="entries-amount-value">{formatMinorCompact(entry.amount_minor)}</span>
-                            <span className="entries-amount-currency">{normalizedCurrencyCode(entry.currency_code)}</span>
+                          ) : null}
+                          {entry.from_entity_missing || entry.to_entity_missing ? (
+                            <span>
+                              <Badge variant="outline">{MISSING_ENTITY_MARKER_LABEL}</Badge>
+                            </span>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="entries-amount-column">
+                        <span className="entries-amount-cell">
+                          <span className={`entries-amount-marker ${kindToneClass(entry.kind)}`} aria-hidden="true">
+                            {kindSymbol(entry.kind)}
                           </span>
-                        </TableCell>
-                        <TableCell className="entries-tags-column">
-                          {entry.tags.length > 0 ? (
-                            <div className="entries-tag-list">
-                              {entry.tags.map((tag) => {
-                                const color = resolveTagColor(tag.name, tag.color);
-                                return (
-                                  <Badge key={tag.id} variant="outline" className="entries-tag-pill" style={{ borderColor: color }} title={tag.name}>
-                                    <span className="entries-tag-pill-color" aria-hidden="true" style={{ backgroundColor: color }} />
-                                    <span className="entries-tag-pill-label">{tag.name}</span>
-                                  </Badge>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <span className="entries-tag-empty">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="entries-actions-column">
-                          <div className="table-actions">
-                            <DeleteIconButton
-                              label={`Delete entry ${entry.name}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                deleteEntryMutation.mutate(entry.id);
-                              }}
-                              onDoubleClick={(event) => event.stopPropagation()}
-                            />
+                          <span className="sr-only">{kindLabel(entry.kind)}</span>
+                          <span className="entries-amount-value">{formatMinorCompact(entry.amount_minor)}</span>
+                          <span className="entries-amount-currency">{normalizedCurrencyCode(entry.currency_code)}</span>
+                        </span>
+                      </TableCell>
+                      <TableCell className="entries-tags-column">
+                        {entry.tags.length > 0 ? (
+                          <div className="entries-tag-list">
+                            {entry.tags.map((tag) => {
+                              const color = resolveTagColor(tag.name, tag.color);
+                              return (
+                                <Badge key={tag.id} variant="outline" className="entries-tag-pill" style={{ borderColor: color }} title={tag.name}>
+                                  <span className="entries-tag-pill-color" aria-hidden="true" style={{ backgroundColor: color }} />
+                                  <span className="entries-tag-pill-label">{tag.name}</span>
+                                </Badge>
+                              );
+                            })}
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            ) : null}
-          </div>
-      </CardContent>
-      </Card>
+                        ) : (
+                          <span className="entries-tag-empty">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="entries-actions-column">
+                        <div className="table-actions">
+                          <DeleteIconButton
+                            label={`Delete entry ${entry.name}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              deleteEntryMutation.mutate(entry.id);
+                            }}
+                            onDoubleClick={(event) => event.stopPropagation()}
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          ) : null}
+        </div>
+      </WorkspaceSection>
 
       <EntryEditorModal
         isOpen={editorState !== null}

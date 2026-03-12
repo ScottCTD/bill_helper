@@ -1,3 +1,5 @@
+import { PageHeader } from "../components/layout/PageHeader";
+import { WorkspaceSection } from "../components/layout/WorkspaceSection";
 import { AccountDialogs } from "../features/accounts/AccountDialogs";
 import { AccountsTableSection } from "../features/accounts/AccountsTableSection";
 import { useAccountsPageModel } from "../features/accounts/useAccountsPageModel";
@@ -18,21 +20,28 @@ export function AccountsPage() {
   const snapshotsError = model.queries.snapshotsQuery.isError ? (model.queries.snapshotsQuery.error as Error).message : null;
 
   return (
-    <div className="stack-lg">
-      <AccountsTableSection
-        accountSearch={model.accountSearch}
-        onAccountSearchChange={model.setAccountSearch}
-        onOpenCreateDialog={model.actions.openCreateDialog}
-        accounts={model.queries.accountsQuery.data}
-        filteredAccounts={model.filteredAccounts}
-        selectedAccountId={model.selectedAccountId}
-        onSelectAccount={model.setSelectedAccountId}
-        onEditAccount={model.actions.editAccount}
-        onDeleteAccount={model.actions.openDeleteDialog}
-        ownerNameForId={model.ownerNameForId}
-        isLoading={model.queries.accountsQuery.isLoading}
-        errorMessage={accountTableError}
+    <div className="page stack-lg">
+      <PageHeader
+        title="Accounts"
+        description="Accounts, snapshots, and reconciliation."
       />
+
+      <WorkspaceSection>
+        <AccountsTableSection
+          accountSearch={model.accountSearch}
+          onAccountSearchChange={model.setAccountSearch}
+          onOpenCreateDialog={model.actions.openCreateDialog}
+          accounts={model.queries.accountsQuery.data}
+          filteredAccounts={model.filteredAccounts}
+          selectedAccountId={model.selectedAccountId}
+          onSelectAccount={model.setSelectedAccountId}
+          onEditAccount={model.actions.editAccount}
+          onDeleteAccount={model.actions.openDeleteDialog}
+          ownerNameForId={model.ownerNameForId}
+          isLoading={model.queries.accountsQuery.isLoading}
+          errorMessage={accountTableError}
+        />
+      </WorkspaceSection>
 
       <AccountDialogs
         createDialogOpen={model.createDialogOpen}

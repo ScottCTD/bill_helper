@@ -68,7 +68,7 @@ function parseUserMemoryLines(rawValue: string): string[] | null {
   return items.length > 0 ? items : null;
 }
 
-function parseAgentModelLines(rawValue: string): string[] {
+export function parseAgentModelLines(rawValue: string): string[] {
   const items: string[] = [];
   const seenKeys = new Set<string>();
 

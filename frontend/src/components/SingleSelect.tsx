@@ -1,6 +1,8 @@
 import { KeyboardEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 
+import { useFloatingMenuPosition } from "../hooks/useFloatingMenuPosition";
 import { Input } from "./ui/input";
 
 interface SingleSelectOption {
@@ -32,9 +34,14 @@ export function SingleSelect({
   emptyLabel = "No matching options."
 }: SingleSelectProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const controlRef = useRef<HTMLButtonElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const { menuRef, menuStyle } = useFloatingMenuPosition({
+    anchorRef: controlRef,
+    open: isOpen
+  });
   const selectedOption = useMemo(() => options.find((option) => option.value === value) ?? null, [options, value]);
   const filteredOptions = useMemo(() => {
     if (!searchable) {
@@ -52,14 +59,15 @@ export function SingleSelect({
       if (!rootRef.current) {
         return;
       }
-      if (!rootRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+      if (rootRef.current.contains(event.target as Node) || menuRef.current?.contains(event.target as Node)) {
+        return;
       }
+      setIsOpen(false);
     };
 
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, []);
+  }, [menuRef]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -147,6 +155,7 @@ export function SingleSelect({
   return (
     <div className={`single-select ${disabled ? "is-disabled" : ""}`} ref={rootRef}>
       <button
+        ref={controlRef}
         type="button"
         className="single-select-control"
         onClick={toggleMenu}
@@ -161,41 +170,44 @@ export function SingleSelect({
         </span>
         <ChevronDown className="single-select-caret" />
       </button>
-      {isOpen ? (
-        <div className="single-select-menu" role="listbox" aria-label="Select option">
-          {searchable ? (
-            <div className="p-1">
-              <Input
-                ref={searchInputRef}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={onSearchInputKeyDown}
-                placeholder={searchPlaceholder}
-                className="h-8"
-                aria-label={searchPlaceholder}
-              />
-            </div>
-          ) : null}
-          {filteredOptions.length === 0 ? <p className="tag-multiselect-empty">{emptyLabel}</p> : null}
-          {filteredOptions.map((option) => {
-            const isSelected = option.value === value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                className={`single-select-option ${isSelected ? "is-selected" : ""}`}
-                role="option"
-                aria-selected={isSelected}
-                onPointerDown={(event) => onOptionPointerDown(event, () => selectOption(option.value))}
-                onKeyDown={(event) => onOptionKeyDown(event, option.value)}
-              >
-                <span>{option.label}</span>
-                <Check className={`single-select-check ${isSelected ? "is-visible" : ""}`} />
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+      {isOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="single-select-menu" role="listbox" aria-label="Select option" ref={menuRef} style={menuStyle}>
+              {searchable ? (
+                <div className="p-1">
+                  <Input
+                    ref={searchInputRef}
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    onKeyDown={onSearchInputKeyDown}
+                    placeholder={searchPlaceholder}
+                    className="h-8"
+                    aria-label={searchPlaceholder}
+                  />
+                </div>
+              ) : null}
+              {filteredOptions.length === 0 ? <p className="tag-multiselect-empty">{emptyLabel}</p> : null}
+              {filteredOptions.map((option) => {
+                const isSelected = option.value === value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`single-select-option ${isSelected ? "is-selected" : ""}`}
+                    role="option"
+                    aria-selected={isSelected}
+                    onPointerDown={(event) => onOptionPointerDown(event, () => selectOption(option.value))}
+                    onKeyDown={(event) => onOptionKeyDown(event, option.value)}
+                  >
+                    <span>{option.label}</span>
+                    <Check className={`single-select-check ${isSelected ? "is-visible" : ""}`} />
+                  </button>
+                );
+              })}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

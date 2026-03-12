@@ -15,7 +15,7 @@ const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-50 bg-black/45 backdrop-blur-[1px]", className)}
+    className={cn("fixed inset-0 z-50 bg-foreground/20", className)}
     {...props}
   />
 ));
@@ -30,7 +30,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "scroll-surface fixed inset-x-0 top-[3vh] z-50 mx-auto flex w-[95vw] max-w-4xl flex-col border bg-background p-6 shadow-lg sm:rounded-lg",
+        "scroll-surface fixed inset-x-0 top-[4vh] z-50 mx-auto flex w-[95vw] max-w-4xl flex-col rounded-xl border border-border bg-card p-5 shadow-[var(--shadow-lg)]",
         className
       )}
       {...props}
@@ -46,7 +46,7 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-1.5 text-left", className)} {...props} />
+  <div className={cn("flex flex-col gap-1.5 text-left", className)} {...props} />
 );
 DialogHeader.displayName = "DialogHeader";
 

@@ -1,9 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { FormField } from "../../components/ui/form-field";
 import { Input } from "../../components/ui/input";
+import { NativeSelect } from "../../components/ui/native-select";
 import { Switch } from "../../components/ui/switch";
 import { Textarea } from "../../components/ui/textarea";
 import { SETTINGS_FIELD_IDS } from "./constants";
+import { parseAgentModelLines } from "./formState";
 import type { SettingsFormPatch, SettingsFormState } from "./types";
 
 interface SettingsAgentSectionProps {
@@ -17,6 +19,26 @@ interface SettingsFormPatchHandlerProps {
 }
 
 function MemoryAndModelsCard({ formState, onFormPatch }: SettingsFormPatchHandlerProps) {
+  const availableModelOptions = parseAgentModelLines(formState.available_agent_models);
+  const hasAvailableModels = availableModelOptions.length > 0;
+  const defaultModelValue = hasAvailableModels
+    ? availableModelOptions.includes(formState.agent_model)
+      ? formState.agent_model
+      : availableModelOptions[0]
+    : "";
+
+  function handleAvailableModelsChange(nextValue: string) {
+    const nextAvailableModels = parseAgentModelLines(nextValue);
+    const nextDefaultModel = nextAvailableModels.includes(formState.agent_model)
+      ? formState.agent_model
+      : nextAvailableModels[0] ?? "";
+
+    onFormPatch({
+      available_agent_models: nextValue,
+      agent_model: nextDefaultModel,
+    });
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -39,24 +61,32 @@ function MemoryAndModelsCard({ formState, onFormPatch }: SettingsFormPatchHandle
         <FormField
           label="Default model"
           htmlFor={SETTINGS_FIELD_IDS.defaultModel}
-          hint="Used for new chats and runs. If it is missing from Available models, the server adds it to the effective list."
+          hint="Used for new chats and runs. Choose from the configured Available models list."
         >
-          <Input
+          <NativeSelect
             id={SETTINGS_FIELD_IDS.defaultModel}
-            value={formState.agent_model}
+            value={defaultModelValue}
+            disabled={!hasAvailableModels}
             onChange={(event) => onFormPatch({ agent_model: event.target.value })}
-          />
+          >
+            {!hasAvailableModels ? <option value="">No available models configured</option> : null}
+            {availableModelOptions.map((modelName) => (
+              <option key={modelName} value={modelName}>
+                {modelName}
+              </option>
+            ))}
+          </NativeSelect>
         </FormField>
 
         <FormField
           label="Available models"
           htmlFor={SETTINGS_FIELD_IDS.availableModels}
-          hint="Enter one model identifier per line. Blank lines are ignored and order is preserved."
+          hint="Enter one model identifier per line. Blank lines are ignored, order is preserved, and the default model always stays on a listed option."
         >
           <Textarea
             id={SETTINGS_FIELD_IDS.availableModels}
             value={formState.available_agent_models}
-            onChange={(event) => onFormPatch({ available_agent_models: event.target.value })}
+            onChange={(event) => handleAvailableModelsChange(event.target.value)}
           />
         </FormField>
       </CardContent>

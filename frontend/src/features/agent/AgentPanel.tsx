@@ -1,5 +1,6 @@
 import { PanelRight, PanelRightClose } from "lucide-react";
 
+import { DeleteConfirmDialog } from "../../components/DeleteConfirmDialog";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { AgentAttachmentPreviewDialog } from "./panel/AgentAttachmentPreviewDialog";
@@ -119,6 +120,16 @@ export function AgentPanel({ isOpen }: AgentPanelProps) {
         </div>
 
         <AgentThreadReviewModal {...controller.reviewModal} />
+        <DeleteConfirmDialog
+          open={controller.deleteDialog.open}
+          onOpenChange={controller.deleteDialog.onOpenChange}
+          title={controller.deleteDialog.title}
+          description={controller.deleteDialog.description}
+          confirmLabel={controller.deleteDialog.confirmLabel}
+          isPending={controller.deleteDialog.isPending}
+          onConfirm={controller.deleteDialog.onConfirm}
+          errorMessage={controller.deleteDialog.errorMessage}
+        />
       </aside>
 
       <AgentAttachmentPreviewDialog {...controller.previewDialog} />

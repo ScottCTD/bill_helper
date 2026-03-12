@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  html {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  @supports not (scrollbar-gutter: stable) {
+    html {
+      overflow-y: scroll;
+    }
+  }
+
+  html,
+  body,
+  .scroll-surface {
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  .scroll-surface::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  html::-webkit-scrollbar-track,
+  body::-webkit-scrollbar-track,
+  .scroll-surface::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  html::-webkit-scrollbar-thumb,
+  body::-webkit-scrollbar-thumb,
+  .scroll-surface::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+    background-color: var(--scrollbar-thumb);
+  }
+
+  html::-webkit-scrollbar-thumb:hover,
+  body::-webkit-scrollbar-thumb:hover,
+  .scroll-surface::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+
+  html::-webkit-scrollbar-corner,
+  body::-webkit-scrollbar-corner,
+  .scroll-surface::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  body {
+    @apply font-sans text-foreground antialiased;
+    font-family:
+      "Public Sans",
+      "Segoe UI Variable Text",
+      "Segoe UI",
+      "Helvetica Neue",
+      Arial,
+      sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    line-height: 1.45;
+    margin: 0;
+    background: hsl(var(--background));
+  }
+
+  a {
+    @apply text-foreground transition-colors hover:text-foreground/70;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply text-foreground;
+  }
+
+  input:not([type="checkbox"]):not([type="file"]):not(.agent-thread-input),
+  select,
+  textarea {
+    @apply rounded-md border border-input bg-background px-3 py-2 text-sm shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted/50 disabled:opacity-60;
+  }
+
+  textarea {
+    @apply min-h-[2.8rem];
+    resize: vertical;
+  }
+
+  input[type="checkbox"] {
+    @apply h-4 w-4 rounded border-input accent-primary;
+  }
+
+  button:not([class]) {
+    @apply inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-55;
+  }
+
+  table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  thead tr {
+    @apply border-b border-border/75;
+  }
+
+  th {
+    @apply px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground;
+  }
+
+  td {
+    @apply border-b border-border/75 px-3 py-3 align-middle;
+  }
+
+  tbody tr:hover {
+    @apply bg-muted/45;
+  }
+}

@@ -4,9 +4,11 @@
 
 - `frontend/src/features/agent/AgentPanel.tsx`
 - used as the primary AI page via `frontend/src/pages/HomePage.tsx`
+- the home route now adds the shared `PageHeader` above the agent panel so the AI workspace sits inside the same route-level shell contract as the ledger pages
 - acts as a render shell that wires the header, timeline, composer, thread rail, review modal, and preview dialog together
 - stateful coordination now lives in `frontend/src/features/agent/panel/useAgentPanelController.ts`, which composes `useAgentPanelQueries.ts` for thread/runtime queries, `useAgentThreadActions.ts` for thread/review mutations plus cache helpers, and `useAgentComposerRuntime.ts` for composer/panel coordination; stream hydration/state lives in `useAgentComposerStreamState.ts`, send-stop orchestration lives in `useAgentComposerActions.ts`, and pure panel helpers live in `frontend/src/features/agent/panel/helpers.ts`
 - page header uses the static title `Bill Assistant`; model selection stays in the composer dropdown instead of the title row
+- visual styling now follows the same compact neutral workspace system as the rest of the app: the agent panel is no longer a full-screen bespoke surface with separate page chrome
 
 Supporting modules include:
 
@@ -48,10 +50,12 @@ Supporting modules include:
 ## Timeline Behavior
 
 - thread rail is on the right, collapsible, resizable, and independently scrollable
-- thread rows expose hover/focus delete controls, support double-click inline rename with a visible active single-line field that preserves native selection and horizontal scrolling for long titles, render the full normalized title text before CSS truncation, and reuse one trailing action slot so hover/focus swaps delete in over the running spinner instead of reserving separate dead space
+- thread rail now reads as a secondary navigation panel inside the shared workspace instead of a floating side app
+- thread rows expose hover/focus delete controls, route deletion through the shared in-app confirmation dialog instead of a browser-native alert, support double-click inline rename with a visible active single-line field that preserves native selection and horizontal scrolling for long titles, render the full normalized title text before CSS truncation, and reuse one trailing action slot so hover/focus swaps delete in over the running spinner instead of reserving separate dead space
 - running state is thread-scoped rather than panel-global, so a background stream keeps its spinner in the rail without forcing other selected idle threads into a stop-oriented composer state
 - delete stays unavailable only for the specific running or deleting thread; idle sibling threads keep their delete affordance even while another thread is active
 - inline rename remains available per thread unless that same thread already has a rename mutation in flight
+- assistant activity bubbles keep a stable conversational width while nested tool-call sections expand or collapse
 - timeline is event-driven from persisted `run.events`
 - tool rows appear as queued, then update in place through running, completed, failed, or cancelled
 - live SSE `run_event` payloads can include a compact `tool_call` snapshot so tool rows show their real name before full hydration
@@ -69,6 +73,7 @@ Supporting modules include:
 - review modal presentation is split across `ReviewModalHeader.tsx`, `ReviewModalControls.tsx`, `ReviewActiveItemCard.tsx`, and `ReviewModalFooter.tsx` so card rendering, action chrome, and footer messaging do not regrow inside the modal shell
 - the header `Review` button is the only review entry point and opens one thread-scoped dialog for all proposal items across the selected thread
 - the dialog uses responsive width rules, lets reviewers collapse the left TOC, groups TOC rows by proposal domain (`Entries`, `Accounts`, `Groups`, `Entities`, `Tags`) within `Pending` and `Reviewed / Failed`, and surfaces batch plus per-item review controls in a full-width bar above the denser review surface
+- the review modal now follows the same compact border-first styling as the rest of the app instead of relying on pill-heavy special-case chrome
 - proposals render CRUD-aware field-level diffs, and reviewer overrides update the preview for create and update entry/account/tag/entity/group proposals plus add-member group proposals
 - `ReviewEditors.tsx` is now the stable export seam; `ReviewTocSection.tsx` owns TOC navigation, `ReviewCatalogEditors.tsx` owns entry/account/entity/tag editors, `ReviewGroupEditors.tsx` owns group and membership editors plus dependency chips, and reusable selection/status helpers live in `frontend/src/features/agent/review/modalHelpers.ts`
 - draft normalization and override builders now live in `frontend/src/features/agent/review/drafts/`, split across shared coercion helpers plus `entries`, `catalog`, and `memberships` ownership modules
@@ -85,6 +90,8 @@ Supporting modules include:
 ## Composer
 
 - pinned composer surface with attachment chips and preview dialog
+- composer now stays docked against the bottom edge of the agent workspace instead of leaving dead space below the input row
+- textarea and control row share one card surface instead of reading as separate color bands
 - supports picker, paste, and drag-drop for images and PDFs
 - includes a `Bulk mode` toggle beside `Add Attachments`
 - shows an `Agent model` dropdown immediately left of the primary composer action and sources options from runtime settings `available_agent_models` in the same order

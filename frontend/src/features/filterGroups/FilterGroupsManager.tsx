@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "../../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { createFilterGroup, deleteFilterGroup, listFilterGroups, updateFilterGroup } from "../../lib/api";
 import { invalidateFilterGroupReadModels } from "../../lib/queryInvalidation";
 import { queryKeys } from "../../lib/queryKeys";
@@ -74,49 +73,44 @@ export function FilterGroupsManager() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Saved Filter Groups</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="muted text-sm">
-            These rules drive dashboard classification and entry filtering. Default groups can have their logic edited, but their names stay fixed.
-          </p>
-          <Button type="button" variant="outline" onClick={() => setIsCreateOpen((current) => !current)}>
-            {isCreateOpen ? "Hide new group" : "New custom group"}
-          </Button>
-        </div>
+    <div className="stack-lg">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="muted text-sm">
+          These rules drive dashboard classification and entry filtering. Default groups can have their logic edited, but their names stay fixed.
+        </p>
+        <Button type="button" variant="outline" onClick={() => setIsCreateOpen((current) => !current)}>
+          {isCreateOpen ? "Hide new group" : "New custom group"}
+        </Button>
+      </div>
 
-        {mutationError ? <p className="error">{mutationError}</p> : null}
-        {filterGroupsQuery.isError ? <p className="error">Failed to load filter groups: {(filterGroupsQuery.error as Error).message}</p> : null}
+      {mutationError ? <p className="error">{mutationError}</p> : null}
+      {filterGroupsQuery.isError ? <p className="error">Failed to load filter groups: {(filterGroupsQuery.error as Error).message}</p> : null}
 
-        {isCreateOpen ? (
-          <FilterGroupEditorCard
-            submitLabel="Create group"
-            isPending={createMutation.isPending}
-            onCancel={() => setIsCreateOpen(false)}
-            onSubmit={(payload) => createMutation.mutate(payload)}
-          />
-        ) : null}
+      {isCreateOpen ? (
+        <FilterGroupEditorCard
+          submitLabel="Create group"
+          isPending={createMutation.isPending}
+          onCancel={() => setIsCreateOpen(false)}
+          onSubmit={(payload) => createMutation.mutate(payload)}
+        />
+      ) : null}
 
-        {filterGroups.map((filterGroup) => (
-          <div key={filterGroup.id} className="space-y-3">
-            <div className="flex justify-end">
-              <Button asChild type="button" variant="ghost" size="sm">
-                <Link to={`/entries?filter_group_id=${filterGroup.id}`}>View matching entries</Link>
-              </Button>
-            </div>
-            <FilterGroupEditorCard
-              filterGroup={filterGroup}
-              submitLabel="Save changes"
-              isPending={activeUpdateId === filterGroup.id || activeDeleteId === filterGroup.id}
-              onSubmit={(payload) => saveFilterGroup(filterGroup, payload)}
-              onDelete={filterGroup.is_default ? undefined : () => removeFilterGroup(filterGroup.id)}
-            />
+      {filterGroups.map((filterGroup) => (
+        <div key={filterGroup.id} className="space-y-3">
+          <div className="flex justify-end">
+            <Button asChild type="button" variant="ghost" size="sm">
+              <Link to={`/entries?filter_group_id=${filterGroup.id}`}>View matching entries</Link>
+            </Button>
           </div>
-        ))}
-      </CardContent>
-    </Card>
+          <FilterGroupEditorCard
+            filterGroup={filterGroup}
+            submitLabel="Save changes"
+            isPending={activeUpdateId === filterGroup.id || activeDeleteId === filterGroup.id}
+            onSubmit={(payload) => saveFilterGroup(filterGroup, payload)}
+            onDelete={filterGroup.is_default ? undefined : () => removeFilterGroup(filterGroup.id)}
+          />
+        </div>
+      ))}
+    </div>
   );
 }

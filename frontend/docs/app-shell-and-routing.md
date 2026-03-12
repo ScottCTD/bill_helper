@@ -28,11 +28,12 @@ Defined in `frontend/src/App.tsx`.
 Current shell behavior:
 
 - startup session gate blocks route rendering until a local principal is selected or prefilled
-- collapsible left sidebar (`Sidebar.tsx`) with navigation links for `Agent`, `Dashboard`, `Filter`, `Entries`, `Entities`, `Groups`, `Accounts`, `Properties`, and `Settings`
-- sidebar footer includes the active-principal switcher used by the frontend-owned development session
+- collapsible left sidebar (`Sidebar.tsx`) with navigation links for `Agent`, `Dashboard`, `Filters`, `Entries`, `Entities`, `Groups`, `Accounts`, `Properties`, and `Settings`
+- sidebar behaves like a fixed tool rail: solid card background, stronger active-state marker, and a quieter footer that only exposes the active-principal switcher
 - desktop sidebar is resizable and persists width in localStorage
-- content canvas is route-driven
-- home route is AI-native and renders the agent experience as full-height primary content
+- content canvas is route-driven and always renders inside the shared neutral workspace frame
+- normal routes render within a centered content column over the shared muted canvas
+- home route is still AI-first, but now renders the agent experience inside the same page header and content shell contract as the other workspaces
 - route pages are lazy-loaded via `React.lazy` and `Suspense`
 - the rich markdown editor bundle is loaded only when an editor dialog opens; development builds surface the exact runtime error above the textarea fallback, while production keeps the fallback generic
 - on small screens the sidebar starts collapsed and can slide open
