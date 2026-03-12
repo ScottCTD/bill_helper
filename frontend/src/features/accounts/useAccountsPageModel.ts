@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { useAuth } from "../auth";
 import {
   createAccount,
   createSnapshot,
@@ -21,6 +22,7 @@ import { buildEditForm, buildSnapshotDeletionImpact, normalizeNullableMarkdown, 
 import { ACCOUNT_FORM_DEFAULTS, TODAY_ISO, type AccountFormState, type SnapshotFormState } from "./types";
 
 export function useAccountsPageModel() {
+  const auth = useAuth();
   const queryClient = useQueryClient();
 
   const accountsQuery = useQuery({ queryKey: queryKeys.accounts.all, queryFn: listAccounts });
@@ -47,7 +49,7 @@ export function useAccountsPageModel() {
   const selectedAccount = accountsQuery.data?.find((account) => account.id === selectedAccountId) ?? null;
   const editingAccount = accountsQuery.data?.find((account) => account.id === editingAccountId) ?? null;
   const deletingAccount = accountsQuery.data?.find((account) => account.id === deletingAccountId) ?? null;
-  const currentUserId = usersQuery.data?.find((user) => user.is_current_user)?.id ?? "";
+  const currentUserId = auth.session?.user.id ?? usersQuery.data?.find((user) => user.is_current_user)?.id ?? "";
   const defaultCurrencyCode = (runtimeSettingsQuery.data?.default_currency_code ?? "CAD").toUpperCase();
 
   const ownerNamesById = useMemo(

@@ -75,6 +75,9 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("tab", { name: "Agent" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByText("Settings")).toBeInTheDocument();
     expect(screen.getByText("Ledger defaults")).toBeInTheDocument();
+    expect(screen.queryByText("Identity")).not.toBeInTheDocument();
+    expect(screen.queryByText("Password")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Change password" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
     expect(screen.getByText("All changes saved")).toBeInTheDocument();
     expect(screen.queryByText(/^Default model:/)).not.toBeInTheDocument();

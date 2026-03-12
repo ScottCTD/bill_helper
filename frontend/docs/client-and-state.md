@@ -34,7 +34,6 @@ Notable client methods:
   - `login`
   - `logout`
   - `getAuthSession`
-  - `changeMyPassword`
 - admin:
   - `listAdminUsers`
   - `createAdminUser`
@@ -71,7 +70,9 @@ Current auth-related keys:
 - `frontend/src/features/auth/AuthProvider.tsx`
   - app-wide auth context for loading `/auth/me`, logging in, logging out, and adopting impersonation sessions
 - `frontend/src/features/auth/AuthSessionCard.tsx`
-  - sidebar card showing the current signed-in user plus logout and admin navigation
+  - sidebar card showing the current signed-in user plus logout
+- `frontend/src/components/Sidebar.tsx`
+  - renders the dedicated admin footer button separately from the session card
 
 Current behavior:
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 
@@ -8,6 +8,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { WorkspaceSection } from "../components/layout/WorkspaceSection";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { useAuth } from "../features/auth";
 import {
   getEntry,
   getGroup,
@@ -37,6 +38,7 @@ function kindSymbol(kind: string) {
 
 export function EntryDetailPage() {
   const { entryId } = useParams();
+  const auth = useAuth();
   const queryClient = useQueryClient();
   const [isEditorOpen, setIsEditorOpen] = useState(false);
 
@@ -64,10 +66,7 @@ export function EntryDetailPage() {
   const tagsQuery = useQuery({ queryKey: queryKeys.properties.tags, queryFn: listTags });
   const runtimeSettingsQuery = useQuery({ queryKey: queryKeys.settings.runtime, queryFn: getRuntimeSettings });
 
-  const currentUserId = useMemo(
-    () => usersQuery.data?.find((user) => user.is_current_user)?.id ?? "",
-    [usersQuery.data]
-  );
+  const currentUserId = auth.session?.user.id ?? usersQuery.data?.find((user) => user.is_current_user)?.id ?? "";
 
   const updateMutation = useMutation({
     mutationFn: (payload: EntryEditorSubmitPayload) => updateEntry(entryId!, payload),
@@ -185,7 +184,6 @@ export function EntryDetailPage() {
         entry={entry}
         currencies={currenciesQuery.data ?? []}
         entities={entitiesQuery.data ?? []}
-        users={usersQuery.data ?? []}
         groups={groupsQuery.data ?? []}
         tags={tagsQuery.data ?? []}
         currentUserId={currentUserId}

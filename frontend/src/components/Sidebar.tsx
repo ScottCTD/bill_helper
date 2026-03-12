@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
 import { NavLink } from "react-router-dom";
-import { Bot, Building2, CreditCard, FolderKanban, Home, Layers3, Network, PanelLeft, PanelLeftClose, Settings2, SlidersHorizontal } from "lucide-react";
+import { Bot, Building2, CreditCard, FolderKanban, Home, Layers3, Network, PanelLeft, PanelLeftClose, Settings2, Shield, SlidersHorizontal } from "lucide-react";
 
-import { AuthSessionCard } from "../features/auth";
+import { AuthSessionCard, useAuth } from "../features/auth";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 
@@ -25,6 +25,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, width, onToggle }: SidebarProps) {
+  const auth = useAuth();
   const sidebarStyle = (!collapsed ? { "--sidebar-width": `${width}px` } : undefined) as CSSProperties | undefined;
 
   return (
@@ -63,7 +64,16 @@ export function Sidebar({ collapsed, width, onToggle }: SidebarProps) {
 
       {!collapsed ? (
         <div className="sidebar-footer">
-          <p className="sidebar-footer-text">Local-first ledger with AI review</p>
+          {auth.status === "authenticated" && auth.session?.user.is_admin ? (
+            <NavLink
+              to="/admin"
+              end
+              className={({ isActive }) => cn("sidebar-link", isActive && "sidebar-link-active")}
+            >
+              <Shield className="sidebar-link-icon" />
+              <span>Admin</span>
+            </NavLink>
+          ) : null}
           <AuthSessionCard />
         </div>
       ) : null}

@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AuthSessionCard } from "./AuthSessionCard";
@@ -16,7 +15,7 @@ describe("AuthSessionCard", () => {
     vi.clearAllMocks();
   });
 
-  it("renders admin session controls and logout", async () => {
+  it("renders only the account name and logout action", async () => {
     const logout = vi.fn().mockResolvedValue(undefined);
     mockUseAuth.mockReturnValue({
       status: "authenticated",
@@ -28,21 +27,17 @@ describe("AuthSessionCard", () => {
       logout,
     });
 
-    render(
-      <MemoryRouter>
-        <AuthSessionCard />
-      </MemoryRouter>
-    );
+    render(<AuthSessionCard />);
 
-    expect(screen.getByText("Signed In")).toBeInTheDocument();
-    expect(screen.getByText("admin (admin)")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin");
+    expect(screen.getByText("admin")).toBeInTheDocument();
+    expect(screen.queryByText("Signed In")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Log out" }));
     expect(logout).toHaveBeenCalledTimes(1);
   });
 
-  it("renders impersonation label without the admin link for non-admin sessions", () => {
+  it("does not append impersonation or admin labels to the account name", () => {
     mockUseAuth.mockReturnValue({
       status: "authenticated",
       session: {
@@ -53,13 +48,10 @@ describe("AuthSessionCard", () => {
       logout: vi.fn(),
     });
 
-    render(
-      <MemoryRouter>
-        <AuthSessionCard />
-      </MemoryRouter>
-    );
+    render(<AuthSessionCard />);
 
-    expect(screen.getByText("alice (impersonating)")).toBeInTheDocument();
+    expect(screen.getByText("alice")).toBeInTheDocument();
+    expect(screen.queryByText(/impersonating/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
   });
 });

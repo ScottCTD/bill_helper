@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ArrowLeftRight } from "lucide-react";
 
-import type { Currency, Entity, Entry, EntryKind, GroupMemberRole, GroupSummary, Tag, User } from "../lib/types";
+import type { Currency, Entity, Entry, EntryKind, GroupMemberRole, GroupSummary, Tag } from "../lib/types";
 import { CreatableSingleSelect, type CreatableSingleSelectChangeMeta } from "./CreatableSingleSelect";
 import { MarkdownBlockEditor } from "./MarkdownBlockEditor";
 import { SingleSelect } from "./SingleSelect";
@@ -51,7 +51,6 @@ interface EntryEditorModalProps {
   entry: Entry | null;
   currencies: Currency[];
   entities: Entity[];
-  users: User[];
   groups: GroupSummary[];
   tags: Tag[];
   currentUserId: string;
@@ -239,7 +238,6 @@ export function EntryEditorModal({
   entry,
   currencies,
   entities,
-  users,
   groups,
   tags,
   currentUserId,
@@ -361,6 +359,7 @@ export function EntryEditorModal({
   function buildSubmitPayload(): EntryEditorSubmitPayload | null {
     const amountMinor = Math.round(Number(formState.amount_major) * 100);
     const trimmedName = formState.name.trim();
+    const ownerUserId = formState.owner_user_id || currentUserId;
     const fromEntityResolution = resolveEntityInput(
       formState.from_entity_value,
       entities,
@@ -380,7 +379,7 @@ export function EntryEditorModal({
       setValidationError("Date is required.");
       return null;
     }
-    if (!formState.owner_user_id) {
+    if (!ownerUserId) {
       setValidationError("Owner is required.");
       return null;
     }
@@ -396,7 +395,7 @@ export function EntryEditorModal({
       from_entity: fromEntityResolution.entityName,
       to_entity_id: toEntityResolution.entityId,
       to_entity: toEntityResolution.entityName,
-      owner_user_id: formState.owner_user_id,
+      owner_user_id: ownerUserId,
       direct_group_id: formState.direct_group_id || null,
       direct_group_member_role: formState.direct_group_id ? (selectedGroupType === "SPLIT" ? formState.direct_group_member_role : null) : null,
       tags: formState.tags,
@@ -610,27 +609,6 @@ export function EntryEditorModal({
                 disabled={isSaving}
                 onChange={(nextTags) => setFormState((state) => ({ ...state, tags: nextTags }))}
               />
-            </div>
-
-            <div className="entry-property-line entry-property-line-group">
-              <span className="entry-property-label">Owner:</span>
-              <div className="entry-property-group entry-property-group-owner">
-                <NativeSelect
-                  aria-label="Owner"
-                  wrapperClassName="entry-property-input-owner"
-                  className="entry-property-input"
-                  value={formState.owner_user_id}
-                  disabled={isSaving}
-                  onChange={(event) => setFormState((state) => ({ ...state, owner_user_id: event.target.value }))}
-                >
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                      {user.is_current_user ? " (Current User)" : ""}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
             </div>
 
             <div className="entry-property-line entry-property-line-group">

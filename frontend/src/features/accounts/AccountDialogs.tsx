@@ -1,6 +1,6 @@
 import type { FormEvent } from "react";
 
-import type { Account, Reconciliation, Snapshot, User } from "../../lib/types";
+import type { Account, Reconciliation, Snapshot } from "../../lib/types";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { MarkdownBlockEditor } from "../../components/MarkdownBlockEditor";
@@ -31,7 +31,6 @@ interface AccountDialogsProps {
   onEditFormChange: (next: AccountFormState) => void;
   onCreateAccount: (event: FormEvent<HTMLFormElement>) => void;
   onUpdateAccount: (event: FormEvent<HTMLFormElement>) => void;
-  users: User[] | undefined;
   currencies: string[];
   editingAccount: Account | null;
   reconciliation: Reconciliation | undefined;
@@ -67,7 +66,6 @@ export function AccountDialogs(props: AccountDialogsProps) {
     onEditFormChange,
     onCreateAccount,
     onUpdateAccount,
-    users,
     currencies,
     editingAccount,
     reconciliation,
@@ -112,20 +110,6 @@ export function AccountDialogs(props: AccountDialogsProps) {
           </DialogHeader>
           <form className="grid gap-4" onSubmit={onCreateAccount}>
             <div className="form-grid">
-              <FormField label="Owner">
-                <NativeSelect
-                  required
-                  value={createForm.owner_user_id}
-                  onChange={(event) => onCreateFormChange({ ...createForm, owner_user_id: event.target.value })}
-                >
-                  {users?.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                      {user.is_current_user ? " (Current User)" : ""}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </FormField>
               <FormField label="Name">
                 <Input required value={createForm.name} onChange={(event) => onCreateFormChange({ ...createForm, name: event.target.value })} />
               </FormField>
@@ -185,20 +169,6 @@ export function AccountDialogs(props: AccountDialogsProps) {
           <div className="account-edit-layout">
             <form id="account-edit-form" className="account-edit-details-card" onSubmit={onUpdateAccount}>
               <div className="account-edit-details-grid">
-                <FormField label="Owner">
-                  <NativeSelect
-                    required
-                    value={editForm.owner_user_id}
-                    onChange={(event) => onEditFormChange({ ...editForm, owner_user_id: event.target.value })}
-                  >
-                    {users?.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.name}
-                        {user.is_current_user ? " (Current User)" : ""}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                </FormField>
                 <FormField label="Name">
                   <Input required value={editForm.name} onChange={(event) => onEditFormChange({ ...editForm, name: event.target.value })} />
                 </FormField>
