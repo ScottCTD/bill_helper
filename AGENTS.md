@@ -102,5 +102,5 @@ When the user requests a feature from `tasks/*.md`, ask whether to move that tas
 
 ## Repo-Local Skills
 
-- `notion-grade-ui`: use for frontend UI work in `frontend/`.
+- `frontend-ui-builder`: use for frontend UI work in `frontend/`, especially when building or changing pages, overlays, dialogs, dashboards, and agent/chat surfaces.
 - `desloppify-maintenance`: use only for explicit desloppify or score-driven cleanup requests.

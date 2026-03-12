@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend UI Builder"
+  short_description: "Repo-specific frontend build guide"
+  default_prompt: "Use $frontend-ui-builder to build or evolve this repo frontend without regressing interaction quality."

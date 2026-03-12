@@ -447,27 +447,27 @@ Behavioral checks:
 
 Skill file:
 
-- `/path/to/bill_helper/skills/notion-grade-ui/SKILL.md`
+- `/path/to/bill_helper/skills/frontend-ui-builder/SKILL.md`
 
 Current behavior:
 
-- For frontend UI changes, agents should load and apply `notion-grade-ui`.
-- The skill enforces token-only styling, primitives-first implementation, subtle interaction states, and accessibility baseline checks.
+- For frontend UI changes, agents should load and apply `frontend-ui-builder`.
+- The skill is the default evolving repo-specific frontend build guide: it covers shared page primitives, style-layer ownership, explicit scroll/overlay design, preserving valuable bespoke interactions, tight UI copy, stricter geometry for dashboard and agent surfaces, and feeding clearly successful new conventions back into the skill.
 - It is not intended for backend-only work.
 
 Operational impact:
 
 - No new runtime dependencies or environment variables.
-- Apply the skill checklist in PRs for non-trivial UI work.
+- Apply the skill checklist in PRs for non-trivial UI work, especially when touching layouts, fixed-height modals, floating menus, timelines, or agent surfaces.
 
 Affected files/modules:
 
 - `/path/to/bill_helper/AGENTS.md`
-- `/path/to/bill_helper/skills/notion-grade-ui/SKILL.md`
+- `/path/to/bill_helper/skills/frontend-ui-builder/SKILL.md`
 
 Constraints:
 
-- If existing frontend structure differs from recommended paths in the skill, adapt while preserving the same token/primitives/accessibility rules.
+- If existing frontend structure differs from the shared page/style ownership described in the skill, adapt while preserving the same scroll, overlay, and interaction-quality rules.
 
 ## Desloppify Skill Workflow
 

@@ -44,7 +44,7 @@ The docs in this repository are intentionally layered. Do not use one file for e
 | Feature deep dives | `docs/features/*.md` | `docs/backend_index.md`, `docs/frontend_index.md` |
 | Active implementation work | `tasks/*.md` | issue or thread context |
 | Historical implementation context | `docs/completed_tasks/*.md` | ADRs, stable docs |
-| Agent workflow, editing standards, and local skills | `AGENTS.md`, `skills/*.md` | `docs/development.md` |
+| Agent workflow, editing standards, and local skills | `AGENTS.md`, `skills/*/SKILL.md` | `docs/development.md` |
 
 If documents conflict, update the primary source first and trim stale secondary copies.
 

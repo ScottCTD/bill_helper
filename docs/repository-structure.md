@@ -252,7 +252,7 @@
   - `features/account-reconciliation.md`: account workspace + snapshot/reconciliation flow map.
   - `/adr`: architecture decision records.
 - `/tasks`: active implementation plans, temporary caveats, and migration checklists.
-- `/skills/notion-grade-ui/SKILL.md`: project-local frontend UI quality skill for calm, tokenized, primitives-first design implementation.
+- `/skills/frontend-ui-builder/SKILL.md`: project-local frontend build skill focused on shared layout primitives, explicit scroll/overlay ownership, concise copy, and preserving bespoke high-value interactions.
 - `/skills/desloppify-maintenance/SKILL.md`: project-local desloppify workflow skill for exclude review, queue-driven fix loops, and standards-log updates during cleanup campaigns.
 - `/scripts/seed_defaults.py`: reset local DB and seed default tags, entity categories, and accounts; optional user-memory copy now has explicit error policy (`best_effort` default, optional `fail_fast`) and shared DB factory usage.
 - `/scripts/seed_demo.py`: local seed dataset generation.
