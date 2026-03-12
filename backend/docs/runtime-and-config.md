@@ -51,6 +51,16 @@ Agent settings:
 - `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL`
 - `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY`
 
+Runtime override behavior:
+
+- `runtime_settings` stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`, including ordered `user_memory` and `available_agent_models`
+- effective runtime settings resolve as `override -> env default` where applicable
+- `user_memory` is DB-backed only, normalized as an ordered `list[str]`, and injected into every agent system prompt as a markdown unordered list when set
+- `available_agent_models` is DB-backed only, normalized as an ordered `list[str]`, and always resolved to include the effective `agent_model`
+- `entry_tagging_model` is DB-backed only, may be blank, and must stay inside the effective `available_agent_models` list; blank disables inline entry tag suggestion
+- identity is request-principal-based at API boundaries and is not persisted in runtime settings
+- protected HTTP routes require explicit `X-Bill-Helper-Principal`; the frontend owns that header through the local principal session
+- `agent_base_url` overrides allow only `http` and `https` and block localhost domains and non-public IP literals
 Behavior notes:
 
 - protected routes expect bearer tokens backed by the `sessions` table
@@ -90,6 +100,7 @@ Supported persisted overrides include:
 - `default_currency_code`
 - `dashboard_currency_code`
 - `agent_model`
+- `entry_tagging_model`
 - `available_agent_models`
 - run-limit and retry fields
 - attachment limits
@@ -100,6 +111,7 @@ Important constraints:
 
 - identity is not stored in runtime settings
 - `available_agent_models` is normalized to always include the effective `agent_model`
+- `entry_tagging_model` must be blank or included in the effective `available_agent_models`
 - `agent_base_url` only allows public `http` / `https` endpoints
 - `agent_api_key` is never returned from the API
 

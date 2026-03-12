@@ -16,6 +16,7 @@ def test_runtime_settings_update_normalizes_currency_and_agent_model() -> None:
         default_currency_code="cad",
         dashboard_currency_code="usd",
         agent_model="  openai/gpt-4.1-mini  ",
+        entry_tagging_model="  bedrock/us.anthropic.claude-sonnet-4-6  ",
         available_agent_models=[
             "  bedrock/us.anthropic.claude-sonnet-4-6  ",
             "openai/gpt-4.1-mini",
@@ -26,6 +27,7 @@ def test_runtime_settings_update_normalizes_currency_and_agent_model() -> None:
     assert payload.default_currency_code == "CAD"
     assert payload.dashboard_currency_code == "USD"
     assert payload.agent_model == "openai/gpt-4.1-mini"
+    assert payload.entry_tagging_model == "bedrock/us.anthropic.claude-sonnet-4-6"
     assert payload.available_agent_models == [
         "bedrock/us.anthropic.claude-sonnet-4-6",
         "openai/gpt-4.1-mini",

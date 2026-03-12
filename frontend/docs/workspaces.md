@@ -34,6 +34,7 @@
 - entry create/edit modal tag picking supports fuzzy search and ranks the strongest matches first before falling back to create-new
 - entry create/edit modal treats re-selecting a same-name existing entity as a real relink, so preserved missing labels can be restored without renaming the field
 - entry create/edit modal does not expose owner controls; submitted entries stay bound to the authenticated user's current scope
+- entry create/edit modal adds an inline AI tag-suggestion button beside the tag picker; it uses the current draft plus similar tagged entries, replaces the current modal tag selection on success, and aborts cleanly on second click or modal close without entering the agent workspace/history
 
 ### `frontend/src/pages/EntryDetailPage.tsx`
 
@@ -163,5 +164,6 @@
 - section UI is split across `SettingsToolbar.tsx`, `SettingsGeneralSection.tsx`, `SettingsAgentSection.tsx`, and `ResetSettingsDialog.tsx`
 - `Agent memory` lives under the `Agent` tab, is edited as one item per line, persists as a list of strings, and is sent to every backend agent system prompt
 - `Default model` is chosen from a dropdown sourced from `Available models`; available models still use one newline-separated identifier per line, preserve entered order, and fallback the default to the first remaining listed model if the current selection is removed
+- `Default tagging model` is a separate optional dropdown sourced from `Available models`; leaving it blank disables inline entry tag suggestion, and removing the selected model from `Available models` auto-clears it back to blank
 - bulk concurrency is labeled around concurrent launches, while the per-message attachment limit explicitly calls out that Bulk mode still starts one fresh thread per attachment
 - agent provider overrides use a compact toggle; when off the custom endpoint/key fields are hidden and saving falls back to server env values from `.env` or process env

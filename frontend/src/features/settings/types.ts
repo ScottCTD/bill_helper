@@ -3,6 +3,7 @@ export interface SettingsFormState {
   default_currency_code: string;
   dashboard_currency_code: string;
   agent_model: string;
+  entry_tagging_model: string;
   available_agent_models: string;
   agent_max_steps: string;
   agent_bulk_max_concurrent_threads: string;

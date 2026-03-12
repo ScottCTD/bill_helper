@@ -188,6 +188,7 @@ export function EntryDetailPage() {
         tags={tagsQuery.data ?? []}
         currentUserId={currentUserId}
         defaultCurrencyCode={runtimeSettingsQuery.data?.default_currency_code ?? "USD"}
+        entryTaggingModel={runtimeSettingsQuery.data?.entry_tagging_model}
         isSaving={updateMutation.isPending}
         saveError={updateMutation.isError ? (updateMutation.error as Error).message : undefined}
         onClose={() => setIsEditorOpen(false)}

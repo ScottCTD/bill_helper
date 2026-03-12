@@ -118,13 +118,18 @@ class LiteLLMModelClient:
         *,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: Any = None,
+        response_format: Any = None,
     ) -> dict[str, Any]:
+        effective_tools = self._tools if tools is None else tools
         request: dict[str, Any] = {
             "model": self._model_name,
             "messages": messages,
-            "tools": self._tools if tools is None else tools,
-            "tool_choice": "auto" if tool_choice is None else tool_choice,
         }
+        if effective_tools:
+            request["tools"] = effective_tools
+            request["tool_choice"] = "auto" if tool_choice is None else tool_choice
+        if response_format is not None:
+            request["response_format"] = response_format
         if supports_prompt_caching(self._model_name):
             injection_points = _cache_injection_points_for_messages(messages)
             if injection_points:
@@ -173,11 +178,13 @@ class LiteLLMModelClient:
         *,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: Any = None,
+        response_format: Any = None,
     ) -> Any:
         request = self._base_request(
             messages,
             tools=tools,
             tool_choice=tool_choice,
+            response_format=response_format,
         )
         try:
             return self._completion_with_transient_ssl_retry(request)
@@ -204,6 +211,7 @@ class LiteLLMModelClient:
         *,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: Any = None,
+        response_format: Any = None,
     ) -> dict[str, Any]:
         retrying = Retrying(
             stop=stop_after_attempt(self._retry_max_attempts),
@@ -222,6 +230,7 @@ class LiteLLMModelClient:
                     messages,
                     tools=tools,
                     tool_choice=tool_choice,
+                    response_format=response_format,
                 )
         if response is None:  # pragma: no cover - defensive guard
             raise AgentModelError("model request failed: no response")
@@ -257,11 +266,13 @@ class LiteLLMModelClient:
         *,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: Any = None,
+        response_format: Any = None,
     ) -> Iterator[dict[str, Any]]:
         request = self._base_request(
             messages,
             tools=tools,
             tool_choice=tool_choice,
+            response_format=response_format,
         )
         request["stream"] = True
         request["stream_options"] = {"include_usage": True}

@@ -19,6 +19,7 @@ RuntimeSettingsWriteField = Literal[
     "default_currency_code",
     "dashboard_currency_code",
     "agent_model",
+    "entry_tagging_model",
     "available_agent_models",
     "agent_max_steps",
     "agent_bulk_max_concurrent_threads",
@@ -40,6 +41,7 @@ class RuntimeSettingsWriteFields(BaseModel):
     default_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     dashboard_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     agent_model: str | None = Field(default=None, max_length=255)
+    entry_tagging_model: str | None = Field(default=None, max_length=255)
     available_agent_models: list[str] | None = None
     agent_max_steps: int | None = Field(default=None, ge=1, le=500)
     agent_bulk_max_concurrent_threads: int | None = Field(default=None, ge=1, le=16)
@@ -52,7 +54,7 @@ class RuntimeSettingsWriteFields(BaseModel):
     agent_base_url: str | None = Field(default=None, max_length=500)
     agent_api_key: str | None = Field(default=None, max_length=500)
 
-    @field_validator("agent_model", mode="before")
+    @field_validator("agent_model", "entry_tagging_model", mode="before")
     @classmethod
     def normalize_optional_text(cls, value: Any) -> str | None:
         if value is None:

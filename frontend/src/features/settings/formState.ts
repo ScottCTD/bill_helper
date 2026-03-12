@@ -8,6 +8,7 @@ export const RESET_RUNTIME_SETTINGS_PAYLOAD: RuntimeSettingsUpdatePayload = {
   default_currency_code: null,
   dashboard_currency_code: null,
   agent_model: null,
+  entry_tagging_model: null,
   available_agent_models: [],
   agent_max_steps: null,
   agent_bulk_max_concurrent_threads: null,
@@ -110,6 +111,7 @@ export function buildSettingsFormState(data: RuntimeSettings): SettingsFormState
     default_currency_code: data.default_currency_code,
     dashboard_currency_code: data.dashboard_currency_code,
     agent_model: data.agent_model,
+    entry_tagging_model: data.entry_tagging_model ?? "",
     available_agent_models: formatLines(data.available_agent_models),
     agent_max_steps: String(data.agent_max_steps),
     agent_bulk_max_concurrent_threads: String(data.agent_bulk_max_concurrent_threads),
@@ -173,13 +175,19 @@ export function buildSettingsUpdatePayload(formState: SettingsFormState): Runtim
       ? formState.agent_api_key.trim() || null
       : undefined
     : null;
+  const nextAvailableAgentModels = parseAgentModelLines(formState.available_agent_models);
+  const nextEntryTaggingModel = formState.entry_tagging_model.trim();
+  if (nextEntryTaggingModel && !nextAvailableAgentModels.includes(nextEntryTaggingModel)) {
+    throw new Error("Default tagging model must be one of the available models.");
+  }
 
   const payload: RuntimeSettingsUpdatePayload = {
     user_memory: parseUserMemoryLines(formState.user_memory),
     default_currency_code: nextDefaultCurrencyCode,
     dashboard_currency_code: nextDashboardCurrencyCode,
     agent_model: formState.agent_model.trim(),
-    available_agent_models: parseAgentModelLines(formState.available_agent_models),
+    entry_tagging_model: nextEntryTaggingModel || null,
+    available_agent_models: nextAvailableAgentModels,
     agent_max_steps: nextAgentMaxSteps,
     agent_bulk_max_concurrent_threads: nextAgentBulkMaxConcurrentThreads,
     agent_max_images_per_message: nextAgentMaxImagesPerMessage,

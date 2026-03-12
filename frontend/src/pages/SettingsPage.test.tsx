@@ -22,6 +22,7 @@ const baseSettingsFixture: RuntimeSettings = {
   default_currency_code: "CAD",
   dashboard_currency_code: "CAD",
   agent_model: "openrouter/qwen/qwen3.5-27b",
+  entry_tagging_model: null,
   available_agent_models: [
     "bedrock/us.anthropic.claude-sonnet-4-6",
     "openai/gpt-4.1-mini",
@@ -42,6 +43,7 @@ const baseSettingsFixture: RuntimeSettings = {
     default_currency_code: null,
     dashboard_currency_code: null,
     agent_model: null,
+    entry_tagging_model: null,
     available_agent_models: null,
     agent_max_steps: null,
     agent_bulk_max_concurrent_threads: null,
@@ -107,15 +109,48 @@ describe("SettingsPage", () => {
     renderWithQueryClient(<SettingsPage />);
 
     await openAgentTab();
-    expect(await screen.findByLabelText("Default model")).toHaveValue("openrouter/qwen/qwen3.5-27b");
+    const defaultModelInput = await screen.findByLabelText("Default model");
+    expect(defaultModelInput).toHaveValue("openrouter/qwen/qwen3.5-27b");
+    expect(screen.getByLabelText("Default tagging model")).toHaveValue("");
     expect(screen.getByLabelText("Available models")).toHaveValue(
       "bedrock/us.anthropic.claude-sonnet-4-6\nopenai/gpt-4.1-mini\nopenrouter/qwen/qwen3.5-27b"
     );
-    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+    expect(Array.from(defaultModelInput.querySelectorAll("option")).map((option) => option.textContent)).toEqual([
       "bedrock/us.anthropic.claude-sonnet-4-6",
       "openai/gpt-4.1-mini",
       "openrouter/qwen/qwen3.5-27b",
     ]);
+  });
+
+  it("saves the default tagging model from the available model list", async () => {
+    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
+    vi.mocked(getRuntimeSettings).mockResolvedValue(baseSettingsFixture);
+    vi.mocked(updateRuntimeSettings).mockResolvedValue({
+      ...baseSettingsFixture,
+      entry_tagging_model: "openai/gpt-4.1-mini",
+      overrides: {
+        ...baseSettingsFixture.overrides,
+        entry_tagging_model: "openai/gpt-4.1-mini",
+      },
+    });
+
+    renderWithQueryClient(<SettingsPage />);
+
+    await openAgentTab();
+    const taggingModelInput = await screen.findByLabelText("Default tagging model");
+    expect(taggingModelInput).toHaveValue("");
+
+    await userEvent.selectOptions(taggingModelInput, "openai/gpt-4.1-mini");
+    fireEvent.submit(document.getElementById("runtime-settings-form") as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(updateRuntimeSettings).toHaveBeenCalled();
+    });
+    expect(vi.mocked(updateRuntimeSettings).mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        entry_tagging_model: "openai/gpt-4.1-mini",
+      })
+    );
   });
 
   it("clears stored provider override when the toggle is turned off and saved", async () => {
@@ -125,9 +160,10 @@ describe("SettingsPage", () => {
       agent_base_url: "https://api.stepfun.example/v1",
       agent_api_key_configured: true,
       overrides: {
-        ...baseSettingsFixture.overrides,
-        agent_base_url: "https://api.stepfun.example/v1",
-        agent_api_key_configured: true,
+      ...baseSettingsFixture.overrides,
+      entry_tagging_model: null,
+      agent_base_url: "https://api.stepfun.example/v1",
+      agent_api_key_configured: true,
       },
     };
 
@@ -139,6 +175,7 @@ describe("SettingsPage", () => {
       agent_api_key_configured: true,
       overrides: {
         ...settingsWithOverride.overrides,
+        entry_tagging_model: null,
         agent_base_url: null,
         agent_api_key_configured: false,
       },
@@ -269,6 +306,31 @@ describe("SettingsPage", () => {
     expect(defaultModelInput).toHaveValue("bedrock/us.anthropic.claude-sonnet-4-6");
   });
 
+  it("clears the tagging model when its available model is removed", async () => {
+    vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
+    vi.mocked(getRuntimeSettings).mockResolvedValue({
+      ...baseSettingsFixture,
+      entry_tagging_model: "openrouter/qwen/qwen3.5-27b",
+      overrides: {
+        ...baseSettingsFixture.overrides,
+        entry_tagging_model: "openrouter/qwen/qwen3.5-27b",
+      },
+    });
+
+    renderWithQueryClient(<SettingsPage />);
+
+    await openAgentTab();
+    const taggingModelInput = await screen.findByLabelText("Default tagging model");
+    const availableModelsInput = screen.getByLabelText("Available models");
+
+    expect(taggingModelInput).toHaveValue("openrouter/qwen/qwen3.5-27b");
+
+    await userEvent.clear(availableModelsInput);
+    await userEvent.type(availableModelsInput, "bedrock/us.anthropic.claude-sonnet-4-6\nopenai/gpt-4.1-mini");
+
+    expect(taggingModelInput).toHaveValue("");
+  });
+
   it("saves Bulk mode max concurrent threads", async () => {
     vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 0, is_placeholder: false }]);
     vi.mocked(getRuntimeSettings).mockResolvedValue(baseSettingsFixture);
@@ -318,6 +380,7 @@ describe("SettingsPage", () => {
     expect(vi.mocked(updateRuntimeSettings).mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         agent_model: null,
+        entry_tagging_model: null,
         available_agent_models: [],
       })
     );

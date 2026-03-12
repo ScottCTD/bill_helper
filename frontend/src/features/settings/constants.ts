@@ -3,6 +3,7 @@ import type { SettingsTabDefinition } from "./types";
 export const SETTINGS_FIELD_IDS = {
   agentMemory: "settings-agent-memory",
   defaultModel: "settings-default-model",
+  defaultTaggingModel: "settings-default-tagging-model",
   availableModels: "settings-available-models",
   bulkMaxThreads: "settings-bulk-max-threads",
   maxAttachmentsPerMessage: "settings-max-attachments-per-message",

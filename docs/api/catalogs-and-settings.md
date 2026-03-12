@@ -327,6 +327,7 @@ Response highlights:
 - `default_currency_code`
 - `dashboard_currency_code`
 - `agent_model`
+- `entry_tagging_model`
 - `available_agent_models`
 - `agent_bulk_max_concurrent_threads`
 - `agent_base_url`
@@ -339,6 +340,7 @@ Behavior:
 - `user_memory` is DB-backed only and returned as an ordered list of strings
 - `available_agent_models` is DB-backed only and returned as an ordered list of model identifiers; the effective list always includes `agent_model`
 - identity is not part of runtime settings anymore
+- `entry_tagging_model` is DB-backed only, nullable, and must resolve to one of the effective `available_agent_models`; blank disables inline entry tag suggestion
 - `agent_api_key` is never returned
 - `agent_base_url` reflects only an explicit custom override from runtime settings or `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL`
 - `agent_api_key_configured` reports whether an explicit override key exists or LiteLLM can resolve provider credentials for the selected model
@@ -355,6 +357,7 @@ Updatable fields include:
 - `default_currency_code`
 - `dashboard_currency_code`
 - `agent_model`
+- `entry_tagging_model`
 - `available_agent_models`
 - `agent_max_steps`
 - `agent_bulk_max_concurrent_threads`

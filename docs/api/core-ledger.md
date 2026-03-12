@@ -158,6 +158,35 @@ Behavior:
 - response `tags` remain lightweight summaries without `entry_count`
 - response no longer includes raw link rows
 
+### `POST /entries/tag-suggestion`
+
+Request AI tag suggestions for an entry draft.
+
+Body:
+
+- `entry_id` (optional, for edit-mode self-exclusion)
+- `kind`
+- `occurred_at`
+- `currency_code`
+- `amount_minor` (optional)
+- `name` (optional)
+- `from_entity_id` / `from_entity` (optional)
+- `to_entity_id` / `to_entity` (optional)
+- `owner_user_id` (optional)
+- `markdown_body` (optional)
+- `current_tags` (required string array, used only as weak context)
+
+Response: `{ "suggested_tags": string[] }`
+
+Behavior:
+
+- request is principal-scoped and does not create an agent thread or persisted run
+- the route accepts partial drafts so the shared entry editor can use it in both create and edit flows
+- suggestions can only return names from the existing tag catalog; unknown tags are rejected as errors
+- prompt context includes the current draft, current tag descriptions, and up to 9 similar tagged entries
+- if `entry_tagging_model` is blank or invalid in runtime settings, the route returns `400`
+- provider/runtime failures return `503`
+
 ### `PATCH /entries/{entry_id}`
 
 Partial update. Response: `EntryRead`

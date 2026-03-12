@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -17,6 +17,8 @@ from backend.schemas_finance import (
     EntryDetailRead,
     EntryListResponse,
     EntryRead,
+    EntryTagSuggestionRequest,
+    EntryTagSuggestionResponse,
     EntryUpdate,
 )
 from backend.services.access_scope import (
@@ -34,6 +36,7 @@ from backend.services.entries import (
     soft_delete_entry,
     update_entry_from_command,
 )
+from backend.services.entry_tag_suggestions import EntryTagSuggestionError, suggest_entry_tags
 from backend.services.filter_groups import (
     entry_matches_filter_group,
     get_filter_group_definition,
@@ -271,6 +274,23 @@ def list_entries(
         limit=filters.limit,
         offset=filters.offset,
     )
+
+
+@router.post("/tag-suggestion", response_model=EntryTagSuggestionResponse)
+def suggest_tags_for_entry(
+    payload: EntryTagSuggestionRequest,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+) -> EntryTagSuggestionResponse:
+    try:
+        suggested_tags = suggest_entry_tags(
+            db,
+            principal=principal,
+            draft=payload,
+        )
+    except EntryTagSuggestionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return EntryTagSuggestionResponse(suggested_tags=suggested_tags)
 
 
 @router.get("/{entry_id}", response_model=EntryDetailRead)

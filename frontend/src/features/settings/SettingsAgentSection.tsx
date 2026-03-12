@@ -26,16 +26,22 @@ function MemoryAndModelsCard({ formState, onFormPatch }: SettingsFormPatchHandle
       ? formState.agent_model
       : availableModelOptions[0]
     : "";
+  const taggingModelValue =
+    hasAvailableModels && availableModelOptions.includes(formState.entry_tagging_model) ? formState.entry_tagging_model : "";
 
   function handleAvailableModelsChange(nextValue: string) {
     const nextAvailableModels = parseAgentModelLines(nextValue);
     const nextDefaultModel = nextAvailableModels.includes(formState.agent_model)
       ? formState.agent_model
       : nextAvailableModels[0] ?? "";
+    const nextTaggingModel = nextAvailableModels.includes(formState.entry_tagging_model)
+      ? formState.entry_tagging_model
+      : "";
 
     onFormPatch({
       available_agent_models: nextValue,
       agent_model: nextDefaultModel,
+      entry_tagging_model: nextTaggingModel,
     });
   }
 
@@ -70,6 +76,25 @@ function MemoryAndModelsCard({ formState, onFormPatch }: SettingsFormPatchHandle
             onChange={(event) => onFormPatch({ agent_model: event.target.value })}
           >
             {!hasAvailableModels ? <option value="">No available models configured</option> : null}
+            {availableModelOptions.map((modelName) => (
+              <option key={modelName} value={modelName}>
+                {modelName}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+
+        <FormField
+          label="Default tagging model"
+          htmlFor={SETTINGS_FIELD_IDS.defaultTaggingModel}
+          hint="Used only for inline entry tag suggestions. Leave blank to disable the feature."
+        >
+          <NativeSelect
+            id={SETTINGS_FIELD_IDS.defaultTaggingModel}
+            value={taggingModelValue}
+            onChange={(event) => onFormPatch({ entry_tagging_model: event.target.value })}
+          >
+            <option value="">Disabled</option>
             {availableModelOptions.map((modelName) => (
               <option key={modelName} value={modelName}>
                 {modelName}
