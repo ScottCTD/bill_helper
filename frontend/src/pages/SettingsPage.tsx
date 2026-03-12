@@ -1,3 +1,4 @@
+import { useAuth } from "../features/auth";
 import { SettingsAgentSection } from "../features/settings/SettingsAgentSection";
 import { SettingsGeneralSection } from "../features/settings/SettingsGeneralSection";
 import { ResetSettingsDialog } from "../features/settings/ResetSettingsDialog";
@@ -6,6 +7,7 @@ import { useSettingsPageModel } from "../features/settings/useSettingsPageModel"
 
 export function SettingsPage() {
   const model = useSettingsPageModel();
+  const auth = useAuth();
 
   if (model.queries.settingsQuery.isLoading && !model.formState) {
     return <p>Loading settings...</p>;
@@ -32,11 +34,17 @@ export function SettingsPage() {
       <form id="runtime-settings-form" className="grid gap-4" onSubmit={model.actions.submitSettings}>
         {model.activeTab === "general" ? (
           <SettingsGeneralSection
+            currentUserName={auth.session?.user.name ?? ""}
+            passwordForm={model.passwordForm}
             formState={model.formState}
             currencyOptions={model.currencyOptions}
             onFormPatch={model.actions.patchFormState}
+            onPasswordFieldChange={model.actions.patchPasswordForm}
+            onPasswordSubmit={model.actions.submitPasswordChange}
             onOpenResetDialog={() => model.actions.setIsResetDialogOpen(true)}
             isSaving={model.mutation.isPending}
+            isChangingPassword={model.passwordMutation.isPending}
+            passwordError={model.passwordError}
           />
         ) : (
           <SettingsAgentSection formState={model.formState} onFormPatch={model.actions.patchFormState} />

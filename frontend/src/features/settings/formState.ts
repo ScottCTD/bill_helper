@@ -106,7 +106,6 @@ function parseNonNegativeNumber(rawValue: string, fieldName: string): number {
 
 export function buildSettingsFormState(data: RuntimeSettings): SettingsFormState {
   return {
-    current_user_name: data.current_user_name,
     user_memory: formatLines(data.user_memory),
     default_currency_code: data.default_currency_code,
     dashboard_currency_code: data.dashboard_currency_code,

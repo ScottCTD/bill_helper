@@ -28,7 +28,6 @@ class RuntimeSettingsOverridesRead(BaseModel):
 class RuntimeSettingsRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    current_user_name: str
     user_memory: list[str] | None = None
     default_currency_code: str
     dashboard_currency_code: str

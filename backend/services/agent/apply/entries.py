@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from backend.auth.contracts import RequestPrincipal
 from backend.models_finance import Entry
 from backend.services.agent.apply.common import (
     AppliedResource,
     find_unique_entry_by_id,
     find_unique_entry_by_selector,
-    resolve_current_user,
 )
 from backend.services.agent.change_contracts.entries import (
     CreateEntryPayload,
@@ -19,13 +19,16 @@ from backend.services.entities import ensure_entity_by_name
 from backend.services.runtime_settings import resolve_runtime_settings
 
 
-def apply_create_entry(db: Session, payload: CreateEntryPayload, actor_name: str) -> AppliedResource:
+def apply_create_entry(
+    db: Session,
+    payload: CreateEntryPayload,
+    principal: RequestPrincipal,
+) -> AppliedResource:
     settings = resolve_runtime_settings(db)
     currency_code = (payload.currency_code or settings.default_currency_code).strip().upper()
 
-    from_entity = ensure_entity_by_name(db, payload.from_entity)
-    to_entity = ensure_entity_by_name(db, payload.to_entity)
-    owner_user = resolve_current_user(db, actor_name=actor_name)
+    from_entity = ensure_entity_by_name(db, payload.from_entity, owner_user_id=principal.user_id)
+    to_entity = ensure_entity_by_name(db, payload.to_entity, owner_user_id=principal.user_id)
 
     entry = Entry(
         account_id=None,
@@ -36,10 +39,10 @@ def apply_create_entry(db: Session, payload: CreateEntryPayload, actor_name: str
         currency_code=currency_code,
         from_entity_id=from_entity.id,
         to_entity_id=to_entity.id,
-        owner_user_id=owner_user.id,
+        owner_user_id=principal.user_id,
         from_entity=from_entity.name,
         to_entity=to_entity.name,
-        owner=owner_user.name,
+        owner=principal.user_name,
         markdown_body=payload.markdown_notes,
     )
     db.add(entry)
@@ -48,11 +51,15 @@ def apply_create_entry(db: Session, payload: CreateEntryPayload, actor_name: str
     return AppliedResource(resource_type="entry", resource_id=entry.id)
 
 
-def apply_update_entry(db: Session, payload: UpdateEntryPayload, actor_name: str) -> AppliedResource:
+def apply_update_entry(
+    db: Session,
+    payload: UpdateEntryPayload,
+    principal: RequestPrincipal,
+) -> AppliedResource:
     if payload.entry_id is not None:
-        entry = find_unique_entry_by_id(db, payload.entry_id, actor_name=actor_name)
+        entry = find_unique_entry_by_id(db, payload.entry_id, principal=principal)
     elif payload.selector is not None:
-        entry = find_unique_entry_by_selector(db, payload.selector, actor_name=actor_name)
+        entry = find_unique_entry_by_selector(db, payload.selector, principal=principal)
     else:  # pragma: no cover - validated by Pydantic
         raise ValueError("Entry reference is required")
 
@@ -72,7 +79,11 @@ def apply_update_entry(db: Session, payload: UpdateEntryPayload, actor_name: str
             entry.from_entity_id = None
             entry.from_entity = None
         else:
-            from_entity = ensure_entity_by_name(db, payload.patch.from_entity)
+            from_entity = ensure_entity_by_name(
+                db,
+                payload.patch.from_entity,
+                owner_user_id=entry.owner_user_id,
+            )
             entry.from_entity_id = from_entity.id
             entry.from_entity = from_entity.name
 
@@ -81,7 +92,11 @@ def apply_update_entry(db: Session, payload: UpdateEntryPayload, actor_name: str
             entry.to_entity_id = None
             entry.to_entity = None
         else:
-            to_entity = ensure_entity_by_name(db, payload.patch.to_entity)
+            to_entity = ensure_entity_by_name(
+                db,
+                payload.patch.to_entity,
+                owner_user_id=entry.owner_user_id,
+            )
             entry.to_entity_id = to_entity.id
             entry.to_entity = to_entity.name
 
@@ -96,11 +111,15 @@ def apply_update_entry(db: Session, payload: UpdateEntryPayload, actor_name: str
     return AppliedResource(resource_type="entry", resource_id=entry.id)
 
 
-def apply_delete_entry(db: Session, payload: DeleteEntryPayload, actor_name: str) -> AppliedResource:
+def apply_delete_entry(
+    db: Session,
+    payload: DeleteEntryPayload,
+    principal: RequestPrincipal,
+) -> AppliedResource:
     if payload.entry_id is not None:
-        entry = find_unique_entry_by_id(db, payload.entry_id, actor_name=actor_name)
+        entry = find_unique_entry_by_id(db, payload.entry_id, principal=principal)
     elif payload.selector is not None:
-        entry = find_unique_entry_by_selector(db, payload.selector, actor_name=actor_name)
+        entry = find_unique_entry_by_selector(db, payload.selector, principal=principal)
     else:  # pragma: no cover - validated by Pydantic
         raise ValueError("Entry reference is required")
     soft_delete_entry(db, entry)

@@ -38,7 +38,6 @@ vi.mock("../lib/api", async () => {
 });
 
 const runtimeSettingsFixture: RuntimeSettings = {
-  current_user_name: "Alice",
   user_memory: null,
   default_currency_code: "CAD",
   dashboard_currency_code: "CAD",
@@ -55,7 +54,6 @@ const runtimeSettingsFixture: RuntimeSettings = {
   agent_base_url: null,
   agent_api_key_configured: false,
   overrides: {
-    current_user_name: null,
     user_memory: null,
     default_currency_code: null,
     dashboard_currency_code: null,
@@ -171,6 +169,7 @@ describe("AccountsPage", () => {
     });
     expect(vi.mocked(createAccount).mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
+        owner_user_id: "user-1",
         name: "Travel Card",
         currency_code: "CAD",
         is_active: true
@@ -205,7 +204,7 @@ describe("AccountsPage", () => {
     await userEvent.dblClick(row);
     const editDialog = await screen.findByRole("dialog", { name: "Main" });
     expect(within(editDialog).getByLabelText("Name")).toHaveValue("Main");
-    expect(within(editDialog).queryByLabelText("Owner")).not.toBeInTheDocument();
+    expect(within(editDialog).getByLabelText("Owner")).toHaveValue("user-1");
     expect(within(editDialog).getByRole("heading", { name: "Reconciliation" })).toBeInTheDocument();
     expect(within(editDialog).getByRole("heading", { name: "Snapshot history" })).toBeInTheDocument();
     expect(within(editDialog).getByRole("heading", { name: "Add snapshot" })).toBeInTheDocument();

@@ -27,7 +27,7 @@ from backend.services.taxonomy_constants import (
     TAG_TYPE_TAXONOMY_KEY,
 )
 from backend.services.taxonomy import assign_single_term_by_name
-from backend.services.users import ensure_user_by_name
+from backend.services.users import create_user_with_unique_name
 
 SUPPORTED_CURRENCIES = ("CAD", "USD", "CNY")
 DEFAULT_ENTRY_CURRENCY = "CAD"
@@ -119,11 +119,17 @@ def _resolve_counterparty(
     description: str,
     debit_account_entity_name: str,
     kind: EntryKind,
+    owner_user_id: str,
 ):
     lowered = description.lower()
     if kind == EntryKind.INCOME and lowered.startswith("payment from"):
-        return ensure_entity_by_name(db, debit_account_entity_name)
-    return ensure_entity_by_name(db, _title_case(description), category="merchant")
+        return ensure_entity_by_name(db, debit_account_entity_name, owner_user_id=owner_user_id)
+    return ensure_entity_by_name(
+        db,
+        _title_case(description),
+        owner_user_id=owner_user_id,
+        category="merchant",
+    )
 
 
 def _iter_credit_rows(csv_path: str) -> list[dict[str, str]]:
@@ -147,7 +153,12 @@ def _seed_demo_rows(
     if existing_accounts:
         raise RuntimeError("Database reset failed: accounts still present after drop/create.")
 
-    default_user = ensure_user_by_name(db, "admin")
+    default_user = create_user_with_unique_name(
+        db,
+        raw_name="admin",
+        password="admin",
+        is_admin=True,
+    )
 
     debit_account = create_account_root(
         db,
@@ -177,6 +188,7 @@ def _seed_demo_rows(
             description=description,
             debit_account_entity_name=debit_account.name,
             kind=kind,
+            owner_user_id=default_user.id,
         )
 
         from_entity = credit_entity
@@ -225,6 +237,7 @@ def _seed_demo_rows(
                 subject_type=TAG_TYPE_SUBJECT_TYPE,
                 subject_id=tag.id,
                 term_name=tag_type,
+                owner_user_id=default_user.id,
             )
 
     db.commit()

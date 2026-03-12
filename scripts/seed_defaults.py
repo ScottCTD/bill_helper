@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import build_engine_for_url, build_session_maker
 from backend.services.accounts import create_account_root
+from backend.services.users import create_user_with_unique_name
 
 logger = logging.getLogger(__name__)
 
@@ -106,13 +107,17 @@ DEFAULT_ENTITY_CATEGORIES: list[dict[str, str]] = [
 # Seed functions
 # ---------------------------------------------------------------------------
 
-def seed_accounts(db: Session) -> tuple["User", "Account", "Account"]:
-    """Create admin user and Scotiabank Debit/Credit accounts. Returns (user, debit_account, credit_account)."""
-    from backend.models_finance import User
+def create_default_admin_user(db: Session) -> "User":
+    return create_user_with_unique_name(
+        db,
+        raw_name="admin",
+        password="admin",
+        is_admin=True,
+    )
 
-    user = User(name="admin")
-    db.add(user)
-    db.flush()
+
+def seed_accounts(db: Session, *, user: "User") -> tuple["Account", "Account"]:
+    """Create Scotiabank Debit/Credit accounts for the seeded admin user."""
 
     debit_account = create_account_root(
         db,
@@ -131,7 +136,7 @@ def seed_accounts(db: Session) -> tuple["User", "Account", "Account"]:
         is_active=True,
     )
 
-    return user, debit_account, credit_account
+    return debit_account, credit_account
 
 
 def _tag_color(name: str) -> str:
@@ -142,7 +147,12 @@ def _tag_color(name: str) -> str:
     return f"hsl({h % 360} 62% 72%)"
 
 
-def seed_tags(db: Session, tags: list[dict[str, str]] | None = None) -> list["Tag"]:
+def seed_tags(
+    db: Session,
+    *,
+    owner_user_id: str,
+    tags: list[dict[str, str]] | None = None,
+) -> list["Tag"]:
     """Create tags and assign tag_type taxonomy. Returns list of Tag objects."""
     from backend.models_finance import Tag
     from backend.services.taxonomy import assign_single_term_by_name
@@ -151,6 +161,7 @@ def seed_tags(db: Session, tags: list[dict[str, str]] | None = None) -> list["Ta
     created = []
     for tag_data in tags:
         tag = Tag(
+            owner_user_id=owner_user_id,
             name=tag_data["name"],
             color=_tag_color(tag_data["name"]),
             description=tag_data.get("description"),
@@ -163,6 +174,7 @@ def seed_tags(db: Session, tags: list[dict[str, str]] | None = None) -> list["Ta
             subject_type="tag",
             subject_id=tag.id,
             term_name=tag_data["type"],
+            owner_user_id=owner_user_id,
         )
         created.append(tag)
     return created
@@ -170,13 +182,15 @@ def seed_tags(db: Session, tags: list[dict[str, str]] | None = None) -> list["Ta
 
 def seed_entity_categories(
     db: Session,
+    *,
+    owner_user_id: str,
     categories: list[dict[str, str]] | None = None,
 ) -> list["TaxonomyTerm"]:
     """Create entity_category taxonomy terms with descriptions. Returns list of TaxonomyTerm objects."""
     from backend.services.taxonomy import ensure_term, get_taxonomy_by_key
 
     categories = categories or DEFAULT_ENTITY_CATEGORIES
-    taxonomy = get_taxonomy_by_key(db, "entity_category")
+    taxonomy = get_taxonomy_by_key(db, "entity_category", owner_user_id=owner_user_id)
     if taxonomy is None:
         raise RuntimeError("entity_category taxonomy not found")
 
@@ -245,10 +259,11 @@ def seed_all(
     """Run all seed functions. Returns a summary dict."""
     from backend.services.taxonomy import ensure_default_taxonomies
 
-    ensure_default_taxonomies(db)
-    user, debit, credit = seed_accounts(db)
-    tags = seed_tags(db)
-    entity_cats = seed_entity_categories(db)
+    user = create_default_admin_user(db)
+    ensure_default_taxonomies(db, owner_user_id=user.id)
+    debit, credit = seed_accounts(db, user=user)
+    tags = seed_tags(db, owner_user_id=user.id)
+    entity_cats = seed_entity_categories(db, owner_user_id=user.id)
 
     memory = None
     if include_user_memory:

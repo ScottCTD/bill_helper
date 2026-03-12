@@ -67,7 +67,7 @@ def parse_user_memory_or_none(value: object) -> list[str] | None:
             decoded = None
         if isinstance(decoded, list):
             return normalize_user_memory_items_or_none(str(item) for item in decoded)
-        return normalize_user_memory_items_or_none(normalized_text.split("\n"))
+        return normalize_user_memory_items_or_none([normalized_text])
     return normalize_user_memory_items_or_none([str(value)])
 
 

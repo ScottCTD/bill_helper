@@ -20,9 +20,9 @@ export function normalizeNullableMarkdown(value: string): string | null {
   return value;
 }
 
-export function buildEditForm(account: Account, fallbackOwnerUserId: string): AccountFormState {
+export function buildEditForm(account: Account): AccountFormState {
   return {
-    owner_user_id: account.owner_user_id ?? fallbackOwnerUserId,
+    owner_user_id: account.owner_user_id,
     name: account.name,
     markdown_body: account.markdown_body ?? "",
     currency_code: account.currency_code,

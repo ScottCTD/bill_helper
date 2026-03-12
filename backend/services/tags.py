@@ -8,15 +8,15 @@ from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal
 from backend.models_finance import Entry, EntryTag, Tag
-from backend.services.access_scope import entry_owner_filter
-from backend.services.crud_policy import PolicyViolation, assert_unique_name, normalize_required_name
+from backend.schemas_finance import TagRead
+from backend.services.access_scope import entry_owner_filter, tag_owner_filter
+from backend.services.crud_policy import assert_unique_name, normalize_required_name
 from backend.services.finance_contracts import TagCreateCommand, TagPatch
+from backend.services.taxonomy import assign_single_term_by_name, get_single_term_name, get_single_term_name_map
 from backend.services.taxonomy_constants import (
     TAG_TYPE_SUBJECT_TYPE,
     TAG_TYPE_TAXONOMY_KEY,
 )
-from backend.services.taxonomy import assign_single_term_by_name, get_single_term_name, get_single_term_name_map
-from backend.schemas_finance import TagRead
 from backend.validation.finance_names import normalize_tag_name
 
 _RNG = random.SystemRandom()
@@ -45,13 +45,35 @@ def resolve_tag_color(color: str | None) -> str:
     return generate_random_tag_color()
 
 
-def create_tag(db: Session, *, command: TagCreateCommand) -> Tag:
+def find_tag_by_name(
+    db: Session,
+    name: str,
+    *,
+    owner_user_id: str,
+) -> Tag | None:
+    normalized = normalize_tag_name(name)
+    if not normalized:
+        return None
+    return db.scalar(
+        select(Tag).where(
+            Tag.owner_user_id == owner_user_id,
+            Tag.name == normalized,
+        )
+    )
+
+
+def create_tag(
+    db: Session,
+    *,
+    command: TagCreateCommand,
+    owner_user_id: str,
+) -> Tag:
     normalized_name = normalize_required_name(
         command.name,
         normalizer=normalize_tag_name,
         empty_detail="Tag name cannot be empty",
     )
-    existing = db.scalar(select(Tag).where(Tag.name == normalized_name))
+    existing = find_tag_by_name(db, normalized_name, owner_user_id=owner_user_id)
     assert_unique_name(
         existing_id=existing.id if existing is not None else None,
         current_id=None,
@@ -59,6 +81,7 @@ def create_tag(db: Session, *, command: TagCreateCommand) -> Tag:
     )
 
     tag = Tag(
+        owner_user_id=owner_user_id,
         name=normalized_name,
         color=resolve_tag_color(command.color),
         description=command.description,
@@ -71,14 +94,8 @@ def create_tag(db: Session, *, command: TagCreateCommand) -> Tag:
         subject_type=TAG_TYPE_SUBJECT_TYPE,
         subject_id=tag.id,
         term_name=command.type,
+        owner_user_id=owner_user_id,
     )
-    return tag
-
-
-def load_tag(db: Session, *, tag_id: int) -> Tag:
-    tag = db.get(Tag, tag_id)
-    if tag is None:
-        raise PolicyViolation.not_found("Tag not found")
     return tag
 
 
@@ -89,7 +106,11 @@ def update_tag(db: Session, *, tag: Tag, patch: TagPatch) -> Tag:
             normalizer=normalize_tag_name,
             empty_detail="Tag name cannot be empty",
         )
-        existing = db.scalar(select(Tag).where(Tag.name == normalized_name))
+        existing = find_tag_by_name(
+            db,
+            normalized_name,
+            owner_user_id=tag.owner_user_id,
+        )
         assert_unique_name(
             existing_id=existing.id if existing is not None else None,
             current_id=tag.id,
@@ -107,25 +128,11 @@ def update_tag(db: Session, *, tag: Tag, patch: TagPatch) -> Tag:
             subject_type=TAG_TYPE_SUBJECT_TYPE,
             subject_id=tag.id,
             term_name=patch.type,
+            owner_user_id=tag.owner_user_id,
         )
     db.add(tag)
     db.flush()
     return tag
-
-
-def count_entries_for_tag(db: Session, *, tag_id: int) -> int:
-    return int(
-        db.scalar(
-            select(func.count(EntryTag.entry_id))
-            .select_from(EntryTag)
-            .join(Entry, Entry.id == EntryTag.entry_id)
-            .where(
-                EntryTag.tag_id == tag_id,
-                Entry.is_deleted.is_(False),
-            )
-        )
-        or 0
-    )
 
 
 def count_entries_for_tag_principal(
@@ -172,6 +179,7 @@ def build_tag_read(
             taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
             subject_type=TAG_TYPE_SUBJECT_TYPE,
             subject_id=tag.id,
+            owner_user_id=tag.owner_user_id,
         ),
         entry_count=resolved_entry_count,
     )
@@ -193,13 +201,16 @@ def list_tag_reads(db: Session, *, principal: RequestPrincipal) -> list[TagRead]
         select(
             Tag,
             entry_count_subquery.label("entry_count"),
-        ).order_by(Tag.name.asc())
+        )
+        .where(tag_owner_filter(principal))
+        .order_by(Tag.name.asc())
     ).all()
     type_by_tag_id = get_single_term_name_map(
         db,
         taxonomy_key=TAG_TYPE_TAXONOMY_KEY,
         subject_type=TAG_TYPE_SUBJECT_TYPE,
         subject_ids=[tag.id for tag, _ in rows],
+        owner_user_id=principal.user_id,
     )
     return [
         build_tag_read(
@@ -220,6 +231,7 @@ def delete_tag(db: Session, *, tag: Tag) -> None:
         subject_type=TAG_TYPE_SUBJECT_TYPE,
         subject_id=tag.id,
         term_name=None,
+        owner_user_id=tag.owner_user_id,
     )
     db.delete(tag)
     db.flush()

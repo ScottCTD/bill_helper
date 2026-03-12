@@ -78,8 +78,11 @@ This package contains the Bill Helper Telegram private-chat transport. It keeps 
    - `TELEGRAM_ALLOWED_USER_IDS=<your-telegram-user-id>`
    - one model-provider credential for the backend agent, such as `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`
    - optional: `TELEGRAM_BACKEND_BASE_URL=http://localhost:8000/api/v1` when using a non-default backend URL
+   - optional but recommended: `TELEGRAM_BACKEND_AUTH_TOKEN=<bearer-token>`
+   - optional for custom auth setups: `TELEGRAM_BACKEND_AUTH_HEADERS={"X-Forwarded-User":"bot-gateway"}` when a proxy or upstream requires extra headers
 4. Start the backend API the bot should talk to:
    - `uv run alembic upgrade head`
+   - `uv run python scripts/bootstrap_admin.py --name admin --password admin` if the target database does not already have a usable password-backed admin
    - `uv run bill-helper-api`
 5. In a second terminal, start polling:
    - `uv run python -m telegram.polling`
@@ -103,7 +106,7 @@ The webhook module serves `GET /healthz` and accepts Telegram updates at `POST /
 - `TELEGRAM_BACKEND_BASE_URL`: backend API base URL; defaults to `http://localhost:8000/api/v1`
 - `TELEGRAM_API_BASE_URL`: optional Telegram API override; defaults to `https://api.telegram.org`
 - `TELEGRAM_BACKEND_AUTH_TOKEN`: optional bearer token for backend requests
-- `TELEGRAM_BACKEND_AUTH_HEADERS`: optional JSON object of backend headers; explicit `Authorization` here wins over `TELEGRAM_BACKEND_AUTH_TOKEN`
+- `TELEGRAM_BACKEND_AUTH_HEADERS`: optional JSON object of backend headers for proxy or custom header injection. Explicit `Authorization` here wins over `TELEGRAM_BACKEND_AUTH_TOKEN`
 - `TELEGRAM_DATA_DIR`: optional transport data directory; defaults to `~/.local/share/bill-helper/telegram`
 - `TELEGRAM_STATE_PATH`: optional override for the per-chat state JSON file; defaults to `<TELEGRAM_DATA_DIR>/chat_state.json`
 

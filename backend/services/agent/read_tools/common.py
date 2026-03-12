@@ -2,20 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from backend.auth.dev_session import is_admin_principal_name
 from backend.models_finance import Account, Entity, Entry
 from backend.services.agent.group_references import (
     GroupMemberPublicRecord,
     GroupRelationshipRecord,
 )
 from backend.services.agent.payload_normalization import normalize_loose_text
+from backend.services.agent.principal_scope import load_run_principal
 from backend.services.agent.user_context import normalize_account_markdown_for_context
 from backend.services.agent.tool_types import ToolContext
-from backend.services.runtime_settings import resolve_runtime_settings
-from backend.services.users import find_user_by_name
 
 
 def string_match_rank(value: str | None, query: str | None) -> tuple[int, bool]:
@@ -30,13 +28,23 @@ def string_match_rank(value: str | None, query: str | None) -> tuple[int, bool]:
     return 99, False
 
 
-def tool_principal_scope(context: ToolContext) -> tuple[str, str | None]:
-    if context.principal_name is not None:
-        return context.principal_name, context.principal_user_id
-    settings = resolve_runtime_settings(context.db)
-    principal_name = settings.current_user_name
-    principal_user = find_user_by_name(context.db, principal_name)
-    return principal_name, principal_user.id if principal_user is not None else None
+def _load_run_principal(context: ToolContext) -> tuple[str | None, str | None, bool]:
+    principal = load_run_principal(context.db, run_id=context.run_id)
+    if principal is None:
+        return None, None, False
+    return principal.user_name, principal.user_id, principal.is_admin
+
+
+def tool_principal_scope(context: ToolContext) -> tuple[str | None, str | None, bool]:
+    if (
+        context.principal_name is not None
+        or context.principal_user_id is not None
+        or context.principal_is_admin is not None
+    ):
+        return context.principal_name, context.principal_user_id, bool(context.principal_is_admin)
+    return _load_run_principal(context)
+
+
 def effective_entity_category(
     entity: Entity,
     *,
@@ -81,19 +89,17 @@ def format_account_record(record: dict[str, Any]) -> str:
 
 
 def get_account_by_id_for_tool_context(context: ToolContext, account_id: str) -> Account | None:
-    principal_name, principal_user_id = tool_principal_scope(context)
-
-    conditions = [Account.id == account_id]
-    if not is_admin_principal_name(principal_name):
-        if principal_user_id is None:
-            conditions.append(Account.owner_user_id.is_(None))
-        else:
-            conditions.append(or_(Account.owner_user_id == principal_user_id, Account.owner_user_id.is_(None)))
+    _principal_name, principal_user_id, _principal_is_admin = tool_principal_scope(context)
+    if principal_user_id is None:
+        return None
 
     return context.db.scalar(
         select(Account)
         .join(Entity, Entity.id == Account.id)
-        .where(*conditions)
+        .where(
+            Account.id == account_id,
+            Account.owner_user_id == principal_user_id,
+        )
         .options(selectinload(Account.entity))
     )
 

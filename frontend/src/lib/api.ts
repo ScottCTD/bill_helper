@@ -1,5 +1,6 @@
 import type {
   Account,
+  AdminSession,
   AgentChangeItem,
   AgentRun,
   AgentStreamEvent,
@@ -7,6 +8,8 @@ import type {
   AgentThreadDetail,
   AgentThreadSummary,
   AgentToolCall,
+  AuthLoginResponse,
+  AuthSession,
   Currency,
   Dashboard,
   DashboardTimeline,
@@ -29,9 +32,19 @@ import type {
   Tag,
   User
 } from "./types";
-import { PRINCIPAL_SESSION_HEADER_NAME, getStoredPrincipalName } from "../features/session/principalStorage";
+import { clearStoredAuthToken, getStoredAuthToken } from "../features/auth/storage";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
 
 function extractErrorMessage(body: string, status: number): string {
   if (!body) {
@@ -50,13 +63,17 @@ function extractErrorMessage(body: string, status: number): string {
   return body;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+function buildApiHeaders(init?: RequestInit): Headers {
   const headers = new Headers(init?.headers ?? {});
-  const principalName = getStoredPrincipalName();
-  if (!principalName) {
-    throw new Error("Select a local principal before calling the API.");
+  const token = getStoredAuthToken();
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
   }
-  headers.set(PRINCIPAL_SESSION_HEADER_NAME, principalName);
+  return headers;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = buildApiHeaders(init);
   const isFormData = init?.body instanceof FormData;
   if (!isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -69,7 +86,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(extractErrorMessage(body, response.status));
+    const message = extractErrorMessage(body, response.status);
+    if (response.status === 401) {
+      clearStoredAuthToken();
+    }
+    throw new ApiError(message, response.status);
   }
 
   if (response.status === 204) {
@@ -136,6 +157,33 @@ function parseAgentStreamEvent(rawBlock: string): AgentStreamEvent | null {
     return null;
   }
   return payload as AgentStreamEvent;
+}
+
+export function login(payload: { username: string; password: string }): Promise<AuthLoginResponse> {
+  return request<AuthLoginResponse>("/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function logout(): Promise<void> {
+  return request<void>("/api/v1/auth/logout", {
+    method: "POST"
+  });
+}
+
+export function getAuthSession(): Promise<AuthSession> {
+  return request<AuthSession>("/api/v1/auth/me");
+}
+
+export function changeMyPassword(payload: {
+  current_password: string;
+  new_password: string;
+}): Promise<void> {
+  return request<void>("/api/v1/users/me/change-password", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 export function listAccounts(): Promise<Account[]> {
@@ -211,20 +259,6 @@ export function listUsers(): Promise<User[]> {
   return request<User[]>("/api/v1/users");
 }
 
-export function createUser(payload: { name: string }): Promise<User> {
-  return request<User>("/api/v1/users", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
-}
-
-export function updateUser(userId: string, payload: { name?: string }): Promise<User> {
-  return request<User>(`/api/v1/users/${userId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload)
-  });
-}
-
 export function createTag(payload: {
   name: string;
   color?: string | null;
@@ -287,7 +321,7 @@ export function updateTaxonomyTerm(
 }
 
 export function createAccount(payload: {
-  owner_user_id?: string;
+  owner_user_id: string;
   name: string;
   markdown_body?: string | null;
   currency_code: string;
@@ -372,7 +406,7 @@ export function createEntry(payload: {
   currency_code: string;
   from_entity_id?: string;
   to_entity_id?: string;
-  owner_user_id?: string;
+  owner_user_id: string;
   from_entity?: string;
   to_entity?: string;
   owner?: string;
@@ -467,6 +501,66 @@ export function updateRuntimeSettings(payload: RuntimeSettingsUpdatePayload): Pr
   });
 }
 
+export function listAdminUsers(): Promise<User[]> {
+  return request<User[]>("/api/v1/admin/users");
+}
+
+export function createAdminUser(payload: {
+  name: string;
+  password: string;
+  is_admin: boolean;
+}): Promise<User> {
+  return request<User>("/api/v1/admin/users", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateAdminUser(
+  userId: string,
+  payload: {
+    name?: string;
+    is_admin?: boolean;
+  }
+): Promise<User> {
+  return request<User>(`/api/v1/admin/users/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function resetAdminUserPassword(
+  userId: string,
+  payload: { new_password: string }
+): Promise<User> {
+  return request<User>(`/api/v1/admin/users/${userId}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteAdminUser(userId: string): Promise<void> {
+  return request<void>(`/api/v1/admin/users/${userId}`, {
+    method: "DELETE"
+  });
+}
+
+export function loginAsAdminUser(userId: string): Promise<AuthLoginResponse> {
+  return request<AuthLoginResponse>(`/api/v1/admin/users/${userId}/login-as`, {
+    method: "POST"
+  });
+}
+
+export function listAdminSessions(): Promise<AdminSession[]> {
+  return request<AdminSession[]>("/api/v1/admin/sessions");
+}
+
+export function deleteAdminSession(sessionId: string): Promise<void> {
+  return request<void>(`/api/v1/admin/sessions/${sessionId}`, {
+    method: "DELETE"
+  });
+}
+
 export function withApiBase(path: string): string {
   return `${API_BASE_URL}${path}`;
 }
@@ -532,9 +626,9 @@ export async function streamAgentMessage(payload: {
   signal?: AbortSignal;
   onEvent: (event: AgentStreamEvent) => void;
 }): Promise<void> {
-  const principalName = getStoredPrincipalName();
-  if (!principalName) {
-    throw new Error("Select a local principal before calling the API.");
+  const token = getStoredAuthToken();
+  if (!token) {
+    throw new Error("Log in before calling the API.");
   }
   const response = await fetch(`${API_BASE_URL}/api/v1/agent/threads/${payload.threadId}/messages/stream`, {
     method: "POST",
@@ -542,12 +636,16 @@ export async function streamAgentMessage(payload: {
     signal: payload.signal,
     headers: {
       Accept: "text/event-stream",
-      [PRINCIPAL_SESSION_HEADER_NAME]: principalName
+      Authorization: `Bearer ${token}`
     }
   });
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(extractErrorMessage(body, response.status));
+    const message = extractErrorMessage(body, response.status);
+    if (response.status === 401) {
+      clearStoredAuthToken();
+    }
+    throw new ApiError(message, response.status);
   }
   if (!response.body) {
     throw new Error("Streaming response body is unavailable.");

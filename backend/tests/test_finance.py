@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from backend.database import build_engine
-from backend.models_finance import Entity
+from backend.models_finance import Entity, User
 
 
 def create_account(client, name: str = "Checking", *, headers: dict[str, str] | None = None) -> dict:
@@ -29,9 +29,9 @@ def create_entity(client, name: str, *, category: str | None = None) -> dict:
     return response.json()
 
 
-def create_legacy_account_like_entity(name: str) -> None:
+def create_legacy_account_like_entity(name: str, *, owner_user_id: str) -> None:
     with Session(build_engine()) as db:
-        db.add(Entity(name=name, category="account"))
+        db.add(Entity(name=name, category="account", owner_user_id=owner_user_id))
         db.commit()
 
 
@@ -339,8 +339,11 @@ def test_dashboard_monthly_aggregations(client):
 
 def test_dashboard_keeps_generic_entities_even_when_categorized_as_account(client):
     account = create_account(client)
-    create_legacy_account_like_entity("Legacy Debit")
-    create_legacy_account_like_entity("Legacy Credit")
+    with Session(build_engine()) as db:
+        owner = db.query(User).filter(User.name == "admin").one()
+        owner_user_id = owner.id
+    create_legacy_account_like_entity("Legacy Debit", owner_user_id=owner_user_id)
+    create_legacy_account_like_entity("Legacy Credit", owner_user_id=owner_user_id)
 
     create_entry(
         client,
@@ -434,10 +437,10 @@ def test_dashboard_timeline_only_lists_months_with_visible_expenses(client):
     assert response.json() == {"months": ["2025-11", "2026-01"]}
 
 
-def test_account_routes_are_scoped_by_principal(client):
+def test_account_routes_are_scoped_by_principal(client, auth_headers):
     account = create_account(client, name="Admin Account")
 
-    scoped_headers = {"X-Bill-Helper-Principal": "alice"}
+    scoped_headers = auth_headers("alice")
     list_response = client.get("/api/v1/accounts", headers=scoped_headers)
     list_response.raise_for_status()
     assert list_response.json() == []
@@ -470,6 +473,18 @@ def test_account_patch_can_clear_markdown_body(client):
     assert update_response.json()["markdown_body"] is None
 
 
+def test_account_patch_rejects_null_owner(client):
+    account = create_account(client, name="Owned Account")
+
+    update_response = client.patch(
+        f"/api/v1/accounts/{account['id']}",
+        json={"owner_user_id": None},
+    )
+
+    assert update_response.status_code == 400
+    assert update_response.json()["detail"] == "Account owner is required"
+
+
 def test_create_account_duplicate_name_returns_conflict(client):
     create_account(client, name="Duplicate Account")
 
@@ -486,7 +501,7 @@ def test_create_account_duplicate_name_returns_conflict(client):
     assert duplicate_response.json()["detail"] == "Entity name already exists"
 
 
-def test_dashboard_is_scoped_by_principal(client):
+def test_dashboard_is_scoped_by_principal(client, auth_headers):
     create_account(client, name="Admin Account")
     admin_account = create_account(client, name="Admin Ledger")
     create_entry(
@@ -498,7 +513,7 @@ def test_dashboard_is_scoped_by_principal(client):
         name="Admin-only expense",
     )
 
-    alice_headers = {"X-Bill-Helper-Principal": "alice"}
+    alice_headers = auth_headers("alice")
     alice_account = create_account(client, name="Alice Account", headers=alice_headers)
     create_entry(
         client,

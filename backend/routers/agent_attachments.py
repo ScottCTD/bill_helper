@@ -6,22 +6,24 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from backend.auth.dependencies import require_admin_principal
+from backend.auth.contracts import RequestPrincipal
+from backend.auth.dependencies import get_current_principal
 from backend.database import get_db
-from backend.models_agent import AgentMessageAttachment
+from backend.services.access_scope import load_attachment_for_principal
 
 router = APIRouter(
     prefix="/agent",
     tags=["agent"],
-    dependencies=[Depends(require_admin_principal)],
 )
 
 
 @router.get("/attachments/{attachment_id}")
-def get_attachment(attachment_id: str, db: Session = Depends(get_db)) -> FileResponse:
-    attachment = db.get(AgentMessageAttachment, attachment_id)
-    if attachment is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+def get_attachment(
+    attachment_id: str,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> FileResponse:
+    attachment = load_attachment_for_principal(db, attachment_id=attachment_id, principal=principal)
     path = Path(attachment.file_path)
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file is missing")

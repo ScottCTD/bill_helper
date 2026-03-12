@@ -26,7 +26,6 @@ THREAD_2_ID = "22222222-2222-2222-2222-222222222222"
 class FakeBillHelperApiClient:
     def __init__(self) -> None:
         self.settings = RuntimeSettingsRead(
-            current_user_name="admin",
             user_memory=None,
             default_currency_code="CAD",
             dashboard_currency_code="CAD",

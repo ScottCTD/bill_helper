@@ -77,7 +77,7 @@ export interface TaxonomyTerm {
 
 export interface Account {
   id: string;
-  owner_user_id: string | null;
+  owner_user_id: string;
   name: string;
   markdown_body: string | null;
   currency_code: string;
@@ -147,7 +147,7 @@ export interface Entry {
   currency_code: string;
   from_entity_id: string | null;
   to_entity_id: string | null;
-  owner_user_id: string | null;
+  owner_user_id: string;
   from_entity: string | null;
   from_entity_missing: boolean;
   to_entity: string | null;
@@ -356,7 +356,6 @@ export interface Dashboard {
 }
 
 export interface RuntimeSettingsOverrides {
-  current_user_name: string | null;
   user_memory: string[] | null;
   default_currency_code: string | null;
   dashboard_currency_code: string | null;
@@ -375,7 +374,6 @@ export interface RuntimeSettingsOverrides {
 }
 
 export interface RuntimeSettings {
-  current_user_name: string;
   user_memory: string[] | null;
   default_currency_code: string;
   dashboard_currency_code: string;
@@ -454,6 +452,33 @@ export interface AgentThread {
   title: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  is_admin: boolean;
+}
+
+export interface AuthSession {
+  user: AuthUser;
+  session_id: string | null;
+  is_admin_impersonation: boolean;
+}
+
+export interface AuthLoginResponse extends AuthSession {
+  token: string;
+}
+
+export interface AdminSession {
+  id: string;
+  user_id: string;
+  user_name: string;
+  is_admin: boolean;
+  is_admin_impersonation: boolean;
+  created_at: string;
+  expires_at: string | null;
+  is_current: boolean;
 }
 
 export interface AgentThreadSummary extends AgentThread {

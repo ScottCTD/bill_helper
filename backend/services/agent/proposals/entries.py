@@ -28,6 +28,7 @@ from backend.services.agent.proposals.common import (
     has_pending_create_entity_root_proposal,
     proposal_short_id,
     proposal_result,
+    require_tool_principal,
     resolve_proposal_by_id,
 )
 from backend.services.agent.tool_results import error_result
@@ -56,13 +57,24 @@ def _find_entries_for_reference(
     entry_id: str | None,
     selector: EntrySelectorPayload | None,
 ) -> list[Entry]:
+    principal = require_tool_principal(context)
     id_matches = (
-        find_entries_by_public_id_prefix(context.db, entry_id)
+        find_entries_by_public_id_prefix(
+            context.db,
+            entry_id,
+            principal_user_id=principal.user_id,
+            is_admin=False,
+        )
         if entry_id is not None
         else None
     )
     selector_matches = (
-        find_entries_by_selector(context.db, selector)
+        find_entries_by_selector(
+            context.db,
+            selector,
+            principal_user_id=principal.user_id,
+            is_admin=False,
+        )
         if selector is not None
         else None
     )
@@ -149,7 +161,16 @@ def match_existing_entry_or_error(
     *,
     entry_id: str,
 ) -> Entry | ToolExecutionResult:
-    matches = find_entries_by_public_id_prefix(context.db, entry_id)
+    try:
+        principal = require_tool_principal(context)
+    except ValueError as exc:
+        return error_result(str(exc))
+    matches = find_entries_by_public_id_prefix(
+        context.db,
+        entry_id,
+        principal_user_id=principal.user_id,
+        is_admin=False,
+    )
     if not matches:
         return error_result("no entry matched entry_id", details={"entry_id": entry_id})
     if len(matches) > 1:
@@ -206,7 +227,8 @@ def entry_preview_from_proposal(item: AgentChangeItem) -> dict[str, Any]:
 
 
 def validate_proposed_entity_reference(context: ToolContext, entity_name: str) -> None:
-    if find_entity_by_name(context.db, entity_name) is not None:
+    principal = require_tool_principal(context)
+    if find_entity_by_name(context.db, entity_name, owner_user_id=principal.user_id) is not None:
         return
     if has_pending_create_entity_root_proposal(context, entity_name):
         return

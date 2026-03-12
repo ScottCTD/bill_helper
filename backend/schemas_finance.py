@@ -135,12 +135,12 @@ class AccountBase(BaseModel):
 
 
 class AccountCreate(AccountBase):
-    owner_user_id: str | None = None
+    owner_user_id: str | None = Field(default=None, min_length=1)
     is_active: bool = True
 
 
 class AccountUpdate(NonEmptyPatchModel):
-    owner_user_id: str | None = None
+    owner_user_id: str | None = Field(default=None, min_length=1)
     name: str | None = Field(default=None, min_length=1, max_length=200)
     markdown_body: str | None = None
     currency_code: str | None = Field(default=None, min_length=3, max_length=3)
@@ -149,7 +149,7 @@ class AccountUpdate(NonEmptyPatchModel):
 
 class AccountRead(AccountBase):
     id: str
-    owner_user_id: str | None = None
+    owner_user_id: str
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -219,7 +219,7 @@ class EntryBase(BaseModel):
     currency_code: str = Field(min_length=3, max_length=3)
     from_entity_id: str | None = None
     to_entity_id: str | None = None
-    owner_user_id: str | None = None
+    owner_user_id: str | None = Field(default=None, min_length=1)
     from_entity: str | None = Field(default=None, max_length=255)
     to_entity: str | None = Field(default=None, max_length=255)
     owner: str | None = Field(default=None, max_length=255)
@@ -247,7 +247,7 @@ class EntryUpdate(BaseModel):
     currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     from_entity_id: str | None = None
     to_entity_id: str | None = None
-    owner_user_id: str | None = None
+    owner_user_id: str | None = Field(default=None, min_length=1)
     from_entity: str | None = Field(default=None, max_length=255)
     to_entity: str | None = Field(default=None, max_length=255)
     owner: str | None = Field(default=None, max_length=255)
@@ -267,7 +267,7 @@ class EntryRead(BaseModel):
     currency_code: str
     from_entity_id: str | None = None
     to_entity_id: str | None = None
-    owner_user_id: str | None = None
+    owner_user_id: str
     from_entity: str | None = None
     from_entity_missing: bool = False
     to_entity: str | None = None

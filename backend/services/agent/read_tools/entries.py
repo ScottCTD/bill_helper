@@ -5,9 +5,7 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
-from backend.auth.dev_session import is_admin_principal_name
 from backend.models_finance import Entry
-from backend.services.access_scope import owner_user_condition
 from backend.services.agent.entry_references import entry_ambiguity_details, entry_to_public_record
 from backend.services.agent.read_tools.common import format_entry_record, string_match_rank, tool_principal_scope
 from backend.services.agent.tool_args.read import ListEntriesArgs
@@ -17,48 +15,47 @@ from backend.validation.finance_names import normalize_tag_name
 
 
 def list_entries(context: ToolContext, args: ListEntriesArgs) -> ToolExecutionResult:
-    principal_name, principal_user_id = tool_principal_scope(context)
-    conditions = [
-        Entry.is_deleted.is_(False),
-        owner_user_condition(
-            Entry.owner_user_id,
-            principal_user_id=principal_user_id,
-            is_admin=is_admin_principal_name(principal_name),
-        ),
-    ]
-    if args.date is not None:
-        conditions.append(Entry.occurred_at == args.date)
-    if args.start_date is not None:
-        conditions.append(Entry.occurred_at >= args.start_date)
-    if args.end_date is not None:
-        conditions.append(Entry.occurred_at <= args.end_date)
-    if args.kind is not None:
-        conditions.append(Entry.kind == args.kind)
-    if args.source is not None:
-        source_pattern = f"%{args.source}%"
-        conditions.append(
-            or_(
-                Entry.name.ilike(source_pattern),
-                Entry.from_entity.ilike(source_pattern),
-                Entry.to_entity.ilike(source_pattern),
+    _principal_name, principal_user_id, _principal_is_admin = tool_principal_scope(context)
+
+    candidate_rows: list[Entry] = []
+    if principal_user_id is not None:
+        conditions = [
+            Entry.is_deleted.is_(False),
+            Entry.owner_user_id == principal_user_id,
+        ]
+        if args.date is not None:
+            conditions.append(Entry.occurred_at == args.date)
+        if args.start_date is not None:
+            conditions.append(Entry.occurred_at >= args.start_date)
+        if args.end_date is not None:
+            conditions.append(Entry.occurred_at <= args.end_date)
+        if args.kind is not None:
+            conditions.append(Entry.kind == args.kind)
+        if args.source is not None:
+            source_pattern = f"%{args.source}%"
+            conditions.append(
+                or_(
+                    Entry.name.ilike(source_pattern),
+                    Entry.from_entity.ilike(source_pattern),
+                    Entry.to_entity.ilike(source_pattern),
+                )
+            )
+        if args.name is not None:
+            conditions.append(Entry.name.ilike(f"%{args.name}%"))
+        if args.from_entity is not None:
+            conditions.append(Entry.from_entity.ilike(f"%{args.from_entity}%"))
+        if args.to_entity is not None:
+            conditions.append(Entry.to_entity.ilike(f"%{args.to_entity}%"))
+
+        candidate_rows = list(
+            context.db.scalars(
+                select(Entry)
+                .where(*conditions)
+                .options(selectinload(Entry.tags))
+                .order_by(Entry.occurred_at.desc(), Entry.created_at.desc())
+                .limit(max(args.limit * 8, 200))
             )
         )
-    if args.name is not None:
-        conditions.append(Entry.name.ilike(f"%{args.name}%"))
-    if args.from_entity is not None:
-        conditions.append(Entry.from_entity.ilike(f"%{args.from_entity}%"))
-    if args.to_entity is not None:
-        conditions.append(Entry.to_entity.ilike(f"%{args.to_entity}%"))
-
-    candidate_rows = list(
-        context.db.scalars(
-            select(Entry)
-            .where(*conditions)
-            .options(selectinload(Entry.tags))
-            .order_by(Entry.occurred_at.desc(), Entry.created_at.desc())
-            .limit(max(args.limit * 8, 200))
-        )
-    )
 
     ranked: list[tuple[tuple[int, int, int, int, int, int, int], Entry]] = []
     for entry in candidate_rows:

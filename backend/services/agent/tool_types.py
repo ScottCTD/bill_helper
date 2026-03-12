@@ -30,3 +30,4 @@ class ToolContext:
     run_id: str
     principal_name: str | None = None
     principal_user_id: str | None = None
+    principal_is_admin: bool | None = None

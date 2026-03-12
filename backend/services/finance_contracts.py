@@ -29,7 +29,7 @@ class AccountCreateCore(BaseModel):
 
 
 class AccountCreateCommand(AccountCreateCore):
-    owner_user_id: str | None = None
+    owner_user_id: str | None = Field(default=None, min_length=1)
 
 
 class AccountPatchCore(NonEmptyPatchModel):
@@ -42,7 +42,7 @@ class AccountPatchCore(NonEmptyPatchModel):
 
 
 class AccountPatch(AccountPatchCore):
-    owner_user_id: str | None = None
+    owner_user_id: str | None = Field(default=None, min_length=1)
 
     def includes(self, field: AccountPatchField) -> bool:
         return field in self.model_fields_set

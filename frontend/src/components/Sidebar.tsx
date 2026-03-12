@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
 import { NavLink } from "react-router-dom";
-import { Bot, Building2, CreditCard, FolderKanban, Home, Layers3, Network, Settings2, SlidersHorizontal, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Bot, Building2, CreditCard, FolderKanban, Home, Layers3, Network, PanelLeft, PanelLeftClose, Settings2, SlidersHorizontal } from "lucide-react";
 
-import { PrincipalSessionCard } from "../features/session";
+import { AuthSessionCard } from "../features/auth";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 
@@ -28,17 +28,9 @@ export function Sidebar({ collapsed, width, onToggle }: SidebarProps) {
   const sidebarStyle = (!collapsed ? { "--sidebar-width": `${width}px` } : undefined) as CSSProperties | undefined;
 
   return (
-    <aside
-      className={cn(
-        "sidebar",
-        collapsed && "sidebar-collapsed"
-      )}
-      style={sidebarStyle}
-    >
+    <aside className={cn("sidebar", collapsed && "sidebar-collapsed")} style={sidebarStyle}>
       <div className="sidebar-header">
-        {!collapsed && (
-          <span className="sidebar-title">Bill Helper</span>
-        )}
+        {!collapsed ? <span className="sidebar-title">Bill Helper</span> : null}
         <Button
           type="button"
           variant="ghost"
@@ -47,11 +39,7 @@ export function Sidebar({ collapsed, width, onToggle }: SidebarProps) {
           className="sidebar-toggle"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {collapsed ? (
-            <PanelLeft className="h-4 w-4" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" />
-          )}
+          {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </Button>
       </div>
 
@@ -63,23 +51,22 @@ export function Sidebar({ collapsed, width, onToggle }: SidebarProps) {
               key={item.to}
               to={item.to}
               end={item.to === "/"}
-              className={({ isActive }) =>
-                cn("sidebar-link", isActive && "sidebar-link-active")
-              }
+              className={({ isActive }) => cn("sidebar-link", isActive && "sidebar-link-active")}
               title={collapsed ? item.label : undefined}
             >
               <Icon className="sidebar-link-icon" />
-              {!collapsed && <span>{item.label}</span>}
+              {!collapsed ? <span>{item.label}</span> : null}
             </NavLink>
           );
         })}
       </nav>
 
-      {!collapsed && (
+      {!collapsed ? (
         <div className="sidebar-footer">
-          <PrincipalSessionCard />
+          <p className="sidebar-footer-text">Local-first ledger with AI review</p>
+          <AuthSessionCard />
         </div>
-      )}
+      ) : null}
     </aside>
   );
 }

@@ -24,6 +24,9 @@ class AgentThread(Base):
     __tablename__ = "agent_threads"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False

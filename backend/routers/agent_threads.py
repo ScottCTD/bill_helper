@@ -11,7 +11,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, load_only, selectinload
 
-from backend.auth.dependencies import require_admin_principal
+from backend.auth.contracts import RequestPrincipal
+from backend.auth.dependencies import get_current_principal
 from backend.config import get_settings
 from backend.database import get_db
 from backend.database import get_session_maker
@@ -31,6 +32,7 @@ from backend.schemas_agent import (
     AgentThreadSummaryRead,
     AgentThreadUpdate,
 )
+from backend.services.access_scope import agent_thread_owner_filter, load_agent_thread_for_principal
 from backend.services.agent.attachments import (
     delete_attachment_directories,
     thread_attachment_directories,
@@ -57,7 +59,6 @@ AgentSurface = Literal["app", "telegram"]
 router = APIRouter(
     prefix="/agent",
     tags=["agent"],
-    dependencies=[Depends(require_admin_principal)],
 )
 
 
@@ -98,12 +99,20 @@ async def create_user_message_run_or_503(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
-def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:
-    threads = list(db.scalars(select(AgentThread).order_by(AgentThread.updated_at.desc())))
+def _thread_summary_rows(db: Session, *, principal: RequestPrincipal) -> list[AgentThreadSummaryRead]:
+    threads = list(
+        db.scalars(
+            select(AgentThread)
+            .where(agent_thread_owner_filter(principal))
+            .order_by(AgentThread.updated_at.desc())
+        )
+    )
     running_thread_ids = set(
         db.scalars(
             select(AgentRun.thread_id)
+            .join(AgentThread, AgentThread.id == AgentRun.thread_id)
             .where(AgentRun.status == AgentRunStatus.RUNNING)
+            .where(agent_thread_owner_filter(principal))
             .distinct()
         )
     )
@@ -139,13 +148,20 @@ def _thread_summary_rows(db: Session) -> list[AgentThreadSummaryRead]:
 
 
 @router.get("/threads", response_model=list[AgentThreadSummaryRead])
-def list_threads(db: Session = Depends(get_db)) -> list[AgentThreadSummaryRead]:
-    return _thread_summary_rows(db)
+def list_threads(
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> list[AgentThreadSummaryRead]:
+    return _thread_summary_rows(db, principal=principal)
 
 
 @router.post("/threads", response_model=AgentThreadRead, status_code=status.HTTP_201_CREATED)
-def create_thread(payload: AgentThreadCreate | None = None, db: Session = Depends(get_db)) -> AgentThreadRead:
-    thread = AgentThread(title=payload.title if payload else None)
+def create_thread(
+    payload: AgentThreadCreate | None = None,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> AgentThreadRead:
+    thread = AgentThread(owner_user_id=principal.user_id, title=payload.title if payload else None)
     db.add(thread)
     db.commit()
     db.refresh(thread)
@@ -153,17 +169,20 @@ def create_thread(payload: AgentThreadCreate | None = None, db: Session = Depend
 
 
 @router.delete("/threads/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_thread(thread_id: str, db: Session = Depends(get_db)) -> None:
-    thread = db.scalar(
-        select(AgentThread)
-        .where(AgentThread.id == thread_id)
-        .options(
+def delete_thread(
+    thread_id: str,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> None:
+    thread = load_agent_thread_for_principal(
+        db,
+        thread_id=thread_id,
+        principal=principal,
+        stmt=select(AgentThread).options(
             selectinload(AgentThread.runs),
             selectinload(AgentThread.messages).selectinload(AgentMessage.attachments),
-        )
+        ),
     )
-    if thread is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
 
     if any(run.status == AgentRunStatus.RUNNING for run in thread.runs):
         raise HTTPException(
@@ -182,7 +201,9 @@ def update_thread(
     thread_id: str,
     payload: AgentThreadUpdate,
     db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> AgentThreadRead:
+    load_agent_thread_for_principal(db, thread_id=thread_id, principal=principal)
     try:
         result = rename_thread_by_id(db, thread_id=thread_id, title=payload.title)
     except AgentThreadNotFoundError as exc:
@@ -191,11 +212,16 @@ def update_thread(
 
 
 @router.get("/threads/{thread_id}", response_model=AgentThreadDetailRead)
-def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThreadDetailRead:
-    thread = db.scalar(
-        select(AgentThread)
-        .where(AgentThread.id == thread_id)
-        .options(
+def get_thread_detail(
+    thread_id: str,
+    db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
+) -> AgentThreadDetailRead:
+    thread = load_agent_thread_for_principal(
+        db,
+        thread_id=thread_id,
+        principal=principal,
+        stmt=select(AgentThread).options(
             selectinload(AgentThread.messages).selectinload(AgentMessage.attachments),
             selectinload(AgentThread.runs).selectinload(AgentRun.events),
             selectinload(AgentThread.runs).selectinload(AgentRun.assistant_message),
@@ -216,10 +242,8 @@ def get_thread_detail(thread_id: str, db: Session = Depends(get_db)) -> AgentThr
             selectinload(AgentThread.runs)
             .selectinload(AgentRun.change_items)
             .selectinload(AgentChangeItem.review_actions),
-        )
+        ),
     )
-    if thread is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
     settings = resolve_runtime_settings(db)
     return AgentThreadDetailRead(
         thread=thread_to_schema(thread),
@@ -242,7 +266,9 @@ async def send_thread_message(
     surface: AgentSurface = Form(default="app"),
     files: list[UploadFile] = File(default_factory=list),
     db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> AgentRunRead:
+    load_agent_thread_for_principal(db, thread_id=thread_id, principal=principal)
     run = await create_user_message_run_or_503(
         thread_id=thread_id,
         content=content,
@@ -267,7 +293,9 @@ async def send_thread_message_stream(
     surface: AgentSurface = Form(default="app"),
     files: list[UploadFile] = File(default_factory=list),
     db: Session = Depends(get_db),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> StreamingResponse:
+    load_agent_thread_for_principal(db, thread_id=thread_id, principal=principal)
     run = await create_user_message_run_or_503(
         thread_id=thread_id,
         content=content,

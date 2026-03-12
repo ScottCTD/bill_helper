@@ -4,12 +4,15 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.enums_agent import AgentMessageRole, AgentRunStatus
 from backend.models_agent import AgentMessage, AgentMessageAttachment, AgentRun, AgentThread
+from backend.models_finance import User
 from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.model_client import AgentModelError
+from backend.services.agent.principal_scope import load_thread_owner_user
 from backend.services.agent.protocol_helpers import (
     USAGE_FIELDS,
     canonicalize_tool_call,
@@ -28,7 +31,6 @@ from backend.services.agent.runtime import call_model
 from backend.services.agent.tool_runtime import execute_tool
 from backend.services.agent.tool_types import ToolContext
 from backend.services.runtime_settings import resolve_runtime_settings
-from backend.services.users import find_user_by_name
 
 PROPOSAL_TOOL_NAMES = {
     "propose_create_tag",
@@ -158,8 +160,9 @@ def _create_benchmark_run(
     text: str,
     attachments: list[BenchmarkAttachmentInput],
     model_name: str,
+    owner_user: User,
 ) -> tuple[AgentThread, AgentMessage, AgentRun]:
-    thread = AgentThread()
+    thread = AgentThread(owner_user_id=owner_user.id)
     db.add(thread)
     db.flush()
 
@@ -235,13 +238,13 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
         self._user_message_id = user_message_id
         self._max_steps = max_steps
         self._state = state
-        settings = resolve_runtime_settings(db)
-        principal_user = find_user_by_name(db, settings.current_user_name)
+        owner_user = load_thread_owner_user(db, thread_id=thread_id)
         self._tool_context = ToolContext(
             db=db,
             run_id=run.id,
-            principal_name=settings.current_user_name,
-            principal_user_id=principal_user.id if principal_user is not None else None,
+            principal_name=owner_user.name if owner_user is not None else None,
+            principal_user_id=owner_user.id if owner_user is not None else None,
+            principal_is_admin=owner_user.is_admin if owner_user is not None else False,
         )
         self._latest_usage_totals: dict[str, int | None] = {}
         self._trace_step: BenchmarkTraceStep | None = None
@@ -435,11 +438,18 @@ def run_benchmark_case(
     attachments: list[BenchmarkAttachmentInput],
 ) -> BenchmarkCaseExecution:
     settings = resolve_runtime_settings(db)
+    owner_user = (
+        db.scalar(select(User).where(User.is_admin.is_(True)).order_by(User.created_at.asc()).limit(1))
+        or db.scalar(select(User).order_by(User.created_at.asc()).limit(1))
+    )
+    if owner_user is None:
+        raise ValueError("Benchmark execution requires at least one persisted user.")
     thread, user_message, run = _create_benchmark_run(
         db,
         text=text,
         attachments=attachments,
         model_name=settings.agent_model,
+        owner_user=owner_user,
     )
     state = _BenchmarkRunState()
     overall_start = time.monotonic()

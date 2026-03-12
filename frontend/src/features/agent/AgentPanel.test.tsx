@@ -72,7 +72,6 @@ type RuntimeSettingsOverrideInput = Partial<Omit<RuntimeSettingsResponse, "overr
 
 function buildRuntimeSettings(overrides: RuntimeSettingsOverrideInput = {}) {
   const baseOverrides: RuntimeSettingsResponse["overrides"] = {
-    current_user_name: null,
     user_memory: null,
     default_currency_code: null,
     dashboard_currency_code: null,
@@ -91,7 +90,6 @@ function buildRuntimeSettings(overrides: RuntimeSettingsOverrideInput = {}) {
   };
 
   return {
-    current_user_name: "Admin",
     user_memory: null,
     default_currency_code: "USD",
     dashboard_currency_code: "USD",

@@ -7,7 +7,7 @@ import {
 } from "./types";
 
 export function usePropertiesSectionState() {
-  const [activeSection, setActiveSection] = useState<PropertiesSectionId>("users");
+  const [activeSection, setActiveSection] = useState<PropertiesSectionId>("tags");
   const [sectionSearch, setSectionSearch] = useState<Record<PropertiesSectionId, string>>({
     ...SECTION_SEARCH_DEFAULTS
   });

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from backend.auth.contracts import RequestPrincipal
 from backend.contracts_groups import (
     ChildGroupMemberTarget,
     EntryGroupMemberTarget,
@@ -15,7 +16,6 @@ from backend.services.agent.apply.common import (
     find_unique_entry_by_id,
     resolve_applied_group_id,
     resolve_applied_group_member_target_ids,
-    resolve_current_user,
 )
 from backend.services.agent.change_contracts.groups import (
     CreateGroupMemberPayload,
@@ -33,20 +33,26 @@ from backend.services.groups import (
 )
 
 
-def apply_create_group(db: Session, payload: CreateGroupPayload, actor_name: str) -> AppliedResource:
-    current_user = resolve_current_user(db, actor_name=actor_name)
+def apply_create_group(
+    db: Session,
+    payload: CreateGroupPayload,
+    principal: RequestPrincipal,
+) -> AppliedResource:
     group = create_group(
         db,
         command=GroupCreateCommand(name=payload.name, group_type=payload.group_type),
-        owner_user_id=current_user.id,
+        owner_user_id=principal.user_id,
     )
     db.flush()
     return AppliedResource(resource_type="group", resource_id=group.id)
 
 
-def apply_update_group(db: Session, payload: UpdateGroupPayload, actor_name: str) -> AppliedResource:
-    current_user = resolve_current_user(db, actor_name=actor_name)
-    group = find_scoped_group_by_id(db, group_id=payload.group_id, current_user_id=current_user.id)
+def apply_update_group(
+    db: Session,
+    payload: UpdateGroupPayload,
+    principal: RequestPrincipal,
+) -> AppliedResource:
+    group = find_scoped_group_by_id(db, group_id=payload.group_id, principal=principal)
     updated = update_group(
         db,
         group=group,
@@ -56,61 +62,60 @@ def apply_update_group(db: Session, payload: UpdateGroupPayload, actor_name: str
     return AppliedResource(resource_type="group", resource_id=updated.id)
 
 
-def apply_delete_group(db: Session, payload: DeleteGroupPayload, actor_name: str) -> AppliedResource:
-    current_user = resolve_current_user(db, actor_name=actor_name)
-    group = find_scoped_group_by_id(db, group_id=payload.group_id, current_user_id=current_user.id)
+def apply_delete_group(
+    db: Session,
+    payload: DeleteGroupPayload,
+    principal: RequestPrincipal,
+) -> AppliedResource:
+    group = find_scoped_group_by_id(db, group_id=payload.group_id, principal=principal)
     resource_id = group.id
     delete_group(db, group=group)
     db.flush()
     return AppliedResource(resource_type="group", resource_id=resource_id)
 
 
-def apply_create_group_member(db: Session, payload: CreateGroupMemberPayload, actor_name: str) -> AppliedResource:
-    current_user = resolve_current_user(db, actor_name=actor_name)
-    group_id = resolve_applied_group_id(db, payload.group_ref, current_user_id=current_user.id)
-    group = find_scoped_group_by_id(db, group_id=group_id, current_user_id=current_user.id)
+def apply_create_group_member(
+    db: Session,
+    payload: CreateGroupMemberPayload,
+    principal: RequestPrincipal,
+) -> AppliedResource:
+    group_id = resolve_applied_group_id(db, payload.group_ref, principal=principal)
+    group = find_scoped_group_by_id(db, group_id=group_id, principal=principal)
 
     target_entry_id, target_child_group_id = resolve_applied_group_member_target_ids(
         db,
         target=payload.target,
-        current_user_id=current_user.id,
-        actor_name=actor_name,
+        principal=principal,
     )
     if target_entry_id is not None:
-        entry = find_unique_entry_by_id(db, target_entry_id, actor_name=actor_name)
+        entry = find_unique_entry_by_id(db, target_entry_id, principal=principal)
         command = GroupMemberCreateCommand(
             target=EntryGroupMemberTarget(entry_id=entry.id),
             member_role=payload.member_role,
         )
     else:
-        child_group = find_scoped_group_by_id(db, group_id=target_child_group_id, current_user_id=current_user.id)
+        child_group = find_scoped_group_by_id(db, group_id=target_child_group_id, principal=principal)
         command = GroupMemberCreateCommand(
             target=ChildGroupMemberTarget(group_id=child_group.id),
             member_role=payload.member_role,
         )
 
-    membership = add_group_member(
-        db,
-        group=group,
-        command=command,
-    )
+    membership = add_group_member(db, group=group, command=command)
     db.flush()
     return AppliedResource(resource_type="group_membership", resource_id=membership.id)
 
 
-def apply_delete_group_member(db: Session, payload: DeleteGroupMemberPayload, actor_name: str) -> AppliedResource:
-    current_user = resolve_current_user(db, actor_name=actor_name)
-    group = find_scoped_group_by_id(
-        db,
-        group_id=payload.group_ref.group_id or "",
-        current_user_id=current_user.id,
-    )
+def apply_delete_group_member(
+    db: Session,
+    payload: DeleteGroupMemberPayload,
+    principal: RequestPrincipal,
+) -> AppliedResource:
+    group = find_scoped_group_by_id(db, group_id=payload.group_ref.group_id or "", principal=principal)
 
     target_entry_id, target_child_group_id = resolve_applied_group_member_target_ids(
         db,
         target=payload.target,
-        current_user_id=current_user.id,
-        actor_name=actor_name,
+        principal=principal,
     )
     membership = next(
         (

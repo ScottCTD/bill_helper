@@ -14,7 +14,7 @@ def test_settings_parse_backend_auth_and_derive_state_path(tmp_path, monkeypatch
     monkeypatch.setenv("BILL_HELPER_TELEGRAM_BACKEND_AUTH_TOKEN", " secret-token ")
     monkeypatch.setenv(
         "BILL_HELPER_TELEGRAM_BACKEND_AUTH_HEADERS",
-        '{"X-Bill-Helper-Principal": "admin"}',
+        '{"X-Trace-Id": "telegram"}',
     )
     monkeypatch.setenv("BILL_HELPER_TELEGRAM_DATA_DIR", str(tmp_path))
 
@@ -25,7 +25,7 @@ def test_settings_parse_backend_auth_and_derive_state_path(tmp_path, monkeypatch
     assert settings.backend_base_url == "http://localhost:8000/api/v1"
     assert settings.state_path == tmp_path / "chat_state.json"
     assert settings.build_backend_headers() == {
-        "X-Bill-Helper-Principal": "admin",
+        "X-Trace-Id": "telegram",
         "Authorization": "Bearer secret-token",
     }
     assert settings.ensure_data_dir() == tmp_path

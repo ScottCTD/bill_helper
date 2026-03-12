@@ -100,12 +100,26 @@
 - section navigation and content rendering are split into dedicated components
 - section state, form state, queries, and filtered data live in focused hooks
 - editable sections use modal-driven create and edit flows
-- users and tags open edit modals on row double-click instead of explicit row Edit buttons
+- editable sections now cover tags plus taxonomy term tables; user CRUD moved to `/admin`
 - taxonomy term tables expose `Entity Categories` and `Tag Types`
 - tags have destructive confirmation dialogs
 - tag row delete controls use compact icon buttons with subdued shared table action styling; destructive emphasis is reserved for confirmation
 - tag delete warns when existing entry-tag associations will be removed
 - currencies remain read-only
+
+## Auth And Admin
+
+### `frontend/src/pages/LoginPage.tsx`
+
+- password-only sign-in surface
+- stores the opaque session token in `bill-helper.session-token`
+- redirects back to the originally requested protected route after success
+
+### `frontend/src/pages/AdminPage.tsx`
+
+- admin-only workspace for user and session management
+- supports create, rename, role changes, password reset, delete, and `Log in as`
+- session table can revoke bearer tokens without deleting the owning user
 
 ## Dashboard
 
@@ -143,7 +157,7 @@
 - settings changes invalidate dependent query surfaces
 - query, mutation, and form orchestration live in `frontend/src/features/settings/useSettingsPageModel.ts`
 - reusable runtime-settings parsing and payload validation live in `frontend/src/features/settings/formState.ts`
-- `General` groups read-only identity context separately from ledger default currencies
+- `General` groups read-only identity context, self-service password change, and ledger default currencies
 - `Agent` groups memory/models, provider overrides, run limits, bulk and attachment limits, and reliability into separate sections
 - section UI is split across `SettingsToolbar.tsx`, `SettingsGeneralSection.tsx`, `SettingsAgentSection.tsx`, and `ResetSettingsDialog.tsx`
 - `Agent memory` lives under the `Agent` tab, is edited as one item per line, persists as a list of strings, and is sent to every backend agent system prompt

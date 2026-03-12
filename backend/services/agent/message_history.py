@@ -19,6 +19,7 @@ from backend.services.agent.message_history_prefixes import (
 from backend.services.agent.message_history_prefixes import (
     build_review_results_prefix_for_current_turn as _build_review_results_prefix_for_current_turn,
 )
+from backend.services.agent.principal_scope import load_thread_owner_user
 from backend.services.agent.prompts import SystemPromptContext, system_prompt
 from backend.services.agent.user_context import (
     build_current_user_context as _build_current_user_context,
@@ -35,6 +36,7 @@ def build_llm_messages(
     surface: str = "app",
 ) -> list[dict[str, Any]]:
     settings = resolve_runtime_settings(db)
+    owner_user = load_thread_owner_user(db, thread_id=thread_id)
     include_pdf_page_images = attachment_content.model_supports_vision(
         model_name or settings.agent_model
     )
@@ -65,8 +67,15 @@ def build_llm_messages(
             "role": "system",
             "content": system_prompt(
                 SystemPromptContext(
-                    current_user_context=_build_current_user_context(db),
-                    entity_category_context=_build_entity_category_context(db),
+                    current_user_context=_build_current_user_context(
+                        db,
+                        user_id=owner_user.id if owner_user is not None else None,
+                        user_name=owner_user.name if owner_user is not None else None,
+                    ),
+                    entity_category_context=_build_entity_category_context(
+                        db,
+                        owner_user_id=owner_user.id if owner_user is not None else None,
+                    ),
                     user_memory=settings.user_memory,
                     current_timezone=get_settings().current_user_timezone,
                     response_surface=surface,

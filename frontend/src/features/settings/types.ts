@@ -1,5 +1,4 @@
 export interface SettingsFormState {
-  current_user_name: string;
   user_memory: string;
   default_currency_code: string;
   dashboard_currency_code: string;

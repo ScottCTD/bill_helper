@@ -36,13 +36,20 @@ def test_thread_history_and_final_assistant_message(client, monkeypatch):
     assert [message["role"] for message in detail["messages"]] == ["user", "assistant"]
 
 
-def test_agent_routes_require_admin_principal(client):
+def test_agent_routes_are_scoped_by_principal(client, auth_headers):
+    admin_thread = create_thread(client)
     response = client.get(
         "/api/v1/agent/threads",
-        headers={"X-Bill-Helper-Principal": "alice"},
+        headers=auth_headers("alice"),
     )
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Only admin principal can access this resource."
+    response.raise_for_status()
+    assert response.json() == []
+
+    missing_thread = client.get(
+        f"/api/v1/agent/threads/{admin_thread['id']}",
+        headers=auth_headers("alice"),
+    )
+    assert missing_thread.status_code == 404
 
 
 def test_thread_detail_includes_configured_model_name(client):

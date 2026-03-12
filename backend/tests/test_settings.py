@@ -20,7 +20,6 @@ def test_settings_endpoint_returns_effective_defaults(client):
     payload = response.json()
 
     settings = get_settings()
-    assert payload["current_user_name"] == settings.current_user_name
     assert payload["user_memory"] is None
     assert payload["default_currency_code"] == settings.default_currency_code
     assert payload["dashboard_currency_code"] == settings.dashboard_currency_code
@@ -33,14 +32,14 @@ def test_settings_endpoint_returns_effective_defaults(client):
     assert payload["overrides"]["agent_bulk_max_concurrent_threads"] is None
 
 
-def test_settings_endpoint_uses_request_principal_for_current_user_name(client):
+def test_settings_endpoint_no_longer_reports_mutable_identity(client, auth_headers):
     response = client.get(
         "/api/v1/settings",
-        headers={"X-Bill-Helper-Principal": "Alice"},
+        headers=auth_headers("Alice"),
     )
     response.raise_for_status()
     payload = response.json()
-    assert payload["current_user_name"] == "Alice"
+    assert "current_user_name" not in payload
 
 
 def test_settings_patch_rejects_identity_override_field(client):

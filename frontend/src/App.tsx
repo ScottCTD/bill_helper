@@ -1,9 +1,10 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 
 import { Sidebar } from "./components/Sidebar";
-import { PrincipalSessionGate, usePrincipalSession } from "./features/session";
+import { useAuth } from "./features/auth";
 import { useResizablePanel } from "./hooks/useResizablePanel";
+import { cn } from "./lib/utils";
 
 const HomePage = lazy(async () => {
   const module = await import("./pages/HomePage");
@@ -55,6 +56,16 @@ const SettingsPage = lazy(async () => {
   return { default: module.SettingsPage };
 });
 
+const LoginPage = lazy(async () => {
+  const module = await import("./pages/LoginPage");
+  return { default: module.LoginPage };
+});
+
+const AdminPage = lazy(async () => {
+  const module = await import("./pages/AdminPage");
+  return { default: module.AdminPage };
+});
+
 function defaultSidebarCollapsed() {
   if (typeof window === "undefined") {
     return false;
@@ -62,8 +73,8 @@ function defaultSidebarCollapsed() {
   return window.innerWidth <= 768;
 }
 
-export function App() {
-  const { principalName } = usePrincipalSession();
+function ProtectedShell() {
+  const auth = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(defaultSidebarCollapsed);
   const appMainRef = useRef<HTMLElement | null>(null);
   const { panelWidth: sidebarWidth, handleMouseDown: handleSidebarResizeMouseDown } = useResizablePanel({
@@ -73,6 +84,8 @@ export function App() {
     maxWidth: 320,
     edge: "left"
   });
+  const location = useLocation();
+  const isAgentPage = location.pathname === "/";
 
   useEffect(() => {
     if (!(appMainRef.current instanceof HTMLElement)) {
@@ -103,8 +116,12 @@ export function App() {
     };
   }, []);
 
-  if (!principalName) {
-    return <PrincipalSessionGate />;
+  if (auth.status === "loading") {
+    return <p>Loading session...</p>;
+  }
+
+  if (auth.status !== "authenticated" || !auth.session) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   return (
@@ -112,7 +129,7 @@ export function App() {
       <Sidebar
         collapsed={sidebarCollapsed}
         width={sidebarWidth}
-        onToggle={() => setSidebarCollapsed((c) => !c)}
+        onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
       />
       {!sidebarCollapsed ? (
         <div
@@ -124,24 +141,51 @@ export function App() {
         />
       ) : null}
 
-      <main ref={appMainRef} className="app-main app-main-padded">
-        <div className="app-content">
+      <main ref={appMainRef} className={cn("app-main", !isAgentPage && "app-main-padded")}>
+        <div className={cn(!isAgentPage && "app-content")}>
+          {auth.session.is_admin_impersonation ? (
+            <div className="impersonation-banner">
+              Impersonating {auth.session.user.name}. Log out when you want to end this session.
+            </div>
+          ) : null}
           <Suspense fallback={<p>Loading page...</p>}>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/filters" element={<FilterGroupsPage />} />
-              <Route path="/entries" element={<EntriesPage />} />
-              <Route path="/entities" element={<EntitiesPage />} />
-              <Route path="/entries/:entryId" element={<EntryDetailPage />} />
-              <Route path="/groups" element={<GroupsPage />} />
-              <Route path="/accounts" element={<AccountsPage />} />
-              <Route path="/properties" element={<PropertiesPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Routes>
+            <Outlet />
           </Suspense>
         </div>
       </main>
     </div>
+  );
+}
+
+function RequireAdmin() {
+  const auth = useAuth();
+  if (auth.status !== "authenticated" || !auth.session?.user.is_admin) {
+    return <Navigate to="/" replace />;
+  }
+  return <Outlet />;
+}
+
+export function App() {
+  return (
+    <Suspense fallback={<p>Loading page...</p>}>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route element={<ProtectedShell />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/filters" element={<FilterGroupsPage />} />
+          <Route path="/entries" element={<EntriesPage />} />
+          <Route path="/entities" element={<EntitiesPage />} />
+          <Route path="/entries/:entryId" element={<EntryDetailPage />} />
+          <Route path="/groups" element={<GroupsPage />} />
+          <Route path="/accounts" element={<AccountsPage />} />
+          <Route path="/properties" element={<PropertiesPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route element={<RequireAdmin />}>
+            <Route path="/admin" element={<AdminPage />} />
+          </Route>
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }

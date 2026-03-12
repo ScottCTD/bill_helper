@@ -17,7 +17,6 @@ vi.mock("../../../lib/api", () => ({
 describe("AgentThreadReviewModal", () => {
   beforeEach(() => {
     vi.mocked(getRuntimeSettings).mockResolvedValue({
-      current_user_name: "Admin",
       user_memory: null,
       default_currency_code: "USD",
       dashboard_currency_code: "USD",
@@ -34,7 +33,6 @@ describe("AgentThreadReviewModal", () => {
       agent_base_url: null,
       agent_api_key_configured: true,
       overrides: {
-        current_user_name: null,
         user_memory: null,
         default_currency_code: null,
         dashboard_currency_code: null,

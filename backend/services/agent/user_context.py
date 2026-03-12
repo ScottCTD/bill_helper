@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import re
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.models_finance import Account, User
-from backend.services.runtime_settings import resolve_runtime_settings
+from backend.models_finance import Account
 
 MAX_ACCOUNT_MARKDOWN_CONTEXT_CHARS = 1_500
 MAX_ACCOUNT_MARKDOWN_CONTEXT_LINES = 40
@@ -45,21 +44,34 @@ def normalize_account_markdown_for_context(markdown: str | None) -> str | None:
     return normalized
 
 
-def build_current_user_context(db: Session) -> str:
-    settings = resolve_runtime_settings(db)
-    current_user_name = (settings.current_user_name or "").strip() or "(unknown)"
+def build_current_user_context(
+    db: Session,
+    *,
+    user_id: str | None,
+    user_name: str | None,
+) -> str:
+    resolved_user_name = (user_name or "").strip() or "(unknown)"
+    if user_id is None:
+        return "\n".join(
+            [
+                f"user_name: {resolved_user_name}",
+                "accounts_count: 0",
+                "accounts:",
+                "- (none)",
+            ]
+        )
+
     accounts = list(
         db.scalars(
             select(Account)
-            .join(User, User.id == Account.owner_user_id)
-            .where(func.lower(User.name) == current_user_name.lower())
+            .where(Account.owner_user_id == user_id)
             .options(selectinload(Account.entity))
             .order_by(Account.created_at.asc())
         )
     )
 
     lines = [
-        f"user_name: {current_user_name}",
+        f"user_name: {resolved_user_name}",
         f"accounts_count: {len(accounts)}",
         "accounts:",
     ]
@@ -83,4 +95,3 @@ def build_current_user_context(db: Session) -> str:
     if len(accounts) > max_accounts:
         lines.append(f"- ... (+{len(accounts) - max_accounts} more)")
     return "\n".join(lines)
-

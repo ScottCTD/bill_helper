@@ -53,7 +53,6 @@ def test_thread_endpoints_and_settings_use_existing_backend_routes():
             httpx.Response(
                 200,
                 json={
-                    "current_user_name": "admin",
                     "user_memory": None,
                     "default_currency_code": "CAD",
                     "dashboard_currency_code": "CAD",
@@ -81,7 +80,6 @@ def test_thread_endpoints_and_settings_use_existing_backend_routes():
             httpx.Response(
                 200,
                 json={
-                    "current_user_name": "admin",
                     "user_memory": None,
                     "default_currency_code": "CAD",
                     "dashboard_currency_code": "CAD",
@@ -166,7 +164,6 @@ def test_thread_endpoints_and_settings_use_existing_backend_routes():
 
     client = BillHelperApiClient(
         base_url="http://localhost:8000/api/v1",
-        auth_headers={"X-Bill-Helper-Principal": "admin"},
         auth_token="secret-token",
         transport=httpx.MockTransport(transport),
     )
@@ -195,7 +192,7 @@ def test_thread_endpoints_and_settings_use_existing_backend_routes():
     assert str(requests[5].url).endswith("/agent/runs/run-1?surface=telegram")
     assert str(requests[6].url).endswith("/agent/runs/run-1/interrupt")
     assert requests[0].headers["Authorization"] == "Bearer secret-token"
-    assert requests[0].headers["X-Bill-Helper-Principal"] == "admin"
+    assert "X-Bill-Helper-Principal" not in requests[0].headers
 
 
 def test_send_thread_message_uses_backend_multipart_contract():

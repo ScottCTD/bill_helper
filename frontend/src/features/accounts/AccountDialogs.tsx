@@ -114,10 +114,10 @@ export function AccountDialogs(props: AccountDialogsProps) {
             <div className="form-grid">
               <FormField label="Owner">
                 <NativeSelect
+                  required
                   value={createForm.owner_user_id}
                   onChange={(event) => onCreateFormChange({ ...createForm, owner_user_id: event.target.value })}
                 >
-                  <option value="">(none)</option>
                   {users?.map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.name}
@@ -185,6 +185,20 @@ export function AccountDialogs(props: AccountDialogsProps) {
           <div className="account-edit-layout">
             <form id="account-edit-form" className="account-edit-details-card" onSubmit={onUpdateAccount}>
               <div className="account-edit-details-grid">
+                <FormField label="Owner">
+                  <NativeSelect
+                    required
+                    value={editForm.owner_user_id}
+                    onChange={(event) => onEditFormChange({ ...editForm, owner_user_id: event.target.value })}
+                  >
+                    {users?.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                        {user.is_current_user ? " (Current User)" : ""}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
                 <FormField label="Name">
                   <Input required value={editForm.name} onChange={(event) => onEditFormChange({ ...editForm, name: event.target.value })} />
                 </FormField>

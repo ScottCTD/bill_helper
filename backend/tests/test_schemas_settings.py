@@ -8,7 +8,7 @@ from backend.schemas_settings import RuntimeSettingsUpdate
 
 def test_runtime_settings_update_rejects_unknown_fields() -> None:
     with pytest.raises(ValidationError):
-        RuntimeSettingsUpdate(current_user_name="alice")
+        RuntimeSettingsUpdate(unknown_field="alice")
 
 
 def test_runtime_settings_update_normalizes_currency_and_agent_model() -> None:

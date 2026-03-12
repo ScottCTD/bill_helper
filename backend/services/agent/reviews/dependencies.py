@@ -15,6 +15,7 @@ from backend.services.agent.change_contracts.groups import (
     CreateGroupMemberPayload,
     EntryGroupMemberTargetPayload,
 )
+from backend.services.agent.principal_scope import load_change_item_principal
 from backend.services.agent.reviews.common import get_change_item_or_none, thread_id_for_change_item
 from backend.services.entities import find_entity_by_name
 from backend.services.crud_policy import PolicyViolation
@@ -122,11 +123,14 @@ def validate_entry_dependencies_ready_for_approval(
         exclude_item_ids={item.id},
     )
     pending_entity_names = _pending_create_entity_root_names(pending_items)
+    owner_principal = load_change_item_principal(db, item_id=item.id)
+    if owner_principal is None:
+        return
 
     pending_blockers: list[str] = []
     missing_entities: list[str] = []
     for normalized_name, display_name in sorted(entity_labels.items()):
-        if find_entity_by_name(db, display_name) is not None:
+        if find_entity_by_name(db, display_name, owner_user_id=owner_principal.user_id) is not None:
             continue
         if normalized_name in pending_entity_names:
             pending_blockers.append(display_name)

@@ -27,10 +27,7 @@ from backend.services.agent.group_references import (
     group_owner_condition,
     group_public_summary,
 )
-from backend.services.principals import ensure_request_principal
 from backend.services.groups import group_tree_options
-from backend.services.runtime_settings import resolve_runtime_settings
-from backend.services.users import ensure_current_user
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,20 +36,20 @@ class AppliedResource:
     resource_id: str
 
 
-ChangeApplyHandler = Callable[[Session, ChangePayloadModel, str], AppliedResource]
+ChangeApplyHandler = Callable[[Session, ChangePayloadModel, RequestPrincipal], AppliedResource]
 
 
-def resolve_apply_principal(db: Session, *, actor_name: str) -> RequestPrincipal:
-    return ensure_request_principal(db, principal_name=actor_name)
-
-
-def find_unique_entry_by_selector(db: Session, selector_payload: EntrySelectorPayload, *, actor_name: str) -> Entry:
-    principal = resolve_apply_principal(db, actor_name=actor_name)
+def find_unique_entry_by_selector(
+    db: Session,
+    selector_payload: EntrySelectorPayload,
+    *,
+    principal: RequestPrincipal,
+) -> Entry:
     matches = find_entries_by_selector(
         db,
         selector_payload,
         principal_user_id=principal.user_id,
-        is_admin=principal.is_admin,
+        is_admin=False,
     )
     if not matches:
         raise ValueError("Entry selector did not match any entry")
@@ -62,13 +59,17 @@ def find_unique_entry_by_selector(db: Session, selector_payload: EntrySelectorPa
     return matches[0]
 
 
-def find_unique_entry_by_id(db: Session, entry_id: str, *, actor_name: str) -> Entry:
-    principal = resolve_apply_principal(db, actor_name=actor_name)
+def find_unique_entry_by_id(
+    db: Session,
+    entry_id: str,
+    *,
+    principal: RequestPrincipal,
+) -> Entry:
     matches = find_entries_by_exact_id(
         db,
         entry_id,
         principal_user_id=principal.user_id,
-        is_admin=principal.is_admin,
+        is_admin=False,
     )
     if not matches:
         raise ValueError("Entry id did not match any entry")
@@ -85,8 +86,13 @@ def find_change_item_by_id(db: Session, change_item_id: str) -> AgentChangeItem:
     return item
 
 
-def resolve_existing_group_id(db: Session, *, group_id: str, current_user_id: str) -> str:
-    matches = find_groups_by_id(db, group_id=group_id, owner_user_id=current_user_id)
+def resolve_existing_group_id(
+    db: Session,
+    *,
+    group_id: str,
+    principal: RequestPrincipal,
+) -> str:
+    matches = find_groups_by_id(db, group_id=group_id, owner_user_id=principal.user_id)
     if not matches:
         raise ValueError("Group not found")
     if len(matches) > 1:
@@ -95,13 +101,17 @@ def resolve_existing_group_id(db: Session, *, group_id: str, current_user_id: st
     return str(matches[0].id)
 
 
-def resolve_existing_entry_id(db: Session, *, entry_id: str, actor_name: str) -> str:
-    principal = resolve_apply_principal(db, actor_name=actor_name)
+def resolve_existing_entry_id(
+    db: Session,
+    *,
+    entry_id: str,
+    principal: RequestPrincipal,
+) -> str:
     matches = find_entries_by_exact_id(
         db,
         entry_id,
         principal_user_id=principal.user_id,
-        is_admin=principal.is_admin,
+        is_admin=False,
     )
     if not matches:
         raise ValueError("Entry id did not match any entry")
@@ -111,9 +121,14 @@ def resolve_existing_entry_id(db: Session, *, entry_id: str, actor_name: str) ->
     return str(matches[0].id)
 
 
-def resolve_applied_group_id(db: Session, reference: GroupReferencePayload, *, current_user_id: str) -> str:
+def resolve_applied_group_id(
+    db: Session,
+    reference: GroupReferencePayload,
+    *,
+    principal: RequestPrincipal,
+) -> str:
     if reference.group_id is not None:
-        return resolve_existing_group_id(db, group_id=reference.group_id, current_user_id=current_user_id)
+        return resolve_existing_group_id(db, group_id=reference.group_id, principal=principal)
 
     assert reference.create_group_proposal_id is not None
     item = find_change_item_by_id(db, reference.create_group_proposal_id)
@@ -124,9 +139,14 @@ def resolve_applied_group_id(db: Session, reference: GroupReferencePayload, *, c
     return item.applied_resource_id
 
 
-def resolve_applied_entry_id(db: Session, reference: EntryReferencePayload, *, actor_name: str) -> str:
+def resolve_applied_entry_id(
+    db: Session,
+    reference: EntryReferencePayload,
+    *,
+    principal: RequestPrincipal,
+) -> str:
     if reference.entry_id is not None:
-        return resolve_existing_entry_id(db, entry_id=reference.entry_id, actor_name=actor_name)
+        return resolve_existing_entry_id(db, entry_id=reference.entry_id, principal=principal)
 
     assert reference.create_entry_proposal_id is not None
     item = find_change_item_by_id(db, reference.create_entry_proposal_id)
@@ -141,30 +161,28 @@ def resolve_applied_group_member_target_ids(
     db: Session,
     *,
     target: EntryGroupMemberTargetPayload | ChildGroupMemberTargetPayload,
-    current_user_id: str,
-    actor_name: str,
+    principal: RequestPrincipal,
 ) -> tuple[str | None, str | None]:
     if isinstance(target, EntryGroupMemberTargetPayload):
-        return resolve_applied_entry_id(db, target.entry_ref, actor_name=actor_name), None
-    return None, resolve_applied_group_id(db, target.group_ref, current_user_id=current_user_id)
+        return resolve_applied_entry_id(db, target.entry_ref, principal=principal), None
+    return None, resolve_applied_group_id(db, target.group_ref, principal=principal)
 
 
-def find_scoped_group_by_id(db: Session, *, group_id: str, current_user_id: str) -> EntryGroup:
-    resolved_group_id = resolve_existing_group_id(db, group_id=group_id, current_user_id=current_user_id)
+def find_scoped_group_by_id(
+    db: Session,
+    *,
+    group_id: str,
+    principal: RequestPrincipal,
+) -> EntryGroup:
+    resolved_group_id = resolve_existing_group_id(db, group_id=group_id, principal=principal)
     group = db.scalar(
         select(EntryGroup)
         .where(
             EntryGroup.id == resolved_group_id,
-            group_owner_condition(current_user_id),
+            group_owner_condition(principal.user_id),
         )
         .options(*group_tree_options())
     )
     if group is None:  # pragma: no cover - guarded by resolve_existing_group_id
         raise ValueError("Group not found")
     return group
-
-
-def resolve_current_user(db: Session, *, actor_name: str):
-    settings = resolve_runtime_settings(db)
-    current_user_name = actor_name or settings.current_user_name
-    return ensure_current_user(db, current_user_name)

@@ -10,50 +10,50 @@
 - Recharts
 - React Flow
 - Tailwind CSS
-- `shadcn/ui` component primitives
-- Radix UI primitives
+- `shadcn/ui`
 
 ## Build And Runtime
 
-- Dev server: `npm run dev` (default `http://localhost:5173`)
-- Frontend tests: `npm run test`
-- Production build: `npm run build`
-- API base override: `VITE_API_BASE_URL` (optional)
-- Vite forces a fresh dep-optimization pass on each dev-server start so local restarts do not leave stale `.vite/deps` chunk references for the markdown editor
+- dev server: `npm run dev`
+- frontend tests: `npm run test`
+- production build: `npm run build`
+- API base override: `VITE_API_BASE_URL`
 
-## App Shell And Routing
+## App Shell
 
 Defined in `frontend/src/App.tsx`.
 
 Current shell behavior:
 
-- startup session gate blocks route rendering until a local principal is selected or prefilled
+- `/login` is public
+- every other route renders inside a protected shell that waits for auth resolution
+- unauthenticated users are redirected to `/login`
+- authenticated users see the shared sidebar plus route content
+- impersonation sessions show a banner above protected content
 - collapsible left sidebar (`Sidebar.tsx`) with navigation links for `Agent`, `Dashboard`, `Filters`, `Entries`, `Entities`, `Groups`, `Accounts`, `Properties`, and `Settings`
-- sidebar behaves like a fixed tool rail: solid card background, stronger active-state marker, and a quieter footer that only exposes the active-principal switcher
-- desktop sidebar is resizable and persists width in localStorage
-- content canvas is route-driven and always renders inside the shared neutral workspace frame
-- normal routes render within a centered content column over the shared muted canvas
-- home route is still AI-first, but now renders the agent experience inside the same page header and content shell contract as the other workspaces
 - route pages are lazy-loaded via `React.lazy` and `Suspense`
 - the rich markdown editor bundle is loaded only when an editor dialog opens; development builds surface the exact runtime error above the textarea fallback, while production keeps the fallback generic
+- desktop sidebar is resizable and persisted in `localStorage`
 - on small screens the sidebar starts collapsed and can slide open
 
 Route map:
 
-- `/` -> AI home chat
+- `/login` -> password sign-in page
+- `/` -> agent home chat
 - `/dashboard` -> dashboard analytics
-- `/filters` -> first-class saved filter-group workspace
-- `/entries` -> entry list, including optional `filter_group_id` URL filtering
-- `/entities` -> entity list
+- `/filters` -> saved filter-group workspace
+- `/entries` -> entry list
 - `/entries/:entryId` -> entry detail
-- `/groups` -> derived group workspace
+- `/entities` -> entity list
+- `/groups` -> groups workspace
 - `/accounts` -> accounts workspace
-- `/properties` -> catalogs and taxonomy management
-- `/settings` -> runtime settings workspace
+- `/properties` -> tag/taxonomy/currency properties workspace
+- `/settings` -> runtime settings + self-service password change
+- `/admin` -> admin-only user/session management
 
 Providers in `frontend/src/main.tsx`:
 
 - `QueryClientProvider`
 - `NotificationProvider`
-- `PrincipalSessionProvider`
+- `AuthProvider`
 - `BrowserRouter`

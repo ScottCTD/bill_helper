@@ -57,7 +57,7 @@ def test_resolve_runtime_settings_applies_override_and_sanitization() -> None:
         db.close()
 
 
-def test_build_runtime_settings_read_prefers_request_principal_name() -> None:
+def test_build_runtime_settings_view_omits_request_identity() -> None:
     make_session = get_session_maker()
     db = make_session()
     try:
@@ -67,8 +67,7 @@ def test_build_runtime_settings_read_prefers_request_principal_name() -> None:
         )
         db.commit()
 
-        payload = build_runtime_settings_view(db, principal_name="alice")
-        assert payload.current_user_name == "alice"
+        payload = build_runtime_settings_view(db)
         assert payload.agent_model == "openai/gpt-4.1-mini"
         assert payload.available_agent_models == expected_available_agent_models("openai/gpt-4.1-mini")
         assert payload.overrides.agent_model == "openai/gpt-4.1-mini"
@@ -142,20 +141,20 @@ def test_resolve_runtime_settings_uses_override_available_agent_models_and_keeps
         db.close()
 
 
-def test_resolve_runtime_settings_parses_legacy_multiline_user_memory() -> None:
+def test_resolve_runtime_settings_treats_non_json_user_memory_as_single_item() -> None:
     make_session = get_session_maker()
     db = make_session()
     try:
         db.add(
             RuntimeSettings(
                 scope="default",
-                user_memory="Prefers terse answers.\n- Works in CAD.",
+                user_memory="Prefers terse answers.",
             )
         )
         db.commit()
 
         resolved = resolve_runtime_settings(db)
-        assert resolved.user_memory == ["Prefers terse answers.", "Works in CAD."]
+        assert resolved.user_memory == ["Prefers terse answers."]
     finally:
         db.close()
 

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from backend.enums_agent import AgentChangeStatus, AgentReviewActionType
 from backend.models_agent import AgentChangeItem, AgentReviewAction
 from backend.services.agent.apply.dispatch import apply_change_item_payload
+from backend.services.agent.principal_scope import load_change_item_principal
 from backend.services.agent.reviews.common import combine_notes, get_change_item_or_none, utc_now
 from backend.services.agent.reviews.dependencies import (
     validate_entry_dependencies_ready_for_approval,
@@ -52,13 +53,16 @@ def approve_change_item(
         item.payload_json = payload_json
     item.status = AgentChangeStatus.APPROVED
     item.review_note = combined_note
+    owner_principal = load_change_item_principal(db, item_id=item.id)
+    if owner_principal is None:
+        raise PolicyViolation.not_found("Change item not found")
 
     try:
         resource = apply_change_item_payload(
             db,
             change_type=item.change_type,
             payload=payload,
-            actor_name=actor,
+            principal=owner_principal,
         )
     except Exception as exc:
         item.status = AgentChangeStatus.APPLY_FAILED
