@@ -60,10 +60,9 @@ async function createUser(
 
 async function createAccount(page: Page, accountName: string) {
   await page.goto("/accounts");
-  await expect(
-    page.getByRole("heading", { level: 2, name: "Accounts" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Create account" }).click();
+  const createAccountButton = page.getByRole("button", { name: "Create account" });
+  await expect(createAccountButton).toBeVisible();
+  await createAccountButton.click();
 
   const createDialog = page.getByRole("dialog", { name: "Create Account" });
   await expect(createDialog).toBeVisible();
