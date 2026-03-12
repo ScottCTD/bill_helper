@@ -26,8 +26,14 @@ def _compose_user_feedback_text(
     return f"{'\n\n'.join(prefixes)}\n\nUser feedback:\n{feedback}"
 
 
-def build_entity_category_context(db: Session) -> str | None:
-    records = list_term_name_description_pairs(db, taxonomy_key="entity_category")
+def build_entity_category_context(db: Session, *, owner_user_id: str | None) -> str | None:
+    if owner_user_id is None:
+        return None
+    records = list_term_name_description_pairs(
+        db,
+        taxonomy_key="entity_category",
+        owner_user_id=owner_user_id,
+    )
     if not records:
         return None
 

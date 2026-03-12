@@ -24,10 +24,8 @@ from backend.validation.finance_names import normalize_entity_name
 def validate_account_owner_user_id(
     db: Session,
     *,
-    owner_user_id: str | None,
-) -> str | None:
-    if owner_user_id is None:
-        return None
+    owner_user_id: str,
+) -> str:
     user = db.get(User, owner_user_id)
     if user is None:
         raise PolicyViolation.not_found("Owner user not found")
@@ -39,7 +37,7 @@ def resolve_owner_user_id(
     *,
     owner_user_id: str | None,
     principal: RequestPrincipal,
-) -> str | None:
+) -> str:
     if owner_user_id is not None:
         validated_owner_user_id = validate_account_owner_user_id(db, owner_user_id=owner_user_id)
         ensure_principal_can_assign_user(principal, user_id=validated_owner_user_id)
@@ -47,7 +45,12 @@ def resolve_owner_user_id(
     return principal.user_id
 
 
-def find_account_by_name(db: Session, name: str) -> Account | None:
+def find_account_by_name(
+    db: Session,
+    name: str,
+    *,
+    owner_user_id: str,
+) -> Account | None:
     normalized_name = normalize_entity_name(name)
     if not normalized_name:
         return None
@@ -55,7 +58,10 @@ def find_account_by_name(db: Session, name: str) -> Account | None:
         select(Account)
         .join(Entity, Entity.id == Account.id)
         .options(selectinload(Account.entity))
-        .where(func.lower(Entity.name) == normalized_name.lower())
+        .where(
+            Account.owner_user_id == owner_user_id,
+            func.lower(Entity.name) == normalized_name.lower(),
+        )
     )
 
 
@@ -63,7 +69,7 @@ def create_account_root(
     db: Session,
     *,
     name: str,
-    owner_user_id: str | None,
+    owner_user_id: str,
     markdown_body: str | None,
     currency_code: str,
     is_active: bool,
@@ -75,14 +81,18 @@ def create_account_root(
     )
 
     validated_owner_user_id = validate_account_owner_user_id(db, owner_user_id=owner_user_id)
-    existing_entity = find_entity_by_name(db, normalized_name)
+    existing_entity = find_entity_by_name(
+        db,
+        normalized_name,
+        owner_user_id=validated_owner_user_id,
+    )
     assert_unique_name(
         existing_id=existing_entity.id if existing_entity is not None else None,
         current_id=None,
         conflict_detail="Entity name already exists",
     )
 
-    entity = Entity(name=normalized_name, category=None)
+    entity = Entity(owner_user_id=validated_owner_user_id, name=normalized_name, category=None)
     db.add(entity)
     db.flush()
 
@@ -108,7 +118,11 @@ def update_account_root(
     if patch.includes("name") and patch.name is not None:
         if account.entity is None:
             raise PolicyViolation.not_found("Account entity not found")
-        existing_entity = find_entity_by_name(db, patch.name)
+        existing_entity = find_entity_by_name(
+            db,
+            patch.name,
+            owner_user_id=account.owner_user_id,
+        )
         assert_unique_name(
             existing_id=existing_entity.id if existing_entity is not None else None,
             current_id=account.id,
@@ -120,11 +134,35 @@ def update_account_root(
             raw_name=patch.name,
         )
 
-    if patch.includes("owner_user_id"):
-        account.owner_user_id = validate_account_owner_user_id(
+    if patch.includes("owner_user_id") and patch.owner_user_id is not None:
+        new_owner_user_id = validate_account_owner_user_id(
             db,
             owner_user_id=patch.owner_user_id,
         )
+        owner_user = db.get(User, new_owner_user_id)
+        if owner_user is None:  # pragma: no cover - guarded by validation
+            raise PolicyViolation.not_found("Owner user not found")
+        if account.entity is None:
+            raise PolicyViolation.not_found("Account entity not found")
+
+        existing_entity = find_entity_by_name(
+            db,
+            account.entity.name,
+            owner_user_id=new_owner_user_id,
+        )
+        assert_unique_name(
+            existing_id=existing_entity.id if existing_entity is not None else None,
+            current_id=account.id,
+            conflict_detail="Entity name already exists",
+        )
+        account.owner_user_id = new_owner_user_id
+        account.entity.owner_user_id = new_owner_user_id
+        db.execute(
+            update(Entry)
+            .where(Entry.account_id == account.id)
+            .values(owner_user_id=new_owner_user_id, owner=owner_user.name)
+        )
+
     if patch.includes("markdown_body"):
         account.markdown_body = patch.markdown_body
     if patch.includes("currency_code") and patch.currency_code is not None:
@@ -166,6 +204,8 @@ def update_account(
 ) -> Account:
     update_data = patch.model_dump(exclude_unset=True)
     if "owner_user_id" in update_data:
+        if update_data["owner_user_id"] is None:
+            raise PolicyViolation.bad_request("Account owner is required")
         update_data["owner_user_id"] = resolve_owner_user_id(
             db,
             owner_user_id=update_data["owner_user_id"],

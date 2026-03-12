@@ -6,16 +6,17 @@
 - SQLAlchemy 2.x
 - Pydantic v2
 - Alembic
-- SQLite (local file)
-- LiteLLM model-provider routing for chat completions
-- PyMuPDF (`pymupdf`) for PDF text extraction and page rendering in agent message history
-- local Tesseract CLI (`tesseract`) as OCR fallback for PDFs whose native text extraction returns no usable text
+- SQLite
+- LiteLLM for model-provider routing
+- PyMuPDF for PDF extraction and rendering
+- local `tesseract` as OCR fallback
 
 ## Entry Points
 
-- App factory + ASGI app: `backend/main.py`
-- Backend run command: `uv run bill-helper-api`
-- Health endpoint: `GET /healthz`
+- app factory + ASGI app: `backend/main.py`
+- backend run command: `uv run bill-helper-api`
+- health endpoint: `GET /healthz`
+- admin bootstrap CLI: `uv run python scripts/bootstrap_admin.py --name <user> --password <pass>`
 - Telegram polling entry point: `uv run python -m telegram.polling`
 - Telegram webhook entry point: `uv run python -m telegram.webhook`
 
@@ -23,77 +24,115 @@
 
 Settings use the `BILL_HELPER_` prefix.
 
-Env files are loaded in cascade order:
+Env files load in cascade order:
 
-1. `.env` in the working directory for per-worktree overrides
-2. `~/.config/bill-helper/.env` for shared dev secrets across worktrees
+1. `.env` in the working directory
+2. `~/.config/bill-helper/.env`
+3. real environment variables override both
 
-Real environment variables always take highest priority. See `docs/development.md` for setup details.
-
-Core app settings include:
+Core settings:
 
 - `APP_NAME`
 - `API_PREFIX` (default `/api/v1`)
 - `DATA_DIR` (default `~/.local/share/bill-helper`)
 - `DATABASE_URL` (derived from `DATA_DIR` unless explicitly set)
 - `CORS_ORIGINS` (default `http://localhost:5173`)
-- `AUTH_MODE` (default `development_header`)
-- `DEVELOPMENT_ADMIN_PRINCIPAL_NAMES` (default `admin`)
-- `CURRENT_USER_NAME` (default `admin`; background-agent and benchmark fallback context, not HTTP auth)
-- `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` (default `America/Toronto`)
-- `DEFAULT_CURRENCY_CODE` (default `CAD`)
-- `DASHBOARD_CURRENCY_CODE` (default `CAD`)
+- `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE`
+- `DEFAULT_CURRENCY_CODE`
+- `DASHBOARD_CURRENCY_CODE`
 
-Agent settings include:
+Agent settings:
 
-- `AGENT_MODEL` (default `bedrock/us.anthropic.claude-sonnet-4-6`)
-- `AGENT_MAX_STEPS` (default `100`)
-- `AGENT_BULK_MAX_CONCURRENT_THREADS` (default `4`)
-- `AGENT_MAX_IMAGE_SIZE_BYTES` (default `5MB`)
-- `AGENT_MAX_IMAGES_PER_MESSAGE` (default `4`)
+- `AGENT_MODEL`
+- `AGENT_MAX_STEPS`
+- `AGENT_BULK_MAX_CONCURRENT_THREADS`
+- retry policy fields
+- image and attachment limit fields
 - `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL`
 - `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY`
 
-Runtime override behavior:
-
-- `runtime_settings` stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`, including ordered `user_memory` and `available_agent_models`
-- effective runtime settings resolve as `override -> env default` where applicable
-- `user_memory` is DB-backed only, normalized as an ordered `list[str]`, and injected into every agent system prompt as a markdown unordered list when set
-- `available_agent_models` is DB-backed only, normalized as an ordered `list[str]`, and always resolved to include the effective `agent_model`
-- identity is request-principal-based at API boundaries; `current_user_name` is read-only in `/settings`
-- protected HTTP routes require explicit `X-Bill-Helper-Principal`; the frontend owns that header through the local principal session
-- `agent_base_url` overrides allow only `http` and `https` and block localhost domains and non-public IP literals
-
 Behavior notes:
 
+- protected routes expect bearer tokens backed by the `sessions` table
+- the web app uses the same bearer-session flow
 - app startup succeeds even when provider credentials are missing
-- only agent execution is blocked (`503`) when LiteLLM cannot resolve credentials for the configured model target
-- provider credentials are resolved by LiteLLM from standard provider-specific environment variables for the configured model
-- provider-specific secrets from `.env` or `~/.config/bill-helper/.env` are mirrored into `os.environ` before LiteLLM validation and model calls, so shared XDG env files work for direct provider lookups such as `AWS_BEARER_TOKEN_BEDROCK`
-- `agent_base_url` and `agent_api_key` are explicit app-level overrides only; provider-native env vars are not forwarded through those fields
+- only agent execution is blocked (`503`) when LiteLLM cannot resolve credentials for the configured model
+- env-file variables are mirrored into `os.environ` so provider SDKs and LiteLLM can see shared secrets
 - `get_settings()` caches environment settings with `lru_cache`
-- runtime behavior consumers should read through `backend/services/runtime_settings.py`
-- FastAPI app construction is factory-driven via `create_app()`
-- `backend.main` launches uvicorn in factory mode (`backend.main:create_app`) to avoid import-time bootstrap coupling
+
+## Session Auth Runtime
+
+Relevant modules:
+
+- `backend/auth/dependencies.py`
+- `backend/services/passwords.py`
+- `backend/services/sessions.py`
+- `backend/services/principals.py`
+- `backend/routers/auth.py`
+- `backend/routers/admin.py`
+
+Current behavior:
+
+- password hashes are stored on `users.password_hash`
+- bearer tokens are generated as opaque random strings
+- only `SHA-256(token)` is persisted in `sessions.token_hash`
+- logout or admin session deletion revokes access by deleting the row
+- session expiry is nullable in the current prototype
+- impersonation sessions set `is_admin_impersonation=true`
+
+## Runtime Settings
+
+`runtime_settings` stores optional app-wide overrides managed by `GET/PATCH /api/v1/settings`.
+
+Supported persisted overrides include:
+
+- `user_memory`
+- `default_currency_code`
+- `dashboard_currency_code`
+- `agent_model`
+- `available_agent_models`
+- run-limit and retry fields
+- attachment limits
+- `agent_base_url`
+- `agent_api_key`
+
+Important constraints:
+
+- identity is not stored in runtime settings
+- `available_agent_models` is normalized to always include the effective `agent_model`
+- `agent_base_url` only allows public `http` / `https` endpoints
+- `agent_api_key` is never returned from the API
 
 ## Telegram Transport Config (`telegram/config.py`)
 
-- Telegram settings use `TELEGRAM_*` env names with `BILL_HELPER_TELEGRAM_*` aliases also accepted.
-- The Telegram adapter reads the same env cascade as the backend: working-tree `.env`, then `~/.config/bill-helper/.env`, then real environment variables.
-- Key settings: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_API_BASE_URL`, `TELEGRAM_BACKEND_BASE_URL`, `TELEGRAM_BACKEND_AUTH_TOKEN`, `TELEGRAM_BACKEND_AUTH_HEADERS`, `TELEGRAM_DATA_DIR`, and `TELEGRAM_STATE_PATH`.
-- Default Telegram data dir is `{SHARED_DATA_DIR}/telegram`; default state path is `{data_dir}/chat_state.json`.
-- `TELEGRAM_ALLOWED_USER_IDS` accepts either a comma-separated list or JSON array of positive Telegram user IDs. The default is empty, which denies all private-chat Telegram commands and content messages until an allow-list is configured.
-- `TELEGRAM_BACKEND_AUTH_HEADERS` must decode to a JSON object; if it already provides `Authorization`, that header is preserved instead of synthesizing a bearer token from `TELEGRAM_BACKEND_AUTH_TOKEN`.
-- `telegram.config.get_settings()` is cached with `lru_cache`, mirroring the backend settings access pattern.
+Telegram settings use `TELEGRAM_*` env names with `BILL_HELPER_TELEGRAM_*` aliases accepted.
+
+Key settings:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_ALLOWED_USER_IDS`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `TELEGRAM_API_BASE_URL`
+- `TELEGRAM_BACKEND_BASE_URL`
+- `TELEGRAM_BACKEND_AUTH_TOKEN`
+- `TELEGRAM_BACKEND_AUTH_HEADERS`
+- `TELEGRAM_DATA_DIR`
+- `TELEGRAM_STATE_PATH`
+
+Auth guidance:
+
+- use `TELEGRAM_BACKEND_AUTH_TOKEN` for normal backend authentication
+- use `TELEGRAM_BACKEND_AUTH_HEADERS` only when you need extra custom headers, such as proxy headers
+- if `Authorization` is already present in `TELEGRAM_BACKEND_AUTH_HEADERS`, Telegram preserves it instead of synthesizing one from `TELEGRAM_BACKEND_AUTH_TOKEN`
 
 ## Database Layer (`backend/database.py`)
 
-- side-effect-free metadata lives in `backend/db_meta.py` (`Base`)
-- `backend/database.py` exposes explicit factories:
+- `backend/db_meta.py` holds side-effect-free SQLAlchemy metadata
+- `backend/database.py` exposes:
   - `build_engine_for_url(database_url)`
   - `build_engine(settings)`
   - `build_session_maker(engine)`
   - cached runtime accessors `get_engine()` and `get_session_maker()`
   - request dependency `get_db()` and helper `open_session()`
-- SQLite engines keep `check_same_thread=False`
-- scripts, migrations, and tests that need dedicated DB handles should construct their own engine and session explicitly instead of importing runtime globals
+- SQLite engines use `check_same_thread=False`
+- scripts, tests, and migrations should construct dedicated engines/sessions instead of relying on runtime globals when isolation matters

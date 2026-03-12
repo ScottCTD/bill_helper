@@ -6,6 +6,7 @@ from statistics import median
 from backend.database import SessionLocal
 from backend.enums_agent import AgentMessageRole, AgentRunEventType, AgentRunStatus, AgentToolCallStatus
 from backend.models_agent import AgentMessage, AgentRun, AgentRunEvent, AgentThread, AgentToolCall
+from backend.models_finance import User
 
 
 def _seed_tool_heavy_thread(
@@ -15,7 +16,8 @@ def _seed_tool_heavy_thread(
 ) -> tuple[str, str]:
     db = SessionLocal()
     try:
-        thread = AgentThread(title="Performance guard thread")
+        owner = db.query(User).filter(User.name == "admin").one()
+        thread = AgentThread(title="Performance guard thread", owner_user_id=owner.id)
         db.add(thread)
         db.flush()
 

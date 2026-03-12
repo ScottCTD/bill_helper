@@ -61,6 +61,7 @@ When editing this package, import PTB symbols from `telegram.ptb`, not directly 
 - attachment support is limited to a single photo or document per message; media-group/album coalescing is not implemented
 - supported documents are image files and PDFs only
 - webhook mode requires `TELEGRAM_WEBHOOK_SECRET`; `python -m telegram.webhook` binds uvicorn to `0.0.0.0:8081`
+- backends should be configured with `TELEGRAM_BACKEND_AUTH_TOKEN`; `TELEGRAM_BACKEND_AUTH_HEADERS` remains available for proxy or custom header injection
 
 ## Developer checklist
 

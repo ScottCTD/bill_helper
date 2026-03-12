@@ -1,10 +1,18 @@
 from __future__ import annotations
 
-from sqlalchemy import Select, or_, select, true
+from sqlalchemy import Select, false, select, true
 from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal, is_admin_principal
-from backend.models_finance import Account, Entry, EntryGroup, FilterGroup, User
+from backend.models_agent import (
+    AgentChangeItem,
+    AgentMessage,
+    AgentMessageAttachment,
+    AgentRun,
+    AgentThread,
+    AgentToolCall,
+)
+from backend.models_finance import Account, Entity, Entry, EntryGroup, FilterGroup, Tag, Taxonomy, User
 from backend.services.crud_policy import PolicyViolation
 
 
@@ -17,8 +25,8 @@ def owner_user_condition(
     if is_admin:
         return true()
     if principal_user_id is None:
-        return owner_user_id_column.is_(None)
-    return or_(owner_user_id_column == principal_user_id, owner_user_id_column.is_(None))
+        return false()
+    return owner_user_id_column == principal_user_id
 
 
 def owner_user_filter(owner_user_id_column, principal: RequestPrincipal):
@@ -42,7 +50,23 @@ def group_owner_filter(principal: RequestPrincipal):
 
 
 def filter_group_owner_filter(principal: RequestPrincipal):
-    return FilterGroup.owner_user_id == principal.user_id
+    return owner_user_filter(FilterGroup.owner_user_id, principal)
+
+
+def entity_owner_filter(principal: RequestPrincipal):
+    return owner_user_filter(Entity.owner_user_id, principal)
+
+
+def tag_owner_filter(principal: RequestPrincipal):
+    return owner_user_filter(Tag.owner_user_id, principal)
+
+
+def taxonomy_owner_filter(principal: RequestPrincipal):
+    return owner_user_filter(Taxonomy.owner_user_id, principal)
+
+
+def agent_thread_owner_filter(principal: RequestPrincipal):
+    return owner_user_filter(AgentThread.owner_user_id, principal)
 
 
 def get_account_for_principal_or_404(
@@ -69,6 +93,40 @@ def load_account_for_principal(
     if account is None:
         raise PolicyViolation.not_found("Account not found")
     return account
+
+
+def load_entity_for_principal(
+    db: Session,
+    *,
+    entity_id: str,
+    principal: RequestPrincipal,
+) -> Entity:
+    entity = db.scalar(
+        select(Entity).where(
+            Entity.id == entity_id,
+            entity_owner_filter(principal),
+        )
+    )
+    if entity is None:
+        raise PolicyViolation.not_found("Entity not found")
+    return entity
+
+
+def load_tag_for_principal(
+    db: Session,
+    *,
+    tag_id: int,
+    principal: RequestPrincipal,
+) -> Tag:
+    tag = db.scalar(
+        select(Tag).where(
+            Tag.id == tag_id,
+            tag_owner_filter(principal),
+        )
+    )
+    if tag is None:
+        raise PolicyViolation.not_found("Tag not found")
+    return tag
 
 
 def get_entry_for_principal_or_404(
@@ -178,6 +236,122 @@ def load_filter_group_for_principal(
     if filter_group is None:
         raise PolicyViolation.not_found("Filter group not found")
     return filter_group
+
+
+def load_taxonomy_for_principal(
+    db: Session,
+    *,
+    taxonomy_id: str,
+    principal: RequestPrincipal,
+) -> Taxonomy:
+    taxonomy = db.scalar(
+        select(Taxonomy).where(
+            Taxonomy.id == taxonomy_id,
+            taxonomy_owner_filter(principal),
+        )
+    )
+    if taxonomy is None:
+        raise PolicyViolation.not_found("Taxonomy not found")
+    return taxonomy
+
+
+def load_agent_thread_for_principal(
+    db: Session,
+    *,
+    thread_id: str,
+    principal: RequestPrincipal,
+    stmt: Select[tuple[AgentThread]] | None = None,
+) -> AgentThread:
+    query = stmt if stmt is not None else select(AgentThread)
+    thread = db.scalar(
+        query.where(
+            AgentThread.id == thread_id,
+            agent_thread_owner_filter(principal),
+        )
+    )
+    if thread is None:
+        raise PolicyViolation.not_found("Thread not found")
+    return thread
+
+
+def load_agent_run_for_principal(
+    db: Session,
+    *,
+    run_id: str,
+    principal: RequestPrincipal,
+    stmt: Select[tuple[AgentRun]] | None = None,
+) -> AgentRun:
+    query = stmt if stmt is not None else select(AgentRun)
+    run = db.scalar(
+        query.join(AgentThread, AgentThread.id == AgentRun.thread_id).where(
+            AgentRun.id == run_id,
+            agent_thread_owner_filter(principal),
+        )
+    )
+    if run is None:
+        raise PolicyViolation.not_found("Run not found")
+    return run
+
+
+def load_change_item_for_principal(
+    db: Session,
+    *,
+    item_id: str,
+    principal: RequestPrincipal,
+    stmt: Select[tuple[AgentChangeItem]] | None = None,
+) -> AgentChangeItem:
+    query = stmt if stmt is not None else select(AgentChangeItem)
+    item = db.scalar(
+        query.join(AgentRun, AgentRun.id == AgentChangeItem.run_id)
+        .join(AgentThread, AgentThread.id == AgentRun.thread_id)
+        .where(
+            AgentChangeItem.id == item_id,
+            agent_thread_owner_filter(principal),
+        )
+    )
+    if item is None:
+        raise PolicyViolation.not_found("Change item not found")
+    return item
+
+
+def load_attachment_for_principal(
+    db: Session,
+    *,
+    attachment_id: str,
+    principal: RequestPrincipal,
+) -> AgentMessageAttachment:
+    attachment = db.scalar(
+        select(AgentMessageAttachment)
+        .join(AgentMessage, AgentMessage.id == AgentMessageAttachment.message_id)
+        .join(AgentThread, AgentThread.id == AgentMessage.thread_id)
+        .where(
+            AgentMessageAttachment.id == attachment_id,
+            agent_thread_owner_filter(principal),
+        )
+    )
+    if attachment is None:
+        raise PolicyViolation.not_found("Attachment not found")
+    return attachment
+
+
+def load_tool_call_for_principal(
+    db: Session,
+    *,
+    tool_call_id: str,
+    principal: RequestPrincipal,
+) -> AgentToolCall:
+    tool_call = db.scalar(
+        select(AgentToolCall)
+        .join(AgentRun, AgentRun.id == AgentToolCall.run_id)
+        .join(AgentThread, AgentThread.id == AgentRun.thread_id)
+        .where(
+            AgentToolCall.id == tool_call_id,
+            agent_thread_owner_filter(principal),
+        )
+    )
+    if tool_call is None:
+        raise PolicyViolation.not_found("Tool call not found")
+    return tool_call
 
 
 def ensure_principal_can_assign_user(

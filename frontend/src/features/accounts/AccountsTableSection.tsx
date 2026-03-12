@@ -18,7 +18,7 @@ interface AccountsTableSectionProps {
   onSelectAccount: (accountId: string) => void;
   onEditAccount: (accountId: string) => void;
   onDeleteAccount: (accountId: string) => void;
-  ownerNameForId: (ownerUserId: string | null) => string;
+  ownerNameForId: (ownerUserId: string) => string;
   isLoading: boolean;
   errorMessage: string | null;
 }

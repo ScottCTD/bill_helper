@@ -177,6 +177,32 @@ describe("EntryEditorModal", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("renders only explicit owner choices with no blank fallback option", () => {
+    render(
+      <EntryEditorModal
+        isOpen
+        mode="create"
+        entry={null}
+        currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
+        entities={[]}
+        users={[
+          { id: "user-1", name: "Alice", is_admin: false, is_current_user: true },
+          { id: "user-2", name: "Bob", is_admin: false, is_current_user: false }
+        ]}
+        groups={[]}
+        tags={[]}
+        currentUserId="user-1"
+        defaultCurrencyCode="CAD"
+        isSaving={false}
+        onClose={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    expect(screen.getByLabelText("Owner")).toHaveValue("user-1");
+    expect(screen.queryByRole("option", { name: "(none)" })).not.toBeInTheDocument();
+  });
+
   it("submits when re-linking a preserved missing label to an existing entity with the same name", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();

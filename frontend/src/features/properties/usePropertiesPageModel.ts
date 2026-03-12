@@ -4,15 +4,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createTag,
   createTaxonomyTerm,
-  createUser,
   deleteTag,
   updateTag,
-  updateTaxonomyTerm,
-  updateUser
+  updateTaxonomyTerm
 } from "../../lib/api";
 import { ENTITY_CATEGORY_TAXONOMY_KEY, TAG_TYPE_TAXONOMY_KEY } from "../../lib/catalogs";
-import { invalidateTagReadModels, invalidateTaxonomyReadModels, invalidateUserReadModels } from "../../lib/queryInvalidation";
-import type { Tag, TaxonomyTerm, User } from "../../lib/types";
+import { invalidateTagReadModels, invalidateTaxonomyReadModels } from "../../lib/queryInvalidation";
+import type { Tag, TaxonomyTerm } from "../../lib/types";
 import { usePropertiesFilteredData } from "./usePropertiesFilteredData";
 import { usePropertiesFormState } from "./usePropertiesFormState";
 import { usePropertiesQueries } from "./usePropertiesQueries";
@@ -30,7 +28,6 @@ export function usePropertiesPageModel() {
 
   const filtered = usePropertiesFilteredData({
     sectionSearch: sectionState.sectionSearch,
-    users: queries.usersQuery.data,
     tags: queries.tagsQuery.data,
     currencies: queries.currenciesQuery.data,
     entityCategoryTerms: queries.entityCategoryTermsQuery.data,
@@ -85,24 +82,6 @@ export function usePropertiesPageModel() {
       }
       forms.setDeletingTagId(null);
       invalidateTagReadModels(queryClient);
-    }
-  });
-
-  const createUserMutation = useMutation({
-    mutationFn: createUser,
-    onSuccess: () => {
-      forms.setNewUserName("");
-      sectionState.actions.closeCreatePanel("users");
-      invalidateUserReadModels(queryClient);
-    }
-  });
-
-  const updateUserMutation = useMutation({
-    mutationFn: ({ userId, name }: { userId: string; name: string }) => updateUser(userId, { name }),
-    onSuccess: () => {
-      forms.setEditingUserId("");
-      forms.setEditingUserName("");
-      invalidateUserReadModels(queryClient);
     }
   });
 
@@ -164,15 +143,6 @@ export function usePropertiesPageModel() {
     });
   }
 
-  function onCreateUser(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const name = forms.newUserName.trim();
-    if (!name) {
-      return;
-    }
-    createUserMutation.mutate({ name });
-  }
-
   function onCreateEntityCategoryTerm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = forms.newEntityCategoryTermName.trim();
@@ -195,24 +165,6 @@ export function usePropertiesPageModel() {
       name,
       description: forms.newTagTypeTermDescription.trim() || undefined
     });
-  }
-
-  function saveUser(userId: string) {
-    const name = forms.editingUserName.trim();
-    if (!name) {
-      return;
-    }
-    updateUserMutation.mutate({ userId, name });
-  }
-
-  function startEditUser(user: User) {
-    forms.setEditingUserId(user.id);
-    forms.setEditingUserName(user.name);
-  }
-
-  function cancelEditUser() {
-    forms.setEditingUserId("");
-    forms.setEditingUserName("");
   }
 
   function saveTag(tagId: number) {
@@ -311,7 +263,6 @@ export function usePropertiesPageModel() {
   }
 
   const coreSections = [
-    { id: "users" as const, label: "Users" },
     { id: "tags" as const, label: "Tags" },
     { id: "currencies" as const, label: "Currencies" }
   ];
@@ -352,11 +303,6 @@ export function usePropertiesPageModel() {
       editingTagDescription: forms.editingTagDescription,
       setEditingTagDescription: forms.setEditingTagDescription,
       deletingTagId: forms.deletingTagId,
-      newUserName: forms.newUserName,
-      setNewUserName: forms.setNewUserName,
-      editingUserId: forms.editingUserId,
-      editingUserName: forms.editingUserName,
-      setEditingUserName: forms.setEditingUserName,
       newEntityCategoryTermName: forms.newEntityCategoryTermName,
       setNewEntityCategoryTermName: forms.setNewEntityCategoryTermName,
       newEntityCategoryTermDescription: forms.newEntityCategoryTermDescription,
@@ -381,12 +327,8 @@ export function usePropertiesPageModel() {
       toggleCreatePanel: sectionState.actions.toggleCreatePanel,
       closeCreatePanel: sectionState.actions.closeCreatePanel,
       onCreateTag,
-      onCreateUser,
       onCreateEntityCategoryTerm,
       onCreateTagTypeTerm,
-      saveUser,
-      startEditUser,
-      cancelEditUser,
       saveTag,
       startEditTag,
       cancelEditTag,
@@ -404,8 +346,6 @@ export function usePropertiesPageModel() {
       createTagMutation,
       updateTagMutation,
       deleteTagMutation,
-      createUserMutation,
-      updateUserMutation,
       createEntityCategoryTermMutation,
       updateEntityCategoryTermMutation,
       createTagTypeTermMutation,

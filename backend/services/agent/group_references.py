@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import NotRequired, TypedDict
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import false, func, select
 from sqlalchemy.orm import Session
 
 from backend.models_finance import EntryGroup
@@ -69,8 +69,10 @@ def group_public_id(group_id: str, *, full: bool = False) -> str:
     return normalized if full else normalized[:GROUP_PUBLIC_ID_LENGTH]
 
 
-def group_owner_condition(user_id: str):
-    return or_(EntryGroup.owner_user_id == user_id, EntryGroup.owner_user_id.is_(None))
+def group_owner_condition(user_id: str | None):
+    if user_id is None:
+        return false()
+    return EntryGroup.owner_user_id == user_id
 
 
 def group_summary_to_public_record(summary: GroupSummaryRead, *, full_id: bool = False) -> GroupSummaryPublicRecord:

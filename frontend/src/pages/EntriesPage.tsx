@@ -287,7 +287,7 @@ export function EntriesPage() {
       from_entity: payload.from_entity || undefined,
       to_entity_id: payload.to_entity_id || undefined,
       to_entity: payload.to_entity || undefined,
-      owner_user_id: payload.owner_user_id || undefined,
+      owner_user_id: payload.owner_user_id,
       direct_group_id: payload.direct_group_id || undefined,
       direct_group_member_role: payload.direct_group_member_role ?? undefined,
       markdown_body: payload.markdown_body || undefined,

@@ -31,7 +31,6 @@ class RuntimeSettingsOverridesView:
 
 @dataclass(slots=True, frozen=True)
 class RuntimeSettingsView:
-    current_user_name: str
     user_memory: list[str] | None
     default_currency_code: str
     dashboard_currency_code: str

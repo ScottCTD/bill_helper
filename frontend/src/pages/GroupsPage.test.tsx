@@ -89,7 +89,6 @@ const groupsFixture: GroupSummary[] = [
 ];
 
 const runtimeSettingsFixture: RuntimeSettings = {
-  current_user_name: "Alice",
   user_memory: null,
   default_currency_code: "CAD",
   dashboard_currency_code: "CAD",
@@ -106,7 +105,6 @@ const runtimeSettingsFixture: RuntimeSettings = {
   agent_base_url: null,
   agent_api_key_configured: false,
   overrides: {
-    current_user_name: null,
     user_memory: null,
     default_currency_code: null,
     dashboard_currency_code: null,
@@ -135,7 +133,7 @@ const entryFixture: Entry = {
   currency_code: "CAD",
   from_entity_id: null,
   to_entity_id: null,
-  owner_user_id: null,
+  owner_user_id: "user-1",
   from_entity: "Scotiabank Credit",
   from_entity_missing: false,
   to_entity: "OpenAI",

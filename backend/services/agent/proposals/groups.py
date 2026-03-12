@@ -23,8 +23,8 @@ from backend.services.agent.proposals.common import (
     pending_proposals_for_thread,
     proposal_result,
     proposal_short_id,
+    require_tool_principal,
     resolve_proposal_by_id,
-    runtime_current_user_id,
 )
 from backend.services.agent.tool_results import error_result
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
@@ -57,10 +57,14 @@ def resolve_group_proposal_reference_or_error(
 
 
 def _find_groups_for_reference(context: ToolContext, *, group_id: str) -> list[EntryGroup]:
+    try:
+        principal = require_tool_principal(context)
+    except ValueError:
+        return []
     return find_groups_by_id(
         context.db,
         group_id=group_id,
-        owner_user_id=runtime_current_user_id(context),
+        owner_user_id=principal.user_id,
     )
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -255,7 +256,15 @@ def test_migration_0026_converts_legacy_links_to_typed_groups(tmp_path):
             },
         )
 
-    command.upgrade(cfg, "head")
+    previous_backfill_user = os.environ.get("BILL_HELPER_OWNER_BACKFILL_USER_NAME")
+    os.environ["BILL_HELPER_OWNER_BACKFILL_USER_NAME"] = "admin"
+    try:
+        command.upgrade(cfg, "head")
+    finally:
+        if previous_backfill_user is None:
+            os.environ.pop("BILL_HELPER_OWNER_BACKFILL_USER_NAME", None)
+        else:
+            os.environ["BILL_HELPER_OWNER_BACKFILL_USER_NAME"] = previous_backfill_user
 
     inspector = inspect(engine)
     assert "entry_group_members" in inspector.get_table_names()
@@ -317,7 +326,15 @@ def test_migration_0031_adds_users_is_admin_column(tmp_path):
             },
         )
 
-    command.upgrade(cfg, "head")
+    previous_backfill_user = os.environ.get("BILL_HELPER_OWNER_BACKFILL_USER_NAME")
+    os.environ["BILL_HELPER_OWNER_BACKFILL_USER_NAME"] = "alice"
+    try:
+        command.upgrade(cfg, "head")
+    finally:
+        if previous_backfill_user is None:
+            os.environ.pop("BILL_HELPER_OWNER_BACKFILL_USER_NAME", None)
+        else:
+            os.environ["BILL_HELPER_OWNER_BACKFILL_USER_NAME"] = previous_backfill_user
 
     inspector = inspect(engine)
     user_columns = {column["name"] for column in inspector.get_columns("users")}

@@ -7,8 +7,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.auth.contracts import RequestPrincipal
-from backend.enums_finance import EntryKind
-from backend.enums_finance import GroupMemberRole
+from backend.enums_finance import EntryKind, GroupMemberRole
 from backend.models_finance import Entity, Entry, EntryGroup, EntryGroupMember, Tag
 from backend.services.access_scope import (
     ensure_principal_can_assign_user,
@@ -21,7 +20,7 @@ from backend.services.crud_policy import PolicyViolation
 from backend.services.entities import ensure_entity_by_name
 from backend.services.groups import entry_group_options, group_tree_options, set_entry_direct_group
 from backend.services.tags import generate_random_tag_color
-from backend.services.users import ensure_user_by_name, normalize_user_name
+from backend.services.users import find_user_by_name, normalize_user_name
 from backend.validation.finance_names import normalize_entity_name, normalize_tag_name
 
 
@@ -124,19 +123,26 @@ def normalize_required_tag_name(name: str) -> str:
     return normalized
 
 
-def ensure_tags(db: Session, tag_names: list[str]) -> list[Tag]:
+def ensure_tags(db: Session, tag_names: list[str], *, owner_user_id: str) -> list[Tag]:
     normalized_names = sorted({normalize_required_tag_name(name) for name in tag_names})
     if not normalized_names:
         return []
 
-    existing_tags = list(db.scalars(select(Tag).where(Tag.name.in_(normalized_names))))
+    existing_tags = list(
+        db.scalars(
+            select(Tag).where(
+                Tag.owner_user_id == owner_user_id,
+                Tag.name.in_(normalized_names),
+            )
+        )
+    )
     existing_by_name = {tag.name: tag for tag in existing_tags}
 
     tags: list[Tag] = []
     for name in normalized_names:
         tag = existing_by_name.get(name)
         if tag is None:
-            tag = Tag(name=name, color=generate_random_tag_color())
+            tag = Tag(owner_user_id=owner_user_id, name=name, color=generate_random_tag_color())
             db.add(tag)
             db.flush()
         tags.append(tag)
@@ -145,7 +151,7 @@ def ensure_tags(db: Session, tag_names: list[str]) -> list[Tag]:
 
 
 def set_entry_tags(db: Session, entry: Entry, tag_names: list[str]) -> None:
-    entry.tags = ensure_tags(db, tag_names)
+    entry.tags = ensure_tags(db, tag_names, owner_user_id=entry.owner_user_id)
 
 
 def soft_delete_entry(db: Session, entry: Entry) -> None:
@@ -176,6 +182,7 @@ def _resolve_entity_ref(
     *,
     ref: EntityRef | EntityRefPatch | None,
     field_name: str,
+    owner_user_id: str,
 ) -> tuple[str | None, str | None]:
     if ref is None:
         return None, None
@@ -183,7 +190,12 @@ def _resolve_entity_ref(
     normalized_name = _normalize_optional_entity_name(ref.name)
 
     if ref.entity_id:
-        entity = db.get(Entity, ref.entity_id)
+        entity = db.scalar(
+            select(Entity).where(
+                Entity.id == ref.entity_id,
+                Entity.owner_user_id == owner_user_id,
+            )
+        )
         if entity is None:
             raise PolicyViolation.not_found(f"{field_name} entity not found")
         if normalized_name is not None and entity.name.lower() != normalized_name.lower():
@@ -191,7 +203,11 @@ def _resolve_entity_ref(
         return entity.id, entity.name
 
     if normalized_name is not None:
-        entity = ensure_entity_by_name(db, normalized_name)
+        entity = ensure_entity_by_name(
+            db,
+            normalized_name,
+            owner_user_id=owner_user_id,
+        )
         return entity.id, entity.name
 
     return None, None
@@ -216,7 +232,9 @@ def _resolve_user_ref(
         return user.id, user.name
 
     if normalized_name is not None:
-        user = ensure_user_by_name(db, normalized_name)
+        user = find_user_by_name(db, normalized_name)
+        if user is None:
+            raise PolicyViolation.not_found(f"{field_name} user not found")
         ensure_principal_can_assign_user(principal, user_id=user.id)
         return user.id, user.name
 
@@ -263,17 +281,6 @@ def create_entry_from_command(
     if command.account_id is not None:
         load_account_for_principal(db, account_id=command.account_id, principal=principal)
 
-    from_entity_id, from_entity_name = _resolve_entity_ref(
-        db,
-        ref=command.from_ref,
-        field_name="from",
-    )
-    to_entity_id, to_entity_name = _resolve_entity_ref(
-        db,
-        ref=command.to_ref,
-        field_name="to",
-    )
-
     if command.owner_ref is None:
         owner_user_id = principal.user_id
         owner_name = principal.user_name
@@ -284,6 +291,22 @@ def create_entry_from_command(
             field_name="owner",
             principal=principal,
         )
+
+    if owner_user_id is None or owner_name is None:  # pragma: no cover - guarded by validation
+        raise PolicyViolation.bad_request("Entry owner is required")
+
+    from_entity_id, from_entity_name = _resolve_entity_ref(
+        db,
+        ref=command.from_ref,
+        field_name="from",
+        owner_user_id=owner_user_id,
+    )
+    to_entity_id, to_entity_name = _resolve_entity_ref(
+        db,
+        ref=command.to_ref,
+        field_name="to",
+        owner_user_id=owner_user_id,
+    )
 
     entry = Entry(
         account_id=command.account_id,
@@ -337,11 +360,26 @@ def update_entry_from_command(
     if "currency_code" in update_data and update_data["currency_code"] is not None:
         update_data["currency_code"] = update_data["currency_code"].upper()
 
+    resolved_owner_user_id = entry.owner_user_id
+    if "owner_ref" in command.model_fields_set:
+        owner_user_id, owner_name = _resolve_user_ref(
+            db,
+            ref=command.owner_ref,
+            field_name="owner",
+            principal=principal,
+        )
+        if owner_user_id is None or owner_name is None:
+            raise PolicyViolation.bad_request("Entry owner is required")
+        resolved_owner_user_id = owner_user_id
+        update_data["owner_user_id"] = owner_user_id
+        update_data["owner"] = owner_name
+
     if "from_ref" in command.model_fields_set:
         resolved_id, resolved_name = _resolve_entity_ref(
             db,
             ref=command.from_ref,
             field_name="from",
+            owner_user_id=resolved_owner_user_id,
         )
         update_data["from_entity_id"] = resolved_id
         update_data["from_entity"] = resolved_name
@@ -351,19 +389,10 @@ def update_entry_from_command(
             db,
             ref=command.to_ref,
             field_name="to",
+            owner_user_id=resolved_owner_user_id,
         )
         update_data["to_entity_id"] = resolved_id
         update_data["to_entity"] = resolved_name
-
-    if "owner_ref" in command.model_fields_set:
-        resolved_id, resolved_name = _resolve_user_ref(
-            db,
-            ref=command.owner_ref,
-            field_name="owner",
-            principal=principal,
-        )
-        update_data["owner_user_id"] = resolved_id
-        update_data["owner"] = resolved_name
 
     for field, value in update_data.items():
         setattr(entry, field, value)

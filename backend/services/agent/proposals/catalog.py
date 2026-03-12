@@ -17,16 +17,17 @@ from backend.services.agent.change_contracts.catalog import (
     UpdateEntityPayload as ProposeUpdateEntityArgs,
     UpdateTagPayload as ProposeUpdateTagArgs,
 )
+from backend.services.agent.entry_references import entry_to_public_record
 from backend.services.agent.proposals.common import (
     create_change_item,
     has_pending_create_entity_root_proposal,
     proposal_result,
+    require_tool_principal,
 )
 from backend.services.agent.proposals.snapshots import (
     propose_create_snapshot,
     propose_delete_snapshot,
 )
-from backend.services.agent.entry_references import entry_to_public_record
 from backend.services.agent.tool_results import error_result
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult
 from backend.services.entities import ACCOUNT_CATEGORY_DETAIL, find_entity_by_name, is_account_entity
@@ -44,7 +45,16 @@ def account_payload_record(account: Account) -> dict[str, object]:
 
 
 def propose_create_tag(context: ToolContext, args: ProposeCreateTagArgs) -> ToolExecutionResult:
-    existing = context.db.scalar(select(Tag).where(Tag.name == args.name))
+    try:
+        principal = require_tool_principal(context)
+    except ValueError as exc:
+        return error_result(str(exc))
+    existing = context.db.scalar(
+        select(Tag).where(
+            Tag.owner_user_id == principal.user_id,
+            Tag.name == args.name,
+        )
+    )
     if existing is not None:
         return error_result("tag already exists", details={"name": args.name})
 
@@ -59,14 +69,28 @@ def propose_create_tag(context: ToolContext, args: ProposeCreateTagArgs) -> Tool
 
 
 def propose_update_tag(context: ToolContext, args: ProposeUpdateTagArgs) -> ToolExecutionResult:
-    existing = context.db.scalar(select(Tag).where(Tag.name == args.name))
+    try:
+        principal = require_tool_principal(context)
+    except ValueError as exc:
+        return error_result(str(exc))
+    existing = context.db.scalar(
+        select(Tag).where(
+            Tag.owner_user_id == principal.user_id,
+            Tag.name == args.name,
+        )
+    )
     if existing is None:
         return error_result("tag not found", details={"name": args.name})
 
     patch = args.patch.model_dump(exclude_unset=True)
     target_name = patch.get("name")
     if target_name is not None:
-        duplicate = context.db.scalar(select(Tag).where(Tag.name == target_name))
+        duplicate = context.db.scalar(
+            select(Tag).where(
+                Tag.owner_user_id == principal.user_id,
+                Tag.name == target_name,
+            )
+        )
         if duplicate is not None and duplicate.id != existing.id:
             return error_result("target tag name already exists", details={"name": target_name})
 
@@ -75,6 +99,7 @@ def propose_update_tag(context: ToolContext, args: ProposeUpdateTagArgs) -> Tool
         taxonomy_key="tag_type",
         subject_type="tag",
         subject_ids=[existing.id],
+        owner_user_id=principal.user_id,
     )
     payload = {
         "name": args.name,
@@ -95,7 +120,16 @@ def propose_update_tag(context: ToolContext, args: ProposeUpdateTagArgs) -> Tool
 
 
 def propose_delete_tag(context: ToolContext, args: ProposeDeleteTagArgs) -> ToolExecutionResult:
-    existing = context.db.scalar(select(Tag).where(Tag.name == args.name))
+    try:
+        principal = require_tool_principal(context)
+    except ValueError as exc:
+        return error_result(str(exc))
+    existing = context.db.scalar(
+        select(Tag).where(
+            Tag.owner_user_id == principal.user_id,
+            Tag.name == args.name,
+        )
+    )
     if existing is None:
         return error_result("tag not found", details={"name": args.name})
 
@@ -103,20 +137,32 @@ def propose_delete_tag(context: ToolContext, args: ProposeDeleteTagArgs) -> Tool
         context.db.scalar(
             select(func.count(Entry.id))
             .join(Entry.tags)
-            .where(Tag.id == existing.id, Entry.is_deleted.is_(False))
+            .where(
+                Tag.id == existing.id,
+                Entry.is_deleted.is_(False),
+                Entry.owner_user_id == principal.user_id,
+            )
         )
         or 0
     )
-    sample_entries = list(
-        context.db.scalars(
-            select(Entry)
-            .join(Entry.tags)
-            .where(Tag.id == existing.id, Entry.is_deleted.is_(False))
-            .options(selectinload(Entry.tags))
-            .order_by(Entry.occurred_at.desc(), Entry.created_at.desc())
-            .limit(5)
+    sample_entries = (
+        list(
+            context.db.scalars(
+                select(Entry)
+                .join(Entry.tags)
+                .where(
+                    Tag.id == existing.id,
+                    Entry.is_deleted.is_(False),
+                    Entry.owner_user_id == principal.user_id,
+                )
+                .options(selectinload(Entry.tags))
+                .order_by(Entry.occurred_at.desc(), Entry.created_at.desc())
+                .limit(5)
+            )
         )
-    ) if referenced_entry_count > 0 else []
+        if referenced_entry_count > 0
+        else []
+    )
 
     payload = {"name": args.name}
     item = create_change_item(
@@ -134,9 +180,13 @@ def propose_delete_tag(context: ToolContext, args: ProposeDeleteTagArgs) -> Tool
 
 
 def propose_create_entity(context: ToolContext, args: ProposeCreateEntityArgs) -> ToolExecutionResult:
+    try:
+        principal = require_tool_principal(context)
+    except ValueError as exc:
+        return error_result(str(exc))
     if normalize_entity_category(args.category) == "account":
         return error_result(ACCOUNT_CATEGORY_DETAIL)
-    existing = find_entity_by_name(context.db, args.name)
+    existing = find_entity_by_name(context.db, args.name, owner_user_id=principal.user_id)
     if existing is not None:
         return error_result("entity already exists", details={"name": args.name})
     if has_pending_create_entity_root_proposal(context, args.name):
@@ -156,7 +206,11 @@ def propose_create_entity(context: ToolContext, args: ProposeCreateEntityArgs) -
 
 
 def propose_update_entity(context: ToolContext, args: ProposeUpdateEntityArgs) -> ToolExecutionResult:
-    existing = find_entity_by_name(context.db, args.name)
+    try:
+        principal = require_tool_principal(context)
+    except ValueError as exc:
+        return error_result(str(exc))
+    existing = find_entity_by_name(context.db, args.name, owner_user_id=principal.user_id)
     if existing is None:
         return error_result("entity not found", details={"name": args.name})
     if is_account_entity(existing):
@@ -170,7 +224,7 @@ def propose_update_entity(context: ToolContext, args: ProposeUpdateEntityArgs) -
         return error_result(ACCOUNT_CATEGORY_DETAIL)
     target_name = patch.get("name")
     if target_name is not None:
-        duplicate = find_entity_by_name(context.db, target_name)
+        duplicate = find_entity_by_name(context.db, target_name, owner_user_id=principal.user_id)
         if duplicate is not None and duplicate.id != existing.id:
             return error_result("target entity name already exists", details={"name": target_name})
 
@@ -193,7 +247,11 @@ def propose_update_entity(context: ToolContext, args: ProposeUpdateEntityArgs) -
 
 
 def propose_delete_entity(context: ToolContext, args: ProposeDeleteEntityArgs) -> ToolExecutionResult:
-    existing = find_entity_by_name(context.db, args.name)
+    try:
+        principal = require_tool_principal(context)
+    except ValueError as exc:
+        return error_result(str(exc))
+    existing = find_entity_by_name(context.db, args.name, owner_user_id=principal.user_id)
     if existing is None:
         return error_result("entity not found", details={"name": args.name})
     if is_account_entity(existing):
@@ -207,6 +265,7 @@ def propose_delete_entity(context: ToolContext, args: ProposeDeleteEntityArgs) -
             select(Entry)
             .where(
                 Entry.is_deleted.is_(False),
+                Entry.owner_user_id == principal.user_id,
                 or_(Entry.from_entity_id == existing.id, Entry.to_entity_id == existing.id),
             )
             .options(selectinload(Entry.tags))
@@ -215,7 +274,12 @@ def propose_delete_entity(context: ToolContext, args: ProposeDeleteEntityArgs) -
     )
     impact_records = [entry_to_public_record(entry) for entry in impacted_entries]
     impacted_account_count = int(
-        context.db.scalar(select(func.count(Account.id)).where(Account.id == existing.id))
+        context.db.scalar(
+            select(func.count(Account.id)).where(
+                Account.id == existing.id,
+                Account.owner_user_id == principal.user_id,
+            )
+        )
         or 0
     )
 
@@ -242,7 +306,11 @@ def propose_delete_entity(context: ToolContext, args: ProposeDeleteEntityArgs) -
 
 
 def propose_create_account(context: ToolContext, args: ProposeCreateAccountArgs) -> ToolExecutionResult:
-    if find_entity_by_name(context.db, args.name) is not None:
+    try:
+        principal = require_tool_principal(context)
+    except ValueError as exc:
+        return error_result(str(exc))
+    if find_entity_by_name(context.db, args.name, owner_user_id=principal.user_id) is not None:
         return error_result("entity name already exists", details={"name": args.name})
     if has_pending_create_entity_root_proposal(context, args.name):
         return error_result(
@@ -261,14 +329,18 @@ def propose_create_account(context: ToolContext, args: ProposeCreateAccountArgs)
 
 
 def propose_update_account(context: ToolContext, args: ProposeUpdateAccountArgs) -> ToolExecutionResult:
-    existing = find_account_by_name(context.db, args.name)
+    try:
+        principal = require_tool_principal(context)
+    except ValueError as exc:
+        return error_result(str(exc))
+    existing = find_account_by_name(context.db, args.name, owner_user_id=principal.user_id)
     if existing is None:
         return error_result("account not found", details={"name": args.name})
 
     patch = args.patch.model_dump(exclude_unset=True)
     target_name = patch.get("name")
     if target_name is not None:
-        duplicate = find_entity_by_name(context.db, target_name)
+        duplicate = find_entity_by_name(context.db, target_name, owner_user_id=principal.user_id)
         if duplicate is not None and duplicate.id != existing.id:
             return error_result("target account name already exists", details={"name": target_name})
 
@@ -288,7 +360,11 @@ def propose_update_account(context: ToolContext, args: ProposeUpdateAccountArgs)
 
 
 def propose_delete_account(context: ToolContext, args: ProposeDeleteAccountArgs) -> ToolExecutionResult:
-    existing = find_account_by_name(context.db, args.name)
+    try:
+        principal = require_tool_principal(context)
+    except ValueError as exc:
+        return error_result(str(exc))
+    existing = find_account_by_name(context.db, args.name, owner_user_id=principal.user_id)
     if existing is None:
         return error_result("account not found", details={"name": args.name})
 
@@ -296,6 +372,7 @@ def propose_delete_account(context: ToolContext, args: ProposeDeleteAccountArgs)
         context.db.scalar(
             select(func.count(Entry.id)).where(
                 Entry.is_deleted.is_(False),
+                Entry.owner_user_id == principal.user_id,
                 or_(
                     Entry.account_id == existing.id,
                     Entry.from_entity_id == existing.id,
@@ -306,7 +383,9 @@ def propose_delete_account(context: ToolContext, args: ProposeDeleteAccountArgs)
         or 0
     )
     snapshot_count = int(
-        context.db.scalar(select(func.count(AccountSnapshot.id)).where(AccountSnapshot.account_id == existing.id))
+        context.db.scalar(
+            select(func.count(AccountSnapshot.id)).where(AccountSnapshot.account_id == existing.id)
+        )
         or 0
     )
     payload = {

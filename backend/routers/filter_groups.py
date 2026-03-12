@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal
-from backend.auth.dependencies import get_or_create_current_principal
+from backend.auth.dependencies import get_current_principal
 from backend.database import get_db
 from backend.schemas_finance import FilterGroupCreate, FilterGroupRead, FilterGroupUpdate
 from backend.services.filter_groups import (
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/filter-groups", tags=["filter-groups"])
 @router.get("", response_model=list[FilterGroupRead])
 def list_filter_groups(
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> list[FilterGroupRead]:
     rows = list_filter_group_reads(db, principal=principal)
     db.commit()
@@ -32,7 +32,7 @@ def list_filter_groups(
 def create_filter_group_endpoint(
     payload: FilterGroupCreate,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> FilterGroupRead:
     filter_group = create_filter_group(db, payload=payload, principal=principal)
     db.commit()
@@ -44,7 +44,7 @@ def update_filter_group_endpoint(
     filter_group_id: str,
     payload: FilterGroupUpdate,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> FilterGroupRead:
     filter_group = update_filter_group(
         db,
@@ -60,7 +60,7 @@ def update_filter_group_endpoint(
 def delete_filter_group_endpoint(
     filter_group_id: str,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> None:
     delete_filter_group(db, filter_group_id=filter_group_id, principal=principal)
     db.commit()

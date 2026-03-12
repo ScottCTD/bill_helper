@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from backend.auth.contracts import RequestPrincipal
 from backend.database import get_session_maker
 from backend.services.agent.apply.entries import apply_update_entry
 from backend.services.agent.change_contracts.entries import UpdateEntryPatchPayload, UpdateEntryPayload
@@ -29,11 +30,11 @@ def test_entry_reference_helpers_split_exact_and_prefix_lookup(client) -> None:
         db.close()
 
 
-def test_entry_reference_helpers_scope_matches_by_principal(client) -> None:
+def test_entry_reference_helpers_scope_matches_by_principal(client, auth_headers) -> None:
     admin_account_id = create_account(client, name="Admin Checking")
     admin_entry = create_entry(client, admin_account_id, "Admin Coffee")
 
-    alice_headers = {"X-Bill-Helper-Principal": "alice"}
+    alice_headers = auth_headers("alice")
     alice_account_id = create_account(client, name="Alice Checking", headers=alice_headers)
     alice_entry = create_entry(client, alice_account_id, "Alice Coffee", headers=alice_headers)
 
@@ -68,7 +69,7 @@ def test_entry_reference_helpers_scope_matches_by_principal(client) -> None:
         db.close()
 
 
-def test_apply_update_entry_uses_reviewer_scope(client) -> None:
+def test_apply_update_entry_uses_owner_scope(client) -> None:
     admin_account_id = create_account(client, name="Admin Checking")
     admin_entry = create_entry(client, admin_account_id, "Admin Coffee")
 
@@ -81,7 +82,7 @@ def test_apply_update_entry_uses_reviewer_scope(client) -> None:
                     entry_id=admin_entry["id"],
                     patch=UpdateEntryPatchPayload(name="Hidden update"),
                 ),
-                actor_name="alice",
+                principal=RequestPrincipal(user_id="alice-user", user_name="alice", is_admin=False),
             )
     finally:
         db.close()

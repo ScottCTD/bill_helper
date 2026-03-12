@@ -1,6 +1,11 @@
 # API Agent
 
-All agent routes require `X-Bill-Helper-Principal`, and the resolved user must have persisted admin access (`users.is_admin=true`).
+All agent routes require an authenticated principal.
+
+Scope rules:
+
+- non-admin principals can access only their own threads and all child resources under those threads
+- admin principals can access any thread and may impersonate a user when they need an exact end-user scope
 
 ## Threads
 
@@ -8,28 +13,24 @@ All agent routes require `X-Bill-Helper-Principal`, and the resolved user must h
 
 List threads in most-recently-updated order. Response: `AgentThreadSummaryRead[]`
 
-Authorization: admin principal only.
+Behavior:
 
-Each row includes:
-
-- thread metadata
-- `last_message_preview`
-- `pending_change_count`
-- `has_running_run`
+- returns the caller's threads
+- admin callers receive all threads
+- each row includes `last_message_preview`, `pending_change_count`, and `has_running_run`
 
 ### `POST /agent/threads`
 
-Create a thread. Body: optional `title`. Response: `AgentThreadRead`
+Create a thread. Body: optional `title`. Response: `201 AgentThreadRead`
 
-Authorization: admin principal only.
+Behavior:
 
-If no title is supplied, the thread remains untitled until a later explicit rename.
+- the new thread is owned by the authenticated principal
+- if no title is supplied, the thread remains untitled until a later explicit rename
 
 ### `PATCH /agent/threads/{thread_id}`
 
 Rename one thread. Body: `{ "title": string }`. Response: `AgentThreadRead`
-
-Authorization: admin principal only.
 
 Validation:
 
@@ -41,10 +42,9 @@ Validation:
 
 Delete one thread and its persisted timeline artifacts. Response: `204`
 
-Authorization: admin principal only.
-
 Behavior:
 
+- lookup is thread-owner scoped
 - cascades deletes for messages, runs, tool calls, change items, and review actions
 - removes local upload directories under `{data_dir}/agent_uploads/<message_id>/...`
 - rejects delete when any run in the thread is still running
@@ -58,29 +58,23 @@ Errors:
 
 Fetch timeline-ready thread detail. Response: `AgentThreadDetailRead`
 
-Authorization: admin principal only.
-
 Includes:
 
 - `thread`
 - `messages`
 - `runs`
-- per-run `change_items` used by the frontend to build the thread-scoped review surface
-- legacy persisted change rows with unsupported `change_type` values are skipped from `change_items` so thread history keeps loading on current clients
+- per-run `change_items`
 - `configured_model_name`
 - `current_context_tokens`
-- each run carries its own `model_name`; clients should treat the newest run model as the active conversation model when present
 - compact tool-call snapshots by default
 - ordered run `events[]`
-- nullable usage counters and derived pricing fields (`input_cost_usd`, `output_cost_usd`, `total_cost_usd`)
+- nullable usage counters and derived pricing fields
 
 ## Message Send
 
 ### `POST /agent/threads/{thread_id}/messages`
 
 Create a user message and run the agent in background.
-
-Authorization: admin principal only.
 
 Content type: `multipart/form-data`
 
@@ -93,14 +87,14 @@ Form fields:
 
 Behavior:
 
+- thread lookup is owner-scoped
 - validates attachment count and size limits
-- persists message and attachments
+- persists the message and attachments
 - creates an `agent_runs` row with initial `status=running`
 - starts bounded tool-calling execution in background
 - PDFs are parsed with PyMuPDF first; vision-capable models also receive rendered page images
 - provider routing resolves through LiteLLM using the requested `model_name` when supplied, otherwise the configured default model
 - proposal tool outputs include `proposal_id` and `proposal_short_id`
-- pending proposals can later be edited or removed while still pending
 
 Response: `AgentRunRead`
 
@@ -115,8 +109,6 @@ Errors:
 
 Create a user message and run the agent with SSE.
 
-Authorization: admin principal only.
-
 Content type: `multipart/form-data`
 
 Form fields:
@@ -130,7 +122,7 @@ Behavior:
 - uses the same validation and persistence rules as the non-stream endpoint
 - executes in-request and streams incremental events
 - if the client disconnects, the run continues in background
-- response payload shape stays aligned with the non-stream endpoint: run snapshots expose the effective per-run `model_name`
+- response payload shape stays aligned with the non-stream endpoint
 
 Response content type: `text/event-stream`
 
@@ -140,17 +132,15 @@ Event contract:
 - `text_delta`
 - `run_event`
   - shape: `{ type, run_id, event, tool_call? }`
-  - `tool_call` is present only for tool lifecycle events and uses the compact `AgentToolCallRead` shape (`has_full_payload=false`, payload fields omitted)
-  - `rename_thread` starts streaming as a compact tool-call event before the final assistant message; clients can hydrate the tool row immediately through `GET /agent/tool-calls/{tool_call_id}` and update thread labels without waiting for run completion
+  - `tool_call` is present only for tool lifecycle events and uses the compact `AgentToolCallRead` shape (`has_full_payload=false`)
+  - `rename_thread` starts streaming as a compact tool-call event before the final assistant message
 
 Usage notes:
 
 - usage totals are persisted on the run record and read from snapshot endpoints
-- when cache metadata is present, prompt-side pricing uses LiteLLM's cache-aware rates but remains exposed through the existing `input_cost_usd` and `total_cost_usd` fields
+- cache-aware pricing still rolls into the existing `input_cost_usd` and `total_cost_usd` fields
 - retries after partial streamed text suppress already-emitted prefixes
-- `reasoning_delta` is transient live stream output; the durable record remains the later persisted `run_event` with `event_type=reasoning_update`
-- Telegram transport clients typically send `surface=telegram` here and later read `GET /agent/runs/{run_id}?surface=telegram` to retrieve the same run's Telegram-safe terminal reply.
-- expand a streamed compact tool row through `GET /agent/tool-calls/{tool_call_id}` when full arguments or results are needed
+- Telegram transport clients typically send `surface=telegram` here and later read `GET /agent/runs/{run_id}?surface=telegram`
 
 ## Runs And Tool Calls
 
@@ -158,29 +148,19 @@ Usage notes:
 
 Get a run snapshot. Response: `AgentRunRead`
 
-Authorization: admin principal only.
+Behavior:
 
-Optional query params:
-
-- `surface` (`app` or `telegram`) to override terminal-reply formatting for this read only
-
-Returned payload includes:
-
-- lifecycle metadata
-- `surface` (persisted execution surface for the run)
-- `reply_surface` (effective surface used to format `terminal_assistant_reply`)
-- `terminal_assistant_reply` (latest terminal assistant reply formatted for `reply_surface`; defaults to the run's persisted surface)
-- full tool calls (`has_full_payload=true`)
-- malformed tool-call JSON is reported as a tool-call error; the persisted `output_json.details` includes the decode error plus the raw argument string that failed
-- change items (legacy unsupported persisted change rows are omitted)
-- usage counters
-- derived pricing fields, where `input_cost_usd` is the full prompt-side cost after cache-aware pricing, `output_cost_usd` remains the completion-side cost, and `total_cost_usd` is their sum
+- lookup is owner-scoped through the parent thread
+- optional query param `surface` (`app` or `telegram`) overrides terminal-reply formatting for this read only
+- payload includes lifecycle metadata, full tool calls (`has_full_payload=true`), change items, usage counters, and derived pricing fields
 
 ### `GET /agent/tool-calls/{tool_call_id}`
 
 Get one fully hydrated tool-call payload. Response: `AgentToolCallRead`
 
-Authorization: admin principal only.
+Behavior:
+
+- lookup is owner-scoped through the parent thread
 
 Errors:
 
@@ -190,10 +170,9 @@ Errors:
 
 Interrupt a currently running run. Response: `AgentRunRead`
 
-Authorization: admin principal only.
-
 Behavior:
 
+- lookup is owner-scoped through the parent thread
 - running runs are marked `failed` with `error_text = "Run interrupted by user."`
 - already terminal runs are returned unchanged
 
@@ -206,8 +185,6 @@ Errors:
 ### `POST /agent/change-items/{item_id}/approve`
 
 Approve and apply one proposal item. Response: `AgentChangeItemRead`
-
-Authorization: admin principal only.
 
 Body:
 
@@ -226,64 +203,54 @@ Apply behavior covers:
 - group create, rename, delete, and direct-member add/remove
 - tag create, update, and delete
 - entity create, update, and delete
+- account create, update, delete, and snapshot operations when present in the pending proposal set
 
 Notes:
 
-- the endpoint shape is unchanged; reviewer edits are sent through `payload_override`
+- lookup is owner-scoped through the parent thread
+- reviewer edits are sent through `payload_override`
 - invalid `payload_override` payloads return `422` and leave the item unchanged
-- group-member proposals that reference pending `create_group` or `create_entry` proposals return `422` until those dependencies are approved and applied
-- principal-scoped entry resolution during apply uses the approving reviewer principal, and newly created entry/account/group resources are attributed to that reviewer rather than mutable runtime settings identity
+- apply uses the approving principal for scoped resolution and owner attribution
 - when reviewer edits are present, later agent turns receive a compact `review_override=...` summary in the prepended review-results context
 
 ### `POST /agent/change-items/{item_id}/reject`
 
 Reject one proposal item. Response: `AgentChangeItemRead`
 
-Authorization: admin principal only.
-
 Body:
 
 - `note` (optional)
-- `payload_override` (optional; supported for the same editable change types as approve)
-
-State rules:
-
-- allowed for any non-`APPLIED` item
-- returns `409` if already applied
+- `payload_override` (optional)
 
 Behavior:
 
-- stores reviewer edits back onto the proposal payload before marking it `REJECTED`
-- does not apply domain changes
+- lookup is owner-scoped through the parent thread
 
 ### `POST /agent/change-items/{item_id}/reopen`
 
-Move one non-applied proposal item back to pending review. Response: `AgentChangeItemRead`
-
-Authorization: admin principal only.
+Move one reviewed item back to `PENDING_REVIEW`. Response: `AgentChangeItemRead`
 
 Body:
 
 - `note` (optional)
-- `payload_override` (optional; supported for the same editable change types as approve)
-
-State rules:
-
-- allowed for any non-`APPLIED` item
-- returns `409` if already applied
+- `payload_override` (optional)
 
 Behavior:
 
-- stores reviewer edits back onto the proposal payload
-- sets status back to `PENDING_REVIEW`
-- does not apply domain changes
+- lookup is owner-scoped through the parent thread
 
 ## Attachments
 
 ### `GET /agent/attachments/{attachment_id}`
 
-Serve one uploaded agent attachment.
+Download a stored attachment. Response: file body
 
-Authorization: admin principal only.
+Behavior:
 
-Response: binary file with stored MIME type.
+- lookup is owner-scoped through the parent thread
+- returns the original stored media type
+
+Errors:
+
+- `404` attachment not found
+- `404` attachment file missing on disk

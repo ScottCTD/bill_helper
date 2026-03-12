@@ -148,8 +148,9 @@ Cross-page consistency:
 
 ## Security / Scope (Current)
 
-- explicit development principal sessions gate protected routes; agent endpoints require an admin principal
-- owner-scoped finance and agent-entry reads reuse the same principal visibility rules
+- password-backed bearer sessions gate the web app and API
+- owner-scoped finance and agent reads reuse the same principal visibility rules
+- agent threads are user-owned instead of admin-global; admins can still access everything or impersonate a user
 - review apply uses the approving reviewer principal for scoped entry resolution and owner attribution, not mutable runtime settings identity
 - only image and PDF attachments are accepted in agent messages
 - no arbitrary code execution tools in agent runtime
@@ -163,6 +164,7 @@ Cross-page consistency:
 ## Deferred / Roadmap
 
 - Live bank sync and generalized multi-bank CSV ingestion workflows
-- Multi-user authentication and permissions (RBAC)
+- Finer-grained RBAC beyond the current admin/non-admin split
+- Native-client and mobile login UX beyond bearer-token configuration
 - FX conversion to a configurable base currency
 - Autonomous background agent runs (scheduled or event-driven)

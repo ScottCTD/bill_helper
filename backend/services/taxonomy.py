@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from backend.auth.contracts import RequestPrincipal
 from backend.models_finance import Taxonomy, TaxonomyAssignment, TaxonomyTerm
 from backend.schemas_finance import TaxonomyRead, TaxonomyTermRead
 from backend.services.crud_policy import PolicyViolation, map_value_error
@@ -74,6 +75,23 @@ def set_term_description(term: TaxonomyTerm, description: str | None) -> None:
     term.metadata_json = metadata or None
 
 
+def _taxonomy_rows_for_key(
+    db: Session,
+    *,
+    key: str,
+) -> list[Taxonomy]:
+    normalized_key = normalize_taxonomy_key(key)
+    if not normalized_key:
+        return []
+    return list(
+        db.scalars(
+            select(Taxonomy)
+            .where(Taxonomy.key == normalized_key)
+            .order_by(Taxonomy.created_at.asc())
+        )
+    )
+
+
 def ensure_taxonomy(
     db: Session,
     *,
@@ -81,13 +99,20 @@ def ensure_taxonomy(
     applies_to: str,
     cardinality: str,
     display_name: str,
+    owner_user_id: str,
 ) -> Taxonomy:
     normalized_key = normalize_taxonomy_key(key)
-    taxonomy = db.scalar(select(Taxonomy).where(Taxonomy.key == normalized_key))
+    taxonomy = db.scalar(
+        select(Taxonomy).where(
+            Taxonomy.owner_user_id == owner_user_id,
+            Taxonomy.key == normalized_key,
+        )
+    )
     if taxonomy is not None:
         return taxonomy
 
     taxonomy = Taxonomy(
+        owner_user_id=owner_user_id,
         key=normalized_key,
         applies_to=applies_to,
         cardinality=cardinality,
@@ -98,7 +123,7 @@ def ensure_taxonomy(
     return taxonomy
 
 
-def ensure_default_taxonomies(db: Session) -> dict[str, Taxonomy]:
+def ensure_default_taxonomies(db: Session, *, owner_user_id: str) -> dict[str, Taxonomy]:
     taxonomies: dict[str, Taxonomy] = {}
     for key, spec in DEFAULT_TAXONOMY_SPECS.items():
         taxonomies[key] = ensure_taxonomy(
@@ -107,24 +132,50 @@ def ensure_default_taxonomies(db: Session) -> dict[str, Taxonomy]:
             applies_to=spec.applies_to,
             cardinality=spec.cardinality,
             display_name=spec.display_name,
+            owner_user_id=owner_user_id,
         )
     return taxonomies
 
 
-def list_taxonomy_reads(db: Session) -> list[TaxonomyRead]:
-    ensure_default_taxonomies(db)
-    rows = list(db.scalars(select(Taxonomy).order_by(Taxonomy.key.asc())))
+def list_taxonomy_reads(
+    db: Session,
+    *,
+    principal: RequestPrincipal,
+) -> list[TaxonomyRead]:
+    ensure_default_taxonomies(db, owner_user_id=principal.user_id)
+    rows = list(
+        db.scalars(
+            select(Taxonomy)
+            .where(Taxonomy.owner_user_id == principal.user_id)
+            .order_by(Taxonomy.key.asc())
+        )
+    )
     return [TaxonomyRead.model_validate(row) for row in rows]
 
 
-def get_taxonomy_by_key(db: Session, key: str) -> Taxonomy | None:
+def get_taxonomy_by_key(
+    db: Session,
+    key: str,
+    *,
+    owner_user_id: str,
+) -> Taxonomy | None:
     normalized_key = normalize_taxonomy_key(key)
-    return db.scalar(select(Taxonomy).where(Taxonomy.key == normalized_key))
+    return db.scalar(
+        select(Taxonomy).where(
+            Taxonomy.owner_user_id == owner_user_id,
+            Taxonomy.key == normalized_key,
+        )
+    )
 
 
-def ensure_taxonomy_by_key(db: Session, key: str) -> Taxonomy:
+def ensure_taxonomy_by_key(
+    db: Session,
+    key: str,
+    *,
+    owner_user_id: str,
+) -> Taxonomy:
     normalized_key = normalize_required_taxonomy_key(key)
-    taxonomy = get_taxonomy_by_key(db, normalized_key)
+    taxonomy = get_taxonomy_by_key(db, normalized_key, owner_user_id=owner_user_id)
     if taxonomy is not None:
         return taxonomy
     spec = DEFAULT_TAXONOMY_SPECS.get(normalized_key)
@@ -136,14 +187,30 @@ def ensure_taxonomy_by_key(db: Session, key: str) -> Taxonomy:
         applies_to=spec.applies_to,
         cardinality=spec.cardinality,
         display_name=spec.display_name,
+        owner_user_id=owner_user_id,
     )
 
 
-def load_taxonomy_by_key(db: Session, key: str) -> Taxonomy:
-    taxonomy = get_taxonomy_by_key(db, key)
-    if taxonomy is None:
+def load_taxonomy_by_key(
+    db: Session,
+    key: str,
+    *,
+    principal: RequestPrincipal,
+) -> Taxonomy:
+    taxonomy = get_taxonomy_by_key(db, key, owner_user_id=principal.user_id)
+    if taxonomy is not None:
+        return taxonomy
+    if not principal.is_admin:
         raise PolicyViolation.not_found("Taxonomy not found")
-    return taxonomy
+
+    rows = _taxonomy_rows_for_key(db, key=key)
+    if not rows:
+        raise PolicyViolation.not_found("Taxonomy not found")
+    if len(rows) > 1:
+        raise PolicyViolation.conflict(
+            "Taxonomy key is ambiguous across users. Use admin impersonation to edit a user's taxonomy."
+        )
+    return rows[0]
 
 
 def ensure_term(db: Session, *, taxonomy: Taxonomy, name: str) -> TaxonomyTerm:
@@ -241,8 +308,9 @@ def assign_single_term_by_name(
     subject_type: str,
     subject_id: str | int,
     term_name: str | None,
+    owner_user_id: str,
 ) -> TaxonomyTerm | None:
-    taxonomy = ensure_taxonomy_by_key(db, taxonomy_key)
+    taxonomy = ensure_taxonomy_by_key(db, taxonomy_key, owner_user_id=owner_user_id)
 
     normalized_term_name = normalize_term_name(term_name or "") if term_name is not None else ""
     subject_id_str = str(subject_id)
@@ -271,8 +339,15 @@ def assign_single_term_by_name(
     return term
 
 
-def get_single_term_name(db: Session, *, taxonomy_key: str, subject_type: str, subject_id: str | int) -> str | None:
-    taxonomy = get_taxonomy_by_key(db, taxonomy_key)
+def get_single_term_name(
+    db: Session,
+    *,
+    taxonomy_key: str,
+    subject_type: str,
+    subject_id: str | int,
+    owner_user_id: str,
+) -> str | None:
+    taxonomy = get_taxonomy_by_key(db, taxonomy_key, owner_user_id=owner_user_id)
     if taxonomy is None:
         return None
 
@@ -295,11 +370,10 @@ def get_single_term_name_map(
     taxonomy_key: str,
     subject_type: str,
     subject_ids: list[str | int],
+    owner_user_id: str,
 ) -> dict[str, str]:
-    taxonomy = get_taxonomy_by_key(db, taxonomy_key)
-    if taxonomy is None:
-        return {}
-    if not subject_ids:
+    taxonomy = get_taxonomy_by_key(db, taxonomy_key, owner_user_id=owner_user_id)
+    if taxonomy is None or not subject_ids:
         return {}
 
     subject_id_values = [str(value) for value in subject_ids]
@@ -361,8 +435,9 @@ def list_taxonomy_term_reads(
     db: Session,
     *,
     taxonomy_key: str,
+    principal: RequestPrincipal,
 ) -> list[TaxonomyTermRead]:
-    taxonomy = load_taxonomy_by_key(db, taxonomy_key)
+    taxonomy = load_taxonomy_by_key(db, taxonomy_key, principal=principal)
     rows = list_terms_with_usage(db, taxonomy=taxonomy)
     return [
         TaxonomyTermRead(
@@ -383,9 +458,14 @@ def create_term_from_payload(
     taxonomy_key: str,
     name: str,
     description: str | None,
+    principal: RequestPrincipal,
 ) -> TaxonomyTerm:
     try:
-        taxonomy = ensure_taxonomy_by_key(db, taxonomy_key)
+        taxonomy = ensure_taxonomy_by_key(
+            db,
+            taxonomy_key,
+            owner_user_id=principal.user_id,
+        )
         term = create_term(
             db,
             taxonomy=taxonomy,
@@ -416,8 +496,9 @@ def update_term_from_payload(
     name: str | None,
     description: str | None,
     fields_set: set[str],
+    principal: RequestPrincipal,
 ) -> TaxonomyTerm:
-    taxonomy = load_taxonomy_by_key(db, taxonomy_key)
+    taxonomy = load_taxonomy_by_key(db, taxonomy_key, principal=principal)
     term = load_taxonomy_term(db, taxonomy_id=taxonomy.id, term_id=term_id)
 
     if name is not None:
@@ -439,8 +520,9 @@ def list_term_name_description_pairs(
     db: Session,
     *,
     taxonomy_key: str,
+    owner_user_id: str,
 ) -> list[tuple[str, str | None]]:
-    taxonomy = get_taxonomy_by_key(db, taxonomy_key)
+    taxonomy = get_taxonomy_by_key(db, taxonomy_key, owner_user_id=owner_user_id)
     if taxonomy is None:
         return []
 

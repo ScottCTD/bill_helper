@@ -49,6 +49,7 @@
 - `versions/0030_add_account_agent_change_types.py`: expands the agent review enum to persist account create/update/delete proposal types.
 - `versions/0031_add_user_is_admin.py`: adds the persisted `users.is_admin` role gate used by principal resolution and admin-only route checks.
 - `versions/0032_add_filter_groups.py`: adds principal-owned saved filter-group definitions for dashboard classification and analytics slices.
+- `versions/0033_multi_user_security.py`: adds password hashes and sessions, makes owned resources explicitly user-scoped, and migrates user deletion to cascade semantics.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
@@ -69,6 +70,7 @@
 - `models_shared.py`: shared model defaults (`utc_now`, `uuid_str`) used by both model domains.
 - `schemas_finance.py`: ledger, filter-group, and dashboard request/response schemas.
 - `schemas_agent.py`: agent thread/message/run/review request/response schemas.
+- `schemas_auth.py`: auth, admin-user, and admin-session request/response schemas.
 - `schemas_settings.py`: runtime settings request/response schemas.
 - `auth/`: request-principal contracts, explicit dev-session header parsing, and FastAPI auth dependencies.
 - `validation/`: neutral validation/normalization helpers plus shared contract field types used by schemas, services, and tool-input models.
@@ -79,7 +81,9 @@
 ### Backend Routers (`/backend/routers`)
 
 - `accounts.py`: accounts, account deletion, snapshots, reconciliation endpoints.
-- `users.py`: system-level user list/create/update endpoints.
+- `auth.py`: login/logout/current-session endpoints.
+- `admin.py`: admin user/session management and impersonation endpoints.
+- `users.py`: visible-user reads plus self-service password change.
 - `entries.py`: entry CRUD, filtering, and direct group-context reads.
 - `entities.py`: entity list/create/update/delete endpoints for entry selectors/properties.
 - `tags.py`: tag list/create/update/delete endpoints for property/tag selectors.
@@ -103,7 +107,9 @@
 - `tags.py`: tag CRUD helpers, taxonomy cleanup, and random default color generation.
 - `entities.py`: entity normalization, account-backed guards, and preserve-label delete helpers.
 - `users.py`: user normalization, lookup, and current-user helpers.
-- `principals.py`: explicit request-principal materialization from the development-session header and persisted user role.
+- `principals.py`: request-principal materialization from a persisted user row plus optional session row.
+- `passwords.py`: Argon2 hashing and reset-required password helpers.
+- `sessions.py`: session creation, lookup, and revocation.
 - `groups.py`: group CRUD, typed membership validation, depth-1 nesting enforcement, and derived graph generation.
 - `finance.py`: reconciliation, runtime-currency dashboard analytics, filter-group-powered classification rollups, projections, and chart-ready breakdown aggregations.
 - `crud_policy.py`: shared CRUD validation/conflict policy primitives and standardized error-translation helpers.
@@ -163,7 +169,7 @@
 
 ### Frontend Source (`/frontend/src`)
 
-- `main.tsx`: React root and providers, including the principal-session provider.
+- `main.tsx`: React root and providers, including the auth provider.
 - `App.tsx`: top-level shell layout (sidebar + content) and route map.
 - `styles.css`: global styling including sidebar and app-shell classes.
 - `test/`: frontend test setup, typed fixture factories, and shared query-client test renderer.
@@ -190,6 +196,8 @@
 #### Pages (`/frontend/src/pages`)
 
 - `DashboardPage.tsx`: tabbed interactive analytics dashboard (overview/daily/breakdowns/insights) backed by Recharts.
+- `LoginPage.tsx`: password sign-in page for the browser app.
+- `AdminPage.tsx`: admin-only user/session management workspace.
 - `SettingsPage.tsx`: thin runtime-settings page shell that composes the `features/settings` controller and section modules.
 - `EntriesPage.tsx`: list/filter/delete entries and open popup create/edit editor.
 - `EntryDetailPage.tsx`: show entry detail, direct-group context, direct-group graph, and popup editing.
@@ -199,10 +207,14 @@
 - `PropertiesPage.tsx`: thin page orchestrator that composes properties feature modules.
 - `AccountsPage.test.tsx`: page-level integration tests for account create, snapshot, and delete flows.
 - `EntriesPage.test.tsx`: page-level integration tests for missing-entity markers in the entries table.
-- `PropertiesPage.test.tsx`: page-level integration tests for users, taxonomy, and property delete flows.
+- `PropertiesPage.test.tsx`: page-level integration tests for taxonomy and property delete flows.
 
 #### Feature Modules (`/frontend/src/features`)
 
+- `auth/`
+  - `storage.ts`: localStorage-backed bearer token helpers.
+  - `AuthProvider.tsx`: app-wide auth context and `/auth/me` bootstrap.
+  - `AuthSessionCard.tsx`: sidebar account/session controls.
 - `accounts/`
   - `useAccountsPageModel.ts`: query/mutation orchestration, derived state, and action handlers.
   - `AccountsTableSection.tsx`: account table/search/selection UI.
@@ -224,16 +236,11 @@
   - `formState.ts`: runtime-settings form hydration, validation, and update-payload construction.
   - `SettingsToolbar.tsx`, `SettingsGeneralSection.tsx`, `SettingsAgentSection.tsx`, `ResetSettingsDialog.tsx`: settings workspace UI sections and dialogs.
   - `constants.ts`, `types.ts`: shared settings field ids, tab definitions, and form-state contracts.
-- `session/`
-  - `principalStorage.ts`: localStorage-backed development principal session state plus shared header constant.
-  - `PrincipalSessionProvider.tsx`: app-wide principal-session context.
-  - `PrincipalSessionGate.tsx`: startup gate for selecting a principal before protected routes load.
-  - `PrincipalSessionCard.tsx`: sidebar control for switching or clearing the active principal.
 
 #### Frontend Lib (`/frontend/src/lib`)
 
 - `types.ts`: shared TS API/data types.
-- `api.ts`: fetch wrappers and API request functions, including shared principal-header injection plus typed group-member target payload helpers.
+- `api.ts`: fetch wrappers and API request functions, including shared bearer-token injection plus admin/auth helpers.
 - `format.ts`: money formatting and date helpers.
 - `queryKeys.ts`: centralized TanStack Query key factory for all domains.
 - `queryInvalidation.ts`: shared cache invalidation rules after mutations/review actions, including group-driven entry/group refresh.
@@ -256,6 +263,7 @@
 - `/skills/desloppify-maintenance/SKILL.md`: project-local desloppify workflow skill for exclude review, queue-driven fix loops, and standards-log updates during cleanup campaigns.
 - `/scripts/seed_defaults.py`: reset local DB and seed default tags, entity categories, and accounts; optional user-memory copy now has explicit error policy (`best_effort` default, optional `fail_fast`) and shared DB factory usage.
 - `/scripts/seed_demo.py`: local seed dataset generation.
+- `/scripts/bootstrap_admin.py`: create or reset an admin password-backed login and upgrade the database to head when needed.
 - `/scripts/setup_shared_env.sh`: copies `.env` (or `.env.example`) to `~/.config/bill-helper/.env` for cross-worktree secret sharing.
 - `/scripts/check_docs_sync.py`: docs consistency checks (migration refs + stale term detection + index links).
 - `/.data` (runtime, legacy): per-worktree SQLite DB override location (ignored in git). Default data location is `~/.local/share/bill-helper/`.

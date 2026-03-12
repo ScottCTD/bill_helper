@@ -1,7 +1,6 @@
 import { CurrenciesSection } from "./sections/CurrenciesSection";
 import { TagsSection } from "./sections/TagsSection";
 import { TaxonomyTermsSection } from "./sections/TaxonomyTermsSection";
-import { UsersSection } from "./sections/UsersSection";
 import type { PropertiesPageModel } from "./usePropertiesPageModel";
 
 interface PropertiesSectionContentProps {
@@ -14,34 +13,6 @@ function queryErrorMessage(error: unknown): string | null {
 
 export function PropertiesSectionContent({ model }: PropertiesSectionContentProps) {
   switch (model.activeSection) {
-    case "users":
-      return (
-        <UsersSection
-          search={model.sectionSearch.users}
-          onSearchChange={(value) => model.actions.setSectionSearchValue("users", value)}
-          createPanelOpen={model.createPanelOpen.users}
-          onToggleCreatePanel={() => model.actions.toggleCreatePanel("users")}
-          onCloseCreatePanel={() => model.actions.closeCreatePanel("users")}
-          newUserName={model.forms.newUserName}
-          onNewUserNameChange={model.forms.setNewUserName}
-          editingUserId={model.forms.editingUserId}
-          editingUserName={model.forms.editingUserName}
-          onEditingUserNameChange={model.forms.setEditingUserName}
-          onStartEditUser={model.actions.startEditUser}
-          onCancelEditUser={model.actions.cancelEditUser}
-          onSaveUser={model.actions.saveUser}
-          onCreateUserSubmit={model.actions.onCreateUser}
-          users={model.filtered.users}
-          hasAnyUsers={(model.queries.usersQuery.data ?? []).length > 0}
-          isLoading={model.queries.usersQuery.isLoading}
-          isError={model.queries.usersQuery.isError}
-          queryErrorMessage={queryErrorMessage(model.queries.usersQuery.error)}
-          createErrorMessage={queryErrorMessage(model.mutations.createUserMutation.error)}
-          updateErrorMessage={queryErrorMessage(model.mutations.updateUserMutation.error)}
-          isCreating={model.mutations.createUserMutation.isPending}
-          isUpdating={model.mutations.updateUserMutation.isPending}
-        />
-      );
     case "tags":
       return (
         <TagsSection

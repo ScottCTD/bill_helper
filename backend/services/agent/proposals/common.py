@@ -5,12 +5,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from backend.auth.contracts import RequestPrincipal
 from backend.enums_agent import AgentChangeStatus, AgentChangeType
 from backend.models_agent import AgentChangeItem, AgentRun
+from backend.services.agent.read_tools.common import tool_principal_scope
 from backend.services.agent.tool_results import format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
-from backend.services.runtime_settings import resolve_runtime_settings
-from backend.services.users import ensure_current_user
 from backend.validation.finance_names import normalize_entity_name
 
 
@@ -168,7 +168,12 @@ def resolve_proposal_by_id(
     return None
 
 
-def runtime_current_user_id(context: ToolContext) -> str:
-    settings = resolve_runtime_settings(context.db)
-    current_user = ensure_current_user(context.db, settings.current_user_name)
-    return current_user.id
+def require_tool_principal(context: ToolContext) -> RequestPrincipal:
+    principal_name, principal_user_id, principal_is_admin = tool_principal_scope(context)
+    if principal_user_id is None:
+        raise ValueError("Tool principal is unavailable for this run.")
+    return RequestPrincipal(
+        user_id=principal_user_id,
+        user_name=principal_name or "(unknown)",
+        is_admin=principal_is_admin,
+    )

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal
-from backend.auth.dependencies import get_or_create_current_principal, require_admin_principal
+from backend.auth.dependencies import get_current_principal, require_admin_principal
 from backend.database import get_db
 from backend.schemas_settings import RuntimeSettingsRead, RuntimeSettingsUpdate
 from backend.services.runtime_settings import build_runtime_settings_view, update_runtime_settings_override
@@ -16,9 +16,9 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 @router.get("", response_model=RuntimeSettingsRead)
 def get_runtime_settings(
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+    _: RequestPrincipal = Depends(get_current_principal),
 ) -> RuntimeSettingsRead:
-    view = build_runtime_settings_view(db, principal_name=principal.user_name)
+    view = build_runtime_settings_view(db)
     return RuntimeSettingsRead.model_validate(view, from_attributes=True)
 
 
@@ -34,5 +34,5 @@ def patch_runtime_settings(
             RuntimeSettingsPatch.model_validate(payload.model_dump(exclude_unset=True)),
         )
         db.commit()
-    view = build_runtime_settings_view(db, principal_name=principal.user_name)
+    view = build_runtime_settings_view(db)
     return RuntimeSettingsRead.model_validate(view, from_attributes=True)

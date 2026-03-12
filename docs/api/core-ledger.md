@@ -114,7 +114,7 @@ Behavior:
 - new entries start ungrouped until a group membership is added
 - tag names are normalized to lowercase
 - missing tags are auto-created with random colors
-- owner defaults to configured current user if omitted
+- owner defaults to the authenticated principal if omitted
 - ownership is scoped to the requesting principal
 - create flow can assign one direct group membership inline
 - embedded `tags` use the lightweight `TagSummaryRead` shape (`id`, `name`, `color`, `description`, `type`) and do not include catalog usage counts

@@ -5,9 +5,11 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.auth.dependencies import get_or_create_current_principal
+from backend.auth.dependencies import get_current_principal
 from backend.config import get_settings
 from backend.routers import (
+    admin,
+    auth,
     currencies,
     dashboard,
     entities,
@@ -46,8 +48,11 @@ def create_app() -> FastAPI:
     def healthcheck() -> dict[str, str]:
         return {"status": "ok"}
 
-    protected_dependencies = [Depends(get_or_create_current_principal)]
+    app.include_router(auth.router, prefix=app_settings.api_prefix)
+
+    protected_dependencies = [Depends(get_current_principal)]
     protected_routers = (
+        admin.router,
         accounts_router,
         currencies.router,
         entities.router,

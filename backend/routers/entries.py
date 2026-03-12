@@ -8,7 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.auth.contracts import RequestPrincipal
-from backend.auth.dependencies import get_or_create_current_principal
+from backend.auth.dependencies import get_current_principal
 from backend.database import get_db
 from backend.enums_finance import EntryKind
 from backend.models_finance import Entry, Tag
@@ -187,7 +187,7 @@ def _get_entry_or_404(
 def create_entry(
     payload: EntryCreate,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> EntryRead:
     entry = create_entry_from_command(
         db,
@@ -202,7 +202,7 @@ def create_entry(
 @router.get("", response_model=EntryListResponse)
 def list_entries(
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
     filters: EntryListQueryParams = Depends(),
 ) -> EntryListResponse:
     conditions = [Entry.is_deleted.is_(False), entry_owner_filter(principal)]
@@ -277,7 +277,7 @@ def list_entries(
 def get_entry(
     entry_id: str,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> EntryDetailRead:
     entry = _get_entry_or_404(db, entry_id, principal)
     return entry_to_detail_schema(entry)
@@ -288,7 +288,7 @@ def update_entry(
     entry_id: str,
     payload: EntryUpdate,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> EntryRead:
     entry = update_entry_from_command(
         db,
@@ -305,7 +305,7 @@ def update_entry(
 def delete_entry(
     entry_id: str,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> None:
     entry = _get_entry_or_404(db, entry_id, principal)
     soft_delete_entry(db, entry)

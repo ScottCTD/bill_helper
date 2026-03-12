@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from backend.auth.contracts import RequestPrincipal
 from backend.enums_agent import AgentChangeType
 from backend.services.agent.apply.catalog import (
     apply_create_account,
@@ -60,9 +61,9 @@ def apply_change_item_payload(
     *,
     change_type: AgentChangeType,
     payload: ChangePayloadModel,
-    actor_name: str,
+    principal: RequestPrincipal,
 ) -> AppliedResource:
     handler = APPLY_CHANGE_HANDLERS.get(change_type)
     if handler is None:  # pragma: no cover - enum guard
         raise ValueError(f"Unsupported change type: {change_type}")
-    return handler(db, payload, actor_name)
+    return handler(db, payload, principal)

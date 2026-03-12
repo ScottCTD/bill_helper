@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from backend.auth.dev_session import is_admin_principal_name
 from backend.models_finance import Account, Entity, Tag
 from backend.services.agent.read_tools.common import (
     account_to_record,
@@ -21,12 +20,22 @@ from backend.services.taxonomy import get_single_term_name_map
 
 
 def list_tags(context: ToolContext, args: ListTagsArgs) -> ToolExecutionResult:
-    tags = list(context.db.scalars(select(Tag).order_by(Tag.name.asc())))
+    _principal_name, principal_user_id, _principal_is_admin = tool_principal_scope(context)
+    tags: list[Tag] = []
+    if principal_user_id is not None:
+        tags = list(
+            context.db.scalars(
+                select(Tag)
+                .where(Tag.owner_user_id == principal_user_id)
+                .order_by(Tag.name.asc())
+            )
+        )
     type_by_tag_id = get_single_term_name_map(
         context.db,
         taxonomy_key="tag_type",
         subject_type="tag",
         subject_ids=[tag.id for tag in tags],
+        owner_user_id=principal_user_id or "",
     )
 
     ranked: list[tuple[tuple[int, int, str], dict[str, Any]]] = []
@@ -72,28 +81,25 @@ def list_tags(context: ToolContext, args: ListTagsArgs) -> ToolExecutionResult:
 
 
 def list_accounts(context: ToolContext, args: ListAccountsArgs) -> ToolExecutionResult:
-    principal_name, principal_user_id = tool_principal_scope(context)
+    _principal_name, principal_user_id, _principal_is_admin = tool_principal_scope(context)
 
-    conditions = []
-    if not is_admin_principal_name(principal_name):
-        if principal_user_id is None:
-            conditions.append(Account.owner_user_id.is_(None))
-        else:
-            conditions.append(or_(Account.owner_user_id == principal_user_id, Account.owner_user_id.is_(None)))
-    if args.currency_code is not None:
-        conditions.append(Account.currency_code == args.currency_code)
-    if args.is_active is not None:
-        conditions.append(Account.is_active.is_(args.is_active))
+    accounts: list[Account] = []
+    if principal_user_id is not None:
+        conditions = [Account.owner_user_id == principal_user_id]
+        if args.currency_code is not None:
+            conditions.append(Account.currency_code == args.currency_code)
+        if args.is_active is not None:
+            conditions.append(Account.is_active.is_(args.is_active))
 
-    accounts = list(
-        context.db.scalars(
-            select(Account)
-            .join(Entity, Entity.id == Account.id)
-            .where(*conditions)
-            .options(selectinload(Account.entity))
-            .order_by(func.lower(Entity.name).asc(), Account.created_at.asc())
+        accounts = list(
+            context.db.scalars(
+                select(Account)
+                .join(Entity, Entity.id == Account.id)
+                .where(*conditions)
+                .options(selectinload(Account.entity))
+                .order_by(func.lower(Entity.name).asc(), Account.created_at.asc())
+            )
         )
-    )
 
     ranked: list[tuple[tuple[int, str], dict[str, Any]]] = []
     for account in accounts:
@@ -128,20 +134,27 @@ def list_accounts(context: ToolContext, args: ListAccountsArgs) -> ToolExecution
 
 
 def list_entities(context: ToolContext, args: ListEntitiesArgs) -> ToolExecutionResult:
-    entities = list(
-        context.db.scalars(
-            select(Entity)
-            .outerjoin(Account, Account.id == Entity.id)
-            .where(Account.id.is_(None))
-            .options(selectinload(Entity.account))
-            .order_by(func.lower(Entity.name).asc())
+    _principal_name, principal_user_id, _principal_is_admin = tool_principal_scope(context)
+    entities: list[Entity] = []
+    if principal_user_id is not None:
+        entities = list(
+            context.db.scalars(
+                select(Entity)
+                .outerjoin(Account, Account.id == Entity.id)
+                .where(
+                    Account.id.is_(None),
+                    Entity.owner_user_id == principal_user_id,
+                )
+                .options(selectinload(Entity.account))
+                .order_by(func.lower(Entity.name).asc())
+            )
         )
-    )
     category_by_entity_id = get_single_term_name_map(
         context.db,
         taxonomy_key="entity_category",
         subject_type="entity",
         subject_ids=[entity.id for entity in entities],
+        owner_user_id=principal_user_id or "",
     )
 
     ranked: list[tuple[tuple[int, int, str], dict[str, Any]]] = []

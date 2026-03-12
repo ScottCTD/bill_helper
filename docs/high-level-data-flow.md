@@ -4,7 +4,7 @@ This document summarizes end-to-end flows for the current implementation: manual
 
 ## System View
 
-Bill Helper is a local-first, single-user app with a React frontend, FastAPI backend, and SQLite storage.
+Bill Helper is a local-first multi-user app with a React frontend, FastAPI backend, and SQLite storage.
 
 ```mermaid
 flowchart LR
@@ -50,11 +50,13 @@ Primary tables:
 - `tags`, `entry_tags`: tag catalog and many-to-many entry mapping.
 - `filter_groups`: per-user saved analytics filters with recursive rule definitions.
 - `taxonomies`, `taxonomy_terms`, `taxonomy_assignments`: reusable categorical system for entities/tags.
+- `sessions`: password-backed bearer sessions stored as hashed token digests.
 
 Agent review tables:
 
 - `agent_threads`, `agent_messages`, `agent_runs`, `agent_tool_calls`
 - `agent_change_items`, `agent_review_actions`
+- `agent_threads.owner_user_id` scopes the agent timeline and all nested run resources to a specific user
 
 Note: entry-level status has been removed; review state lives in `agent_change_items`.
 
@@ -188,15 +190,16 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `0024_entity_root_accounts`
   - `0025_user_memory_json_list`
   - `0026_entry_groups_v2`
-  - `0032_add_filter_groups`
+- `0032_add_filter_groups`
+- `0033_multi_user_security`
 - Operational commands:
   - `uv run alembic upgrade head`
+  - `uv run python scripts/bootstrap_admin.py --name <user> --password <pass>`
   - `uv run bill-helper-api`
   - `uv run pytest`
   - `uv run python scripts/check_docs_sync.py`
 - Relevant environment variables:
   - `BILL_HELPER_DATABASE_URL`
-  - `BILL_HELPER_CURRENT_USER_NAME` (background-agent default context; request auth comes from `X-Bill-Helper-Principal`)
   - `BILL_HELPER_DEFAULT_CURRENCY_CODE`
   - `BILL_HELPER_DASHBOARD_CURRENCY_CODE`
   - `BILL_HELPER_AGENT_MODEL`
@@ -204,7 +207,7 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 
 ## Current Constraints and Limitations
 
-- no auth or permissions beyond the current prototype principal model
+- app auth is still prototype-grade and limited to admin/non-admin roles
 - group nesting depth is capped at one
 - child groups cannot be shared across multiple parents
 - edges are derived only; there is no explicit edge storage or arbitrary edge editor

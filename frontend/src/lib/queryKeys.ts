@@ -12,6 +12,9 @@ export type EntryListFiltersKey = {
 };
 
 export const queryKeys = {
+  auth: {
+    session: ["auth", "session"] as const
+  },
   groups: {
     all: ["groups"] as const,
     list: ["groups", "list"] as const,
@@ -56,5 +59,9 @@ export const queryKeys = {
     threads: ["agent", "threads"] as const,
     threadRoot: ["agent", "thread"] as const,
     thread: (threadId: string) => ["agent", "thread", threadId] as const
+  },
+  admin: {
+    users: ["admin", "users"] as const,
+    sessions: ["admin", "sessions"] as const
   }
 };

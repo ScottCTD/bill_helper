@@ -16,6 +16,7 @@ This directory stores archived task docs after active work in `/tasks/*.md` is f
 
 ## Recent Archived Tasks
 
+- `2026-03-12_multi_user_security.md`: archived task for password-backed sessions, user-owned resource scoping, admin impersonation, and web auth flow migration.
 - `2026-03-09_parallel_agent_thread.md`: archived task for thread-scoped agent composer controls and parallel thread activity UX.
 - `2026-03-09_entry_entity_label_repair_and_agent_selector_fix.md`: archived fix log for entry entity-label corruption and agent update selector approval failures.
 - `2026-03-10_markdown_editor_vite_fix_log.md`: archived fix log for the BlockNote markdown editor runtime/import failures and Vite dep-cache restart hardening.

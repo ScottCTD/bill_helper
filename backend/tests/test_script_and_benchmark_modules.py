@@ -169,7 +169,8 @@ def test_seed_defaults_seed_accounts_uses_entity_root_account_ids(tmp_path):
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, future=True)
     with SessionLocal() as db:
-        user, debit, credit = seed_defaults.seed_accounts(db)
+        user = seed_defaults.create_default_admin_user(db)
+        debit, credit = seed_defaults.seed_accounts(db, user=user)
         assert debit.id == debit.entity.id
         assert credit.id == credit.entity.id
         assert debit.owner_user_id == user.id

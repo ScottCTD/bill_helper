@@ -18,17 +18,26 @@ from backend.services.entries import (
     create_entry_from_command,
     update_entry_from_command,
 )
+from backend.services.passwords import hash_password
 
 
 def _create_user(db, name: str) -> User:
-    user = User(name=name, is_admin=name.lower() == "admin")
+    existing = db.query(User).filter(User.name == name).one_or_none()
+    if existing is not None:
+        return existing
+
+    user = User(
+        name=name,
+        password_hash=hash_password(f"{name}-password"),
+        is_admin=name.lower() == "admin",
+    )
     db.add(user)
     db.flush()
     return user
 
 
 def _create_account(db, *, name: str, owner_user_id: str) -> Account:
-    entity = Entity(name=name)
+    entity = Entity(name=name, owner_user_id=owner_user_id)
     db.add(entity)
     db.flush()
 

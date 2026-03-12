@@ -1,6 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-
-import { PRINCIPAL_SESSION_STORAGE_KEY } from "../features/session/principalStorage";
+import { AUTH_TOKEN_STORAGE_KEY } from "../features/auth/storage";
 
 if (typeof document.elementsFromPoint !== "function") {
   Object.defineProperty(Document.prototype, "elementsFromPoint", {
@@ -22,4 +21,4 @@ if (typeof window.ResizeObserver !== "function") {
   });
 }
 
-window.localStorage.setItem(PRINCIPAL_SESSION_STORAGE_KEY, "admin");
+window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);

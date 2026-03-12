@@ -131,7 +131,7 @@ export function EntryDetailPage() {
             ) : null}
           </div>
           <div>
-            <strong>Owner:</strong> {entry.owner || "(none)"}
+            <strong>Owner:</strong> {entry.owner ?? entry.owner_user_id}
           </div>
         </div>
       </WorkspaceSection>

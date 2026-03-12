@@ -5,14 +5,12 @@ import {
   listCurrencies,
   listTags,
   listTaxonomies,
-  listTaxonomyTerms,
-  listUsers
+  listTaxonomyTerms
 } from "../../lib/api";
 import { ENTITY_CATEGORY_TAXONOMY_KEY, TAG_TYPE_TAXONOMY_KEY, taxonomyTermNames, uniqueOptionValues } from "../../lib/catalogs";
 import { queryKeys } from "../../lib/queryKeys";
 
 export function usePropertiesQueries() {
-  const usersQuery = useQuery({ queryKey: queryKeys.properties.users, queryFn: listUsers });
   const tagsQuery = useQuery({ queryKey: queryKeys.properties.tags, queryFn: listTags });
   const currenciesQuery = useQuery({ queryKey: queryKeys.properties.currencies, queryFn: listCurrencies });
   const taxonomiesQuery = useQuery({ queryKey: queryKeys.properties.taxonomies, queryFn: listTaxonomies });
@@ -46,7 +44,6 @@ export function usePropertiesQueries() {
   return {
     queries: {
       taxonomiesQuery,
-      usersQuery,
       tagsQuery,
       currenciesQuery,
       entityCategoryTermsQuery,

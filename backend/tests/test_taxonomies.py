@@ -148,18 +148,18 @@ def test_entity_category_terms_support_description(client):
     assert renamed["description"] == "Service providers and recurring vendors"
 
 
-def test_shared_taxonomy_mutations_require_admin_principal(client):
-    scoped_headers = {"X-Bill-Helper-Principal": "alice"}
+def test_taxonomy_mutations_are_scoped_to_current_principal(client, auth_headers):
+    scoped_headers = auth_headers("alice")
 
     entity_response = client.post("/api/v1/entities", json={"name": "Local Shop"}, headers=scoped_headers)
-    assert entity_response.status_code == 403
+    entity_response.raise_for_status()
 
     tag_response = client.post("/api/v1/tags", json={"name": "groceries"}, headers=scoped_headers)
-    assert tag_response.status_code == 403
+    tag_response.raise_for_status()
 
     term_response = client.post(
         "/api/v1/taxonomies/tag_type/terms",
         json={"name": "food"},
         headers=scoped_headers,
     )
-    assert term_response.status_code == 403
+    term_response.raise_for_status()

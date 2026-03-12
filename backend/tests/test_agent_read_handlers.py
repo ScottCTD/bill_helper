@@ -26,11 +26,12 @@ def _user_count(db) -> int:
 def test_list_accounts_does_not_bootstrap_runtime_settings_user() -> None:
     db = get_session_maker()()
     try:
+        initial_user_count = _user_count(db)
         result = list_accounts(ToolContext(db=db, run_id="run-1"), ListAccountsArgs())
 
         assert result.output_json["status"] == "ok"
         assert result.output_json["accounts"] == []
-        assert _user_count(db) == 0
+        assert _user_count(db) == initial_user_count
     finally:
         db.close()
 
@@ -38,6 +39,7 @@ def test_list_accounts_does_not_bootstrap_runtime_settings_user() -> None:
 def test_list_groups_does_not_bootstrap_context_principal_user() -> None:
     db = get_session_maker()()
     try:
+        initial_user_count = _user_count(db)
         result = list_groups(
             ToolContext(db=db, run_id="run-1", principal_name="alice", principal_user_id=None),
             ListGroupsArgs(),
@@ -45,16 +47,16 @@ def test_list_groups_does_not_bootstrap_context_principal_user() -> None:
 
         assert result.output_json["status"] == "ok"
         assert result.output_json["groups"] == []
-        assert _user_count(db) == 0
+        assert _user_count(db) == initial_user_count
     finally:
         db.close()
 
 
-def test_list_entries_respects_tool_principal_scope(client) -> None:
+def test_list_entries_respects_tool_principal_scope(client, auth_headers) -> None:
     admin_account_id = create_account(client, name="Admin Checking")
     create_entry(client, admin_account_id, "Admin Coffee")
 
-    alice_headers = {"X-Bill-Helper-Principal": "alice"}
+    alice_headers = auth_headers("alice")
     alice_account_id = create_account(client, name="Alice Checking", headers=alice_headers)
     alice_entry = create_entry(client, alice_account_id, "Alice Coffee", headers=alice_headers)
 
@@ -102,7 +104,15 @@ def test_snapshot_read_tools_return_interval_reconciliation(client) -> None:
 
     db = get_session_maker()()
     try:
-        context = ToolContext(db=db, run_id="run-1")
+        admin = db.scalar(select(User).where(User.name == "admin"))
+        assert admin is not None
+        context = ToolContext(
+            db=db,
+            run_id="run-1",
+            principal_name=admin.name,
+            principal_user_id=admin.id,
+            principal_is_admin=admin.is_admin,
+        )
 
         snapshots_result = list_snapshots(context, ListSnapshotsArgs(account_id=account_id, limit=10))
         assert snapshots_result.output_json["snapshots"][0]["snapshot_at"] == "2026-02-01"

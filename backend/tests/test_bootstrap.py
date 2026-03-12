@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import subprocess
+import sys
+
 import pytest
 from sqlalchemy import Column, Integer, MetaData, Table, create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.database import build_engine, build_session_maker
 from backend.db_meta import Base
-from backend.models_finance import Account, Entity
+from backend.models_finance import Account, Entity, User
 from backend.services.bootstrap import (
     run_schema_seed_and_stamp,
     should_seed_demo_data,
@@ -31,12 +36,14 @@ def test_should_seed_demo_data_when_accounts_table_is_empty(db_session):
 
 
 def test_should_not_seed_demo_data_when_account_exists(db_session):
-    entity = Entity(name="Existing Account", category=None)
+    owner = db_session.query(User).filter(User.name == "admin").one()
+    entity = Entity(name="Existing Account", category=None, owner_user_id=owner.id)
     db_session.add(entity)
     db_session.flush()
     db_session.add(
         Account(
             id=entity.id,
+            owner_user_id=owner.id,
             currency_code="CAD",
             is_active=True,
         )
@@ -134,3 +141,45 @@ def test_run_schema_seed_and_stamp_recreate_schema_drops_existing_rows():
     )
 
     assert existing_count_before_seed == 0
+
+
+def test_bootstrap_admin_script_creates_admin_in_isolated_data_dir(tmp_path):
+    repo_root = Path(__file__).resolve().parents[2]
+    data_dir = tmp_path / "data"
+    env = {
+        **dict(os.environ),
+        "BILL_HELPER_DATA_DIR": str(data_dir),
+    }
+    env.pop("BILL_HELPER_DATABASE_URL", None)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/bootstrap_admin.py",
+            "--name",
+            "script-admin",
+            "--password",
+            "script-password",
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Admin user ready: script-admin" in result.stdout
+
+    verification_engine = create_engine(
+        f"sqlite:///{data_dir / 'bill_helper.db'}",
+        future=True,
+    )
+    with verification_engine.connect() as connection:
+        user = connection.execute(
+            text("SELECT name, is_admin, password_hash FROM users WHERE name = 'script-admin'")
+        ).mappings().one()
+
+    assert user["name"] == "script-admin"
+    assert user["is_admin"] == 1
+    assert user["password_hash"]

@@ -2,159 +2,111 @@
 
 ## Prerequisites
 
-- `uv` for Python environment/dependencies
-- `node` + `npm` for frontend
-- `tesseract` (optional, but required if you want OCR fallback for image-only/redacted PDF uploads in the agent)
+- `uv` for Python environment, scripts, and tests
+- `node` + `npm` for the frontend
+- `tesseract` if you want OCR fallback for image-only or redacted PDF uploads
 
 ## First-Time Setup
 
 ```bash
 cd /path/to/bill_helper
 uv sync
-cd /path/to/bill_helper/frontend
+cd frontend
 npm install
+cd ..
 ```
 
-This repository keeps local-only Python tooling in uv's default `dev` dependency group, so everyday setup and `uv run ...` commands do not need a `dev` extra flag.
+## Environment Resolution
 
-## Version Control Hygiene
+All backend variables use the `BILL_HELPER_` prefix and are defined in `backend/config.py`.
 
-Current `.gitignore` behavior:
+Configuration resolves in this order:
 
-- ignores standard Python build/cache/test artifacts (for example `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`, `.mypy_cache/`, `build/`, `dist/`, `*.egg-info/`)
-- ignores local environment and secret files (for example `.env`, `.envrc`, `.venv`, `venv/`)
-- ignores project runtime/frontend artifacts (`/path/to/bill_helper/frontend/node_modules/`, `/path/to/bill_helper/frontend/dist/`, `/path/to/bill_helper/.data/`, `/path/to/bill_helper/logs/`, `/path/to/bill_helper/.playwright-cli/`, `/path/to/bill_helper/output/playwright/`)
-- ignores local desloppify scan artifacts (`/path/to/bill_helper/.desloppify/`, `/path/to/bill_helper/scorecard.png`)
+1. real environment variables
+2. `.env` in the working directory
+3. `~/.config/bill-helper/.env`
+4. defaults in code
 
-Operational impact:
-
-- local cache/build/runtime files stay out of commits by default
-- local Playwright snapshots, console/network logs, and captured browser artifacts stay out of commits by default
-- local desloppify state/query snapshots and scorecards stay out of commits by default
-- `uv.lock` remains tracked unless manually ignored, matching current repository policy
-
-## Environment Variables
-
-All backend variables use the `BILL_HELPER_` prefix and are defined in `backend/config.py`. Runtime settings from `/api/v1/settings` take priority over env defaults where applicable.
-
-### Env File Cascade
-
-Configuration is resolved in this order (highest → lowest priority):
-
-| Priority | Source | Purpose |
-|----------|--------|---------|
-| 1 | Real environment variables | Production / CI (platform-injected) |
-| 2 | `.env` in working directory | Per-worktree overrides (gitignored) |
-| 3 | `~/.config/bill-helper/.env` | Shared dev secrets across all worktrees |
-| 4 | Defaults in `backend/config.py` | Sensible fallbacks |
-
-This means secrets like `OPENROUTER_API_KEY` or `AWS_BEARER_TOKEN_BEDROCK` only need to be configured once in the shared location and are available to every worktree automatically. Bill Helper mirrors env-file variables into the process environment before LiteLLM validation and model calls, so provider-specific SDK/env lookups see the same shared secrets. A per-worktree `.env` can selectively override any value (e.g., test a different model).
+Shared secrets and shared data therefore work across Git worktrees by default.
 
 ### Shared Data Directory
 
-Application data (SQLite DB) defaults to `~/.local/share/bill-helper/`, following XDG conventions. This means all worktrees share the same database — no need to re-migrate or re-seed per worktree.
+Application data defaults to `~/.local/share/bill-helper/`.
 
-| Priority | Source | Example |
-|----------|--------|---------|
-| 1 | `BILL_HELPER_DATABASE_URL` | Explicit DB URL (e.g., PostgreSQL in prod) |
-| 2 | `BILL_HELPER_DATA_DIR` | Custom data dir → DB path derived automatically |
-| 3 | Default | `~/.local/share/bill-helper/bill_helper.db` |
+- default SQLite path: `~/.local/share/bill-helper/bill_helper.db`
+- override with `BILL_HELPER_DATABASE_URL`
+- or override the root directory with `BILL_HELPER_DATA_DIR`
 
-To use a per-worktree isolated database (e.g., for testing a migration), set in your local `.env`:
+For a per-worktree database:
 
-```
+```env
 BILL_HELPER_DATA_DIR=./.data
 ```
 
-#### First-time shared env setup
-
-```bash
-# Option A: copy your existing .env to the shared location
-./scripts/setup_shared_env.sh
-
-# Option B: create a blank template to fill in
-./scripts/setup_shared_env.sh --clean
-```
-
-#### Git worktree workflow
-
-```bash
-git worktree add ../bill_helper-feature feature-branch
-cd ../bill_helper-feature
-uv sync
-# Shared secrets from ~/.config/bill-helper/.env are already available.
-# Optionally create a local .env for worktree-specific overrides.
-```
-
-### Core
+## Core Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BILL_HELPER_APP_NAME` | `Bill Helper` | Application display name |
 | `BILL_HELPER_API_PREFIX` | `/api/v1` | API route prefix |
-| `BILL_HELPER_DATA_DIR` | `~/.local/share/bill-helper` | Shared data directory (SQLite DB lives here) |
-| `BILL_HELPER_DATABASE_URL` | _(derived from data_dir)_ | SQLAlchemy database URL; overrides data_dir for DB |
+| `BILL_HELPER_DATA_DIR` | `~/.local/share/bill-helper` | Shared data directory |
+| `BILL_HELPER_DATABASE_URL` | _(derived from data dir)_ | SQLAlchemy database URL |
 | `BILL_HELPER_CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed CORS origins |
-| `BILL_HELPER_CURRENT_USER_NAME` | `admin` | Default current user name |
-| `CURRENT_USER_TIMEZONE` | `America/Toronto` | User timezone for agent date context |
+| `CURRENT_USER_TIMEZONE` | `America/Toronto` | Timezone for agent date context |
 | `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `CAD` | Default currency for new entries |
 | `BILL_HELPER_DASHBOARD_CURRENCY_CODE` | `CAD` | Currency used in dashboard analytics |
 
-### Agent
+## Agent Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BILL_HELPER_AGENT_MODEL` | `bedrock/us.anthropic.claude-sonnet-4-6` | LiteLLM model identifier |
-| `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool-call steps per agent run |
+| `BILL_HELPER_AGENT_MODEL` | `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0` | LiteLLM model identifier |
+| `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool-call steps per run |
 | `BILL_HELPER_AGENT_BULK_MAX_CONCURRENT_THREADS` | `4` | Max fresh threads Bulk mode starts at once |
 | `BILL_HELPER_AGENT_RETRY_MAX_ATTEMPTS` | `3` | Model call retry attempts |
 | `BILL_HELPER_AGENT_RETRY_INITIAL_WAIT_SECONDS` | `0.25` | Initial retry backoff delay |
 | `BILL_HELPER_AGENT_RETRY_MAX_WAIT_SECONDS` | `4.0` | Max retry backoff delay |
 | `BILL_HELPER_AGENT_RETRY_BACKOFF_MULTIPLIER` | `2.0` | Retry backoff multiplier |
-| `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` | `5242880` | Per-attachment size limit (5 MB) |
+| `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` | `5242880` | Per-attachment size limit |
 | `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE` | `4` | Max image/PDF uploads per message |
+| `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL` | _(none)_ | Optional custom provider endpoint |
+| `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY` | _(none)_ | Optional custom provider API key |
 
-### Provider Credentials
+## Provider Credentials
 
-LiteLLM resolves provider credentials from standard environment variables based on `BILL_HELPER_AGENT_MODEL`. Bill Helper forwards only explicit app-level overrides through `AGENT_API_KEY` / `AGENT_BASE_URL` (or the matching runtime settings override fields).
+LiteLLM resolves provider credentials from environment variables based on the selected model.
 
 | Variable | Used when |
 |----------|-----------|
-| `AWS_BEARER_TOKEN_BEDROCK` or standard AWS Bedrock credential env vars | Model starts with `bedrock/` (default) |
-| `OPENROUTER_API_KEY` | Model starts with `openrouter/` |
-| `OPENAI_API_KEY` | Model starts with `openai/` |
-| `ANTHROPIC_API_KEY` | Model starts with `anthropic/` |
-| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Model starts with `gemini/` |
-| `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY` | Explicit app-level credential override for a custom endpoint |
-| `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL` | Explicit app-level base URL override for a custom endpoint |
+| `AWS_BEARER_TOKEN_BEDROCK` or standard AWS Bedrock env vars | model starts with `bedrock/` |
+| `OPENROUTER_API_KEY` | model starts with `openrouter/` |
+| `OPENAI_API_KEY` | model starts with `openai/` |
+| `ANTHROPIC_API_KEY` | model starts with `anthropic/` |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | model starts with `gemini/` |
 
-### Seed / Scripts
+Backend startup succeeds without provider credentials; only agent execution fails (`503`) until a valid credential source exists.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BILL_HELPER_SEED_CREDIT_CSV` | _(none)_ | CSV path for `scripts/seed_demo.py` (alternative to CLI arg) |
+## Auth Bootstrap
 
-### Frontend
+After migrating an existing database, create or reset an admin password explicitly:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VITE_API_BASE_URL` | `http://localhost:8000/api/v1` | Backend API base URL for Vite dev server |
-| `VITE_DEV_PRINCIPAL_NAME` | _(none)_ | Optional frontend bootstrap principal used to prefill the local principal session |
+```bash
+uv run python scripts/bootstrap_admin.py --name admin --password admin
+```
 
-### Notes
+Behavior:
 
-- Backend boots normally when provider credentials are missing
-- Protected backend routes require an explicit `X-Bill-Helper-Principal` header; the frontend now owns that through a local principal session and can prefill it from `VITE_DEV_PRINCIPAL_NAME`
-- Agent message execution endpoints return `503` when the configured model's provider credentials are missing
-- `GET /settings` reports `agent_api_key_configured=true` when either an explicit override key exists or LiteLLM can resolve provider credentials for the selected model; `agent_base_url` reflects only explicit overrides
-- Runtime settings from the database (`/api/v1/settings`) override env defaults for: default currency, dashboard currency, agent model, ordered available agent models, agent max steps, Bulk mode concurrency, and retry parameters
+- upgrades the database to head if needed
+- creates the named user when absent
+- resets the password and ensures `is_admin=true` when the user already exists
+
+The backend uses password-backed bearer sessions for protected routes and the web app.
 
 ## Database Setup
 
 Apply migrations:
 
 ```bash
-cd /path/to/bill_helper
 uv run alembic upgrade head
 ```
 
@@ -185,58 +137,46 @@ Current revisions:
 - `0023_add_agent_provider_config`
 - `0024_entity_root_accounts`
 - `0025_user_memory_json_list`
+- `0026_entry_groups_v2`
 - `0027_add_agent_bulk_concurrency_setting`
+- `0028_add_available_agent_models_to_runtime_settings`
+- `0029_add_agent_run_surface`
+- `0030_add_account_agent_change_types`
+- `0031_add_user_is_admin`
+- `0032_add_filter_groups`
+- `0033_multi_user_security`
 
-Optional seed:
+## Seed Data
+
+Optional demo seed:
 
 ```bash
 uv run python scripts/seed_demo.py /path/to/credit_card_export.csv
 ```
 
-Seed behavior:
+Current seed behavior:
 
-- Drops and recreates tables, then reseeds with an `admin` profile.
-- Stamps Alembic revision metadata to `head` after table recreation so future `alembic upgrade head` runs stay idempotent.
-- Creates demo accounts `Demo Debit` and `Demo Credit`.
-- Imports credit transactions from a CSV path passed as a CLI argument or `BILL_HELPER_SEED_CREDIT_CSV` env var.
-- Seeded entries default to `CAD`; currency defaults are `CAD`, `USD`, and `CNY`.
-- Entities are derived from CSV transaction descriptions.
-- Tag names are derived from CSV data, and tag `type` is assigned via taxonomy (`tag_type`) with values such as `transaction_type`, `merchant`, `channel`, `location`, and `payment`.
+- recreates tables and stamps Alembic to `head`
+- creates demo accounts and entries
+- creates `admin` with password `admin`
 
 ## Run Backend + Frontend Together
 
 ```bash
-cd /path/to/bill_helper
 ./scripts/dev_up.sh
 ```
 
 Behavior:
 
-- checks for a legacy local schema state where app tables exist but `alembic_version` is missing/empty, then auto-runs `uv run alembic stamp head`
-- runs `uv run alembic upgrade head` before starting services
-- checks whether the `accounts` table is empty and seeds demo data only when no accounts exist
-  - implementation: `scripts/dev_up.py` calls `backend/services/bootstrap.py` (`should_seed_demo_data`) before deciding to run `scripts/seed_demo.py`
-  - fresh worktree impact: first boot auto-seeds demo data into that worktree-local SQLite database
-- skips demo seeding when existing accounts are present
-- runs `npm install` in `frontend/` before starting services to keep UI deps in sync
-- clears `frontend/node_modules/.vite` before starting Vite so local restarts rebuild optimized frontend dependencies
-- starts the backend API and frontend dev server
-- starts the Telegram polling worker too when `TELEGRAM_BOT_TOKEN` (or `BILL_HELPER_TELEGRAM_BOT_TOKEN`) is configured
-- writes logs in `/path/to/bill_helper/logs`
-- prefixes service log lines with `[backend]`, `[frontend]`, or `[telegram]` in both the terminal stream and the per-service log files
-- prints service URLs
-- `Ctrl+C` shuts down every service that was started
-- implementation note: `scripts/dev_up.sh` is a thin wrapper; the orchestration logic lives in `scripts/dev_up.py`
-
-Constraints/known limitations:
-
-- conditional auto-seeding depends on the same CSV source as manual seeding (`BILL_HELPER_SEED_CREDIT_CSV` or the script default path). If the CSV file is missing, `dev_up.sh` fails during seeding.
-- Telegram startup is skipped when no bot token is configured; see the Telegram sections below for the required bot settings and backend auth headers.
+- runs `uv run alembic upgrade head`
+- auto-seeds demo data only when the database is effectively empty
+- runs `npm install` in `frontend/`
+- starts backend, frontend, and optionally Telegram polling
+- writes logs under `logs/`
 
 ## Run Backend Only
 
 ```bash
-cd /path/to/bill_helper
 uv run bill-helper-api
 ```
 
@@ -249,123 +189,48 @@ Useful URLs:
 ## Run Frontend Only
 
 ```bash
-cd /path/to/bill_helper/frontend
+cd frontend
 npm run dev
 ```
 
-## Run Telegram Bot (Local Dev Polling)
+Open `http://localhost:5173/login` and sign in with a password-backed account.
 
-Required env/config:
+## Telegram
 
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_BACKEND_BASE_URL` (defaults to `http://localhost:8000/api/v1`)
-- `TELEGRAM_API_BASE_URL` (optional override; defaults to `https://api.telegram.org`)
-- `TELEGRAM_DATA_DIR` (optional; defaults to `~/.local/share/bill-helper/telegram`)
-- `TELEGRAM_STATE_PATH` (optional; defaults to `<TELEGRAM_DATA_DIR>/chat_state.json`)
-- backend auth for the bot via either `TELEGRAM_BACKEND_AUTH_TOKEN` or `TELEGRAM_BACKEND_AUTH_HEADERS`
+Telegram settings use `TELEGRAM_*` names, with `BILL_HELPER_TELEGRAM_*` aliases also accepted.
 
-Notes:
+Important variables:
 
-- `TELEGRAM_BACKEND_AUTH_HEADERS` must be a JSON object of header names to values.
-- If both `TELEGRAM_BACKEND_AUTH_TOKEN` and an explicit `Authorization` header are supplied, the explicit header wins.
+| Variable | Description |
+|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | Required bot token |
+| `TELEGRAM_ALLOWED_USER_IDS` | Private-chat allow-list |
+| `TELEGRAM_BACKEND_BASE_URL` | Backend API base URL |
+| `TELEGRAM_BACKEND_AUTH_TOKEN` | Preferred bearer token for password-mode backend auth |
+| `TELEGRAM_BACKEND_AUTH_HEADERS` | Optional raw headers for custom auth or proxy/header injection |
+| `TELEGRAM_WEBHOOK_SECRET` | Required only for webhook mode |
 
-Run the polling worker:
+Run polling locally:
 
 ```bash
-cd /path/to/bill_helper
 uv run python -m telegram.polling
 ```
 
-The polling worker uses a `python-telegram-bot` application with PTB command handlers plus a private-chat message handler that forwards non-command traffic into the shared Telegram content handler.
-
-Because this repository also has a top-level `telegram/` package, bot modules should import PTB symbols from `telegram.ptb`, not directly from the upstream `telegram` package. `telegram/ptb.py` bootstraps the installed `python-telegram-bot` distribution and re-exports the PTB types used inside this codebase.
-
-## Run Telegram Webhook Adapter
-
-Required env/config:
-
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_WEBHOOK_SECRET`
-- `TELEGRAM_BACKEND_BASE_URL` (defaults to `http://localhost:8000/api/v1`)
-- `TELEGRAM_API_BASE_URL` (optional override; defaults to `https://api.telegram.org`)
-- `TELEGRAM_DATA_DIR` (optional; defaults to `~/.local/share/bill-helper/telegram`)
-- `TELEGRAM_STATE_PATH` (optional; defaults to `<TELEGRAM_DATA_DIR>/chat_state.json`)
-- backend auth for the bot via either `TELEGRAM_BACKEND_AUTH_TOKEN` or `TELEGRAM_BACKEND_AUTH_HEADERS`
-
-Run the webhook app locally:
+Run the webhook adapter:
 
 ```bash
-cd /path/to/bill_helper
 uv run python -m telegram.webhook
 ```
 
-The webhook app listens on port `8081`, serves `GET /healthz`, validates `X-Telegram-Bot-Api-Secret-Token` on `POST /telegram/webhook`, and then hands the JSON payload to the PTB application for command/message routing.
+## Verification Gates
 
-## Verification Commands
-
-`uv run` includes the default `dev` dependency group in this repository, so test and tooling commands below do not need `--extra dev`.
-
-Backend tests:
+Run these after behavior, schema, API, tooling, or UI changes:
 
 ```bash
-cd /path/to/bill_helper
-uv run pytest
-```
-
-Telegram transport compile check:
-
-```bash
-cd /path/to/bill_helper
-uv run python -m py_compile telegram/__init__.py telegram/bill_helper_api.py telegram/commands.py telegram/config.py telegram/files.py telegram/formatting.py telegram/message_handler.py telegram/polling.py telegram/ptb.py telegram/state.py telegram/webhook.py
-```
-
-Backend + Telegram transport tests:
-
-```bash
-cd /path/to/bill_helper
-OPENROUTER_API_KEY=test uv run pytest backend/tests telegram/tests -q
-```
-
-Backend performance guard tests:
-
-```bash
-cd /path/to/bill_helper
-uv run pytest backend/tests/test_agent_performance.py
-```
-
-Frontend build:
-
-```bash
-cd /path/to/bill_helper/frontend
-npm run build
-npm audit
-```
-
-Frontend tests:
-
-```bash
-cd /path/to/bill_helper/frontend
-npm run test
-```
-
-iOS shell + API tests:
-
-```bash
-cd /path/to/bill_helper
-xcodebuild -project ios/BillHelperApp.xcodeproj -scheme BillHelperApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:BillHelperAPITests test
-```
-
-Migration state:
-
-```bash
-cd /path/to/bill_helper
-uv run alembic current
-```
-
-Documentation consistency:
-
-```bash
-cd /path/to/bill_helper
+uv run python -m py_compile backend
+OPENROUTER_API_KEY=test uv run pytest backend/tests -q
+cd frontend && npm run test && npm run test:e2e && npm run build
+cd ..
 uv run python scripts/check_docs_sync.py
 ```
 
@@ -567,3 +432,4 @@ Recommended before merging:
 1. `uv run pytest`
 2. `npm run build` (from `frontend/`)
 3. `uv run python scripts/check_docs_sync.py`
+The Playwright harness starts the backend on disposable non-default ports and copies the shared app data directory into a temporary location before applying migrations, so browser coverage stays isolated from the primary local database.

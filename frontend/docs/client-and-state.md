@@ -8,17 +8,15 @@ Defines typed API models for:
 
 - ledger domain (`Entry`, `Account`, `User`, `Entity`, `Tag`, ...)
 - analytics (`Dashboard`, `Reconciliation`, ...)
+- auth/admin (`AuthSession`, `AuthLoginResponse`, `AdminSession`)
 - runtime settings (`RuntimeSettings`, `RuntimeSettingsOverrides`)
 - agent domain (`AgentThread*`, `AgentMessage*`, `AgentRun`, `AgentToolCall`, `AgentChangeItem`, `AgentReviewAction`)
 
 Current contract highlights:
 
-- `Account` no longer exposes `entity_id`
-- `Entity` includes `is_account` plus single-currency net aggregate fields for the standalone entities table
-- `User` includes persisted `is_admin` and `is_current_user`
-- `Entry` and `EntryDetail` include `from_entity_missing` and `to_entity_missing`
-- `FilterGroup` includes recursive include/exclude rules and a plain-language `rule_summary`
-- runtime settings include both `agent_model` and ordered `available_agent_models`
+- `Account.owner_user_id` and `Entry.owner_user_id` are non-null
+- `RuntimeSettings` no longer carries identity fields
+- auth payloads include impersonation metadata
 
 ### `frontend/src/lib/api.ts`
 
@@ -26,67 +24,57 @@ Responsibilities:
 
 - generic `request<T>` helper
 - JSON and FormData request handling
-- injects `X-Bill-Helper-Principal` from the shared frontend principal session before every protected request
-- endpoint functions across all backend domains including `agent/*`
-- runtime settings client methods:
-  - `getRuntimeSettings`
-  - `updateRuntimeSettings`
-  - `updateRuntimeSettings` uses a typed runtime-settings patch payload that mirrors the backend `PATCH /settings` contract
-- taxonomy client methods:
-  - `listTaxonomies`
-  - `listTaxonomyTerms`
-  - `createTaxonomyTerm`
-  - `updateTaxonomyTerm`
-- property delete client methods:
-  - `deleteAccount`
-  - `deleteEntity`
-  - `deleteTag`
-- group client methods:
-  - `listGroups`
-  - `getGroup`
-- filter-group client methods:
-  - `listFilterGroups`
-  - `createFilterGroup`
-  - `updateFilterGroup`
-  - `deleteFilterGroup`
+- injects `Authorization: Bearer <token>` from `localStorage` before protected requests
+- clears the stored token on `401`
+- exposes route helpers across ledger, catalog, settings, agent, auth, and admin domains
+
+Notable client methods:
+
+- auth:
+  - `login`
+  - `logout`
+  - `getAuthSession`
+  - `changeMyPassword`
+- admin:
+  - `listAdminUsers`
+  - `createAdminUser`
+  - `updateAdminUser`
+  - `resetAdminUserPassword`
+  - `deleteAdminUser`
+  - `loginAsAdminUser`
+  - `listAdminSessions`
+  - `deleteAdminSession`
 
 ### `frontend/src/lib/queryKeys.ts`
 
 Responsibilities:
 
-- centralized TanStack Query key factory by domain
-- stable key shapes for list, detail, thread, and derived queries
-- groups keys include `groups.list` and `groups.detail(groupId)`
-- dashboard keys include month-scoped analytics
-- filter-group keys live under `filterGroups.all` and `filterGroups.list`
-- dashboard month keys are also reused by the dashboard page's month timeline and yearly comparisons, which hydrate multiple month snapshots in parallel
-- properties keys include taxonomy-specific keys
-- settings keys include `settings.runtime`
+- centralized TanStack Query key factory
+- stable domains for auth, admin, settings, ledger, properties, dashboard, and agent data
 
-### `frontend/src/lib/queryInvalidation.ts`
+Current auth-related keys:
 
-Responsibilities:
-
-- centralized invalidation policies after writes and review actions
-- shared invalidation bundles for entry, account, agent, and property read models
-- runtime settings invalidation refreshes dependent surfaces after settings writes
-- taxonomy invalidation refreshes term usage and dependent lists
-- account, entity, and tag delete invalidation refreshes accounts, properties, entries, and dashboard surfaces that depend on preserved labels or cascaded tag detaches
-- filter-group invalidation refreshes the saved filter-group list, dashboard analytics views, and entry list queries that depend on `filter_group_id`
+- `auth.session`
+- `admin.users`
+- `admin.sessions`
 
 ## State Strategy
 
 - TanStack Query owns remote server state
-- feature-owned hooks under `frontend/src/features/*` own screen-level derived state and mutations
-- query keys and invalidation logic should be reused rather than recreated ad hoc in pages or components
+- feature hooks under `frontend/src/features/*` own screen-level derived state and mutations
+- auth session state lives outside Query in the auth provider because it must survive redirects and global `401` handling
 
-## Principal Session
+## Auth State
 
-- `frontend/src/features/session/principalStorage.ts`
-  - localStorage-backed principal session state, shared header constant, and browser-change event
-- `frontend/src/features/session/PrincipalSessionProvider.tsx`
-  - app-wide principal session context for reading, updating, and clearing the active principal
-- `frontend/src/features/session/PrincipalSessionGate.tsx`
-  - startup gate that blocks protected workspace rendering until a principal session exists
-- `frontend/src/features/session/PrincipalSessionCard.tsx`
-  - sidebar control for switching or clearing the active principal without rebuilding request code per page
+- `frontend/src/features/auth/storage.ts`
+  - `localStorage` helpers around `bill-helper.session-token`
+- `frontend/src/features/auth/AuthProvider.tsx`
+  - app-wide auth context for loading `/auth/me`, logging in, logging out, and adopting impersonation sessions
+- `frontend/src/features/auth/AuthSessionCard.tsx`
+  - sidebar card showing the current signed-in user plus logout and admin navigation
+
+Current behavior:
+
+- app startup validates any stored token with `GET /auth/me`
+- invalid or expired tokens are cleared automatically
+- successful admin impersonation swaps the stored token and refreshes the whole app scope

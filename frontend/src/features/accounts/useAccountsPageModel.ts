@@ -76,7 +76,7 @@ export function useAccountsPageModel() {
     }
 
     return accounts.filter((account) => {
-      const ownerName = account.owner_user_id ? ownerNamesById.get(account.owner_user_id) ?? "" : "";
+      const ownerName = ownerNamesById.get(account.owner_user_id) ?? "";
       return [account.name, account.currency_code, ownerName].join(" ").toLowerCase().includes(query);
     });
   }, [accountSearch, accountsQuery.data, ownerNamesById]);
@@ -118,8 +118,8 @@ export function useAccountsPageModel() {
     if (!editingAccount) {
       return;
     }
-    setEditForm(buildEditForm(editingAccount, currentUserId));
-  }, [currentUserId, editingAccount]);
+    setEditForm(buildEditForm(editingAccount));
+  }, [editingAccount]);
 
   useEffect(() => {
     if (!editingAccountId) {
@@ -213,7 +213,7 @@ export function useAccountsPageModel() {
   function onCreateAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     createAccountMutation.mutate({
-      owner_user_id: createForm.owner_user_id || undefined,
+      owner_user_id: createForm.owner_user_id,
       name: createForm.name.trim(),
       markdown_body: normalizeNullableMarkdown(createForm.markdown_body),
       currency_code: createForm.currency_code.toUpperCase(),
@@ -230,7 +230,7 @@ export function useAccountsPageModel() {
     updateAccountMutation.mutate({
       accountId: editingAccountId,
       payload: {
-        owner_user_id: editForm.owner_user_id || null,
+        owner_user_id: editForm.owner_user_id,
         name: editForm.name.trim(),
         markdown_body: normalizeNullableMarkdown(editForm.markdown_body),
         currency_code: editForm.currency_code.toUpperCase(),
@@ -274,10 +274,7 @@ export function useAccountsPageModel() {
     setEditingAccountId(accountId);
   }
 
-  function ownerNameForId(ownerUserId: string | null): string {
-    if (!ownerUserId) {
-      return "(none)";
-    }
+  function ownerNameForId(ownerUserId: string): string {
     return ownerNamesById.get(ownerUserId) ?? "(unknown user)";
   }
 

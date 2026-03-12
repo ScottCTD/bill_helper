@@ -33,7 +33,7 @@ Agent:
 ## `accounts`
 
 - `id` (PK UUID string, FK -> `entities.id`)
-- `owner_user_id` (nullable FK -> `users.id`)
+- `owner_user_id` (FK -> `users.id`)
 - `markdown_body`, `currency_code`, `is_active`
 - `created_at`, `updated_at`
 
@@ -61,8 +61,24 @@ Operational rules:
 
 - `id` (PK UUID string)
 - `name` (unique)
+- `password_hash`
 - `is_admin` (persisted admin-role gate)
 - `created_at`, `updated_at`
+
+## `sessions`
+
+- `id` (PK UUID string)
+- `user_id` (FK -> `users.id`)
+- `token_hash` (unique SHA-256 digest of the opaque bearer token)
+- `created_at`
+- `expires_at` (nullable)
+- `is_admin_impersonation`
+
+Operational rules:
+
+- password mode never stores raw session tokens in the database
+- deleting a user cascades through owned sessions
+- logout and admin revocation delete rows from this table
 
 ## `filter_groups`
 
@@ -89,7 +105,6 @@ Operational rules:
 - `id` (PK int)
 - `scope` (unique string, current runtime uses `default`)
 - nullable override fields:
-  - `current_user_name`
   - `user_memory`
   - `default_currency_code`
   - `dashboard_currency_code`
@@ -113,11 +128,13 @@ Purpose:
 - effective runtime values are resolved as `override -> env default` where applicable
 - `user_memory` is an optional DB-only JSON-serialized list of strings used for persistent agent prompt context
 - `available_agent_models` is an optional DB-only JSON-serialized ordered list; the resolved API value always includes the effective `agent_model`
+- identity is not stored here
 
 ## `entities`
 
 - `id` (PK UUID string)
-- `name` (unique)
+- `owner_user_id` (FK -> `users.id`)
+- `name` (unique per owner)
 - `category` (nullable normalized lowercase, compatibility mirror of taxonomy assignment)
 - `created_at`, `updated_at`
 
@@ -133,7 +150,7 @@ Operational rules:
 - `account_id` (nullable FK -> `accounts.id`)
 - `kind`, `occurred_at`, `name`, `amount_minor`, `currency_code`
 - `from_entity_id`, `to_entity_id` (nullable FK -> `entities.id`)
-- `owner_user_id` (nullable FK -> `users.id`)
+- `owner_user_id` (FK -> `users.id`)
 - denormalized labels: `from_entity`, `to_entity`, `owner`
 - `markdown_body`
 - `is_deleted`, `deleted_at`
@@ -176,7 +193,8 @@ Operational rules:
 ## `tags`
 
 - `id` (PK int)
-- `name` (unique normalized lowercase)
+- `owner_user_id` (FK -> `users.id`)
+- `name` (unique normalized lowercase per owner)
 - `color`
 - `description` (nullable free-text note)
 - `created_at`
@@ -188,7 +206,8 @@ Taxonomies generalize reusable categorical properties without creating a new tab
 ## `taxonomies`
 
 - `id` (PK UUID string)
-- `key` (unique, e.g. `entity_category`, `tag_type`)
+- `owner_user_id` (FK -> `users.id`)
+- `key` (unique per owner, e.g. `entity_category`, `tag_type`)
 - `applies_to` (subject domain, e.g. `entity`, `tag`)
 - `cardinality` (`single` in current defaults)
 - `display_name`
@@ -257,6 +276,7 @@ Purpose: conversation container.
 Fields:
 
 - `id` (PK UUID string)
+- `owner_user_id` (FK -> `users.id`)
 - `title` (nullable)
 - `created_at`, `updated_at`
 

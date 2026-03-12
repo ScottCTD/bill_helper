@@ -39,7 +39,6 @@ vi.mock("../lib/api", async () => {
 });
 
 const runtimeSettingsFixture: RuntimeSettings = {
-  current_user_name: "Alice",
   user_memory: null,
   default_currency_code: "CAD",
   dashboard_currency_code: "CAD",
@@ -56,7 +55,6 @@ const runtimeSettingsFixture: RuntimeSettings = {
   agent_base_url: null,
   agent_api_key_configured: false,
   overrides: {
-    current_user_name: null,
     user_memory: null,
     default_currency_code: null,
     dashboard_currency_code: null,

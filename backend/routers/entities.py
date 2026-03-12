@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal
-from backend.auth.dependencies import get_or_create_current_principal, require_admin_principal
+from backend.auth.dependencies import get_current_principal
 from backend.database import get_db
-from backend.models_finance import Entity
 from backend.schemas_finance import EntityCreate, EntityRead, EntityUpdate
+from backend.services.access_scope import load_entity_for_principal
 from backend.services.entities import (
     create_entity as create_entity_service,
     delete_entity_and_preserve_labels,
@@ -18,8 +18,6 @@ from backend.services.entities import (
     update_entity as update_entity_service,
 )
 from backend.services.finance_contracts import EntityCreateCommand, EntityPatch
-from backend.services.taxonomy import get_single_term_name_map
-
 router = APIRouter(prefix="/entities", tags=["entities"])
 
 
@@ -60,19 +58,13 @@ def _to_schema(
 @router.get("", response_model=list[EntityRead])
 def list_entities(
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> list[EntityRead]:
     rows = list_entities_with_usage(db, principal=principal)
-    category_by_entity_id = get_single_term_name_map(
-        db,
-        taxonomy_key="entity_category",
-        subject_type="entity",
-        subject_ids=[row.entity.id for row in rows],
-    )
     return [
         _to_schema(
             row.entity,
-            category=category_by_entity_id.get(row.entity.id) or row.entity.category,
+            category=read_entity_category(db, row.entity),
             usage=_EntityUsageCounts(
                 is_account=row.is_account,
                 from_count=row.from_count,
@@ -92,11 +84,12 @@ def list_entities(
 def create_entity(
     payload: EntityCreate,
     db: Session = Depends(get_db),
-    _: RequestPrincipal = Depends(require_admin_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> EntityRead:
     entity = create_entity_service(
         db,
         command=EntityCreateCommand.model_validate(payload.model_dump()),
+        principal=principal,
     )
     category = read_entity_category(db, entity)
     db.commit()
@@ -108,12 +101,9 @@ def create_entity(
 def delete_entity(
     entity_id: str,
     db: Session = Depends(get_db),
-    _: RequestPrincipal = Depends(require_admin_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> None:
-    entity = db.get(Entity, entity_id)
-    if entity is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found")
-
+    entity = load_entity_for_principal(db, entity_id=entity_id, principal=principal)
     delete_entity_and_preserve_labels(db, entity=entity)
     db.commit()
 
@@ -123,12 +113,9 @@ def update_entity(
     entity_id: str,
     payload: EntityUpdate,
     db: Session = Depends(get_db),
-    _: RequestPrincipal = Depends(require_admin_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> EntityRead:
-    entity = db.get(Entity, entity_id)
-    if entity is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found")
-
+    entity = load_entity_for_principal(db, entity_id=entity_id, principal=principal)
     update_entity_service(
         db,
         entity=entity,

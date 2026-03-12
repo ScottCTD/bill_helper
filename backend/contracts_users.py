@@ -9,9 +9,25 @@ class UserCreateCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: RequiredLooseText = Field(min_length=1, max_length=255)
+    password: RequiredLooseText = Field(min_length=1, max_length=255)
+    is_admin: bool = False
 
 
 class UserPatch(NonEmptyPatchModel):
     model_config = ConfigDict(extra="forbid")
 
     name: OptionalRequiredText = Field(default=None, min_length=1, max_length=255)
+    is_admin: bool | None = None
+
+
+class UserPasswordResetCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    new_password: RequiredLooseText = Field(min_length=1, max_length=255)
+
+
+class UserPasswordChangeCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: RequiredLooseText = Field(min_length=1, max_length=255)
+    new_password: RequiredLooseText = Field(min_length=1, max_length=255)

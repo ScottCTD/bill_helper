@@ -38,7 +38,7 @@ export interface EntryEditorSubmitPayload {
   from_entity: string | null;
   to_entity_id: string | null;
   to_entity: string | null;
-  owner_user_id: string | null;
+  owner_user_id: string;
   direct_group_id: string | null;
   direct_group_member_role: GroupMemberRole | null;
   tags: string[];
@@ -100,7 +100,7 @@ function buildCreateForm(currentUserId: string, defaultCurrencyCode: string): En
   };
 }
 
-function buildEditForm(entry: Entry, currentUserId: string): EntryEditorFormState {
+function buildEditForm(entry: Entry): EntryEditorFormState {
   return {
     kind: entry.kind,
     occurred_at: entry.occurred_at,
@@ -111,7 +111,7 @@ function buildEditForm(entry: Entry, currentUserId: string): EntryEditorFormStat
     to_entity_value: entry.to_entity ?? "",
     from_entity_selected_id: entry.from_entity_id,
     to_entity_selected_id: entry.to_entity_id,
-    owner_user_id: entry.owner_user_id ?? currentUserId,
+    owner_user_id: entry.owner_user_id,
     direct_group_id: entry.direct_group?.id ?? "",
     direct_group_member_role: entry.direct_group_member_role ?? "CHILD",
     tags: entry.tags.map((tag) => tag.name),
@@ -274,7 +274,7 @@ export function EntryEditorModal({
     }
 
     if (entry) {
-      const nextState = buildEditForm(entry, currentUserId);
+      const nextState = buildEditForm(entry);
       setFormState(nextState);
       setInitialFormState(nextState);
       setValidationError(null);
@@ -380,6 +380,10 @@ export function EntryEditorModal({
       setValidationError("Date is required.");
       return null;
     }
+    if (!formState.owner_user_id) {
+      setValidationError("Owner is required.");
+      return null;
+    }
 
     setValidationError(null);
     return {
@@ -392,7 +396,7 @@ export function EntryEditorModal({
       from_entity: fromEntityResolution.entityName,
       to_entity_id: toEntityResolution.entityId,
       to_entity: toEntityResolution.entityName,
-      owner_user_id: formState.owner_user_id || null,
+      owner_user_id: formState.owner_user_id,
       direct_group_id: formState.direct_group_id || null,
       direct_group_member_role: formState.direct_group_id ? (selectedGroupType === "SPLIT" ? formState.direct_group_member_role : null) : null,
       tags: formState.tags,
@@ -619,7 +623,6 @@ export function EntryEditorModal({
                   disabled={isSaving}
                   onChange={(event) => setFormState((state) => ({ ...state, owner_user_id: event.target.value }))}
                 >
-                  <option value="">(none)</option>
                   {users.map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.name}

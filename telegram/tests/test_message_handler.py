@@ -81,7 +81,6 @@ class FakeTelegramMessage:
 
 def _runtime_settings(*, max_size: int = 1024, max_attachments: int = 4) -> RuntimeSettingsRead:
     return RuntimeSettingsRead(
-        current_user_name="admin",
         user_memory=None,
         default_currency_code="CAD",
         dashboard_currency_code="CAD",

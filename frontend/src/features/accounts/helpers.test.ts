@@ -14,19 +14,19 @@ describe("accounts helpers", () => {
     expect(normalizeOptionalText("  Savings  ")).toBe("Savings");
   });
 
-  it("builds edit form state with owner fallback", () => {
-    const account: Account = {
+  it("builds edit form state with the persisted owner", () => {
+    const account = {
       id: "acc-1",
-      owner_user_id: null,
+      owner_user_id: "user-1",
       name: "Main account",
       markdown_body: "## Notes",
       currency_code: "CAD",
       is_active: true,
       created_at: "2026-02-15T00:00:00Z",
       updated_at: "2026-02-15T00:00:00Z"
-    };
+    } as unknown as Account;
 
-    expect(buildEditForm(account, "user-1")).toEqual({
+    expect(buildEditForm(account)).toEqual({
       owner_user_id: "user-1",
       name: "Main account",
       markdown_body: "## Notes",

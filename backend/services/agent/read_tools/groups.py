@@ -25,7 +25,7 @@ from backend.services.groups import build_group_summary, group_tree_options
 
 
 def list_groups(context: ToolContext, args: ListGroupsArgs) -> ToolExecutionResult:
-    _principal_name, principal_user_id = tool_principal_scope(context)
+    _principal_name, principal_user_id, _principal_is_admin = tool_principal_scope(context)
 
     if args.group_id is not None:
         if principal_user_id is None:
@@ -76,7 +76,7 @@ def list_groups(context: ToolContext, args: ListGroupsArgs) -> ToolExecutionResu
     groups = list(
         context.db.scalars(
             select(EntryGroup)
-            .where(group_owner_condition(principal_user_id or ""))
+            .where(group_owner_condition(principal_user_id))
             .options(*group_tree_options())
             .order_by(EntryGroup.created_at.desc())
         )

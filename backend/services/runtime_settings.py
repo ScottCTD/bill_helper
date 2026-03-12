@@ -40,7 +40,6 @@ DEFAULT_AVAILABLE_AGENT_MODELS = (
 @dataclass(slots=True, frozen=True)
 class ResolvedRuntimeSettings:
     api_prefix: str
-    current_user_name: str
     user_memory: list[str] | None
     default_currency_code: str
     dashboard_currency_code: str
@@ -143,10 +142,6 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
     defaults = get_settings()
     override = get_runtime_settings_override(db)
 
-    current_user_name = (
-        normalize_text_or_none(defaults.current_user_name)
-        or "admin"
-    )
     user_memory = (
         parse_user_memory_or_none(override.user_memory)
         if override is not None
@@ -252,7 +247,6 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
 
     return ResolvedRuntimeSettings(
         api_prefix=defaults.api_prefix,
-        current_user_name=current_user_name,
         user_memory=user_memory,
         default_currency_code=default_currency_code,
         dashboard_currency_code=dashboard_currency_code,
@@ -273,8 +267,6 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
 
 def build_runtime_settings_view(
     db: Session,
-    *,
-    principal_name: str | None = None,
 ) -> RuntimeSettingsView:
     override = get_runtime_settings_override(db)
     resolved = resolve_runtime_settings(db)
@@ -283,7 +275,6 @@ def build_runtime_settings_view(
     )
 
     return RuntimeSettingsView(
-        current_user_name=normalize_text_or_none(principal_name) or resolved.current_user_name,
         user_memory=resolved.user_memory,
         default_currency_code=resolved.default_currency_code,
         dashboard_currency_code=resolved.dashboard_currency_code,

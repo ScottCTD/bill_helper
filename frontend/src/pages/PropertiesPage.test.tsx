@@ -7,16 +7,13 @@ import { renderWithQueryClient } from "../test/renderWithQueryClient";
 import {
   createTag,
   createTaxonomyTerm,
-  createUser,
   deleteTag,
   listCurrencies,
   listTags,
   listTaxonomies,
   listTaxonomyTerms,
-  listUsers,
   updateTag,
-  updateTaxonomyTerm,
-  updateUser
+  updateTaxonomyTerm
 } from "../lib/api";
 
 vi.mock("../lib/api", async () => {
@@ -29,10 +26,8 @@ vi.mock("../lib/api", async () => {
     listTaxonomies: vi.fn(),
     listTaxonomyTerms: vi.fn(),
     createTag: vi.fn(),
-    createUser: vi.fn(),
     deleteTag: vi.fn(),
     updateTag: vi.fn(),
-    updateUser: vi.fn(),
     createTaxonomyTerm: vi.fn(),
     updateTaxonomyTerm: vi.fn()
   };
@@ -43,7 +38,6 @@ afterEach(() => {
 });
 
 function mockBasePropertiesApi() {
-  vi.mocked(listUsers).mockResolvedValue([{ id: "user-1", name: "Alice", is_admin: true, is_current_user: true }]);
   vi.mocked(listTags).mockResolvedValue([{ id: 1, name: "groceries", color: "#22aa66", type: "Food", entry_count: 2 }]);
   vi.mocked(listCurrencies).mockResolvedValue([{ code: "CAD", name: "Canadian Dollar", entry_count: 3, is_placeholder: false }]);
   vi.mocked(listTaxonomies).mockResolvedValue([
@@ -70,8 +64,6 @@ function mockBasePropertiesApi() {
   });
   vi.mocked(createTag).mockResolvedValue({ id: 2, name: "rent", color: null, type: "Housing", entry_count: 0 });
   vi.mocked(updateTag).mockResolvedValue({ id: 1, name: "groceries", color: "#22aa66", type: "Food", entry_count: 2 });
-  vi.mocked(createUser).mockResolvedValue({ id: "user-2", name: "Bob", is_admin: false, is_current_user: false });
-  vi.mocked(updateUser).mockResolvedValue({ id: "user-1", name: "Alice", is_admin: true, is_current_user: true });
   vi.mocked(deleteTag).mockResolvedValue(undefined);
   vi.mocked(createTaxonomyTerm).mockImplementation(async (_taxonomyKey, payload) => ({
     id: `term-${payload.name}`,
@@ -92,27 +84,6 @@ function mockBasePropertiesApi() {
 }
 
 describe("PropertiesPage", () => {
-  it("creates users from the Users section", async () => {
-    mockBasePropertiesApi();
-    renderWithQueryClient(<PropertiesPage />);
-
-    await screen.findByText("Property Databases");
-    expect(screen.queryByRole("button", { name: "Entities" })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Users" }));
-    await userEvent.click(screen.getByRole("button", { name: "Add user" }));
-
-    const createButton = screen.getByRole("button", { name: "Create" });
-    const nameInput = screen.getByPlaceholderText("e.g. Alice");
-
-    await userEvent.type(nameInput, "Bob");
-    await userEvent.click(createButton);
-
-    await waitFor(() => {
-      expect(createUser).toHaveBeenCalled();
-    });
-    expect(vi.mocked(createUser).mock.calls[0]?.[0]).toEqual({ name: "Bob" });
-  });
-
   it("creates tag taxonomy terms from the taxonomy section", async () => {
     mockBasePropertiesApi();
     renderWithQueryClient(<PropertiesPage />);
@@ -179,22 +150,4 @@ describe("PropertiesPage", () => {
     expect(screen.queryByRole("dialog", { name: "Edit Tag" })).not.toBeInTheDocument();
   });
 
-  it("opens user editing on row double-click", async () => {
-    mockBasePropertiesApi();
-    renderWithQueryClient(<PropertiesPage />);
-
-    await screen.findByText("Property Databases");
-    await userEvent.click(screen.getByRole("button", { name: "Users" }));
-    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
-
-    const userRow = screen.getByText("Alice").closest("tr");
-    expect(userRow).not.toBeNull();
-    if (!userRow) {
-      throw new Error("Expected user row");
-    }
-
-    await userEvent.dblClick(userRow);
-    const editDialog = await screen.findByRole("dialog", { name: "Edit User" });
-    expect(within(editDialog).getByLabelText("Name")).toHaveValue("Alice");
-  });
 });

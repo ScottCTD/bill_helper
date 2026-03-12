@@ -28,8 +28,8 @@ class EntryGroup(Base):
     __tablename__ = "entry_groups"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    owner_user_id: Mapped[str | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     group_type: Mapped[GroupType] = mapped_column(
@@ -45,7 +45,7 @@ class EntryGroup(Base):
         nullable=False,
     )
 
-    owner_user: Mapped[User | None] = relationship(
+    owner_user: Mapped[User] = relationship(
         back_populates="owned_groups",
         foreign_keys=[owner_user_id],
     )
@@ -68,6 +68,7 @@ class User(Base):
     name: Mapped[str] = mapped_column(
         String(255), nullable=False, unique=True, index=True
     )
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
@@ -83,14 +84,59 @@ class User(Base):
     owned_entries: Mapped[list[Entry]] = relationship(
         back_populates="owner_user", foreign_keys="Entry.owner_user_id"
     )
+    owned_entities: Mapped[list[Entity]] = relationship(
+        back_populates="owner_user",
+        foreign_keys="Entity.owner_user_id",
+        cascade="all, delete-orphan",
+    )
     owned_groups: Mapped[list[EntryGroup]] = relationship(
         back_populates="owner_user", foreign_keys="EntryGroup.owner_user_id"
+    )
+    owned_tags: Mapped[list[Tag]] = relationship(
+        back_populates="owner_user",
+        foreign_keys="Tag.owner_user_id",
+        cascade="all, delete-orphan",
+    )
+    owned_taxonomies: Mapped[list[Taxonomy]] = relationship(
+        back_populates="owner_user",
+        foreign_keys="Taxonomy.owner_user_id",
+        cascade="all, delete-orphan",
     )
     filter_groups: Mapped[list[FilterGroup]] = relationship(
         back_populates="owner_user",
         foreign_keys="FilterGroup.owner_user_id",
         cascade="all, delete-orphan",
     )
+    sessions: Mapped[list[UserSession]] = relationship(
+        back_populates="user",
+        foreign_keys="UserSession.user_id",
+        cascade="all, delete-orphan",
+    )
+
+
+class UserSession(Base):
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    is_admin_impersonation: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    user: Mapped[User] = relationship(back_populates="sessions", foreign_keys=[user_id])
 
 
 class FilterGroup(Base):
@@ -133,8 +179,8 @@ class Account(Base):
         ForeignKey("entities.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    owner_user_id: Mapped[str | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     markdown_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False, index=True)
@@ -153,7 +199,7 @@ class Account(Base):
         back_populates="account", cascade="all, delete-orphan"
     )
     entries: Mapped[list[Entry]] = relationship(back_populates="account")
-    owner_user: Mapped[User | None] = relationship(back_populates="accounts")
+    owner_user: Mapped[User] = relationship(back_populates="accounts")
     entity: Mapped[Entity] = relationship(back_populates="account")
 
     @property
@@ -197,10 +243,16 @@ class EntryTag(Base):
 
 class Tag(Base):
     __tablename__ = "tags"
+    __table_args__ = (
+        UniqueConstraint("owner_user_id", "name", name="uq_tags_owner_name"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(
-        String(64), nullable=False, unique=True, index=True
+        String(64), nullable=False, index=True
     )
     color: Mapped[str | None] = mapped_column(String(20), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -212,14 +264,24 @@ class Tag(Base):
         secondary="entry_tags",
         back_populates="tags",
     )
+    owner_user: Mapped[User] = relationship(
+        back_populates="owned_tags",
+        foreign_keys=[owner_user_id],
+    )
 
 
 class Entity(Base):
     __tablename__ = "entities"
+    __table_args__ = (
+        UniqueConstraint("owner_user_id", "name", name="uq_entities_owner_name"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(
-        String(255), nullable=False, unique=True, index=True
+        String(255), nullable=False, index=True
     )
     category: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -241,14 +303,24 @@ class Entity(Base):
         foreign_keys="Entry.to_entity_id",
     )
     account: Mapped[Account | None] = relationship(back_populates="entity", uselist=False)
+    owner_user: Mapped[User] = relationship(
+        back_populates="owned_entities",
+        foreign_keys=[owner_user_id],
+    )
 
 
 class Taxonomy(Base):
     __tablename__ = "taxonomies"
+    __table_args__ = (
+        UniqueConstraint("owner_user_id", "key", name="uq_taxonomies_owner_key"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     key: Mapped[str] = mapped_column(
-        String(100), nullable=False, unique=True, index=True
+        String(100), nullable=False, index=True
     )
     applies_to: Mapped[str] = mapped_column(String(50), nullable=False)
     cardinality: Mapped[str] = mapped_column(
@@ -272,6 +344,10 @@ class Taxonomy(Base):
     assignments: Mapped[list[TaxonomyAssignment]] = relationship(
         back_populates="taxonomy",
         cascade="all, delete-orphan",
+    )
+    owner_user: Mapped[User] = relationship(
+        back_populates="owned_taxonomies",
+        foreign_keys=[owner_user_id],
     )
 
 
@@ -383,9 +459,9 @@ class Entry(Base):
         nullable=True,
         index=True,
     )
-    owner_user_id: Mapped[str | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     from_entity: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -417,7 +493,7 @@ class Entry(Base):
         back_populates="as_target_entries",
         foreign_keys=[to_entity_id],
     )
-    owner_user: Mapped[User | None] = relationship(
+    owner_user: Mapped[User] = relationship(
         back_populates="owned_entries",
         foreign_keys=[owner_user_id],
     )
