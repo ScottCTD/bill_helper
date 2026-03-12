@@ -16,6 +16,8 @@ import type {
   Entity,
   EntryDetail,
   EntryListResponse,
+  EntryTagSuggestionRequest,
+  EntryTagSuggestionResponse,
   FilterGroup,
   FilterGroupRule,
   GroupMemberCreatePayload,
@@ -558,6 +560,15 @@ export function listAdminSessions(): Promise<AdminSession[]> {
 export function deleteAdminSession(sessionId: string): Promise<void> {
   return request<void>(`/api/v1/admin/sessions/${sessionId}`, {
     method: "DELETE"
+  });
+}
+
+export function suggestEntryTags(payload: EntryTagSuggestionRequest & { signal?: AbortSignal }): Promise<EntryTagSuggestionResponse> {
+  const { signal, ...body } = payload;
+  return request<EntryTagSuggestionResponse>("/api/v1/entries/tag-suggestion", {
+    method: "POST",
+    body: JSON.stringify(body),
+    signal,
   });
 }
 

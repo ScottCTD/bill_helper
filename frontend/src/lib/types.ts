@@ -171,6 +171,26 @@ export interface EntryListResponse {
   offset: number;
 }
 
+export interface EntryTagSuggestionRequest {
+  entry_id?: string | null;
+  kind: EntryKind;
+  occurred_at: string;
+  currency_code: string;
+  amount_minor?: number | null;
+  name?: string | null;
+  from_entity_id?: string | null;
+  from_entity?: string | null;
+  to_entity_id?: string | null;
+  to_entity?: string | null;
+  owner_user_id?: string | null;
+  markdown_body?: string | null;
+  current_tags: string[];
+}
+
+export interface EntryTagSuggestionResponse {
+  suggested_tags: string[];
+}
+
 export interface GroupNode {
   graph_id: string;
   membership_id: string;
@@ -360,6 +380,7 @@ export interface RuntimeSettingsOverrides {
   default_currency_code: string | null;
   dashboard_currency_code: string | null;
   agent_model: string | null;
+  entry_tagging_model: string | null;
   available_agent_models: string[] | null;
   agent_max_steps: number | null;
   agent_bulk_max_concurrent_threads: number | null;
@@ -378,6 +399,7 @@ export interface RuntimeSettings {
   default_currency_code: string;
   dashboard_currency_code: string;
   agent_model: string;
+  entry_tagging_model: string | null;
   available_agent_models: string[];
   agent_max_steps: number;
   agent_bulk_max_concurrent_threads: number;
@@ -397,6 +419,7 @@ export interface RuntimeSettingsUpdatePayload {
   default_currency_code?: string | null;
   dashboard_currency_code?: string | null;
   agent_model?: string | null;
+  entry_tagging_model?: string | null;
   available_agent_models?: string[] | null;
   agent_max_steps?: number | null;
   agent_bulk_max_concurrent_threads?: number | null;

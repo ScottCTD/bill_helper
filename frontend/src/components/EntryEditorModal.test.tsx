@@ -1,9 +1,20 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import type { ComponentProps } from "react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EntryEditorModal } from "./EntryEditorModal";
 import type { Entry } from "../lib/types";
+import { suggestEntryTags } from "../lib/api";
+import { renderWithQueryClient } from "../test/renderWithQueryClient";
+
+vi.mock("../lib/api", async () => {
+  const actual = await vi.importActual<typeof import("../lib/api")>("../lib/api");
+  return {
+    ...actual,
+    suggestEntryTags: vi.fn(),
+  };
+});
 
 vi.mock("./MarkdownBlockEditor", () => ({
   MarkdownBlockEditor: () => <div data-testid="markdown-editor" />
@@ -34,24 +45,47 @@ const entryFixture: Entry = {
   tags: []
 };
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function renderModal(overrides: Partial<ComponentProps<typeof EntryEditorModal>> = {}) {
+  return renderWithQueryClient(
+    <EntryEditorModal
+      isOpen
+      mode="edit"
+      entry={entryFixture}
+      currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
+      entities={[{ id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }]}
+      groups={[]}
+      tags={[
+        { id: 1, name: "coffee", color: "#5f6caf", description: "Coffee purchases" },
+        { id: 2, name: "grocery", color: "#7c9a4d", description: "Groceries" }
+      ]}
+      currentUserId="user-1"
+      defaultCurrencyCode="CAD"
+      entryTaggingModel={null}
+      isSaving={false}
+      onClose={() => {}}
+      onSubmit={() => {}}
+      {...overrides}
+    />
+  );
+}
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
 describe("EntryEditorModal", () => {
   it("renders the markdown editor under a Notes field label", async () => {
-    render(
-      <EntryEditorModal
-        isOpen
-        mode="edit"
-        entry={entryFixture}
-        currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
-        entities={[{ id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }]}
-        groups={[]}
-        tags={[]}
-        currentUserId="user-1"
-        defaultCurrencyCode="CAD"
-        isSaving={false}
-        onClose={() => {}}
-        onSubmit={() => {}}
-      />
-    );
+    renderModal();
 
     const notesLabel = await screen.findByText("Notes:");
     expect(notesLabel).toBeInTheDocument();
@@ -60,22 +94,7 @@ describe("EntryEditorModal", () => {
   });
 
   it("explains preserved missing-entity labels while editing", async () => {
-    render(
-      <EntryEditorModal
-        isOpen
-        mode="edit"
-        entry={entryFixture}
-        currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
-        entities={[{ id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }]}
-        groups={[]}
-        tags={[]}
-        currentUserId="user-1"
-        defaultCurrencyCode="CAD"
-        isSaving={false}
-        onClose={() => {}}
-        onSubmit={() => {}}
-      />
-    );
+    renderModal();
 
     expect(await screen.findByText(/preserved labels remain visible/i)).toBeInTheDocument();
   });
@@ -83,47 +102,37 @@ describe("EntryEditorModal", () => {
   it("shows a split role selector when assigning the entry to a split group", async () => {
     const user = userEvent.setup();
 
-    render(
-      <EntryEditorModal
-        isOpen
-        mode="create"
-        entry={null}
-        currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
-        entities={[]}
-        groups={[
-          {
-            id: "group-1",
-            name: "Bundle Group",
-            group_type: "BUNDLE",
-            parent_group_id: null,
-            direct_member_count: 0,
-            direct_entry_count: 0,
-            direct_child_group_count: 0,
-            descendant_entry_count: 0,
-            first_occurred_at: null,
-            last_occurred_at: null
-          },
-          {
-            id: "group-2",
-            name: "Dinner Split",
-            group_type: "SPLIT",
-            parent_group_id: null,
-            direct_member_count: 0,
-            direct_entry_count: 0,
-            direct_child_group_count: 0,
-            descendant_entry_count: 0,
-            first_occurred_at: null,
-            last_occurred_at: null
-          }
-        ]}
-        tags={[]}
-        currentUserId="user-1"
-        defaultCurrencyCode="CAD"
-        isSaving={false}
-        onClose={() => {}}
-        onSubmit={() => {}}
-      />
-    );
+    renderModal({
+      mode: "create",
+      entry: null,
+      entities: [],
+      groups: [
+        {
+          id: "group-1",
+          name: "Bundle Group",
+          group_type: "BUNDLE",
+          parent_group_id: null,
+          direct_member_count: 0,
+          direct_entry_count: 0,
+          direct_child_group_count: 0,
+          descendant_entry_count: 0,
+          first_occurred_at: null,
+          last_occurred_at: null
+        },
+        {
+          id: "group-2",
+          name: "Dinner Split",
+          group_type: "SPLIT",
+          parent_group_id: null,
+          direct_member_count: 0,
+          direct_entry_count: 0,
+          direct_child_group_count: 0,
+          descendant_entry_count: 0,
+          first_occurred_at: null,
+          last_occurred_at: null
+        }
+      ]
+    });
 
     await user.click(screen.getByRole("button", { name: "Group" }));
     await user.click(screen.getByRole("option", { name: /Dinner Split/i }));
@@ -136,22 +145,7 @@ describe("EntryEditorModal", () => {
     const onSubmit = vi.fn();
     const onClose = vi.fn();
 
-    render(
-      <EntryEditorModal
-        isOpen
-        mode="edit"
-        entry={entryFixture}
-        currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
-        entities={[{ id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 }]}
-        groups={[]}
-        tags={[]}
-        currentUserId="user-1"
-        defaultCurrencyCode="CAD"
-        isSaving={false}
-        onClose={onClose}
-        onSubmit={onSubmit}
-      />
-    );
+    renderModal({ onClose, onSubmit });
 
     await user.click(screen.getByRole("button", { name: "Swap from and to" }));
 
@@ -177,22 +171,12 @@ describe("EntryEditorModal", () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
 
-    render(
-      <EntryEditorModal
-        isOpen
-        mode="create"
-        entry={null}
-        currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
-        entities={[]}
-        groups={[]}
-        tags={[]}
-        currentUserId="user-1"
-        defaultCurrencyCode="CAD"
-        isSaving={false}
-        onClose={() => {}}
-        onSubmit={onSubmit}
-      />
-    );
+    renderModal({
+      mode: "create",
+      entry: null,
+      entities: [],
+      onSubmit
+    });
 
     expect(screen.queryByLabelText("Owner")).not.toBeInTheDocument();
 
@@ -216,41 +200,31 @@ describe("EntryEditorModal", () => {
     const onSubmit = vi.fn();
     const onClose = vi.fn();
 
-    render(
-      <EntryEditorModal
-        isOpen
-        mode="edit"
-        entry={{
-          ...entryFixture,
-          kind: "TRANSFER",
-          name: "Transfer to Saving Account",
-          to_entity_id: null,
-          to_entity: "Saving Account",
-          to_entity_missing: true
-        }}
-        currencies={[{ code: "CAD", name: "Canadian Dollar", entry_count: 1, is_placeholder: false }]}
-        entities={[
-          { id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 },
-          {
-            id: "entity-3",
-            name: "Saving Account",
-            category: "Account",
-            is_account: true,
-            from_count: 0,
-            to_count: 1,
-            account_count: 1,
-            entry_count: 1
-          }
-        ]}
-        groups={[]}
-        tags={[]}
-        currentUserId="user-1"
-        defaultCurrencyCode="CAD"
-        isSaving={false}
-        onClose={onClose}
-        onSubmit={onSubmit}
-      />
-    );
+    renderModal({
+      entry: {
+        ...entryFixture,
+        kind: "TRANSFER",
+        name: "Transfer to Saving Account",
+        to_entity_id: null,
+        to_entity: "Saving Account",
+        to_entity_missing: true
+      },
+      entities: [
+        { id: "entity-2", name: "Cafe", category: "Food", is_account: false, from_count: 0, to_count: 1, account_count: 0, entry_count: 1 },
+        {
+          id: "entity-3",
+          name: "Saving Account",
+          category: "Account",
+          is_account: true,
+          from_count: 0,
+          to_count: 1,
+          account_count: 1,
+          entry_count: 1
+        }
+      ],
+      onClose,
+      onSubmit
+    });
 
     await user.click(screen.getAllByRole("button", { name: "Toggle options" })[1]);
     await user.click(screen.getByRole("button", { name: "Saving Account" }));
@@ -265,5 +239,113 @@ describe("EntryEditorModal", () => {
       )
     );
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("notifies when tagging is disabled by settings", async () => {
+    const user = userEvent.setup();
+
+    renderModal();
+
+    await user.click(screen.getByRole("button", { name: "Suggest tags with AI" }));
+
+    expect(
+      await screen.findByText("AI tag suggestion is disabled until you set Default tagging model in Settings.")
+    ).toBeInTheDocument();
+    expect(suggestEntryTags).not.toHaveBeenCalled();
+  });
+
+  it("blocks suggestion when the create draft has no meaningful context", async () => {
+    const user = userEvent.setup();
+
+    renderModal({
+      mode: "create",
+      entry: null,
+      entities: [],
+      entryTaggingModel: "openai/gpt-4.1-mini",
+    });
+
+    await user.clear(screen.getByLabelText("Name"));
+    await user.click(screen.getByRole("button", { name: "Suggest tags with AI" }));
+
+    expect(
+      await screen.findByText("Add a name, amount, entity, notes, or tags before asking AI for tag suggestions.")
+    ).toBeInTheDocument();
+    expect(suggestEntryTags).not.toHaveBeenCalled();
+  });
+
+  it("replaces the current tags with the AI suggestion", async () => {
+    const user = userEvent.setup();
+    vi.mocked(suggestEntryTags).mockResolvedValue({ suggested_tags: ["grocery"] });
+
+    renderModal({
+      entry: {
+        ...entryFixture,
+        tags: [{ id: 1, name: "coffee", color: "#5f6caf", description: "Coffee purchases" }]
+      },
+      entryTaggingModel: "openai/gpt-4.1-mini"
+    });
+
+    expect(screen.getByText("coffee")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Suggest tags with AI" }));
+
+    await waitFor(() => expect(suggestEntryTags).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText("grocery")).toBeInTheDocument());
+    expect(screen.queryByText("coffee")).not.toBeInTheDocument();
+  });
+
+  it("interrupts an in-flight suggestion without changing tags and ignores a late success", async () => {
+    const user = userEvent.setup();
+    const deferred = createDeferred<{ suggested_tags: string[] }>();
+    let capturedSignal: AbortSignal | undefined;
+    vi.mocked(suggestEntryTags).mockImplementation(async (payload) => {
+      capturedSignal = payload.signal;
+      return deferred.promise;
+    });
+
+    renderModal({
+      entry: {
+        ...entryFixture,
+        tags: [{ id: 1, name: "coffee", color: "#5f6caf", description: "Coffee purchases" }]
+      },
+      entryTaggingModel: "openai/gpt-4.1-mini"
+    });
+
+    await user.click(screen.getByRole("button", { name: "Suggest tags with AI" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Stop AI tag suggestion" })).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Stop AI tag suggestion" }));
+    deferred.resolve({ suggested_tags: ["grocery"] });
+
+    await waitFor(() => expect(capturedSignal?.aborted).toBe(true));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Suggest tags with AI" })).toBeInTheDocument());
+    expect(screen.getByText("coffee")).toBeInTheDocument();
+    expect(screen.queryByText("grocery")).not.toBeInTheDocument();
+  });
+
+  it("aborts an in-flight suggestion when the modal closes", async () => {
+    const user = userEvent.setup();
+    const deferred = createDeferred<{ suggested_tags: string[] }>();
+    let capturedSignal: AbortSignal | undefined;
+    const onClose = vi.fn();
+    vi.mocked(suggestEntryTags).mockImplementation(async (payload) => {
+      capturedSignal = payload.signal;
+      return deferred.promise;
+    });
+
+    renderModal({
+      entryTaggingModel: "openai/gpt-4.1-mini",
+      onClose
+    });
+
+    await user.click(screen.getByRole("button", { name: "Suggest tags with AI" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Stop AI tag suggestion" })).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() => expect(capturedSignal?.aborted).toBe(true));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    deferred.resolve({ suggested_tags: ["grocery"] });
   });
 });

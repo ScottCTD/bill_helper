@@ -29,6 +29,7 @@ This file is the backend index. Use it to find the focused backend docs under `.
 - `0031_add_user_is_admin`
 - `0032_add_filter_groups`
 - `0033_multi_user_security`
+- `0034_add_entry_tagging_model_to_runtime_settings`
 
 ## Related Docs
 

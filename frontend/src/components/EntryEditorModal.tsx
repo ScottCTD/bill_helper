@@ -1,7 +1,18 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight, Loader2, Sparkles, Square } from "lucide-react";
 
-import type { Currency, Entity, Entry, EntryKind, GroupMemberRole, GroupSummary, Tag } from "../lib/types";
+import { useEntryTagSuggestion } from "../hooks/useEntryTagSuggestion";
+import type {
+  Currency,
+  Entity,
+  Entry,
+  EntryKind,
+  EntryTagSuggestionRequest,
+  GroupMemberRole,
+  GroupSummary,
+  Tag,
+} from "../lib/types";
+import { cn } from "../lib/utils";
 import { CreatableSingleSelect, type CreatableSingleSelectChangeMeta } from "./CreatableSingleSelect";
 import { MarkdownBlockEditor } from "./MarkdownBlockEditor";
 import { SingleSelect } from "./SingleSelect";
@@ -55,6 +66,7 @@ interface EntryEditorModalProps {
   tags: Tag[];
   currentUserId: string;
   defaultCurrencyCode: string;
+  entryTaggingModel?: string | null;
   isSaving: boolean;
   loadError?: string | null;
   saveError?: string | null;
@@ -242,6 +254,7 @@ export function EntryEditorModal({
   tags,
   currentUserId,
   defaultCurrencyCode,
+  entryTaggingModel,
   isSaving,
   loadError,
   saveError,
@@ -351,6 +364,17 @@ export function EntryEditorModal({
       }),
     [entry?.from_entity_missing, entry?.to_entity_missing, formState, initialFormState]
   );
+  const { cancelSuggestion, isRunning: isTagSuggestionRunning, requestSuggestion } = useEntryTagSuggestion({
+    entryTaggingModel,
+    buildDraft: buildTagSuggestionDraft,
+    onApplySuggestion: (suggestedTags) => setFormState((state) => ({ ...state, tags: suggestedTags })),
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      cancelSuggestion();
+    }
+  }, [cancelSuggestion, isOpen]);
 
   if (!isOpen) {
     return null;
@@ -408,8 +432,35 @@ export function EntryEditorModal({
     if (!payload) {
       return false;
     }
+    cancelSuggestion();
     onSubmit(payload);
     return true;
+  }
+
+  function buildTagSuggestionDraft(): EntryTagSuggestionRequest {
+    const amountMinor = Math.round(Number(formState.amount_major) * 100);
+    const fromEntityResolution = resolveEntityInput(
+      formState.from_entity_value,
+      entities,
+      formState.from_entity_selected_id
+    );
+    const toEntityResolution = resolveEntityInput(formState.to_entity_value, entities, formState.to_entity_selected_id);
+
+    return {
+      entry_id: mode === "edit" && entry ? entry.id : null,
+      kind: formState.kind,
+      occurred_at: formState.occurred_at,
+      currency_code: formState.currency_code.trim().toUpperCase(),
+      amount_minor: Number.isFinite(amountMinor) && amountMinor > 0 ? amountMinor : null,
+      name: formState.name.trim() || null,
+      from_entity_id: fromEntityResolution.entityId,
+      from_entity: fromEntityResolution.entityName,
+      to_entity_id: toEntityResolution.entityId,
+      to_entity: toEntityResolution.entityName,
+      owner_user_id: formState.owner_user_id || null,
+      markdown_body: formState.markdown_body.trim() || null,
+      current_tags: Array.from(new Set(formState.tags.map((tag) => tag.trim()).filter(Boolean))),
+    };
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -421,6 +472,7 @@ export function EntryEditorModal({
     if (isSaving) {
       return;
     }
+    cancelSuggestion();
 
     if (!isDirty || (mode === "edit" && !entry && !loadError)) {
       setValidationError(null);
@@ -600,15 +652,38 @@ export function EntryEditorModal({
 
             <div className="entry-property-line entry-property-line-tags">
               <span className="entry-property-label">Tags:</span>
-              <TagMultiSelect
-                options={tags}
-                value={formState.tags}
-                ariaLabel="Tags"
-                placeholder="Select or create tags..."
-                createLabelPrefix="Create tag"
-                disabled={isSaving}
-                onChange={(nextTags) => setFormState((state) => ({ ...state, tags: nextTags }))}
-              />
+              <div className="entry-property-group entry-property-group-tags">
+                <TagMultiSelect
+                  options={tags}
+                  value={formState.tags}
+                  ariaLabel="Tags"
+                  placeholder="Select or create tags..."
+                  createLabelPrefix="Create tag"
+                  disabled={isSaving}
+                  onChange={(nextTags) => setFormState((state) => ({ ...state, tags: nextTags }))}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className={cn("entry-tag-suggestion-button group shrink-0", isTagSuggestionRunning && "is-running")}
+                  aria-label={isTagSuggestionRunning ? "Stop AI tag suggestion" : "Suggest tags with AI"}
+                  title={isTagSuggestionRunning ? "Stop AI tag suggestion" : "Suggest tags with AI"}
+                  disabled={isSaving}
+                  onClick={() => {
+                    void requestSuggestion();
+                  }}
+                >
+                  {isTagSuggestionRunning ? (
+                    <>
+                      <Loader2 className="entry-tag-suggestion-loader h-4 w-4 animate-spin group-hover:hidden" />
+                      <Square className="entry-tag-suggestion-stop hidden h-4 w-4 group-hover:block" />
+                    </>
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
             </div>
 
             <div className="entry-property-line entry-property-line-group">

@@ -487,6 +487,7 @@ export function EntriesPage() {
         tags={tagsQuery.data ?? []}
         currentUserId={currentUserId}
         defaultCurrencyCode={(runtimeSettingsQuery.data?.default_currency_code ?? "CAD").toUpperCase()}
+        entryTaggingModel={runtimeSettingsQuery.data?.entry_tagging_model}
         isSaving={createEntryMutation.isPending || updateEntryMutation.isPending}
         loadError={editorLoadError}
         saveError={editorSaveError}

@@ -63,14 +63,19 @@ def test_build_runtime_settings_view_omits_request_identity() -> None:
     try:
         update_runtime_settings_override(
             db,
-            RuntimeSettingsPatch(agent_model="openai/gpt-4.1-mini"),
+            RuntimeSettingsPatch(
+                agent_model="openai/gpt-4.1-mini",
+                entry_tagging_model="openai/gpt-4.1-mini",
+            ),
         )
         db.commit()
 
         payload = build_runtime_settings_view(db)
         assert payload.agent_model == "openai/gpt-4.1-mini"
+        assert payload.entry_tagging_model == "openai/gpt-4.1-mini"
         assert payload.available_agent_models == expected_available_agent_models("openai/gpt-4.1-mini")
         assert payload.overrides.agent_model == "openai/gpt-4.1-mini"
+        assert payload.overrides.entry_tagging_model == "openai/gpt-4.1-mini"
         assert payload.agent_bulk_max_concurrent_threads == get_settings().agent_bulk_max_concurrent_threads
     finally:
         db.close()
@@ -141,7 +146,54 @@ def test_resolve_runtime_settings_uses_override_available_agent_models_and_keeps
         db.close()
 
 
-def test_resolve_runtime_settings_treats_non_json_user_memory_as_single_item() -> None:
+def test_update_runtime_settings_rejects_entry_tagging_model_outside_available_models() -> None:
+    make_session = get_session_maker()
+    db = make_session()
+    try:
+        update_runtime_settings_override(
+            db,
+            RuntimeSettingsPatch(
+                entry_tagging_model="openai/gpt-4.1-mini",
+                available_agent_models=["bedrock/us.anthropic.claude-sonnet-4-6"],
+            ),
+        )
+    except ValueError as exc:
+        assert str(exc) == "Default tagging model must be enabled in Available models."
+    else:  # pragma: no cover - defensive guard
+        raise AssertionError("Expected update_runtime_settings_override to reject an unavailable tagging model")
+    finally:
+        db.close()
+
+
+def test_update_runtime_settings_rejects_existing_entry_tagging_model_when_available_models_remove_it() -> None:
+    make_session = get_session_maker()
+    db = make_session()
+    try:
+        update_runtime_settings_override(
+            db,
+            RuntimeSettingsPatch(
+                available_agent_models=["openai/gpt-4.1-mini"],
+                entry_tagging_model="openai/gpt-4.1-mini",
+            ),
+        )
+        db.commit()
+
+        try:
+            update_runtime_settings_override(
+                db,
+                RuntimeSettingsPatch(
+                    available_agent_models=["bedrock/us.anthropic.claude-sonnet-4-6"],
+                ),
+            )
+        except ValueError as exc:
+            assert str(exc) == "Default tagging model must be enabled in Available models."
+        else:  # pragma: no cover - defensive guard
+            raise AssertionError("Expected available-model updates to reject an invalid stored tagging model")
+    finally:
+        db.close()
+
+
+def test_resolve_runtime_settings_parses_legacy_multiline_user_memory() -> None:
     make_session = get_session_maker()
     db = make_session()
     try:

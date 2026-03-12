@@ -44,6 +44,7 @@ class ResolvedRuntimeSettings:
     default_currency_code: str
     dashboard_currency_code: str
     agent_model: str
+    entry_tagging_model: str | None
     available_agent_models: list[str]
     agent_max_steps: int
     agent_bulk_max_concurrent_threads: int
@@ -80,6 +81,20 @@ def update_runtime_settings_override(
     updates: RuntimeSettingsPatch,
 ) -> RuntimeSettingsRow:
     row = _ensure_runtime_settings_override(db)
+    current = resolve_runtime_settings(db)
+    next_agent_model = updates.agent_model if updates.includes("agent_model") else current.agent_model
+    effective_agent_model = next_agent_model or DEFAULT_AGENT_MODEL
+    next_available_agent_models = _ensure_available_models_include_default(
+        updates.available_agent_models if updates.includes("available_agent_models") else current.available_agent_models,
+        agent_model=effective_agent_model,
+    )
+    next_entry_tagging_model = (
+        updates.entry_tagging_model if updates.includes("entry_tagging_model") else current.entry_tagging_model
+    )
+    _validate_entry_tagging_model(
+        entry_tagging_model=next_entry_tagging_model,
+        available_agent_models=next_available_agent_models,
+    )
     for field_name, value in updates.model_dump(exclude_unset=True).items():
         # Skip masked sentinel to prevent accidental overwrites of API key
         if field_name == "agent_api_key" and value == "***masked***":
@@ -138,6 +153,18 @@ def _ensure_available_models_include_default(
     return [*normalized_models, agent_model]
 
 
+def _validate_entry_tagging_model(
+    *,
+    entry_tagging_model: str | None,
+    available_agent_models: list[str],
+) -> None:
+    normalized_model = normalize_text_or_none(entry_tagging_model)
+    if normalized_model is None:
+        return
+    if normalized_model.casefold() not in {model.casefold() for model in available_agent_models}:
+        raise ValueError("Default tagging model must be enabled in Available models.")
+
+
 def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
     defaults = get_settings()
     override = get_runtime_settings_override(db)
@@ -179,6 +206,15 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         if override is not None
         else None,
         agent_model=agent_model,
+    )
+    entry_tagging_model = (
+        normalize_text_or_none(override.entry_tagging_model)
+        if override is not None
+        else None
+    )
+    _validate_entry_tagging_model(
+        entry_tagging_model=entry_tagging_model,
+        available_agent_models=available_agent_models,
     )
 
     agent_max_steps = sanitize_int_at_least(
@@ -251,6 +287,7 @@ def resolve_runtime_settings(db: Session) -> ResolvedRuntimeSettings:
         default_currency_code=default_currency_code,
         dashboard_currency_code=dashboard_currency_code,
         agent_model=agent_model,
+        entry_tagging_model=entry_tagging_model,
         available_agent_models=available_agent_models,
         agent_max_steps=agent_max_steps,
         agent_bulk_max_concurrent_threads=agent_bulk_max_concurrent_threads,
@@ -279,6 +316,7 @@ def build_runtime_settings_view(
         default_currency_code=resolved.default_currency_code,
         dashboard_currency_code=resolved.dashboard_currency_code,
         agent_model=resolved.agent_model,
+        entry_tagging_model=resolved.entry_tagging_model,
         available_agent_models=resolved.available_agent_models,
         agent_max_steps=resolved.agent_max_steps,
         agent_bulk_max_concurrent_threads=resolved.agent_bulk_max_concurrent_threads,
@@ -305,6 +343,9 @@ def build_runtime_settings_view(
             if override
             else None,
             agent_model=normalize_text_or_none(override.agent_model)
+            if override
+            else None,
+            entry_tagging_model=normalize_text_or_none(override.entry_tagging_model)
             if override
             else None,
             available_agent_models=parse_agent_models_or_none(override.available_agent_models)

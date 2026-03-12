@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.contracts_groups import GroupCreateCommand, GroupMemberCreateCommand, GroupPatch
 from backend.contracts_users import UserCreateCommand, UserPatch
@@ -291,6 +291,36 @@ class EntryListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class EntryTagSuggestionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entry_id: str | None = None
+    kind: EntryKind
+    occurred_at: date
+    currency_code: str = Field(min_length=3, max_length=3)
+    amount_minor: int | None = Field(default=None, gt=0)
+    name: str | None = Field(default=None, max_length=255)
+    from_entity_id: str | None = None
+    from_entity: str | None = Field(default=None, max_length=255)
+    to_entity_id: str | None = None
+    to_entity: str | None = Field(default=None, max_length=255)
+    owner_user_id: str | None = None
+    markdown_body: str | None = None
+    current_tags: list[str] = Field(default_factory=list)
+
+    @field_validator("currency_code", mode="before")
+    @classmethod
+    def normalize_currency_code(cls, value: object) -> str:
+        normalized = " ".join(str(value or "").split()).strip().upper()
+        if len(normalized) != 3:
+            raise ValueError("currency_code must use a 3-letter ISO code")
+        return normalized
+
+
+class EntryTagSuggestionResponse(BaseModel):
+    suggested_tags: list[str] = Field(default_factory=list)
 
 
 class EntryGroupRefRead(BaseModel):

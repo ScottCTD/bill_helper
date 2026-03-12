@@ -450,6 +450,7 @@ export function GroupsPage() {
         tags={tagsQuery.data ?? []}
         currentUserId={currentUserId}
         defaultCurrencyCode={(runtimeSettingsQuery.data?.default_currency_code ?? "CAD").toUpperCase()}
+        entryTaggingModel={runtimeSettingsQuery.data?.entry_tagging_model}
         isSaving={updateEntryMutation.isPending}
         loadError={entryEditorLoadError}
         saveError={entryEditorSaveError}

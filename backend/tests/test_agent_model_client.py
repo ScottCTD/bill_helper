@@ -208,6 +208,91 @@ def test_complete_retries_before_failing(monkeypatch):
     assert response["usage"]["output_tokens"] == 2
 
 
+def test_complete_omits_tool_fields_when_explicit_tools_override_is_empty(monkeypatch):
+    captured_request: dict[str, object] = {}
+    client = LiteLLMModelClient(
+        model_name="google/gemini-3-flash-preview",
+        tools=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "list_entries",
+                    "description": "List entries",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ],
+        retry_max_attempts=1,
+        retry_initial_wait_seconds=0.0,
+        retry_max_wait_seconds=0.0,
+        retry_backoff_multiplier=2.0,
+    )
+
+    def fake_completion(**kwargs):
+        captured_request.update(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="Hello",
+                        tool_calls=[],
+                    )
+                )
+            ],
+            usage={"input_tokens": 3, "output_tokens": 2},
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    response = client.complete([{"role": "user", "content": "hi"}], tools=[])
+
+    assert response["content"] == "Hello"
+    assert "tools" not in captured_request
+    assert "tool_choice" not in captured_request
+
+
+def test_complete_passes_response_format_when_provided(monkeypatch):
+    captured_request: dict[str, object] = {}
+    client = _build_model_client(retry_max_attempts=1)
+    response_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "demo",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "value": {"type": "string"},
+                },
+                "required": ["value"],
+            },
+        },
+    }
+
+    def fake_completion(**kwargs):
+        captured_request.update(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content='{"value":"ok"}',
+                        tool_calls=[],
+                    )
+                )
+            ],
+            usage={"input_tokens": 3, "output_tokens": 2},
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    response = client.complete(
+        [{"role": "user", "content": "hi"}],
+        response_format=response_format,
+    )
+
+    assert response["content"] == '{"value":"ok"}'
+    assert captured_request["response_format"] == response_format
+
+
 def test_complete_retries_transient_ssl_bad_record_mac_when_max_attempts_is_one(monkeypatch):
     client = _build_model_client(retry_max_attempts=1)
     calls = {"count": 0}
