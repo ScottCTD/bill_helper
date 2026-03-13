@@ -280,7 +280,7 @@ def list_entries(
 def suggest_tags_for_entry(
     payload: EntryTagSuggestionRequest,
     db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_or_create_current_principal),
+    principal: RequestPrincipal = Depends(get_current_principal),
 ) -> EntryTagSuggestionResponse:
     try:
         suggested_tags = suggest_entry_tags(
