@@ -13,6 +13,7 @@ import {
   summarizeActivityTimeline,
   summarizeRunChangeTypes,
   toolLifecycleLabel,
+  toolLifecycleStatusClass,
   type ReasoningUpdateSource,
   type RunActivityItem
 } from "./activity";
@@ -82,7 +83,7 @@ function ToolCallTimelineRow({
 }) {
   const [isOpen, setIsOpen] = useState(Boolean(defaultOpen));
   const toolCall = item.toolCall;
-  const lifecycleLabel = toolLifecycleLabel(item.lifecycleEventType);
+  const lifecycleStatusClass = toolLifecycleStatusClass(item.lifecycleEventType);
   const hasSnapshot = toolCall !== null;
   const hasFullPayload = Boolean(toolCall?.has_full_payload);
   const shouldHydrate = isOpen && !hasFullPayload;
@@ -107,7 +108,10 @@ function ToolCallTimelineRow({
       <summary>
         <ChevronRight className="agent-tool-call-chevron" />
         <span className="agent-tool-call-name">{toolCall?.tool_name ?? "Tool call"}</span>
-        <span className="agent-tool-call-status">{lifecycleLabel}</span>
+        <span
+          className={cn("agent-tool-call-status-dot", lifecycleStatusClass)}
+          title={toolLifecycleLabel(item.lifecycleEventType)}
+        />
         <span className="agent-tool-call-time muted">
           {prettyDateTime(item.createdAt)}
         </span>
@@ -191,7 +195,9 @@ function ActivityTimeline({
             (hasStreamingReasoningText ? 1 : 0) + (hasStreamingAssistantText ? 1 : 0)
           )}
         </span>
-        {isRunning ? <span className="agent-tool-call-status">live</span> : null}
+        {isRunning ? (
+          <span className="agent-tool-call-status-dot is-running" title="Live" />
+        ) : null}
       </summary>
       <div className="agent-run-activity-timeline">
         {items.map((item, index) => {

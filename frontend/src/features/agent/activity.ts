@@ -312,6 +312,21 @@ export function toolLifecycleLabel(eventType: ToolLifecycleEventType): string {
   }
 }
 
+export function toolLifecycleStatusClass(eventType: ToolLifecycleEventType): string {
+  switch (eventType) {
+    case "tool_call_queued":
+      return "is-queued";
+    case "tool_call_started":
+      return "is-running";
+    case "tool_call_completed":
+      return "is-completed";
+    case "tool_call_failed":
+      return "is-failed";
+    case "tool_call_cancelled":
+      return "is-cancelled";
+  }
+}
+
 export function isToolLifecycleTerminal(eventType: ToolLifecycleEventType): boolean {
   return (
     eventType === "tool_call_completed" ||

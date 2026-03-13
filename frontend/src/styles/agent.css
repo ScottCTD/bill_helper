@@ -508,8 +508,39 @@
     @apply opacity-100;
   }
 
-  .agent-tool-call-status {
-    @apply inline-flex rounded-md border border-border bg-secondary px-1.5 py-0 text-[10px] font-medium text-muted-foreground;
+  .agent-tool-call-status-dot {
+    @apply h-1.5 w-1.5 flex-shrink-0 rounded-full border border-transparent bg-muted-foreground/50;
+  }
+
+  .agent-tool-call-status-dot.is-queued {
+    @apply border-warning/30 bg-warning;
+  }
+
+  .agent-tool-call-status-dot.is-running {
+    @apply border-primary/30 bg-primary;
+    animation: agent-tool-call-pulse 2s ease-in-out infinite;
+  }
+
+  .agent-tool-call-status-dot.is-completed {
+    @apply border-success/30 bg-success;
+  }
+
+  .agent-tool-call-status-dot.is-failed {
+    @apply border-destructive/30 bg-destructive;
+  }
+
+  .agent-tool-call-status-dot.is-cancelled {
+    @apply bg-muted-foreground/30;
+  }
+
+  @keyframes agent-tool-call-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.4;
+    }
   }
 
   .agent-tool-call-details {
