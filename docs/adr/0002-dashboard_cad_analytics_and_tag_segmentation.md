@@ -4,7 +4,7 @@
 - Date: 2026-02-09
 - Deciders: Bill Helper maintainers
 
-Superseded by `0005-filter-group-analytics.md`.
+Superseded by `0005-filter_group_analytics.md`.
 
 ## Context
 

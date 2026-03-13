@@ -6,8 +6,8 @@ This file is the iOS index. Use it to find the native-client docs under `../ios/
 
 - `../ios/README.md`: local package overview, run loop, and verification commands.
 - `../ios/docs/README.md`: topic map for iOS-specific behavior docs.
-- `../ios/docs/dashboard-and-entries-mvp.md`: dashboard and entries MVP behavior.
-- `../ios/docs/agent-mvp.md`: agent thread, upload, run-state, and review behavior.
+- `../ios/docs/dashboard_and_entries_mvp.md`: dashboard and entries MVP behavior.
+- `../ios/docs/agent_mvp.md`: agent thread, upload, run-state, and review behavior.
 
 ## Stable Boundaries
 
@@ -20,4 +20,4 @@ This file is the iOS index. Use it to find the native-client docs under `../ios/
 
 - `docs/development.md`
 - `docs/api.md`
-- `docs/repository-structure.md`
+- `docs/repository_structure.md`

@@ -6,9 +6,9 @@ This file is the backend index. Use it to find the focused backend docs under `.
 
 - `../backend/README.md`: local package navigation and change checklist.
 - `../backend/docs/README.md`: topic map and fastest path to the right backend doc.
-- `../backend/docs/runtime-and-config.md`: runtime entrypoints, configuration, and database bootstrap.
-- `../backend/docs/domain-and-http.md`: models, schemas, core services, router boundaries, and non-agent HTTP behavior.
-- `../backend/docs/agent-subsystem.md`: agent runtime, tools, review flow, and agent API ownership.
+- `../backend/docs/runtime_and_config.md`: runtime entrypoints, configuration, and database bootstrap.
+- `../backend/docs/domain_and_http.md`: models, schemas, core services, router boundaries, and non-agent HTTP behavior.
+- `../backend/docs/agent_subsystem.md`: agent runtime, tools, review flow, and agent API ownership.
 - `../backend/docs/operations.md`: migrations, test coverage, operational impact, and current constraints.
 
 ## Stable Boundaries
@@ -34,5 +34,5 @@ This file is the backend index. Use it to find the focused backend docs under `.
 ## Related Docs
 
 - `docs/api.md`
-- `docs/data-model.md`
-- `docs/repository-structure.md`
+- `docs/data_model.md`
+- `docs/repository_structure.md`

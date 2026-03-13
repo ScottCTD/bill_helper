@@ -22,4 +22,4 @@ That model was too narrow for ordinary budgeting questions such as fixed vs disc
 - Analytics classification is now user-visible, durable, and reusable instead of being a dashboard-local special case.
 - Default groups can overlap with custom groups, so summed filter-group shares may exceed `100%`.
 - The rule model is intentionally narrow in v1 (`entry_kind`, tags, `is_internal_transfer`, nested `AND`/`OR`) but extensible without changing the user-facing concept.
-- `0002-dashboard-cad-analytics-and-tag-segmentation.md` is superseded for classification behavior, but CAD-scoped runtime currency selection remains in effect.
+- `0002-dashboard_cad_analytics_and_tag_segmentation.md` is superseded for classification behavior, but CAD-scoped runtime currency selection remains in effect.

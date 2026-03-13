@@ -273,10 +273,10 @@ New admin-only UI section (route: `/admin`):
 - [ ] Manual smoke test: login, create data, login as different user, verify isolation
 
 ### Phase 5: Documentation
-- [ ] Update `docs/data-model.md` — new tables, changed columns, cascade rules
+- [ ] Update `docs/data_model.md` — new tables, changed columns, cascade rules
 - [ ] Update `docs/api.md` — new auth/admin endpoints, removed header auth
 - [ ] Update relevant `backend/docs/*.md`
-- [ ] Update `docs/repository-structure.md` if new files added
+- [ ] Update `docs/repository_structure.md` if new files added
 - [ ] Update `README.md` setup instructions (initial admin user creation)
 
 ## Design Decisions

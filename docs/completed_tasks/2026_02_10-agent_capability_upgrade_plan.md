@@ -199,7 +199,7 @@ Implementation sketch:
   - `backend/tests/test_agent.py`
   - additional tests for selector ambiguity, retry behavior, and continuation context
 - Docs:
-  - `docs/agent-billing-assistant.md`
+  - `docs/agent_billing_assistant.md`
   - `docs/backend.md`
   - `docs/api.md`
   - `docs/architecture.md`

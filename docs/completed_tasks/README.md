@@ -9,17 +9,17 @@ This directory stores archived task docs after active work in `/tasks/*.md` is f
 
 ## Rules
 
-- Name files `YYYY-MM-DD_slug.md`.
+- Name files `YYYY_MM_DD-task_name.md`.
 - Keep each task doc focused on one change or refactor.
 - When work lands, update the canonical docs in the stable `docs/` tree.
 - Do not leave stable behavior documented only in a task doc or archive entry.
 
 ## Recent Archived Tasks
 
-- `2026-03-12_multi_user_security.md`: archived task for password-backed sessions, user-owned resource scoping, admin impersonation, and web auth flow migration.
-- `2026-03-09_parallel_agent_thread.md`: archived task for thread-scoped agent composer controls and parallel thread activity UX.
-- `2026-03-09_entry_entity_label_repair_and_agent_selector_fix.md`: archived fix log for entry entity-label corruption and agent update selector approval failures.
-- `2026-03-10_markdown_editor_vite_fix_log.md`: archived fix log for the BlockNote markdown editor runtime/import failures and Vite dep-cache restart hardening.
-- `2026-03-11_interval_reconciliation.md`: archived task for interval-based account reconciliation, account-modal snapshot management, and snapshot proposal review.
-- `2026-03-08_telegram_bot_todo.md`: archived Telegram integration implementation task.
-- `2026-03-05_clean_architecture_fix_log.md`: archived desloppify and architecture fix log.
+- `2026_03_12_multi_user_security.md`: archived task for password-backed sessions, user-owned resource scoping, admin impersonation, and web auth flow migration.
+- `2026_03_09_parallel_agent_thread.md`: archived task for thread-scoped agent composer controls and parallel thread activity UX.
+- `2026_03_09_entry_entity_label_repair_and_agent_selector_fix.md`: archived fix log for entry entity-label corruption and agent update selector approval failures.
+- `2026_03_10_markdown_editor_vite_fix_log.md`: archived fix log for the BlockNote markdown editor runtime/import failures and Vite dep-cache restart hardening.
+- `2026_03_11_interval_reconciliation.md`: archived task for interval-based account reconciliation, account-modal snapshot management, and snapshot proposal review.
+- `2026_03_08_telegram_bot_todo.md`: archived Telegram integration implementation task.
+- `2026_03_05_clean_architecture_fix_log.md`: archived desloppify and architecture fix log.

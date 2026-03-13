@@ -4,7 +4,7 @@
 
 Create a Docker setup so the entire app can run with `docker compose up`.
 Keep it simple for now (pre-alpha prototype). Design for future extensibility
-(sandbox containers per the agent-workspace plan in `tasks/2026-03-03_agent_workspace.md`).
+(sandbox containers per the agent-workspace plan in `tasks/2026_03_03-agent_workspace.md`).
 
 ## Architecture
 
@@ -237,7 +237,7 @@ Add a Docker section to the existing `.env.example`:
 - [ ] Test: `docker compose --profile telegram up` — verify telegram starts
 - [ ] Test: API calls work through the same port (`/api/v1/...`)
 - [ ] Update `README.md` with Docker quickstart section
-- [ ] Update `docs/repository-structure.md` with new files
+- [ ] Update `docs/repository_structure.md` with new files
 - [ ] Run `uv run python scripts/check_docs_sync.py`
 
 ## Design Decisions

@@ -462,12 +462,12 @@ Manual QA should explicitly cover:
 
 When the redesign is implemented, update the stable docs that describe current behavior:
 
-- `frontend/docs/styles-and-operations.md`
-- `frontend/docs/app-shell-and-routing.md`
+- `frontend/docs/styles_and_operations.md`
+- `frontend/docs/app_shell_and_routing.md`
 - `frontend/docs/workspaces.md`
-- `frontend/docs/agent-workspace.md`
+- `frontend/docs/agent_workspace.md`
 - `docs/frontend_index.md` if the stable frontend doc map changes
-- `docs/features/dashboard-analytics.md` only if dashboard interaction or information architecture changes materially
+- `docs/features/dashboard_analytics.md` only if dashboard interaction or information architecture changes materially
 
 ## Risks And Mitigations
 

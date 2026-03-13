@@ -6,7 +6,7 @@ Start with `../README.md` for the package overview, run commands, and config sum
 
 ## Files
 
-- `implementation-notes.md`: PTB application flow, key modules, backend adapter boundaries, state persistence, and the `telegram/ptb.py` shim.
+- `implementation_notes.md`: PTB application flow, key modules, backend adapter boundaries, state persistence, and the `telegram/ptb.py` shim.
 
 ## Scope
 

@@ -6,15 +6,15 @@ Use the docs in layers:
 
 1. `README.md` for onboarding and the dev loop.
 2. `docs/architecture.md` for the system mental model.
-3. `docs/repository-structure.md` for the filesystem map.
-4. `docs/backend_index.md`, `docs/frontend_index.md`, `docs/ios_index.md`, `docs/telegram_index.md`, `docs/api.md`, and `docs/data-model.md` for subsystem entry points.
+3. `docs/repository_structure.md` for the filesystem map.
+4. `docs/backend_index.md`, `docs/frontend_index.md`, `docs/ios_index.md`, `docs/telegram_index.md`, `docs/api.md`, and `docs/data_model.md` for subsystem entry points.
 5. `../backend/docs/`, `../frontend/docs/`, `../ios/docs/`, `../telegram/docs/`, `docs/api/`, and `docs/features/` for focused subsystem docs.
 6. `../tasks/` for active implementation tracking and `completed_tasks/` for archived task history.
 
 ## Stable Reference Docs
 
 - `architecture.md`: system topology, boundaries, and major design choices.
-- `repository-structure.md`: filesystem map and ownership boundaries.
+- `repository_structure.md`: filesystem map and ownership boundaries.
 - `backend_index.md`: backend index linking to focused backend docs under `../backend/docs/`.
 - `../backend/docs/README.md`: backend topic map.
 - `frontend_index.md`: frontend index linking to focused frontend docs under `../frontend/docs/`.
@@ -23,14 +23,14 @@ Use the docs in layers:
 - `telegram_index.md`: Telegram index linking to `../telegram/README.md` and `../telegram/docs/`.
 - `api.md`: API index for `/api/v1`.
 - `api/README.md`: API route-family topic map.
-- `data-model.md`: schema and domain-model rules.
+- `data_model.md`: schema and domain-model rules.
 - `development.md`: setup, commands, and contributor workflow.
-- `documentation-system.md`: doc ownership rules and anti-drift process.
+- `documentation_system.md`: doc ownership rules and anti-drift process.
 - `features/README.md`: cross-cutting feature-doc index.
-- `features/entry-lifecycle.md`: focused entry-domain flow map.
-- `features/dashboard-analytics.md`: focused dashboard analytics flow map.
-- `features/account-reconciliation.md`: focused account reconciliation flow map.
-- `agent-billing-assistant.md`: billing assistant prompt/tool design notes.
+- `features/entry_lifecycle.md`: focused entry-domain flow map.
+- `features/dashboard_analytics.md`: focused dashboard analytics flow map.
+- `features/account_reconciliation.md`: focused account reconciliation flow map.
+- `agent_billing_assistant.md`: billing assistant prompt/tool design notes.
 - `adr/README.md`: ADR index and process.
 
 ## Task Tracking And Archive
@@ -56,4 +56,4 @@ The package-local `backend/docs/` and `frontend/docs/` directories are canonical
 
 ## Naming Rule
 
-Task files must use a date prefix: `YYYY-MM-DD_slug.md`.
+Task files must use a date prefix: `YYYY_MM_DD-task_name.md`.

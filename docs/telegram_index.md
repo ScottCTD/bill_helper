@@ -6,7 +6,7 @@ This file is the Telegram index. Use it to find the transport docs under `../tel
 
 - `../telegram/README.md`: local package overview, run commands, and config summary.
 - `../telegram/docs/README.md`: topic map for Telegram-specific behavior docs.
-- `../telegram/docs/implementation-notes.md`: PTB wiring, backend adapter flow, state persistence, and shim notes.
+- `../telegram/docs/implementation_notes.md`: PTB wiring, backend adapter flow, state persistence, and shim notes.
 
 ## Stable Boundaries
 

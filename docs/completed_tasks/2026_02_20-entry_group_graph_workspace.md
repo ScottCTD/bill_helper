@@ -98,7 +98,7 @@ Add a complete frontend workflow for entry groups where each group is represente
   - `docs/frontend.md`
   - `docs/backend.md`
   - `docs/api.md`
-  - `docs/feature-entry-lifecycle.md`
+  - `docs/features/entry_lifecycle.md`
 
 ## Operational Impact
 

@@ -181,5 +181,5 @@ Endpoints:
 ## Related Docs
 
 - `docs/api/agent.md`
-- `docs/agent-billing-assistant.md`
+- `docs/agent_billing_assistant.md`
 - `docs/architecture.md`

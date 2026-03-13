@@ -79,4 +79,4 @@ Entry detail no longer exposes:
 
 ## Follow-Up Decision
 
-- Archived at `docs/completed_tasks/2026-03-07_entry_groups.md` after implementation and verification.
+- Archived at `docs/completed_tasks/2026_03_07-entry_groups.md` after implementation and verification.

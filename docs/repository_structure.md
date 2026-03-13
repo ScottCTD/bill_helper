@@ -77,7 +77,7 @@
 - `validation/`: neutral validation/normalization helpers plus shared contract field types used by schemas, services, and tool-input models.
 - `main.py`: FastAPI app creation, routing, CORS, health check.
 - `README.md`: thin backend-local navigation doc that points to canonical docs.
-- `docs/`: package-local backend subsystem docs (`README.md`, `runtime-and-config.md`, `domain-and-http.md`, `agent-subsystem.md`, `operations.md`).
+- `docs/`: package-local backend subsystem docs (`README.md`, `runtime_and_config.md`, `domain_and_http.md`, `agent_subsystem.md`, `operations.md`).
 
 ### Backend Routers (`/backend/routers`)
 
@@ -166,7 +166,7 @@
 - `tsconfig.json`: TypeScript compiler settings.
 - `index.html`: Vite app shell.
 - `README.md`: thin frontend-local navigation doc that points to canonical docs.
-- `docs/`: package-local frontend subsystem docs (`README.md`, `app-shell-and-routing.md`, `client-and-state.md`, `workspaces.md`, `agent-workspace.md`, `styles-and-operations.md`).
+- `docs/`: package-local frontend subsystem docs (`README.md`, `app_shell_and_routing.md`, `client_and_state.md`, `workspaces.md`, `agent_workspace.md`, `styles_and_operations.md`).
 
 ### Frontend Source (`/frontend/src`)
 
@@ -253,11 +253,11 @@
   - `backend_index.md`, `frontend_index.md`, `ios_index.md`, `telegram_index.md`, `api.md`: subsystem index docs.
   - `/api`: focused API topic docs.
   - `/features`: cross-cutting feature docs and feature index.
-  - `documentation-system.md`: source-of-truth matrix + anti-drift workflow.
+  - `documentation_system.md`: source-of-truth matrix + anti-drift workflow.
   - `/completed_tasks`: archived task docs, retrospectives, and fix logs.
-  - `features/entry-lifecycle.md`: entry-domain flow map.
-  - `features/dashboard-analytics.md`: dashboard flow map.
-  - `features/account-reconciliation.md`: account workspace + snapshot/reconciliation flow map.
+  - `features/entry_lifecycle.md`: entry-domain flow map.
+  - `features/dashboard_analytics.md`: dashboard flow map.
+  - `features/account_reconciliation.md`: account workspace + snapshot/reconciliation flow map.
   - `/adr`: architecture decision records.
 - `/tasks`: active implementation plans, temporary caveats, and migration checklists.
 - `/skills/frontend-ui-builder/SKILL.md`: project-local frontend build skill focused on shared layout primitives, explicit scroll/overlay ownership, concise copy, and preserving bespoke high-value interactions.

@@ -574,7 +574,7 @@ When implementation starts, update at minimum:
    - agent runtime/services/routers
 3. `docs/api.md`
    - full `agent` endpoint contract
-4. `docs/data-model.md`
+4. `docs/data_model.md`
    - new agent tables and state fields
 5. `docs/frontend.md`
    - agent panel architecture and interaction flow

@@ -17,7 +17,7 @@ The docs in this repository are intentionally layered. Do not use one file for e
 ## Boundary Rules
 
 - System architecture belongs in `docs/architecture.md`, not in `AGENTS.md`.
-- Filesystem mapping belongs in `docs/repository-structure.md`, not in package READMEs.
+- Filesystem mapping belongs in `docs/repository_structure.md`, not in package READMEs.
 - Top-level subsystem files (`docs/backend_index.md`, `docs/frontend_index.md`, `docs/ios_index.md`, `docs/telegram_index.md`, `docs/api.md`) are indexes, not dumping grounds.
 - Stable backend behavior belongs in `backend/docs/*.md`.
 - Stable frontend behavior belongs in `frontend/docs/*.md`.
@@ -32,15 +32,15 @@ The docs in this repository are intentionally layered. Do not use one file for e
 | Topic | Primary Source | Secondary References |
 | --- | --- | --- |
 | Project setup and dev loop | `README.md` | `docs/development.md` |
-| Documentation policy | `docs/documentation-system.md` | `AGENTS.md`, `docs/README.md` |
+| Documentation policy | `docs/documentation_system.md` | `AGENTS.md`, `docs/README.md` |
 | System architecture | `docs/architecture.md` | ADRs, `docs/backend_index.md`, `docs/frontend_index.md` |
-| Repository layout | `docs/repository-structure.md` | `docs/README.md`, package READMEs |
+| Repository layout | `docs/repository_structure.md` | `docs/README.md`, package READMEs |
 | Backend architecture and operations | `docs/backend_index.md`, `backend/docs/*.md` | `backend/README.md`, `docs/development.md` |
 | Frontend architecture and operations | `docs/frontend_index.md`, `frontend/docs/*.md` | `frontend/README.md`, `docs/development.md` |
 | iOS client behavior | `docs/ios_index.md`, `ios/docs/*.md` | `ios/README.md`, `docs/development.md` |
 | Telegram transport behavior | `docs/telegram_index.md`, `telegram/docs/*.md` | `telegram/README.md`, `docs/development.md` |
 | API contract | `docs/api.md`, `docs/api/*.md` | `docs/backend_index.md`, feature docs |
-| Data schema and persistence | `docs/data-model.md` | `docs/backend_index.md`, ADRs |
+| Data schema and persistence | `docs/data_model.md` | `docs/backend_index.md`, ADRs |
 | Feature deep dives | `docs/features/*.md` | `docs/backend_index.md`, `docs/frontend_index.md` |
 | Active implementation work | `tasks/*.md` | issue or thread context |
 | Historical implementation context | `docs/completed_tasks/*.md` | ADRs, stable docs |
@@ -51,7 +51,7 @@ If documents conflict, update the primary source first and trim stale secondary 
 ## Update Protocol
 
 - API change: update the relevant `docs/api/*.md` files and keep `docs/api.md` current when route-family navigation changed.
-- Schema or migration change: update `docs/data-model.md`, the relevant `backend/docs/*.md` files, and `docs/repository-structure.md` if file maps or migration lists changed.
+- Schema or migration change: update `docs/data_model.md`, the relevant `backend/docs/*.md` files, and `docs/repository_structure.md` if file maps or migration lists changed.
 - Backend behavior change: update the relevant `backend/docs/*.md` files and the relevant feature doc.
 - Frontend behavior or UX change: update the relevant `frontend/docs/*.md` files and the relevant feature doc.
 - Workflow, setup, or tooling change: update `README.md`, `docs/development.md`, and this file. Include any cache-reset, conditional service startup, log-prefixing, wrapper-to-Python launcher changes, isolated browser-test harnesses, or restart behavior added to local scripts so the dev loop stays reproducible.
@@ -63,7 +63,7 @@ If documents conflict, update the primary source first and trim stale secondary 
 
 - Use `tasks/*.md` for work in progress.
 - Move finished task docs that are worth keeping to `docs/completed_tasks/`.
-- Name task files `YYYY-MM-DD_slug.md`.
+- Name task files `YYYY_MM_DD-task_name.md`.
 - Do not treat task docs as the source of truth for current behavior after the work lands.
 
 ## Drift Prevention

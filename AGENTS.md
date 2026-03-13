@@ -7,6 +7,7 @@ These rules apply to any coding agent working in this repository.
 - This project is a prototype. Prefer simplification and replacement over compatibility shims.
 - Use `uv` for Python dependency management, scripts, tests, and tooling.
 - Keep docs synchronized with code changes in the same work item.
+- Except for preserved special filenames such as `README.md`, `AGENTS.md`, and `SKILL.md`, name non-code files in lowercase ASCII with hyphens between semantic fields, underscores within each field, and dates written as `YYYY_MM_DD`, for example `2026_03_13-agent_workspace.md`.
 
 ## Architecture Standards
 
@@ -61,10 +62,10 @@ These rules apply to any coding agent working in this repository.
 ### Required Doc Updates
 
 - API contract changes: update the relevant `/docs/api/*.md` files and keep `/docs/api.md` current when the route-family map changes.
-- Data model or migration changes: update `/docs/data-model.md`, `/docs/backend_index.md`, the relevant `/backend/docs/*.md` files, and `/docs/repository-structure.md` when file maps or migration lists changed.
+- Data model or migration changes: update `/docs/data_model.md`, `/docs/backend_index.md`, the relevant `/backend/docs/*.md` files, and `/docs/repository_structure.md` when file maps or migration lists changed.
 - Backend behavior changes: update the relevant `/backend/docs/*.md` files and any affected `/docs/features/*.md`.
 - Frontend behavior changes: update the relevant `/frontend/docs/*.md` files and any affected `/docs/features/*.md`.
-- Cross-cutting workflow or tooling changes: update `/README.md`, `/docs/development.md`, and `/docs/documentation-system.md`.
+- Cross-cutting workflow or tooling changes: update `/README.md`, `/docs/development.md`, and `/docs/documentation_system.md`.
 - Major architectural decisions: add or update an ADR under `/docs/adr/`.
 - When introducing or removing docs, keep `/docs/README.md` current.
 

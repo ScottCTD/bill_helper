@@ -151,18 +151,18 @@ Extended docs live in [`docs/`](docs/):
 
 - [Docs Index](docs/README.md)
 - [Architecture](docs/architecture.md)
-- [Repository Structure](docs/repository-structure.md)
+- [Repository Structure](docs/repository_structure.md)
 - [Backend](docs/backend_index.md)
 - [Frontend](docs/frontend_index.md)
 - [API](docs/api.md)
 - [iOS](docs/ios_index.md)
 - [Telegram](docs/telegram_index.md)
 - [Features](docs/features/README.md)
-- [Data Model](docs/data-model.md)
+- [Data Model](docs/data_model.md)
 - [Development Guide](docs/development.md)
-- [Documentation System](docs/documentation-system.md)
+- [Documentation System](docs/documentation_system.md)
 - [Completed Tasks Archive](docs/completed_tasks/README.md)
-- [Agent Billing Assistant](docs/agent-billing-assistant.md)
+- [Agent Billing Assistant](docs/agent_billing_assistant.md)
 
 Focused backend and frontend subsystem docs live in [`backend/docs/`](backend/docs/) and [`frontend/docs/`](frontend/docs/). Package-local navigation docs stay intentionally thin and point into those subsystem docs plus the top-level indexes.
 

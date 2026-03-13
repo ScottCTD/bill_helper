@@ -504,11 +504,11 @@ The current dashboard classifies expenses using a primitive `daily` / `non-daily
 ### Phase 5: Docs & Cleanup
 
 **5.1 — Update documentation**
-- `docs/data-model.md`: Add `filter_groups` table documentation.
+- `docs/data_model.md`: Add `filter_groups` table documentation.
 - `docs/api.md` / `docs/api/*.md`: Document new `/filter-groups` endpoints and dashboard schema changes.
 - `backend/docs/*.md`: Update service and router docs.
 - `frontend/docs/*.md`: Update dashboard and new page docs.
-- `docs/repository-structure.md`: Update if file structure changed.
+- `docs/repository_structure.md`: Update if file structure changed.
 
 **5.2 — Update seed scripts**
 - Ensure `seed_defaults.py` creates filter groups.
@@ -520,7 +520,7 @@ The current dashboard classifies expenses using a primitive `daily` / `non-daily
 - `uv run python scripts/check_docs_sync.py`.
 
 **5.4 — Move task doc to completed**
-- Move `tasks/2026-03-09_daily_expense_classification.md` → `docs/completed_tasks/`.
+- Move `tasks/2026_03_09_daily_expense_classification.md` → `docs/completed_tasks/`.
 
 ## Open Design Decisions (to resolve during implementation)
 

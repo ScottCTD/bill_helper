@@ -42,5 +42,5 @@ This is the main local entry point for the native iOS client shipped in this rep
 - start here for the local iOS overview
 - see `../docs/ios_index.md` for the cross-repo iOS entry point
 - see `docs/README.md` for iOS-specific detail docs
-- see `docs/dashboard-and-entries-mvp.md` for dashboard and entries behavior
-- see `docs/agent-mvp.md` for thread, upload, run-state, and review behavior
+- see `docs/dashboard_and_entries_mvp.md` for dashboard and entries behavior
+- see `docs/agent_mvp.md` for thread, upload, run-state, and review behavior

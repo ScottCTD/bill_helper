@@ -476,9 +476,9 @@ The implementation should update the relevant stable docs in the same work item.
 
 Expected doc touch points:
 
-- `docs/api/catalogs-and-settings.md`
-- `docs/api/core-ledger.md` if the new route lands under the entries API
-- `backend/docs/runtime-and-config.md`
+- `docs/api/catalogs_and_settings.md`
+- `docs/api/core_ledger.md` if the new route lands under the entries API
+- `backend/docs/runtime_and_config.md`
 - `frontend/docs/workspaces.md` if the entry editor behavior changes are
   documented there
 - `docs/README.md` if a new stable doc is introduced

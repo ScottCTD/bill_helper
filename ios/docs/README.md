@@ -6,8 +6,8 @@ Start with `../README.md` for the current shipped iOS MVP summary and `ios/` fol
 
 ## Files
 
-- `agent-mvp.md`: agent thread list/detail, upload, run-state, and review behavior for the Wave 2 native MVP.
-- `dashboard-and-entries-mvp.md`: dashboard summary and entries list behavior for the Wave 2 native MVP.
+- `agent_mvp.md`: agent thread list/detail, upload, run-state, and review behavior for the Wave 2 native MVP.
+- `dashboard_and_entries_mvp.md`: dashboard summary and entries list behavior for the Wave 2 native MVP.
 
 ## Scope
 

@@ -114,7 +114,7 @@ Current rules:
 
 ## Related Docs
 
-- `docs/api/core-ledger.md`
-- `docs/api/catalogs-and-settings.md`
+- `docs/api/core_ledger.md`
+- `docs/api/catalogs_and_settings.md`
 - `docs/api/agent.md`
-- `docs/data-model.md`
+- `docs/data_model.md`

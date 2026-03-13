@@ -8,7 +8,7 @@ This file is intentionally thin. Canonical frontend documentation lives in `./do
 - `./docs/README.md`
 - `../docs/api.md`
 - `../docs/development.md`
-- `../docs/repository-structure.md`
+- `../docs/repository_structure.md`
 
 ## High-Frequency Paths
 

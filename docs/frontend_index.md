@@ -6,11 +6,11 @@ This file is the frontend index. Use it to find the focused frontend docs under 
 
 - `../frontend/README.md`: local package navigation and change checklist.
 - `../frontend/docs/README.md`: topic map and fastest path to the right frontend doc.
-- `../frontend/docs/app-shell-and-routing.md`: stack, runtime, app shell, and route layout.
-- `../frontend/docs/client-and-state.md`: shared client layer, types, query keys, and invalidation.
+- `../frontend/docs/app_shell_and_routing.md`: stack, runtime, app shell, and route layout.
+- `../frontend/docs/client_and_state.md`: shared client layer, types, query keys, and invalidation.
 - `../frontend/docs/workspaces.md`: page and workspace behavior outside the agent panel.
-- `../frontend/docs/agent-workspace.md`: agent page, timeline, review modal, and composer behavior.
-- `../frontend/docs/styles-and-operations.md`: shared components, styling system, operational impact, and constraints.
+- `../frontend/docs/agent_workspace.md`: agent page, timeline, review modal, and composer behavior.
+- `../frontend/docs/styles_and_operations.md`: shared components, styling system, operational impact, and constraints.
 
 ## Stable Boundaries
 
@@ -23,5 +23,5 @@ This file is the frontend index. Use it to find the focused frontend docs under 
 
 - `docs/api.md`
 - `docs/backend_index.md`
-- `docs/features/account-reconciliation.md`
-- `docs/features/dashboard-analytics.md`
+- `docs/features/account_reconciliation.md`
+- `docs/features/dashboard_analytics.md`

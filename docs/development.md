@@ -357,7 +357,7 @@ Affected files/modules:
 
 - `/path/to/bill_helper/AGENTS.md`
 - `/path/to/bill_helper/skills/desloppify-maintenance/SKILL.md`
-- `/path/to/bill_helper/docs/completed_tasks/2026-03-05_clean_architecture_fix_log.md`
+- `/path/to/bill_helper/docs/completed_tasks/2026_03_05-clean_architecture_fix_log.md`
 
 Constraints:
 

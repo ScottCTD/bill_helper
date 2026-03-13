@@ -7,8 +7,8 @@ This file is intentionally thin. Canonical backend documentation lives in `./doc
 - `../docs/backend_index.md`
 - `./docs/README.md`
 - `../docs/api.md`
-- `../docs/data-model.md`
-- `../docs/repository-structure.md`
+- `../docs/data_model.md`
+- `../docs/repository_structure.md`
 
 ## High-Frequency Paths
 
@@ -23,7 +23,7 @@ This file is intentionally thin. Canonical backend documentation lives in `./doc
 
 - Update the relevant `./docs/*.md` files and keep `../docs/backend_index.md` current when the topic map changes.
 - Update the relevant `../docs/api/*.md` files for contract changes and keep `../docs/api.md` current when route-family navigation changes.
-- Update `../docs/data-model.md` and `../docs/repository-structure.md` for schema or migration changes.
+- Update `../docs/data_model.md` and `../docs/repository_structure.md` for schema or migration changes.
 - Update the relevant `../docs/feature-*.md` when user-facing flows changed.
 
 ## Verify

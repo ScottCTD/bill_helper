@@ -169,12 +169,12 @@ class Settings(BaseSettings):
 | `docs/backend.md` | Config section updated with cascade + `data_dir` |
 | `docs/architecture.md` | DB and upload paths use `{data_dir}` |
 | `docs/api.md` | Upload path references updated |
-| `docs/data-model.md` | Upload path references updated |
-| `docs/high-level-data-flow.md` | Mermaid diagram updated |
-| `docs/agent-billing-assistant.md` | Upload cleanup path updated |
-| `docs/repository-structure.md` | Added `.env.example`, `setup_shared_env.sh`, updated `.data` note |
+| `docs/data_model.md` | Upload path references updated |
+| `docs/high_level_data_flow.md` | Mermaid diagram updated |
+| `docs/agent_billing_assistant.md` | Upload cleanup path updated |
+| `docs/repository_structure.md` | Added `.env.example`, `setup_shared_env.sh`, updated `.data` note |
 | `docs/README.md` | Added ADR index entry |
-| `docs/adr/0003-xdg-shared-config-and-data.md` | Full architecture decision record |
+| `docs/adr/0003-xdg_shared_config_and_data.md` | Full architecture decision record |
 
 ## Worktree Quick Reference
 

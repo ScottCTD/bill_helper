@@ -16,7 +16,7 @@ The current Telegram transport is a working MVP: allowlist-gated private chat bo
 4. **No dashboard access** — the backend serves rich dashboard data (`/dashboard?month=YYYY-MM`) but the Telegram bot can't show any of it.
 5. **Missing polish** — no `typing` indicator during processing, only `["message"]` updates registered, no command auto-complete menu.
 
-**Reference docs:** `docs/agent-billing-assistant.md` (agent behavior, tools, system prompt), `backend/docs/agent-subsystem.md` (SSE events, runtime loop, review workflow).
+**Reference docs:** `docs/agent_billing_assistant.md` (agent behavior, tools, system prompt), `backend/docs/agent_subsystem.md` (SSE events, runtime loop, review workflow).
 
 ---
 

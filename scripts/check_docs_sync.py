@@ -56,7 +56,7 @@ def assert_task_layout(errors: list[str]) -> None:
 def assert_latest_migration_referenced(latest_migration: str, errors: list[str]) -> None:
     required_reference_docs = [
         DOCS_DIR / "backend_index.md",
-        DOCS_DIR / "repository-structure.md",
+        DOCS_DIR / "repository_structure.md",
     ]
     latest_revision_token = latest_migration.removesuffix(".py")
     for path in required_reference_docs:
@@ -136,7 +136,7 @@ def assert_docs_index_links(errors: list[str]) -> None:
     index_contents = read_text(index_path)
     required_mentions = [
         "../tasks/",
-        "documentation-system.md",
+        "documentation_system.md",
         "backend_index.md",
         "frontend_index.md",
         "ios_index.md",
@@ -150,8 +150,8 @@ def assert_docs_index_links(errors: list[str]) -> None:
         "api/README.md",
         "features/README.md",
         "completed_tasks/README.md",
-        "features/entry-lifecycle.md",
-        "features/dashboard-analytics.md",
+        "features/entry_lifecycle.md",
+        "features/dashboard_analytics.md",
         "adr/README.md",
     ]
     for mention in required_mentions:
@@ -210,12 +210,12 @@ def main() -> int:
         DOCS_DIR / "ios_index.md",
         DOCS_DIR / "telegram_index.md",
         DOCS_DIR / "api.md",
-        DOCS_DIR / "documentation-system.md",
+        DOCS_DIR / "documentation_system.md",
         DOCS_DIR / "api" / "README.md",
         DOCS_DIR / "features" / "README.md",
         DOCS_DIR / "completed_tasks" / "README.md",
-        DOCS_DIR / "features" / "entry-lifecycle.md",
-        DOCS_DIR / "features" / "dashboard-analytics.md",
+        DOCS_DIR / "features" / "entry_lifecycle.md",
+        DOCS_DIR / "features" / "dashboard_analytics.md",
         DOCS_DIR / "adr" / "README.md",
     ]
     assert_exists(required_paths, errors)
