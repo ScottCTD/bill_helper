@@ -9,6 +9,22 @@ These rules apply to any coding agent working in this repository.
 - Keep docs synchronized with code changes in the same work item.
 - Except for preserved special filenames such as `README.md`, `AGENTS.md`, and `SKILL.md`, name non-code files in lowercase ASCII with hyphens between semantic fields, underscores within each field, and dates written as `YYYY_MM_DD`, for example `2026_03_13-agent_workspace.md`.
 
+## LLM-Oriented Design
+
+- Treat `docs/llm_oriented_design.md` as the mandatory design baseline for all non-iOS code in this repository.
+- `AGENTS.md` is the repo-specific enforcement layer. If a subtree needs a temporary exception, write it explicitly in `AGENTS.md` or a nested subtree `AGENTS.md`; never infer exceptions.
+- Hard rules for non-iOS production code:
+  - max file size: `800` LOC
+  - one file, one responsibility
+  - every module begins with a calling spec block
+  - prefer pure functions over methods when object state is unnecessary
+  - prefer dict dispatch and thin registries over factory / strategy indirection
+  - keep deterministic logic in standalone, tested helpers or tools
+  - keep entrypoints and coordinators as slim recipe-style orchestrators
+  - separate schema-like contracts from mutation or orchestration logic
+  - request/config models should reject unknown fields unless a documented exception is required
+- Temporary exception: the existing `ios/` subtree is deferred for this migration batch. Do not expand iOS architecture scope during unrelated work, and do not use the iOS defer as justification elsewhere.
+
 ## Architecture Standards
 
 ### Ownership Boundaries
@@ -44,6 +60,7 @@ These rules apply to any coding agent working in this repository.
 
 - `uv run python -m py_compile ...` on touched Python modules
 - `OPENROUTER_API_KEY=test uv run pytest backend/tests -q`
+- `uv run python scripts/check_llm_design.py`
 - `uv run python scripts/check_docs_sync.py`
 
 ## Documentation

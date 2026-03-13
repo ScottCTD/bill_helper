@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `modalHelpers` frontend module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/modalHelpers.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `modalHelpers`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import { AlertTriangle, Check, CheckCheck, type LucideIcon, X } from "lucide-react";
 
 import type { AgentChangeItem, AgentChangeStatus, AgentChangeType, Currency } from "../../../lib/types";

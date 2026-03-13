@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `contracts_groups` module.
+# - Inputs: callers that import `backend/contracts_groups.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `contracts_groups`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from typing import Annotated, Literal

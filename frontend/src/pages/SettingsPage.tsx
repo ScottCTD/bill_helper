@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `SettingsPage` React UI module.
+ * - Inputs: callers that import `frontend/src/pages/SettingsPage.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `SettingsPage`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { SettingsAgentSection } from "../features/settings/SettingsAgentSection";
 import { SettingsGeneralSection } from "../features/settings/SettingsGeneralSection";
 import { ResetSettingsDialog } from "../features/settings/ResetSettingsDialog";

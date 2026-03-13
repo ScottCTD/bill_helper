@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `form-field` React UI module.
+ * - Inputs: callers that import `frontend/src/components/ui/form-field.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `form-field`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import * as React from "react";
 
 import { cn } from "../../lib/utils";

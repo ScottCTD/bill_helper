@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `attachment_content_pdf`.
+# - Inputs: callers that import `backend/services/agent/attachment_content_pdf.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `attachment_content_pdf`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 import base64

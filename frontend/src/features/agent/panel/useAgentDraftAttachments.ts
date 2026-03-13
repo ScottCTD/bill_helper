@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useAgentDraftAttachments` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/useAgentDraftAttachments.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useAgentDraftAttachments`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import {
   type ChangeEvent,
   type ClipboardEvent,

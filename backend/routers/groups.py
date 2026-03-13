@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: translate HTTP requests and responses for `groups` routes.
+# - Inputs: callers that import `backend/routers/groups.py` and pass module-defined arguments or framework events.
+# - Outputs: router callables and request/response adapters for `groups`.
+# - Side effects: FastAPI routing and HTTP error translation.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, status

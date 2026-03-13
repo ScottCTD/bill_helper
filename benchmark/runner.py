@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide benchmark support for `runner`.
+# - Inputs: callers that import `benchmark/runner.py` and pass module-defined arguments or framework events.
+# - Outputs: benchmark helpers, contracts, or entrypoints for `runner`.
+# - Side effects: benchmark data loading, execution, or reporting as implemented below.
 """Benchmark runner: execute cases against a model and capture results + traces.
 
 Usage:
@@ -64,7 +69,7 @@ def _git_sha() -> str | None:
             timeout=5,
         )
         return result.stdout.strip() or None
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         return None
 
 
@@ -160,25 +165,28 @@ def _close_case_resources(
     engine: Any,
     temp_path: Path,
 ) -> None:
-    def _log_cleanup_failure(stage: str, error: Exception) -> None:
-        logger.warning(
-            "benchmark cleanup step failed",
-            extra={"stage": stage, "error_type": type(error).__name__, "error": str(error)},
-        )
-
     if db is not None:
         try:
             db.close()
         except Exception as exc:
-            _log_cleanup_failure("session_close", exc)
+            logger.warning(
+                "benchmark cleanup step failed",
+                extra={"stage": "session_close", "error_type": type(exc).__name__, "error": str(exc)},
+            )
     try:
         engine.dispose()
     except Exception as exc:
-        _log_cleanup_failure("engine_dispose", exc)
+        logger.warning(
+            "benchmark cleanup step failed",
+            extra={"stage": "engine_dispose", "error_type": type(exc).__name__, "error": str(exc)},
+        )
     try:
         temp_path.unlink(missing_ok=True)
     except Exception as exc:
-        _log_cleanup_failure("tempfile_unlink", exc)
+        logger.warning(
+            "benchmark cleanup step failed",
+            extra={"stage": "tempfile_unlink", "error_type": type(exc).__name__, "error": str(exc)},
+        )
 
 
 @contextmanager

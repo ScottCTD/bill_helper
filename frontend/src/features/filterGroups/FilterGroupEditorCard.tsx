@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `FilterGroupEditorCard` React UI module.
+ * - Inputs: callers that import `frontend/src/features/filterGroups/FilterGroupEditorCard.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `FilterGroupEditorCard`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { useEffect, useState } from "react";
 
 import { Badge } from "../../components/ui/badge";

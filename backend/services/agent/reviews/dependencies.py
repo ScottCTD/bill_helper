@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `dependencies`.
+# - Inputs: callers that import `backend/services/agent/reviews/dependencies.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `dependencies`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from typing import Any

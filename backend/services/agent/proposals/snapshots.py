@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `snapshots`.
+# - Inputs: callers that import `backend/services/agent/proposals/snapshots.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `snapshots`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from datetime import datetime

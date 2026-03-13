@@ -1,9 +1,14 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `entries`.
+# - Inputs: callers that import `backend/services/agent/change_contracts/entries.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `entries`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from datetime import date as DateValue
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.enums_finance import EntryKind
 from backend.services.agent.change_contracts.common import (
@@ -18,6 +23,10 @@ from backend.validation.contract_fields import (
     OptionalEntityName,
     RequiredEntityName,
 )
+
+
+class ChangePayloadModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 def _is_complete_entry_selector_payload(value: Any) -> bool:
@@ -45,7 +54,7 @@ def normalize_entry_reference_payload(value: Any) -> Any:
     return normalized
 
 
-class CreateEntryPayload(BaseModel):
+class CreateEntryPayload(ChangePayloadModel):
     kind: EntryKind
     date: DateValue
     name: RequiredEntityName = Field(min_length=1, max_length=255)
@@ -57,7 +66,7 @@ class CreateEntryPayload(BaseModel):
     markdown_notes: str | None = None
 
 
-class EntrySelectorPayload(BaseModel):
+class EntrySelectorPayload(ChangePayloadModel):
     date: DateValue
     amount_minor: int = Field(gt=0)
     from_entity: RequiredEntityName = Field(min_length=1, max_length=255)
@@ -77,10 +86,11 @@ class UpdateEntryPatchPayload(NonEmptyPatchModel):
     markdown_notes: str | None = None
 
 
-class UpdateEntryPayload(BaseModel):
+class UpdateEntryPayload(ChangePayloadModel):
     entry_id: str | None = Field(default=None, min_length=4, max_length=36)
     selector: EntrySelectorPayload | None = None
     patch: UpdateEntryPatchPayload
+    target: dict[str, Any] | None = None
 
     @field_validator("entry_id")
     @classmethod
@@ -103,9 +113,10 @@ class UpdateEntryPayload(BaseModel):
         return self
 
 
-class DeleteEntryPayload(BaseModel):
+class DeleteEntryPayload(ChangePayloadModel):
     entry_id: str | None = Field(default=None, min_length=4, max_length=36)
     selector: EntrySelectorPayload | None = None
+    target: dict[str, Any] | None = None
 
     @field_validator("entry_id")
     @classmethod
@@ -124,7 +135,7 @@ class DeleteEntryPayload(BaseModel):
         return self
 
 
-class EntryReferencePayload(BaseModel):
+class EntryReferencePayload(ChangePayloadModel):
     entry_id: str | None = Field(default=None, min_length=4, max_length=36)
     create_entry_proposal_id: str | None = Field(default=None, min_length=4, max_length=36)
 

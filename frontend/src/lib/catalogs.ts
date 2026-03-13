@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `catalogs` frontend module.
+ * - Inputs: callers that import `frontend/src/lib/catalogs.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `catalogs`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type { TaxonomyTerm } from "./types";
 
 export const ENTITY_CATEGORY_TAXONOMY_KEY = "entity_category";

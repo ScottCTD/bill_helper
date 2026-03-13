@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `badge` React UI module.
+ * - Inputs: callers that import `frontend/src/components/ui/badge.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `badge`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `runtime`.
+# - Inputs: callers that import `backend/services/agent/runtime.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `runtime`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from collections.abc import Iterator

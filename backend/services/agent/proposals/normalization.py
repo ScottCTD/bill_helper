@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `normalization`.
+# - Inputs: callers that import `backend/services/agent/proposals/normalization.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `normalization`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from collections.abc import Callable

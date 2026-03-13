@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `formState` frontend module.
+ * - Inputs: callers that import `frontend/src/features/settings/formState.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `formState`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type { RuntimeSettings, RuntimeSettingsUpdatePayload } from "../../lib/types";
 import type { SettingsFormState } from "./types";
 

@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `FilterGroupsManager` React UI module.
+ * - Inputs: callers that import `frontend/src/features/filterGroups/FilterGroupsManager.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `FilterGroupsManager`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

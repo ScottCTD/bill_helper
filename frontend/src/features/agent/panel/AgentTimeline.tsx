@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `AgentTimeline` React UI module.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/AgentTimeline.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `AgentTimeline`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Fragment, memo, type Ref } from "react";
 import { ArrowDown, FileText } from "lucide-react";
 

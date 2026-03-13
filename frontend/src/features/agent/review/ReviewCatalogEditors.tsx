@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `ReviewCatalogEditors` React UI module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/ReviewCatalogEditors.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `ReviewCatalogEditors`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { useMemo } from "react";
 
 import { CreatableSingleSelect } from "../../../components/CreatableSingleSelect";

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `progress`.
+# - Inputs: callers that import `backend/services/agent/session_tools/progress.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `progress`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from backend.services.agent.tool_args.shared import SendIntermediateUpdateArgs

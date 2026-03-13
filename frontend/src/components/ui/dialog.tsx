@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `dialog` React UI module.
+ * - Inputs: callers that import `frontend/src/components/ui/dialog.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `dialog`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";

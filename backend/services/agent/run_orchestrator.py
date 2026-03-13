@@ -1,9 +1,15 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `run_orchestrator`.
+# - Inputs: callers that import `backend/services/agent/run_orchestrator.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `run_orchestrator`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Generator
 from dataclasses import dataclass
 from enum import Enum
+import logging
 from typing import Any, Generic, TypeVar
 
 from backend.services.agent.model_client import AgentModelError
@@ -12,6 +18,8 @@ from backend.services.agent.protocol_helpers import (
     accumulate_usage_totals,
     extract_usage_dict,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RunLoopOutcome(str, Enum):
@@ -127,9 +135,11 @@ def run_agent_loop(
 
     llm_messages = adapter.build_initial_messages()
     usage_totals = adapter.initial_usage_totals()
+    current_step_index = 0
 
     try:
         for step_index in range(adapter.max_steps):
+            current_step_index = step_index + 1
             if adapter.is_stopped():
                 for payload in adapter.on_stopped():
                     yield payload
@@ -205,6 +215,13 @@ def run_agent_loop(
             yield payload
         return RunLoopOutcome.FAILED
     except Exception as error:  # pragma: no cover - defensive guard
+        logger.exception(
+            "agent run loop failed unexpectedly",
+            extra={
+                "adapter_type": type(adapter).__name__,
+                "step_index": current_step_index,
+            },
+        )
         for payload in adapter.fail_unexpected_error(error):
             yield payload
         return RunLoopOutcome.FAILED

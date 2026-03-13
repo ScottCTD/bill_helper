@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `tooltip` React UI module.
+ * - Inputs: callers that import `frontend/src/components/ui/tooltip.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `tooltip`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { type ReactNode, useId, useState } from "react";
 
 import { cn } from "../../lib/utils";

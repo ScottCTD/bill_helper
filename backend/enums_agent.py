@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `enums_agent` module.
+# - Inputs: callers that import `backend/enums_agent.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `enums_agent`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from enum import StrEnum

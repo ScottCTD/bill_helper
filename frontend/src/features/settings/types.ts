@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `types` frontend module.
+ * - Inputs: callers that import `frontend/src/features/settings/types.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `types`.
+ * - Side effects: module-local frontend behavior only.
+ */
 export interface SettingsFormState {
   user_memory: string;
   default_currency_code: string;

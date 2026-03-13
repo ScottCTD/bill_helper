@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: translate HTTP requests and responses for `accounts` routes.
+# - Inputs: callers that import `backend/routers/accounts.py` and pass module-defined arguments or framework events.
+# - Outputs: router callables and request/response adapters for `accounts`.
+# - Side effects: FastAPI routing and HTTP error translation.
 from __future__ import annotations
 
 from datetime import date
@@ -33,7 +38,7 @@ from backend.services.account_snapshots import (
     list_account_snapshots,
 )
 from backend.services.finance_contracts import AccountCreateCommand, AccountPatch
-from backend.services.finance import build_reconciliation
+from backend.services.finance_reconciliation import build_reconciliation
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 

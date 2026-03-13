@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `textarea` React UI module.
+ * - Inputs: callers that import `frontend/src/components/ui/textarea.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `textarea`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import * as React from "react";
 
 import { cn } from "../../lib/utils";

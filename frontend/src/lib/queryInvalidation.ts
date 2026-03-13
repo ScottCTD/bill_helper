@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `queryInvalidation` frontend module.
+ * - Inputs: callers that import `frontend/src/lib/queryInvalidation.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `queryInvalidation`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type { QueryClient } from "@tanstack/react-query";
 
 import { ENTITY_CATEGORY_TAXONOMY_KEY, TAG_TYPE_TAXONOMY_KEY } from "./catalogs";

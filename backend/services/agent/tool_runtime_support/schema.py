@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `schema`.
+# - Inputs: callers that import `backend/services/agent/tool_runtime_support/schema.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `schema`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from copy import deepcopy

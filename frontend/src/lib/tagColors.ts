@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `tagColors` frontend module.
+ * - Inputs: callers that import `frontend/src/lib/tagColors.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `tagColors`.
+ * - Side effects: module-local frontend behavior only.
+ */
 export function fallbackTagColor(tagName: string) {
   let hash = 0;
   for (let index = 0; index < tagName.length; index += 1) {

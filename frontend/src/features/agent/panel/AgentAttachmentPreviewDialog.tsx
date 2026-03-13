@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `AgentAttachmentPreviewDialog` React UI module.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/AgentAttachmentPreviewDialog.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `AgentAttachmentPreviewDialog`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../../components/ui/dialog";
 import type { DraftAttachmentPreview } from "./types";
 

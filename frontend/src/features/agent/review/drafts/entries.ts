@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `entries` frontend module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/drafts/entries.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `entries`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type { AgentChangeItem, Entity, EntryKind } from "../../../../lib/types";
 
 import {

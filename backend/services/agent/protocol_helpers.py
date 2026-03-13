@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `protocol_helpers`.
+# - Inputs: callers that import `backend/services/agent/protocol_helpers.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `protocol_helpers`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from dataclasses import dataclass

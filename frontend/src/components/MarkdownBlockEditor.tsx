@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `MarkdownBlockEditor` React UI module.
+ * - Inputs: callers that import `frontend/src/components/MarkdownBlockEditor.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `MarkdownBlockEditor`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Component, Suspense, lazy } from "react";
 
 import { Textarea } from "./ui/textarea";

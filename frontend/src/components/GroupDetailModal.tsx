@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `GroupDetailModal` React UI module.
+ * - Inputs: callers that import `frontend/src/components/GroupDetailModal.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `GroupDetailModal`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Pencil, Plus, Trash2 } from "lucide-react";
 
 import { DeleteIconButton } from "./DeleteIconButton";

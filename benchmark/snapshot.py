@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide benchmark support for `snapshot`.
+# - Inputs: callers that import `benchmark/snapshot.py` and pass module-defined arguments or framework events.
+# - Outputs: benchmark helpers, contracts, or entrypoints for `snapshot`.
+# - Side effects: benchmark data loading, execution, or reporting as implemented below.
 """Create, list, and restore DB snapshots for benchmarking.
 
 Usage:

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: define package exports and module boundaries for `telegram`.
+# - Inputs: callers that import `telegram/__init__.py` and pass module-defined arguments or framework events.
+# - Outputs: package-level exports for `telegram`.
+# - Side effects: import-time package wiring only.
 from telegram.bill_helper_api import (
     AttachmentUpload,
     BillHelperApiClient,

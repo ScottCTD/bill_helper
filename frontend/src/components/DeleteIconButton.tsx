@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `DeleteIconButton` React UI module.
+ * - Inputs: callers that import `frontend/src/components/DeleteIconButton.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `DeleteIconButton`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Trash2 } from "lucide-react";
 
 import { cn } from "../lib/utils";

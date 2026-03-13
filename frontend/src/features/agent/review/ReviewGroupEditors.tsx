@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `ReviewGroupEditors` React UI module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/ReviewGroupEditors.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `ReviewGroupEditors`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Badge } from "../../../components/ui/badge";
 import { FormField } from "../../../components/ui/form-field";
 import { Input } from "../../../components/ui/input";

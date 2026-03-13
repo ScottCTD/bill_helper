@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: translate HTTP requests and responses for `agent_threads` routes.
+# - Inputs: callers that import `backend/routers/agent_threads.py` and pass module-defined arguments or framework events.
+# - Outputs: router callables and request/response adapters for `agent_threads`.
+# - Side effects: FastAPI routing and HTTP error translation.
 from __future__ import annotations
 
 from collections.abc import Iterator

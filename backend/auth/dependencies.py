@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `dependencies` module.
+# - Inputs: callers that import `backend/auth/dependencies.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `dependencies`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from fastapi import Depends, Header, HTTPException, status

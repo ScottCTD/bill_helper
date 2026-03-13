@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `checkbox` React UI module.
+ * - Inputs: callers that import `frontend/src/components/ui/checkbox.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `checkbox`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import * as React from "react";
 import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
 import { Check } from "lucide-react";

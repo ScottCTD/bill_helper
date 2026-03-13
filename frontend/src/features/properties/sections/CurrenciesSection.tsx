@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `CurrenciesSection` React UI module.
+ * - Inputs: callers that import `frontend/src/features/properties/sections/CurrenciesSection.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `CurrenciesSection`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import type { Currency } from "../../../lib/types";
 import { Input } from "../../../components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";

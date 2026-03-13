@@ -1,8 +1,13 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `proposal_admin`.
+# - Inputs: callers that import `backend/services/agent/tool_args/proposal_admin.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `proposal_admin`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.enums_finance import GroupMemberRole
 from backend.services.agent.change_contracts.groups import (
@@ -15,7 +20,11 @@ from backend.services.agent.change_contracts.groups import (
 from backend.services.agent.payload_normalization import normalize_required_text
 
 
-class UpdatePendingProposalArgs(BaseModel):
+class ToolArgsModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class UpdatePendingProposalArgs(ToolArgsModel):
     proposal_id: str = Field(min_length=4, max_length=36)
     patch_map: dict[str, object]
 
@@ -37,7 +46,7 @@ class UpdatePendingProposalArgs(BaseModel):
         return normalized
 
 
-class RemovePendingProposalArgs(BaseModel):
+class RemovePendingProposalArgs(ToolArgsModel):
     proposal_id: str = Field(min_length=4, max_length=36)
 
     @field_validator("proposal_id")
@@ -47,7 +56,7 @@ class RemovePendingProposalArgs(BaseModel):
         return normalized.lower()
 
 
-class ProposeUpdateGroupMembershipArgs(BaseModel):
+class ProposeUpdateGroupMembershipArgs(ToolArgsModel):
     action: Literal["add", "remove"]
     group_ref: GroupReferencePayload
     target: GroupMemberTargetPayload

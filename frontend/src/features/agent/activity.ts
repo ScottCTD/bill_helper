@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `activity` frontend module.
+ * - Inputs: callers that import `frontend/src/features/agent/activity.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `activity`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type {
   AgentChangeItem,
   AgentRun,

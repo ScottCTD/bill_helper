@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `ResetSettingsDialog` React UI module.
+ * - Inputs: callers that import `frontend/src/features/settings/ResetSettingsDialog.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `ResetSettingsDialog`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 

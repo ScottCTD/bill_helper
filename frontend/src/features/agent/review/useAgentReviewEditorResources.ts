@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useAgentReviewEditorResources` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/agent/review/useAgentReviewEditorResources.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useAgentReviewEditorResources`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 

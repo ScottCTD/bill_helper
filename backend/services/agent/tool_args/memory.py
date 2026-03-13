@@ -1,6 +1,11 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `memory`.
+# - Inputs: callers that import `backend/services/agent/tool_args/memory.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `memory`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.validation.runtime_settings import (
     normalize_user_memory_items_or_none,
@@ -9,6 +14,8 @@ from backend.validation.runtime_settings import (
 
 
 class AddUserMemoryArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     memory_items: list[str] = Field(
         min_length=1,
         max_length=20,

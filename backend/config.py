@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `config` module.
+# - Inputs: callers that import `backend/config.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `config`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from functools import lru_cache

@@ -1,8 +1,13 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `groups`.
+# - Inputs: callers that import `backend/services/agent/change_contracts/groups.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `groups`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, TypeAdapter, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from backend.enums_finance import GroupMemberRole, GroupType
 from backend.services.agent.change_contracts.common import (
@@ -14,21 +19,40 @@ from backend.services.agent.change_contracts.entries import EntryReferencePayloa
 from backend.validation.contract_fields import NonEmptyPatchModel, OptionalRequiredText, RequiredLooseText
 
 
+class ChangePayloadModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
 def normalize_group_member_payload(value: Any) -> Any:
     if not isinstance(value, dict):
         return value
     normalized = dict(value)
-    normalized["group_ref"] = normalize_object_json_string(normalized.get("group_ref"))
+    if "group_ref" in normalized:
+        normalized_group_ref = normalize_object_json_string(normalized.get("group_ref"))
+        if normalized_group_ref is not None:
+            normalized["group_ref"] = normalized_group_ref
+        else:
+            normalized.pop("group_ref", None)
     target = normalize_object_json_string(normalized.get("target"))
     if isinstance(target, dict):
         normalized_target = dict(target)
-        normalized_target["entry_ref"] = normalize_object_json_string(normalized_target.get("entry_ref"))
-        normalized_target["group_ref"] = normalize_object_json_string(normalized_target.get("group_ref"))
+        if "entry_ref" in normalized_target:
+            normalized_entry_ref = normalize_object_json_string(normalized_target.get("entry_ref"))
+            if normalized_entry_ref is not None:
+                normalized_target["entry_ref"] = normalized_entry_ref
+            else:
+                normalized_target.pop("entry_ref", None)
+        if "group_ref" in normalized_target:
+            normalized_group_ref = normalize_object_json_string(normalized_target.get("group_ref"))
+            if normalized_group_ref is not None:
+                normalized_target["group_ref"] = normalized_group_ref
+            else:
+                normalized_target.pop("group_ref", None)
         normalized["target"] = normalized_target
     return normalized
 
 
-class GroupReferencePayload(BaseModel):
+class GroupReferencePayload(ChangePayloadModel):
     group_id: str | None = Field(default=None, min_length=4, max_length=36)
     create_group_proposal_id: str | None = Field(default=None, min_length=4, max_length=36)
 
@@ -49,12 +73,12 @@ class GroupReferencePayload(BaseModel):
         return self
 
 
-class EntryGroupMemberTargetPayload(BaseModel):
+class EntryGroupMemberTargetPayload(ChangePayloadModel):
     target_type: Literal["entry"] = "entry"
     entry_ref: EntryReferencePayload
 
 
-class ChildGroupMemberTargetPayload(BaseModel):
+class ChildGroupMemberTargetPayload(ChangePayloadModel):
     target_type: Literal["child_group"] = "child_group"
     group_ref: GroupReferencePayload
 
@@ -72,7 +96,7 @@ def parse_group_member_target_payload(value: Any) -> GroupMemberTargetPayload:
     return GROUP_MEMBER_TARGET_ADAPTER.validate_python(value)
 
 
-class CreateGroupPayload(BaseModel):
+class CreateGroupPayload(ChangePayloadModel):
     name: RequiredLooseText = Field(min_length=1, max_length=255)
     group_type: GroupType
 
@@ -81,9 +105,11 @@ class UpdateGroupPatchPayload(NonEmptyPatchModel):
     name: OptionalRequiredText = Field(default=None, min_length=1, max_length=255)
 
 
-class UpdateGroupPayload(BaseModel):
+class UpdateGroupPayload(ChangePayloadModel):
     group_id: str = Field(min_length=4, max_length=36)
     patch: UpdateGroupPatchPayload
+    current: dict[str, Any] | None = None
+    target: dict[str, Any] | None = None
 
     @field_validator("group_id")
     @classmethod
@@ -103,8 +129,9 @@ class UpdateGroupPayload(BaseModel):
         return normalized
 
 
-class DeleteGroupPayload(BaseModel):
+class DeleteGroupPayload(ChangePayloadModel):
     group_id: str = Field(min_length=4, max_length=36)
+    target: dict[str, Any] | None = None
 
     @field_validator("group_id")
     @classmethod
@@ -115,11 +142,13 @@ class DeleteGroupPayload(BaseModel):
         return normalized
 
 
-class CreateGroupMemberPayload(BaseModel):
+class CreateGroupMemberPayload(ChangePayloadModel):
     action: Literal["add"] = "add"
     group_ref: GroupReferencePayload
     target: GroupMemberTargetPayload
     member_role: GroupMemberRole | None = None
+    group_preview: dict[str, Any] | None = None
+    member_preview: dict[str, Any] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -127,10 +156,12 @@ class CreateGroupMemberPayload(BaseModel):
         return normalize_group_member_payload(value)
 
 
-class DeleteGroupMemberPayload(BaseModel):
+class DeleteGroupMemberPayload(ChangePayloadModel):
     action: Literal["remove"] = "remove"
     group_ref: GroupReferencePayload
     target: GroupMemberTargetPayload
+    group_preview: dict[str, Any] | None = None
+    member_preview: dict[str, Any] | None = None
 
     @model_validator(mode="before")
     @classmethod

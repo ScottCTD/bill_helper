@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `button` React UI module.
+ * - Inputs: callers that import `frontend/src/components/ui/button.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `button`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";

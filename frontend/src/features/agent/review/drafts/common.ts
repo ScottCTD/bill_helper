@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `common` frontend module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/drafts/common.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `common`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type { EntryKind } from "../../../../lib/types";
 
 import type { JsonRecord } from "./types";

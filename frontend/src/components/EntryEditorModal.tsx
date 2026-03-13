@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `EntryEditorModal` React UI module.
+ * - Inputs: callers that import `frontend/src/components/EntryEditorModal.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `EntryEditorModal`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ArrowLeftRight, Loader2, Sparkles, Square } from "lucide-react";
 

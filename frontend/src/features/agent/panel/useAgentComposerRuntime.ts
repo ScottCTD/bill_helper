@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useAgentComposerRuntime` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/useAgentComposerRuntime.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useAgentComposerRuntime`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { type ChangeEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import type { AgentThreadDetail, AgentThreadSummary, RuntimeSettings } from "../../../lib/types";

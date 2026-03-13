@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide benchmark support for `generate_ground_truth`.
+# - Inputs: callers that import `benchmark/generate_ground_truth.py` and pass module-defined arguments or framework events.
+# - Outputs: benchmark helpers, contracts, or entrypoints for `generate_ground_truth`.
+# - Side effects: benchmark data loading, execution, or reporting as implemented below.
 """Generate a draft ground_truth.json by running a capable model on a case.
 
 Usage:

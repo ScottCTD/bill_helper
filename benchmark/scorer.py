@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide benchmark support for `scorer`.
+# - Inputs: callers that import `benchmark/scorer.py` and pass module-defined arguments or framework events.
+# - Outputs: benchmark helpers, contracts, or entrypoints for `scorer`.
+# - Side effects: benchmark data loading, execution, or reporting as implemented below.
 """Score benchmark results against ground truth.
 
 Usage:

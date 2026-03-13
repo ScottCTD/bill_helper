@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: run the `run_e2e_backend` repository script.
+# - Inputs: callers that import `scripts/run_e2e_backend.py` and pass module-defined arguments or framework events.
+# - Outputs: CLI-side workflow helpers and the `run_e2e_backend` entrypoint.
+# - Side effects: command-line execution and repository automation as implemented below.
 from __future__ import annotations
 
 import argparse

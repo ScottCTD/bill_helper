@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `crud_policy`.
+# - Inputs: callers that import `backend/services/crud_policy.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `crud_policy`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `entry_similarity`.
+# - Inputs: callers that import `backend/services/entry_similarity.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `entry_similarity`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from dataclasses import dataclass

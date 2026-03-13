@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `usePropertiesFormState` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/properties/usePropertiesFormState.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `usePropertiesFormState`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { useState } from "react";
 
 export function usePropertiesFormState() {

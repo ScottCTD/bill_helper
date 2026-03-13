@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# CALLING SPEC:
+# - Purpose: run the `list_github_models` repository script.
+# - Inputs: callers that import `scripts/list_github_models.py` and pass module-defined arguments or framework events.
+# - Outputs: CLI-side workflow helpers and the `list_github_models` entrypoint.
+# - Side effects: command-line execution and repository automation as implemented below.
 """
 Check GitHub Models / GitHub Copilot model names for LiteLLM.
 

@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `ReviewModalFooter` React UI module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/ReviewModalFooter.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `ReviewModalFooter`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Button } from "../../../components/ui/button";
 import { shortId } from "./model";
 import type { AgentThreadReviewController } from "./useAgentThreadReviewController";

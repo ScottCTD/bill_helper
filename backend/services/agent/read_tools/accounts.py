@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `accounts`.
+# - Inputs: callers that import `backend/services/agent/read_tools/accounts.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `accounts`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from datetime import date
@@ -7,7 +12,7 @@ from backend.services.agent.read_tools.common import get_account_by_id_for_tool_
 from backend.services.agent.tool_args.read import GetReconciliationArgs, ListSnapshotsArgs
 from backend.services.agent.tool_results import error_result, format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
-from backend.services.finance import build_reconciliation
+from backend.services.finance_reconciliation import build_reconciliation
 
 
 def list_snapshots(context: ToolContext, args: ListSnapshotsArgs) -> ToolExecutionResult:

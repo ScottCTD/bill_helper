@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useStickToBottom` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/useStickToBottom.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useStickToBottom`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const BOTTOM_THRESHOLD_PX = 24;

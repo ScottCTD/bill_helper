@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useAgentThreadActions` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/useAgentThreadActions.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useAgentThreadActions`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 

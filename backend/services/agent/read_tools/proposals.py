@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `proposals`.
+# - Inputs: callers that import `backend/services/agent/read_tools/proposals.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `proposals`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from copy import deepcopy

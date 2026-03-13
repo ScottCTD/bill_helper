@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `SettingsAgentSection` React UI module.
+ * - Inputs: callers that import `frontend/src/features/settings/SettingsAgentSection.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `SettingsAgentSection`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { FormField } from "../../components/ui/form-field";
 import { Input } from "../../components/ui/input";

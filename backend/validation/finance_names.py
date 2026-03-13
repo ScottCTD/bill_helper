@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `finance_names` module.
+# - Inputs: callers that import `backend/validation/finance_names.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `finance_names`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 

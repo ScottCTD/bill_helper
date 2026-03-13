@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `SingleSelect` React UI module.
+ * - Inputs: callers that import `frontend/src/components/SingleSelect.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `SingleSelect`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { KeyboardEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";

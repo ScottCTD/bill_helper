@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `entry_tag_suggestions`.
+# - Inputs: callers that import `backend/services/entry_tag_suggestions.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `entry_tag_suggestions`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -1,9 +1,14 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `read`.
+# - Inputs: callers that import `backend/services/agent/tool_args/read.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `read`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from datetime import date as DateValue
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.enums_agent import AgentChangeStatus
 from backend.enums_finance import GroupType
@@ -21,7 +26,11 @@ from backend.validation.contract_fields import (
 _DATE_DESC = "ISO date YYYY-MM-DD, e.g. '2026-03-02'"
 
 
-class ListEntriesArgs(BaseModel):
+class ToolArgsModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ListEntriesArgs(ToolArgsModel):
     date: DateValue | None = Field(default=None, description=_DATE_DESC)
     start_date: DateValue | None = Field(
         default=None,
@@ -50,7 +59,7 @@ class ListEntriesArgs(BaseModel):
         return self
 
 
-class ListTagsArgs(BaseModel):
+class ListTagsArgs(ToolArgsModel):
     name: QueryTagName = None
     type: OptionalCategory = None
     limit: int = Field(
@@ -60,7 +69,7 @@ class ListTagsArgs(BaseModel):
     )
 
 
-class ListEntitiesArgs(BaseModel):
+class ListEntitiesArgs(ToolArgsModel):
     name: QueryEntityName = None
     category: OptionalCategory = None
     limit: int = Field(
@@ -70,7 +79,7 @@ class ListEntitiesArgs(BaseModel):
     )
 
 
-class ListAccountsArgs(BaseModel):
+class ListAccountsArgs(ToolArgsModel):
     name: QueryEntityName = None
     currency_code: OptionalCurrencyCode = Field(default=None, min_length=3, max_length=3)
     is_active: bool | None = None
@@ -81,7 +90,7 @@ class ListAccountsArgs(BaseModel):
     )
 
 
-class ListSnapshotsArgs(BaseModel):
+class ListSnapshotsArgs(ToolArgsModel):
     account_id: str = Field(
         min_length=4,
         max_length=36,
@@ -94,7 +103,7 @@ class ListSnapshotsArgs(BaseModel):
     )
 
 
-class GetReconciliationArgs(BaseModel):
+class GetReconciliationArgs(ToolArgsModel):
     account_id: str = Field(
         min_length=4,
         max_length=36,
@@ -103,7 +112,7 @@ class GetReconciliationArgs(BaseModel):
     as_of: DateValue | None = Field(default=None, description=_DATE_DESC)
 
 
-class ListGroupsArgs(BaseModel):
+class ListGroupsArgs(ToolArgsModel):
     group_id: str | None = Field(
         default=None,
         min_length=4,
@@ -145,7 +154,7 @@ ProposalType = Literal["entry", "tag", "entity", "account", "snapshot", "group"]
 ProposalAction = Literal["create", "update", "delete"]
 
 
-class ListProposalsArgs(BaseModel):
+class ListProposalsArgs(ToolArgsModel):
     proposal_type: ProposalType | None = Field(
         default=None,
         description="Filter by proposal domain: entry, account, snapshot, group, tag, or entity.",

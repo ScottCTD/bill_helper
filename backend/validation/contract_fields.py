@@ -1,8 +1,13 @@
+# CALLING SPEC:
+# - Purpose: provide the `contract_fields` module.
+# - Inputs: callers that import `backend/validation/contract_fields.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `contract_fields`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, model_validator
 
 from backend.services.agent.payload_normalization import normalize_loose_text, normalize_required_text
 from backend.validation.finance_names import (
@@ -100,6 +105,8 @@ def normalize_tag_list(value: list[str]) -> list[str]:
 
 
 class NonEmptyPatchModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     @model_validator(mode="after")
     def ensure_any_field_set(self) -> NonEmptyPatchModel:
         if not self.model_fields_set:

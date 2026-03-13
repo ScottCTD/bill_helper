@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: translate HTTP requests and responses for `agent_attachments` routes.
+# - Inputs: callers that import `backend/routers/agent_attachments.py` and pass module-defined arguments or framework events.
+# - Outputs: router callables and request/response adapters for `agent_attachments`.
+# - Side effects: FastAPI routing and HTTP error translation.
 from __future__ import annotations
 
 from pathlib import Path

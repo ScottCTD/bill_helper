@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `MarkdownBlockEditorImpl` React UI module.
+ * - Inputs: callers that import `frontend/src/components/MarkdownBlockEditorImpl.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `MarkdownBlockEditorImpl`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { useEffect, useRef } from "react";
 import type { PartialBlock } from "@blocknote/core";
 import { BlockNoteView } from "@blocknote/ariakit";

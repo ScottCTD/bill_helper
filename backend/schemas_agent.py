@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `schemas_agent` module.
+# - Inputs: callers that import `backend/schemas_agent.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `schemas_agent`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from datetime import datetime
@@ -18,11 +23,19 @@ from backend.enums_agent import (
 from backend.validation.agent_threads import THREAD_TITLE_MAX_LENGTH, validate_thread_title
 
 
-class AgentThreadCreate(BaseModel):
+class AgentSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class AgentOrmReadSchema(AgentSchema):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+
+class AgentThreadCreate(AgentSchema):
     title: str | None = Field(default=None, max_length=255)
 
 
-class AgentThreadUpdate(BaseModel):
+class AgentThreadUpdate(AgentSchema):
     title: str = Field(
         min_length=1,
         max_length=THREAD_TITLE_MAX_LENGTH,
@@ -35,14 +48,11 @@ class AgentThreadUpdate(BaseModel):
         return validate_thread_title(value)
 
 
-class AgentThreadRead(BaseModel):
+class AgentThreadRead(AgentOrmReadSchema):
     id: str
     title: str | None = None
     created_at: datetime
     updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
 
 class AgentThreadSummaryRead(AgentThreadRead):
     last_message_preview: str | None = None
@@ -50,7 +60,7 @@ class AgentThreadSummaryRead(AgentThreadRead):
     has_running_run: bool = False
 
 
-class AgentMessageAttachmentRead(BaseModel):
+class AgentMessageAttachmentRead(AgentOrmReadSchema):
     id: str
     message_id: str
     mime_type: str
@@ -58,10 +68,7 @@ class AgentMessageAttachmentRead(BaseModel):
     attachment_url: str
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentMessageRead(BaseModel):
+class AgentMessageRead(AgentOrmReadSchema):
     id: str
     thread_id: str
     role: AgentMessageRole
@@ -69,10 +76,7 @@ class AgentMessageRead(BaseModel):
     created_at: datetime
     attachments: list[AgentMessageAttachmentRead] = Field(default_factory=list)
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentToolCallRead(BaseModel):
+class AgentToolCallRead(AgentOrmReadSchema):
     id: str
     run_id: str
     llm_tool_call_id: str | None = None
@@ -86,10 +90,7 @@ class AgentToolCallRead(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentRunEventRead(BaseModel):
+class AgentRunEventRead(AgentOrmReadSchema):
     id: str
     run_id: str
     sequence_index: int
@@ -99,10 +100,7 @@ class AgentRunEventRead(BaseModel):
     tool_call_id: str | None = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentReviewActionRead(BaseModel):
+class AgentReviewActionRead(AgentOrmReadSchema):
     id: str
     change_item_id: str
     action: AgentReviewActionType
@@ -110,10 +108,7 @@ class AgentReviewActionRead(BaseModel):
     note: str | None = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentChangeItemRead(BaseModel):
+class AgentChangeItemRead(AgentOrmReadSchema):
     id: str
     run_id: str
     change_type: AgentChangeType
@@ -127,10 +122,7 @@ class AgentChangeItemRead(BaseModel):
     updated_at: datetime
     review_actions: list[AgentReviewActionRead] = Field(default_factory=list)
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentRunRead(BaseModel):
+class AgentRunRead(AgentOrmReadSchema):
     id: str
     thread_id: str
     user_message_id: str
@@ -155,10 +147,7 @@ class AgentRunRead(BaseModel):
     tool_calls: list[AgentToolCallRead] = Field(default_factory=list)
     change_items: list[AgentChangeItemRead] = Field(default_factory=list)
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AgentThreadDetailRead(BaseModel):
+class AgentThreadDetailRead(AgentSchema):
     thread: AgentThreadRead
     messages: list[AgentMessageRead]
     runs: list[AgentRunRead]
@@ -166,16 +155,16 @@ class AgentThreadDetailRead(BaseModel):
     current_context_tokens: int | None = None
 
 
-class AgentChangeItemApproveRequest(BaseModel):
+class AgentChangeItemApproveRequest(AgentSchema):
     note: str | None = None
     payload_override: dict[str, Any] | None = None
 
 
-class AgentChangeItemRejectRequest(BaseModel):
+class AgentChangeItemRejectRequest(AgentSchema):
     note: str | None = None
     payload_override: dict[str, Any] | None = None
 
 
-class AgentChangeItemReopenRequest(BaseModel):
+class AgentChangeItemReopenRequest(AgentSchema):
     note: str | None = None
     payload_override: dict[str, Any] | None = None

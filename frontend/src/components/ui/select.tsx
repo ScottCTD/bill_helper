@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `select` React UI module.
+ * - Inputs: callers that import `frontend/src/components/ui/select.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `select`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `schemas_settings` module.
+# - Inputs: callers that import `backend/schemas_settings.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `schemas_settings`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict

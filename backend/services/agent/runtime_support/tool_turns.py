@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `tool_turns`.
+# - Inputs: callers that import `backend/services/agent/runtime_support/tool_turns.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `tool_turns`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 import re

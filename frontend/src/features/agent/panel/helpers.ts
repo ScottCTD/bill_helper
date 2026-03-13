@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `helpers` frontend module.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/helpers.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `helpers`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type { AgentThread, AgentThreadSummary, AgentToolCall, RuntimeSettings } from "../../../lib/types";
 
 export const BULK_MODE_HELP_TEXT =
