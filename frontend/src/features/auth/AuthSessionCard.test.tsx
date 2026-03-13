@@ -15,7 +15,7 @@ describe("AuthSessionCard", () => {
     vi.clearAllMocks();
   });
 
-  it("renders only the account name and logout action", async () => {
+  it("renders a sidebar logout item with the username", async () => {
     const logout = vi.fn().mockResolvedValue(undefined);
     mockUseAuth.mockReturnValue({
       status: "authenticated",
@@ -29,15 +29,15 @@ describe("AuthSessionCard", () => {
 
     render(<AuthSessionCard />);
 
-    expect(screen.getByText("admin")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Logout (admin)" })).toBeInTheDocument();
     expect(screen.queryByText("Signed In")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Log out" }));
+    await userEvent.click(screen.getByRole("button", { name: "Logout (admin)" }));
     expect(logout).toHaveBeenCalledTimes(1);
   });
 
-  it("does not append impersonation or admin labels to the account name", () => {
+  it("does not append impersonation or admin labels to the logout item label", () => {
     mockUseAuth.mockReturnValue({
       status: "authenticated",
       session: {
@@ -50,8 +50,29 @@ describe("AuthSessionCard", () => {
 
     render(<AuthSessionCard />);
 
-    expect(screen.getByText("alice")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Logout (alice)" })).toBeInTheDocument();
     expect(screen.queryByText(/impersonating/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
+  });
+
+  it("renders an icon-only logout item in collapsed mode", async () => {
+    const logout = vi.fn().mockResolvedValue(undefined);
+    mockUseAuth.mockReturnValue({
+      status: "authenticated",
+      session: {
+        user: { id: "user-2", name: "casey", is_admin: false },
+        session_id: "session-3",
+        is_admin_impersonation: false,
+      },
+      logout,
+    });
+
+    render(<AuthSessionCard collapsed />);
+
+    expect(screen.queryByText("Logout (casey)")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Logout (casey)" })).toHaveClass("sidebar-link");
+
+    await userEvent.click(screen.getByRole("button", { name: "Logout (casey)" }));
+    expect(logout).toHaveBeenCalledTimes(1);
   });
 });

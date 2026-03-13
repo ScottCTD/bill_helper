@@ -70,9 +70,9 @@ Current auth-related keys:
 - `frontend/src/features/auth/AuthProvider.tsx`
   - app-wide auth context for loading `/auth/me`, logging in, logging out, and adopting impersonation sessions
 - `frontend/src/features/auth/AuthSessionCard.tsx`
-  - sidebar card showing the current signed-in user plus logout
+  - sidebar logout item that includes the signed-in username in expanded mode
 - `frontend/src/components/Sidebar.tsx`
-  - renders the dedicated admin footer button separately from the session card
+  - renders the dedicated admin footer button separately from the logout item
 
 Current behavior:
 

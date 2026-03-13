@@ -215,7 +215,7 @@
 - `auth/`
   - `storage.ts`: localStorage-backed bearer token helpers.
   - `AuthProvider.tsx`: app-wide auth context and `/auth/me` bootstrap.
-  - `AuthSessionCard.tsx`: sidebar account/session controls.
+  - `AuthSessionCard.tsx`: sidebar logout control that reflects the signed-in user.
 - `accounts/`
   - `useAccountsPageModel.ts`: query/mutation orchestration, derived state, and action handlers.
   - `AccountsTableSection.tsx`: account table/search/selection UI.

@@ -7,7 +7,7 @@
  */
 import type { CSSProperties } from "react";
 import { NavLink } from "react-router-dom";
-import { Bot, Building2, CreditCard, FolderKanban, Home, Layers3, Network, PanelLeft, PanelLeftClose, Settings2, Shield, SlidersHorizontal } from "lucide-react";
+import { Bot, Building2, CreditCard, FolderKanban, Home, Layers3, Network, PanelLeft, PanelLeftClose, Settings2, Shield } from "lucide-react";
 
 import { AuthSessionCard, useAuth } from "../features/auth";
 import { cn } from "../lib/utils";
@@ -16,14 +16,14 @@ import { Button } from "./ui/button";
 const navItems = [
   { to: "/", label: "Agent", icon: Bot },
   { to: "/dashboard", label: "Dashboard", icon: Home },
-  { to: "/filters", label: "Filters", icon: SlidersHorizontal },
-  { to: "/entries", label: "Entries", icon: Layers3 },
-  { to: "/entities", label: "Entities", icon: Building2 },
-  { to: "/groups", label: "Groups", icon: Network },
   { to: "/accounts", label: "Accounts", icon: CreditCard },
+  { to: "/entries", label: "Entries", icon: Layers3 },
+  { to: "/groups", label: "Groups", icon: Network },
+  { to: "/entities", label: "Entities", icon: Building2 },
   { to: "/properties", label: "Properties", icon: FolderKanban },
-  { to: "/settings", label: "Settings", icon: Settings2 },
 ] as const;
+
+const settingsItem = { to: "/settings", label: "Settings", icon: Settings2 } as const;
 
 interface SidebarProps {
   collapsed: boolean;
@@ -63,27 +63,35 @@ export function Sidebar({ collapsed, width, onToggle }: SidebarProps) {
               title={collapsed ? item.label : undefined}
             >
               <Icon className="sidebar-link-icon" />
-              {!collapsed ? <span>{item.label}</span> : null}
+              {!collapsed ? <span className="sidebar-link-label">{item.label}</span> : null}
             </NavLink>
           );
         })}
       </nav>
 
-      {!collapsed ? (
-        <div className="sidebar-footer">
-          {auth.status === "authenticated" && auth.session?.user.is_admin ? (
-            <NavLink
-              to="/admin"
-              end
-              className={({ isActive }) => cn("sidebar-link", isActive && "sidebar-link-active")}
-            >
-              <Shield className="sidebar-link-icon" />
-              <span>Admin</span>
-            </NavLink>
-          ) : null}
-          <AuthSessionCard />
-        </div>
-      ) : null}
+      <div className="sidebar-footer">
+        <NavLink
+          to={settingsItem.to}
+          end
+          className={({ isActive }) => cn("sidebar-link", isActive && "sidebar-link-active")}
+          title={collapsed ? settingsItem.label : undefined}
+        >
+          <Settings2 className="sidebar-link-icon" />
+          {!collapsed ? <span className="sidebar-link-label">{settingsItem.label}</span> : null}
+        </NavLink>
+        {auth.status === "authenticated" && auth.session?.user.is_admin ? (
+          <NavLink
+            to="/admin"
+            end
+            className={({ isActive }) => cn("sidebar-link", isActive && "sidebar-link-active")}
+            title={collapsed ? "Admin" : undefined}
+          >
+            <Shield className="sidebar-link-icon" />
+            {!collapsed ? <span className="sidebar-link-label">Admin</span> : null}
+          </NavLink>
+        ) : null}
+        <AuthSessionCard collapsed={collapsed} />
+      </div>
     </aside>
   );
 }

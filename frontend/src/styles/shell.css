@@ -4,7 +4,7 @@
   }
 
   .sidebar {
-    @apply sticky top-0 flex h-screen flex-shrink-0 flex-col border-r border-border bg-card;
+    @apply sticky top-0 flex h-screen flex-shrink-0 flex-col overflow-x-hidden border-r border-border bg-card;
     width: var(--sidebar-width, 14rem);
     transition: width 0.2s ease;
   }
@@ -30,7 +30,7 @@
   }
 
   .sidebar-nav {
-    @apply flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 py-3;
+    @apply flex flex-1 flex-col gap-1.5 overflow-x-hidden overflow-y-auto px-2 py-3;
   }
 
   .sidebar-collapsed .sidebar-nav {
@@ -38,7 +38,7 @@
   }
 
   .sidebar-link {
-    @apply relative flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground;
+    @apply relative flex min-w-0 items-center gap-2.5 overflow-hidden whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground;
   }
 
   .sidebar-link-active {
@@ -63,24 +63,16 @@
     @apply h-[1.125rem] w-[1.125rem] flex-shrink-0;
   }
 
+  .sidebar-link-label {
+    @apply truncate;
+  }
+
   .sidebar-footer {
     @apply grid gap-3 border-t border-border/85 px-3 py-3;
   }
 
-  .sidebar-session-card {
-    @apply flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/55 p-3;
-  }
-
-  .sidebar-session-copy {
-    @apply min-w-0;
-  }
-
-  .sidebar-session-subtitle {
-    @apply m-0 truncate text-sm font-medium text-foreground/85;
-  }
-
-  .sidebar-session-actions {
-    @apply flex flex-shrink-0 items-center gap-2;
+  .sidebar-collapsed .sidebar-footer {
+    @apply items-center px-1;
   }
 
   .session-gate {
