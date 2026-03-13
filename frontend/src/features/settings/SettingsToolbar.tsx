@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `SettingsToolbar` React UI module.
+ * - Inputs: callers that import `frontend/src/features/settings/SettingsToolbar.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `SettingsToolbar`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Button } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
 import { SETTINGS_TABS } from "./constants";

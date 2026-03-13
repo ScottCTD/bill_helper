@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `helpers` frontend module.
+ * - Inputs: callers that import `frontend/src/features/accounts/helpers.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `helpers`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type { Account, Snapshot } from "../../lib/types";
 import type { AccountFormState } from "./types";
 

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `contracts` module.
+# - Inputs: callers that import `backend/auth/contracts.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `contracts`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from dataclasses import dataclass

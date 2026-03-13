@@ -1,6 +1,12 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `client`.
+# - Inputs: callers that import `backend/services/agent/model_client_support/client.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `client`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from collections.abc import Iterator
+import logging
 from typing import Any
 
 import litellm
@@ -30,6 +36,7 @@ from .usage import (
 )
 
 _PROMPT_CACHE_INJECTION_POINTS_MAX = 4
+logger = logging.getLogger(__name__)
 
 
 class AgentModelError(RuntimeError):
@@ -170,6 +177,13 @@ class LiteLLMModelClient:
         except Exception as exc:
             if not is_transient_ssl_bad_record_mac_error(exc):
                 raise
+            logger.warning(
+                "retrying model completion after transient SSL transport error",
+                extra={
+                    "model_name": self._model_name,
+                    "error_type": type(exc).__name__,
+                },
+            )
             return litellm.completion(**request)
 
     def _chat_completion_once(

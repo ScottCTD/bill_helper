@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `storage` frontend module.
+ * - Inputs: callers that import `frontend/src/features/auth/storage.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `storage`.
+ * - Side effects: module-local frontend behavior only.
+ */
 export const AUTH_TOKEN_STORAGE_KEY = "bill-helper.session-token";
 export const AUTH_STATE_CHANGE_EVENT = "bill-helper:auth-state-changed";
 

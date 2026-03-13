@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: run the `seed_defaults` repository script.
+# - Inputs: callers that import `scripts/seed_defaults.py` and pass module-defined arguments or framework events.
+# - Outputs: CLI-side workflow helpers and the `seed_defaults` entrypoint.
+# - Side effects: command-line execution and repository automation as implemented below.
 """Seed a database with the default tags, entity categories, and accounts.
 
 Can be used standalone to reset the local DB or imported by other scripts.

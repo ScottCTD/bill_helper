@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `memberships` frontend module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/drafts/memberships.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `memberships`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type { AgentChangeItem, GroupMemberRole } from "../../../../lib/types";
 
 import { asRecord, asString, normalizeReferenceId, recordsEqual } from "./common";

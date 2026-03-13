@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `contracts_users` module.
+# - Inputs: callers that import `backend/contracts_users.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `contracts_users`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field

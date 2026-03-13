@@ -1,9 +1,14 @@
+# CALLING SPEC:
+# - Purpose: translate HTTP requests and responses for `entries` routes.
+# - Inputs: callers that import `backend/routers/entries.py` and pass module-defined arguments or framework events.
+# - Outputs: router callables and request/response adapters for `entries`.
+# - Side effects: FastAPI routing and HTTP error translation.
 from __future__ import annotations
 
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -50,6 +55,8 @@ router = APIRouter(prefix="/entries", tags=["entries"])
 
 
 class EntryListQueryParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     start_date: date | None = None
     end_date: date | None = None
     kind: EntryKind | None = None

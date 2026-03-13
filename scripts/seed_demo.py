@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: run the `seed_demo` repository script.
+# - Inputs: callers that import `scripts/seed_demo.py` and pass module-defined arguments or framework events.
+# - Outputs: CLI-side workflow helpers and the `seed_demo` entrypoint.
+# - Side effects: command-line execution and repository automation as implemented below.
 from __future__ import annotations
 
 import argparse

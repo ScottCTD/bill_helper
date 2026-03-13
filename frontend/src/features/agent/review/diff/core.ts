@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `core` frontend module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/diff/core.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `core`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type { DiffLine, DiffLineSign, DiffMetadata, DiffStats, FlatField, JsonRecord, ProposalDiff } from "./types";
 
 type FlatFieldMap = Map<string, FlatField>;

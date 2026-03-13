@@ -9,6 +9,7 @@ Use ADRs for durable technical decisions that affect architecture, data contract
 - `0003-xdg_shared_config_and_data.md`: moved default config and runtime data to shared XDG locations.
 - `0004-entity_root_account_subtype.md`: made `Account` a shared-primary-key `Entity` subtype and standardized delete semantics around that model.
 - `0005-filter_group_analytics.md`: replaced dashboard-local daily/non-daily tagging with saved filter-group analytics classification.
+- `0006-llm-oriented-design-policy.md`: adopted the non-iOS LLM-oriented design baseline and documented the temporary iOS defer.
 
 ## Naming
 

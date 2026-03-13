@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `database` module.
+# - Inputs: callers that import `backend/database.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `database`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from collections.abc import Generator

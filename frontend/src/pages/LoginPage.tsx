@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `LoginPage` React UI module.
+ * - Inputs: callers that import `frontend/src/pages/LoginPage.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `LoginPage`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { type FormEvent, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 

@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `format` frontend module.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/format.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `format`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type { AgentThreadSummary } from "../../../lib/types";
 
 export function prettyDateTime(value: string): string {

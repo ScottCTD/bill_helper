@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# CALLING SPEC:
+# - Purpose: run the `dev_up` repository script.
+# - Inputs: callers that import `scripts/dev_up.py` and pass module-defined arguments or framework events.
+# - Outputs: CLI-side workflow helpers and the `dev_up` entrypoint.
+# - Side effects: command-line execution and repository automation as implemented below.
 from __future__ import annotations
 
 from dataclasses import dataclass, field

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: translate HTTP requests and responses for `agent` routes.
+# - Inputs: callers that import `backend/routers/agent.py` and pass module-defined arguments or framework events.
+# - Outputs: router callables and request/response adapters for `agent`.
+# - Side effects: FastAPI routing and HTTP error translation.
 from fastapi import APIRouter
 
 from backend.routers.agent_attachments import router as attachments_router

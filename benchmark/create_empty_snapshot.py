@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide benchmark support for `create_empty_snapshot`.
+# - Inputs: callers that import `benchmark/create_empty_snapshot.py` and pass module-defined arguments or framework events.
+# - Outputs: benchmark helpers, contracts, or entrypoints for `create_empty_snapshot`.
+# - Side effects: benchmark data loading, execution, or reporting as implemented below.
 """Create the default benchmark snapshot: accounts, default tags, entity categories, user memory."""
 
 from __future__ import annotations

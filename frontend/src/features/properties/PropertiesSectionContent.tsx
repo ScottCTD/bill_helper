@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `PropertiesSectionContent` React UI module.
+ * - Inputs: callers that import `frontend/src/features/properties/PropertiesSectionContent.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `PropertiesSectionContent`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { CurrenciesSection } from "./sections/CurrenciesSection";
 import { TagsSection } from "./sections/TagsSection";
 import { TaxonomyTermsSection } from "./sections/TaxonomyTermsSection";

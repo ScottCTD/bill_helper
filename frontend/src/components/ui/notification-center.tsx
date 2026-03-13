@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `notification-center` React UI module.
+ * - Inputs: callers that import `frontend/src/components/ui/notification-center.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `notification-center`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import {
   createContext,
   type ReactNode,

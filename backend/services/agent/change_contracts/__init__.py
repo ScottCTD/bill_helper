@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: define package exports and module boundaries for `backend/services/agent/change_contracts`.
+# - Inputs: callers that import `backend/services/agent/change_contracts/__init__.py` and pass module-defined arguments or framework events.
+# - Outputs: package-level exports for `backend/services/agent/change_contracts`.
+# - Side effects: import-time package wiring only.
 from __future__ import annotations
 
 from collections.abc import Mapping

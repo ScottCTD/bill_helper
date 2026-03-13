@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `catalog` frontend module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/drafts/catalog.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `catalog`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type { AgentChangeItem, GroupType } from "../../../../lib/types";
 
 import {

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: run the `check_docs_sync` repository script.
+# - Inputs: callers that import `scripts/check_docs_sync.py` and pass module-defined arguments or framework events.
+# - Outputs: CLI-side workflow helpers and the `check_docs_sync` entrypoint.
+# - Side effects: command-line execution and repository automation as implemented below.
 from __future__ import annotations
 
 import re

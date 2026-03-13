@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `App` React UI module.
+ * - Inputs: callers that import `frontend/src/App.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `App`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 

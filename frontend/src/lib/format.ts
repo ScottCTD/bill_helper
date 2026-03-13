@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `format` frontend module.
+ * - Inputs: callers that import `frontend/src/lib/format.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `format`.
+ * - Side effects: module-local frontend behavior only.
+ */
 export function formatMinor(amountMinor: number, currencyCode: string): string {
   const normalizedCurrencyCode = currencyCode.trim().toUpperCase() || "CAD";
   const value = amountMinor / 100;

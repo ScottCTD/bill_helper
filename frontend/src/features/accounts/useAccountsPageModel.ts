@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useAccountsPageModel` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/accounts/useAccountsPageModel.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useAccountsPageModel`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 

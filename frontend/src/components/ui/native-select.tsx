@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `native-select` React UI module.
+ * - Inputs: callers that import `frontend/src/components/ui/native-select.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `native-select`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import * as React from "react";
 import { ChevronDown } from "lucide-react";
 

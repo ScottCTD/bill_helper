@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `GroupMemberEditorModal` React UI module.
+ * - Inputs: callers that import `frontend/src/components/GroupMemberEditorModal.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `GroupMemberEditorModal`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { useEffect, useMemo, useState } from "react";
 
 import type { GroupMemberCreatePayload, GroupMemberRole, GroupType } from "../lib/types";

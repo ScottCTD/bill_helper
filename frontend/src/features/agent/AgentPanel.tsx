@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `AgentPanel` React UI module.
+ * - Inputs: callers that import `frontend/src/features/agent/AgentPanel.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `AgentPanel`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { PanelRight, PanelRightClose } from "lucide-react";
 
 import { DeleteConfirmDialog } from "../../components/DeleteConfirmDialog";

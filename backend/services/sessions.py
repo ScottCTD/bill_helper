@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `sessions`.
+# - Inputs: callers that import `backend/services/sessions.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `sessions`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from datetime import datetime, timezone

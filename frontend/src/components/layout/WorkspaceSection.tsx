@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `WorkspaceSection` React UI module.
+ * - Inputs: callers that import `frontend/src/components/layout/WorkspaceSection.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `WorkspaceSection`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import type { ReactNode } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";

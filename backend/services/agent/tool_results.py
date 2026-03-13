@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `tool_results`.
+# - Inputs: callers that import `backend/services/agent/tool_results.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `tool_results`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from typing import Any

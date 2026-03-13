@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `SettingsGeneralSection` React UI module.
+ * - Inputs: callers that import `frontend/src/features/settings/SettingsGeneralSection.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `SettingsGeneralSection`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { FormField } from "../../components/ui/form-field";
 import { NativeSelect } from "../../components/ui/native-select";

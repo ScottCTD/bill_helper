@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: translate HTTP requests and responses for `dashboard` routes.
+# - Inputs: callers that import `backend/routers/dashboard.py` and pass module-defined arguments or framework events.
+# - Outputs: router callables and request/response adapters for `dashboard`.
+# - Side effects: FastAPI routing and HTTP error translation.
 from __future__ import annotations
 
 from datetime import date
@@ -9,7 +14,7 @@ from backend.auth.contracts import RequestPrincipal
 from backend.auth.dependencies import get_current_principal
 from backend.database import get_db
 from backend.schemas_finance import DashboardRead, DashboardTimelineRead
-from backend.services.finance import (
+from backend.services.finance_dashboard import (
     build_dashboard_read,
     build_dashboard_timeline_read,
     month_window,

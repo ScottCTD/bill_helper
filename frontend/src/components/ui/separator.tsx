@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `separator` React UI module.
+ * - Inputs: callers that import `frontend/src/components/ui/separator.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `separator`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import * as React from "react";
 import * as SeparatorPrimitive from "@radix-ui/react-separator";
 

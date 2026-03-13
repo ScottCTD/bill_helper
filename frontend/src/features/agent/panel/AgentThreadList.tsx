@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `AgentThreadList` React UI module.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/AgentThreadList.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `AgentThreadList`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 

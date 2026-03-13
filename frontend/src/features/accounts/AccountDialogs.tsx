@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `AccountDialogs` React UI module.
+ * - Inputs: callers that import `frontend/src/features/accounts/AccountDialogs.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `AccountDialogs`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import type { FormEvent } from "react";
 
 import type { Account, Reconciliation, Snapshot } from "../../lib/types";

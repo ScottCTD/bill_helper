@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide benchmark support for `io_utils`.
+# - Inputs: callers that import `benchmark/io_utils.py` and pass module-defined arguments or framework events.
+# - Outputs: benchmark helpers, contracts, or entrypoints for `io_utils`.
+# - Side effects: benchmark data loading, execution, or reporting as implemented below.
 """Benchmark filesystem IO helpers."""
 
 from __future__ import annotations

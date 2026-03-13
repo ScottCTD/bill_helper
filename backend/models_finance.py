@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `models_finance` module.
+# - Inputs: callers that import `backend/models_finance.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `models_finance`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from datetime import date, datetime

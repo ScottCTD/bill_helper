@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useAgentPanelQueries` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/useAgentPanelQueries.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useAgentPanelQueries`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 

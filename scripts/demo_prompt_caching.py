@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: run the `demo_prompt_caching` repository script.
+# - Inputs: callers that import `scripts/demo_prompt_caching.py` and pass module-defined arguments or framework events.
+# - Outputs: CLI-side workflow helpers and the `demo_prompt_caching` entrypoint.
+# - Side effects: command-line execution and repository automation as implemented below.
 """Demonstrate LiteLLM prompt-caching cost savings on Bedrock Claude Sonnet.
 
 This script sends a series of LLM calls that mirror a multi-turn ReAct agent

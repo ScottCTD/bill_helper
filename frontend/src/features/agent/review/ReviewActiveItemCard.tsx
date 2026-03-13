@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `ReviewActiveItemCard` React UI module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/ReviewActiveItemCard.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `ReviewActiveItemCard`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import type { ReactNode } from "react";
 
 import { Badge } from "../../../components/ui/badge";

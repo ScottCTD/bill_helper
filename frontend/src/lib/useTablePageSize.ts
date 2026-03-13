@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useTablePageSize` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/lib/useTablePageSize.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useTablePageSize`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const ROW_HEIGHT = 41; // px – matches .entries-table tbody td py-2 + content

@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `AgentThreadPanel` React UI module.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/AgentThreadPanel.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `AgentThreadPanel`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import type { AgentThreadSummary } from "../../../lib/types";
 import { AgentThreadList } from "./AgentThreadList";
 

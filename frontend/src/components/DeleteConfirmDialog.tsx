@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `DeleteConfirmDialog` React UI module.
+ * - Inputs: callers that import `frontend/src/components/DeleteConfirmDialog.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `DeleteConfirmDialog`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Button } from "./ui/button";
 import {
   Dialog,

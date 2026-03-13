@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: run the `bootstrap_admin` repository script.
+# - Inputs: callers that import `scripts/bootstrap_admin.py` and pass module-defined arguments or framework events.
+# - Outputs: CLI-side workflow helpers and the `bootstrap_admin` entrypoint.
+# - Side effects: command-line execution and repository automation as implemented below.
 from __future__ import annotations
 
 import argparse

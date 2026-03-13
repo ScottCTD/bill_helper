@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `ReviewTocSection` React UI module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/ReviewTocSection.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `ReviewTocSection`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Badge } from "../../../components/ui/badge";
 import { cn } from "../../../lib/utils";
 import {

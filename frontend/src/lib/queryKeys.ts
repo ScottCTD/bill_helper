@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `queryKeys` frontend module.
+ * - Inputs: callers that import `frontend/src/lib/queryKeys.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `queryKeys`.
+ * - Side effects: module-local frontend behavior only.
+ */
 export type EntryListFiltersKey = {
   start_date?: string;
   end_date?: string;

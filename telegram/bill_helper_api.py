@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide Telegram integration behavior for `bill_helper_api`.
+# - Inputs: callers that import `telegram/bill_helper_api.py` and pass module-defined arguments or framework events.
+# - Outputs: Telegram handlers, models, or helpers exported by `bill_helper_api`.
+# - Side effects: Telegram I/O and bot workflow integration as implemented below.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator

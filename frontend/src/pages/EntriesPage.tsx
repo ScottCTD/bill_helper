@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `EntriesPage` React UI module.
+ * - Inputs: callers that import `frontend/src/pages/EntriesPage.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `EntriesPage`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";

@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `AdminPage` React UI module.
+ * - Inputs: callers that import `frontend/src/pages/AdminPage.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `AdminPage`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "react-router-dom";

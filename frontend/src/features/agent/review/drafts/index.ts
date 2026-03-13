@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: re-export the public surface for `frontend/src/features/agent/review/drafts`.
+ * - Inputs: callers that import `frontend/src/features/agent/review/drafts/index.ts` and pass module-defined arguments or framework events.
+ * - Outputs: public exports for `frontend/src/features/agent/review/drafts`.
+ * - Side effects: module export wiring only.
+ */
 export type {
   AccountReviewDraft,
   EntityReviewDraft,

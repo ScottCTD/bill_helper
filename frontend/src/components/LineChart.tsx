@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `LineChart` React UI module.
+ * - Inputs: callers that import `frontend/src/components/LineChart.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `LineChart`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import type { DailyExpensePoint } from "../lib/types";
 
 interface LineChartProps {

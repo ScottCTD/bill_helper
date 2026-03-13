@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `schemas_auth` module.
+# - Inputs: callers that import `backend/schemas_auth.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `schemas_auth`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from datetime import datetime
@@ -12,7 +17,11 @@ from backend.contracts_users import (
 )
 
 
-class AuthUserRead(BaseModel):
+class AuthSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class AuthUserRead(AuthSchema):
     id: str
     name: str
     is_admin: bool = False
@@ -20,13 +29,13 @@ class AuthUserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class AuthSessionRead(BaseModel):
+class AuthSessionRead(AuthSchema):
     user: AuthUserRead
     session_id: str | None = None
     is_admin_impersonation: bool = False
 
 
-class AuthLoginRequest(BaseModel):
+class AuthLoginRequest(AuthSchema):
     username: str = Field(min_length=1, max_length=255)
     password: str = Field(min_length=1, max_length=255)
 
@@ -35,7 +44,7 @@ class AuthLoginResponse(AuthSessionRead):
     token: str
 
 
-class AdminSessionRead(BaseModel):
+class AdminSessionRead(AuthSchema):
     id: str
     user_id: str
     user_name: str

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `benchmark_interface`.
+# - Inputs: callers that import `backend/services/agent/benchmark_interface.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `benchmark_interface`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 import time

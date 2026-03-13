@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useAgentThreadReviewController` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/agent/review/useAgentThreadReviewController.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useAgentThreadReviewController`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
 
 import type { AgentChangeItem } from "../../../lib/types";

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `pricing`.
+# - Inputs: callers that import `backend/services/agent/pricing.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `pricing`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 import threading

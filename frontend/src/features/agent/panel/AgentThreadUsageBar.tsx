@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `AgentThreadUsageBar` React UI module.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/AgentThreadUsageBar.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `AgentThreadUsageBar`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { formatUsdCost, formatUsagePercent, formatUsageTokens } from "./format";
 
 interface AgentThreadUsageBarProps {

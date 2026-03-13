@@ -1,11 +1,20 @@
+# CALLING SPEC:
+# - Purpose: provide benchmark support for `schemas`.
+# - Inputs: callers that import `benchmark/schemas.py` and pass module-defined arguments or framework events.
+# - Outputs: benchmark helpers, contracts, or entrypoints for `schemas`.
+# - Side effects: benchmark data loading, execution, or reporting as implemented below.
 """Pydantic schemas for benchmark case input and ground truth."""
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class CaseInput(BaseModel):
+class BenchmarkModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class CaseInput(BenchmarkModel):
     text: str = Field(description="User message text sent to the agent")
     attachment_paths: list[str] = Field(
         default_factory=list,
@@ -21,15 +30,15 @@ class CaseInput(BaseModel):
 # Ground truth
 # ---------------------------------------------------------------------------
 
-class GroundTruthTag(BaseModel):
+class GroundTruthTag(BenchmarkModel):
     name: str
     type: str | None = None
 
-class GroundTruthEntity(BaseModel):
+class GroundTruthEntity(BenchmarkModel):
     name: str
     category: str | None = None
 
-class GroundTruthEntry(BaseModel):
+class GroundTruthEntry(BenchmarkModel):
     kind: str = Field(pattern="^(EXPENSE|INCOME|TRANSFER)$")
     date: str = Field(description="ISO date YYYY-MM-DD")
     name: str
@@ -40,7 +49,7 @@ class GroundTruthEntry(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
-class GroundTruth(BaseModel):
+class GroundTruth(BenchmarkModel):
     tags: list[GroundTruthTag] = Field(default_factory=list)
     entities: list[GroundTruthEntity] = Field(default_factory=list)
     entries: list[GroundTruthEntry] = Field(default_factory=list)
@@ -50,15 +59,15 @@ class GroundTruth(BaseModel):
 # Predicted (extracted from agent tool calls)
 # ---------------------------------------------------------------------------
 
-class PredictedTag(BaseModel):
+class PredictedTag(BenchmarkModel):
     name: str | None = None
     type: str | None = None
 
-class PredictedEntity(BaseModel):
+class PredictedEntity(BenchmarkModel):
     name: str | None = None
     category: str | None = None
 
-class PredictedEntry(BaseModel):
+class PredictedEntry(BenchmarkModel):
     kind: str | None = None
     date: str | None = None
     name: str | None = None
@@ -70,7 +79,7 @@ class PredictedEntry(BaseModel):
     markdown_notes: str | None = None
 
 
-class CaseResult(BaseModel):
+class CaseResult(BenchmarkModel):
     case_id: str
     model: str
     tags: list[PredictedTag] = Field(default_factory=list)

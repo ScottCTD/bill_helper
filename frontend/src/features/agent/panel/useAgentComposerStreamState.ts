@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useAgentComposerStreamState` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/useAgentComposerStreamState.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useAgentComposerStreamState`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 

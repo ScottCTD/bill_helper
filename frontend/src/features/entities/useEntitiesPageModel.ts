@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useEntitiesPageModel` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/entities/useEntitiesPageModel.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useEntitiesPageModel`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { type FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 

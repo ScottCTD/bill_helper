@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: translate HTTP requests and responses for `settings` routes.
+# - Inputs: callers that import `backend/routers/settings.py` and pass module-defined arguments or framework events.
+# - Outputs: router callables and request/response adapters for `settings`.
+# - Side effects: FastAPI routing and HTTP error translation.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends

@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useAgentComposerActions` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/useAgentComposerActions.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useAgentComposerActions`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 

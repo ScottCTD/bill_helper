@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `Sidebar` React UI module.
+ * - Inputs: callers that import `frontend/src/components/Sidebar.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `Sidebar`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import type { CSSProperties } from "react";
 import { NavLink } from "react-router-dom";
 import { Bot, Building2, CreditCard, FolderKanban, Home, Layers3, Network, PanelLeft, PanelLeftClose, Settings2, Shield, SlidersHorizontal } from "lucide-react";

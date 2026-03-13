@@ -230,6 +230,7 @@ Run these after behavior, schema, API, tooling, or UI changes:
 ```bash
 uv run python -m py_compile backend
 OPENROUTER_API_KEY=test uv run pytest backend/tests -q
+uv run python scripts/check_llm_design.py
 cd frontend && npm run test && npm run test:e2e && npm run build
 cd ..
 uv run python scripts/check_docs_sync.py

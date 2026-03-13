@@ -71,6 +71,7 @@ Open the web app, sign in at `/login`, and use the password-backed session for a
 - backend only: `uv run bill-helper-api`
 - frontend only: `cd frontend && npm run dev`
 - backend tests: `OPENROUTER_API_KEY=test uv run pytest backend/tests -q`
+- LLM design check: `uv run python scripts/check_llm_design.py`
 - frontend tests: `cd frontend && npm run test`
 - browser e2e tests: `cd frontend && npm run test:e2e`
 - docs sync: `uv run python scripts/check_docs_sync.py`
@@ -161,6 +162,7 @@ Extended docs live in [`docs/`](docs/):
 - [Data Model](docs/data_model.md)
 - [Development Guide](docs/development.md)
 - [Documentation System](docs/documentation_system.md)
+- [LLM-Oriented Design](docs/llm_oriented_design.md)
 - [Completed Tasks Archive](docs/completed_tasks/README.md)
 - [Agent Billing Assistant](docs/agent_billing_assistant.md)
 

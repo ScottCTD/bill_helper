@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `ReviewModalHeader` React UI module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/ReviewModalHeader.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `ReviewModalHeader`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { Badge } from "../../../components/ui/badge";
 import { DialogDescription, DialogHeader, DialogTitle } from "../../../components/ui/dialog";
 import type { AgentThreadReviewController } from "./useAgentThreadReviewController";

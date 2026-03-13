@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `usePropertiesSectionState` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/properties/usePropertiesSectionState.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `usePropertiesSectionState`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { useState } from "react";
 
 import {

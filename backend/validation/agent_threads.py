@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `agent_threads` module.
+# - Inputs: callers that import `backend/validation/agent_threads.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `agent_threads`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 THREAD_TITLE_MAX_LENGTH = 80

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `catalog`.
+# - Inputs: callers that import `backend/services/agent/proposals/catalog.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `catalog`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from sqlalchemy import func, or_, select

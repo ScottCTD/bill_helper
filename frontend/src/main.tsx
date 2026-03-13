@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `main` React UI module.
+ * - Inputs: callers that import `frontend/src/main.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `main`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

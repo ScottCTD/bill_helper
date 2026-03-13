@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `useEntryTagSuggestion` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/hooks/useEntryTagSuggestion.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `useEntryTagSuggestion`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useNotifications } from "../components/ui/notification-center";

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `validation`.
+# - Inputs: callers that import `backend/services/agent/proposals/group_memberships/validation.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `validation`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from typing import Any

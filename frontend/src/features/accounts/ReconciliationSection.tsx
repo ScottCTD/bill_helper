@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `ReconciliationSection` React UI module.
+ * - Inputs: callers that import `frontend/src/features/accounts/ReconciliationSection.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `ReconciliationSection`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { StatBlock } from "../../components/layout/StatBlock";
 import { Badge } from "../../components/ui/badge";
 import type { Account, Reconciliation, ReconciliationInterval } from "../../lib/types";

@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide Telegram integration behavior for `polling`.
+# - Inputs: callers that import `telegram/polling.py` and pass module-defined arguments or framework events.
+# - Outputs: Telegram handlers, models, or helpers exported by `polling`.
+# - Side effects: Telegram I/O and bot workflow integration as implemented below.
 from __future__ import annotations
 
 import logging

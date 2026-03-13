@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `types` frontend module.
+ * - Inputs: callers that import `frontend/src/features/agent/panel/types.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `types`.
+ * - Side effects: module-local frontend behavior only.
+ */
 export interface DraftAttachment {
   id: string;
   file: File;

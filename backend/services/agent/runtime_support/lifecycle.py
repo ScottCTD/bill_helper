@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: implement focused service logic for `lifecycle`.
+# - Inputs: callers that import `backend/services/agent/runtime_support/lifecycle.py` and pass module-defined arguments or framework events.
+# - Outputs: service functions, contracts, or helpers exported by `lifecycle`.
+# - Side effects: module-defined persistence, validation, or orchestration behavior.
 from __future__ import annotations
 
 from dataclasses import dataclass

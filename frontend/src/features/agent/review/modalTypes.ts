@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `modalTypes` frontend module.
+ * - Inputs: callers that import `frontend/src/features/agent/review/modalTypes.ts` and pass module-defined arguments or framework events.
+ * - Outputs: typed helpers, contracts, or exports from `modalTypes`.
+ * - Side effects: module-local frontend behavior only.
+ */
 import type { AgentChangeItem, AgentRun } from "../../../lib/types";
 
 export interface AgentThreadReviewModalProps {

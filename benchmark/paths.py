@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide benchmark support for `paths`.
+# - Inputs: callers that import `benchmark/paths.py` and pass module-defined arguments or framework events.
+# - Outputs: benchmark helpers, contracts, or entrypoints for `paths`.
+# - Side effects: benchmark data loading, execution, or reporting as implemented below.
 from __future__ import annotations
 
 from pathlib import Path

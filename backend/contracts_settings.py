@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `contracts_settings` module.
+# - Inputs: callers that import `backend/contracts_settings.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `contracts_settings`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 from typing import Any, Literal

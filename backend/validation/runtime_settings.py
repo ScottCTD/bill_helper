@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide the `runtime_settings` module.
+# - Inputs: callers that import `backend/validation/runtime_settings.py` and pass module-defined arguments or framework events.
+# - Outputs: module exports from `runtime_settings`.
+# - Side effects: module-local behavior only.
 from __future__ import annotations
 
 import json

@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: provide the `usePropertiesFilteredData` React hook or UI state helper.
+ * - Inputs: callers that import `frontend/src/features/properties/usePropertiesFilteredData.ts` and pass module-defined arguments or framework events.
+ * - Outputs: hooks and state helpers exported by `usePropertiesFilteredData`.
+ * - Side effects: client-side state coordination and query wiring.
+ */
 import { useMemo } from "react";
 
 import type { Currency, Tag, TaxonomyTerm } from "../../lib/types";

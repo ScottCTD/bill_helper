@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `GroupsPage` React UI module.
+ * - Inputs: callers that import `frontend/src/pages/GroupsPage.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `GroupsPage`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";

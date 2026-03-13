@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `AccountsPage` React UI module.
+ * - Inputs: callers that import `frontend/src/pages/AccountsPage.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `AccountsPage`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import { PageHeader } from "../components/layout/PageHeader";
 import { WorkspaceSection } from "../components/layout/WorkspaceSection";
 import { AccountDialogs } from "../features/accounts/AccountDialogs";

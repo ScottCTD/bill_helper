@@ -1,3 +1,10 @@
+/**
+ * CALLING SPEC:
+ * - Purpose: render the `TagsSection` React UI module.
+ * - Inputs: callers that import `frontend/src/features/properties/sections/TagsSection.tsx` and pass module-defined arguments or framework events.
+ * - Outputs: React components and UI helpers exported by `TagsSection`.
+ * - Side effects: React rendering and user event wiring.
+ */
 import type { FormEvent } from "react";
 import { Plus } from "lucide-react";
 

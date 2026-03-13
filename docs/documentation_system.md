@@ -6,6 +6,7 @@ The docs in this repository are intentionally layered. Do not use one file for e
 
 - `README.md`: onboarding, local setup, run commands, and top-level links.
 - `AGENTS.md`: short working agreement for coding agents, including editing and refactor standards plus links to the right docs.
+- `docs/llm_oriented_design.md`: non-iOS design baseline for LLM-oriented code structure and module contracts.
 - `docs/*.md`: canonical human-facing index and reference docs for current behavior.
 - `backend/docs/*.md`, `frontend/docs/*.md`, `ios/docs/*.md`, `telegram/docs/*.md`, `docs/api/*.md`: focused subsystem docs owned by their packages, with API docs remaining under the shared canonical docs tree.
 - `docs/features/*.md`: cross-cutting feature docs that span multiple packages or layers.
@@ -33,6 +34,7 @@ The docs in this repository are intentionally layered. Do not use one file for e
 | --- | --- | --- |
 | Project setup and dev loop | `README.md` | `docs/development.md` |
 | Documentation policy | `docs/documentation_system.md` | `AGENTS.md`, `docs/README.md` |
+| LLM-oriented non-iOS design policy | `docs/llm_oriented_design.md` | `AGENTS.md`, ADRs |
 | System architecture | `docs/architecture.md` | ADRs, `docs/backend_index.md`, `docs/frontend_index.md` |
 | Repository layout | `docs/repository_structure.md` | `docs/README.md`, package READMEs |
 | Backend architecture and operations | `docs/backend_index.md`, `backend/docs/*.md` | `backend/README.md`, `docs/development.md` |
@@ -55,6 +57,7 @@ If documents conflict, update the primary source first and trim stale secondary 
 - Backend behavior change: update the relevant `backend/docs/*.md` files and the relevant feature doc.
 - Frontend behavior or UX change: update the relevant `frontend/docs/*.md` files and the relevant feature doc.
 - Workflow, setup, or tooling change: update `README.md`, `docs/development.md`, and this file. Include any cache-reset, conditional service startup, log-prefixing, wrapper-to-Python launcher changes, isolated browser-test harnesses, or restart behavior added to local scripts so the dev loop stays reproducible.
+- LLM-oriented architecture policy or enforcement change: update `AGENTS.md`, `docs/llm_oriented_design.md`, this file, and the relevant ADR.
 - For Python tooling, keep local-only developer packages in `dependency-groups.dev` and document the normal workflow with `uv sync` / `uv run ...`, not a published `dev` extra.
 - Major design decision: add or update an ADR in `docs/adr/`.
 - New docs or removed docs: update `docs/README.md`.

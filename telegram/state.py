@@ -1,3 +1,8 @@
+# CALLING SPEC:
+# - Purpose: provide Telegram integration behavior for `state`.
+# - Inputs: callers that import `telegram/state.py` and pass module-defined arguments or framework events.
+# - Outputs: Telegram handlers, models, or helpers exported by `state`.
+# - Side effects: Telegram I/O and bot workflow integration as implemented below.
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -7,7 +12,7 @@ from pathlib import Path
 from tempfile import mkstemp
 from threading import RLock
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from telegram.config import TelegramSettings
 
@@ -16,7 +21,11 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class ChatStateRecord(BaseModel):
+class StateModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ChatStateRecord(StateModel):
     active_thread_id: str | None = None
     active_run_id: str | None = None
     topics_enabled: bool = False
@@ -26,7 +35,7 @@ class ChatStateRecord(BaseModel):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
-class ReviewRunRecord(BaseModel):
+class ReviewRunRecord(StateModel):
     item_message_ids: dict[str, int] = Field(default_factory=dict)
     summary_message_id: int | None = None
 
@@ -34,7 +43,7 @@ class ReviewRunRecord(BaseModel):
 ChatStateRecord.model_rebuild()
 
 
-class _ChatStateFile(BaseModel):
+class _ChatStateFile(StateModel):
     chats: dict[str, ChatStateRecord] = Field(default_factory=dict)
 
 
