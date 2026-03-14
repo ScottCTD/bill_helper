@@ -1,0 +1,1 @@
+to support latest OpenAI models, we need to support using the Response API instead of just the Completion API
