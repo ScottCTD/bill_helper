@@ -7,7 +7,7 @@
  */
 import type { CSSProperties } from "react";
 import { NavLink } from "react-router-dom";
-import { Bot, Building2, CreditCard, FolderKanban, FolderTree, Home, Layers3, Network, PanelLeft, PanelLeftClose, Settings2, Shield } from "lucide-react";
+import { Bot, Building2, CreditCard, FolderKanban, FolderTree, Home, Layers3, Network, PanelLeft, PanelLeftClose, Settings2, Shield, SlidersHorizontal } from "lucide-react";
 
 import { AuthSessionCard, useAuth } from "../features/auth";
 import { cn } from "../lib/utils";
@@ -20,6 +20,7 @@ const navItems = [
   { to: "/accounts", label: "Accounts", icon: CreditCard },
   { to: "/entries", label: "Entries", icon: Layers3 },
   { to: "/groups", label: "Groups", icon: Network },
+  { to: "/filters", label: "Filters", icon: SlidersHorizontal },
   { to: "/entities", label: "Entities", icon: Building2 },
   { to: "/properties", label: "Properties", icon: FolderKanban },
 ] as const;

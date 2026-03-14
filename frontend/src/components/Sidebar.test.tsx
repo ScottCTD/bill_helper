@@ -90,4 +90,37 @@ describe("Sidebar", () => {
 
     expect(screen.getByTestId("auth-session-card")).toHaveAttribute("data-collapsed", "true");
   });
+
+  it("renders filters directly below groups in the sidebar nav", () => {
+    mockUseAuth.mockReturnValue({
+      status: "authenticated",
+      session: {
+        user: { id: "user-3", name: "casey", is_admin: false },
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <Sidebar collapsed={false} width={224} onToggle={vi.fn()} />
+      </MemoryRouter>
+    );
+
+    const navLinks = screen
+      .getAllByRole("link")
+      .map((link) => link.textContent)
+      .filter((label): label is string => Boolean(label));
+
+    expect(navLinks).toEqual([
+      "Agent",
+      "Workspace",
+      "Dashboard",
+      "Accounts",
+      "Entries",
+      "Groups",
+      "Filters",
+      "Entities",
+      "Properties",
+      "Settings",
+    ]);
+  });
 });
