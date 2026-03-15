@@ -9,6 +9,7 @@ Bill Helper is a local-first personal finance ledger with a review-gated AI assi
 - Python 3.13+
 - Node.js 18+
 - [uv](https://docs.astral.sh/uv/)
+- Docker (for the default per-user agent workspace provisioning flow)
 
 ### Install dependencies
 
@@ -44,13 +45,19 @@ See [`docs/development.md`](docs/development.md) and `.env.example` for the full
 uv run alembic upgrade head
 ```
 
+### Build the agent workspace image
+
+```bash
+docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .
+```
+
 ### Create or reset an admin login
 
 ```bash
 uv run python scripts/bootstrap_admin.py --name admin --password admin
 ```
 
-This is the supported bootstrap path for existing databases. On a brand-new demo database, `./scripts/dev_up.sh` may also seed demo data and create `admin` / `admin`.
+This is the supported bootstrap path for existing databases. It now eagerly provisions the admin user's canonical file roots plus named Docker workspace resources, so the configured workspace image must exist first unless you explicitly set `BILL_HELPER_AGENT_WORKSPACE_ENABLED=0`. On a brand-new demo database, `./scripts/dev_up.sh` may also seed demo data and create `admin` / `admin`.
 
 ### Run the app
 
@@ -81,6 +88,7 @@ Open the web app, sign in at `/login`, and use the password-backed session for a
 - Protected API routes use `Authorization: Bearer <token>`.
 - The web app supports password auth only.
 - Admins can manage users and sessions from `/admin`, including impersonation sessions.
+- Agent uploads are stored as canonical per-user files under `{data_dir}/user_files/{user_id}/uploads`.
 - Playwright e2e runs start the backend against a disposable copy of the shared data dir, so browser tests do not mutate the primary local database.
 - Telegram transport can use `TELEGRAM_BACKEND_AUTH_TOKEN` for standard bearer auth or `TELEGRAM_BACKEND_AUTH_HEADERS` for custom proxy/header setups.
 
@@ -100,8 +108,11 @@ All settings use a `BILL_HELPER_` prefix and can be set via `.env` or the in-app
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BILL_HELPER_AGENT_MODEL` | `bedrock/us.anthropic.claude-sonnet-4-6` | LiteLLM model identifier |
+| `BILL_HELPER_AGENT_MODEL` | `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0` | LiteLLM model identifier |
 | `BILL_HELPER_AGENT_MAX_STEPS` | `100` | Max tool-call steps per run |
+| `BILL_HELPER_AGENT_WORKSPACE_ENABLED` | `true` | Enable eager per-user Docker workspace provisioning |
+| `BILL_HELPER_AGENT_WORKSPACE_IMAGE` | `bill-helper-agent-workspace:latest` | Prebuilt Docker image tag used for per-user workspaces |
+| `BILL_HELPER_AGENT_WORKSPACE_DOCKER_BINARY` | `docker` | Docker CLI binary used for workspace lifecycle commands |
 | `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `CAD` | Default currency for new entries |
 | `BILL_HELPER_DASHBOARD_CURRENCY_CODE` | `CAD` | Currency used in dashboard analytics |
 | `CURRENT_USER_TIMEZONE` | `America/Toronto` | Timezone for agent date context |
@@ -115,6 +126,7 @@ backend/                  # FastAPI application
   db_meta.py              # SQLAlchemy metadata root (no runtime side effects)
   database.py             # Engine/session factories and request DB dependency
   routers/                # API route handlers
+  models_files.py         # Canonical per-user file registry ORM model
   services/agent/         # Agent runtime, tools, prompts, model client
   models_finance.py       # Ledger/account/taxonomy ORM models
   models_agent.py         # Agent run/review ORM models
@@ -126,6 +138,7 @@ frontend/                 # React + Vite application
 ios/                      # SwiftUI iOS shell and tests
 telegram/                 # Telegram transport, docs, entrypoints, and tests
 alembic/                  # Database migrations
+docker/                   # Local Dockerfiles, including the agent workspace image
 scripts/                  # Dev and seed scripts
 docs/                     # Extended documentation
 ```

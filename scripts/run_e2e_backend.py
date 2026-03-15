@@ -16,7 +16,7 @@ import tempfile
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ADMIN_NAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin-password"
-DEFAULT_SHARED_DATA_DIR = Path.home() / ".local" / "share" / "bill-helper"
+DEFAULT_SHARED_DATA_DIR = Path.home() / ".local" / "share" / "bill_helper"
 
 
 def _build_parser() -> argparse.ArgumentParser:

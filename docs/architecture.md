@@ -8,15 +8,16 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 
 - Frontend SPA: React + TypeScript + Vite (`http://localhost:5173`)
 - Backend API: FastAPI (`http://localhost:8000`)
-- Database: SQLite (`{data_dir}/bill_helper.db`, default `~/.local/share/bill-helper/`)
-- Agent upload storage: local filesystem under `{data_dir}/agent_uploads`
+- Database: SQLite (`{data_dir}/bill_helper.db`, default `~/.local/share/bill_helper/`)
+- Canonical user file storage: local filesystem under `{data_dir}/user_files/{user_id}/{uploads,artifacts}`
+- Per-user agent workspace resources: one named Docker volume plus one stopped-by-default named container definition per user
 
 ## High-Level Components
 
 - `frontend`: UI pages, agent panel, API calls, cache orchestration
 - `backend/routers`: HTTP endpoint layer
-- `backend/services`: domain logic and agent runtime/review logic
-- `backend/models_finance.py` + `backend/models_agent.py`: SQLAlchemy ORM tables
+- `backend/services`: domain logic, canonical file storage, agent runtime/review logic, and per-user workspace provisioning
+- `backend/models_finance.py` + `backend/models_agent.py` + `backend/models_files.py`: SQLAlchemy ORM tables
 - `alembic`: schema migrations
 
 ## Core Decisions
@@ -29,6 +30,8 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 - soft-delete entries with direct group-membership cleanup
 - AI boundary is append-only proposal creation plus explicit human review apply/reject
 - direct API deletes and agent-applied deletes use the same canonical semantics for tag/entity/account removal
+- durable user-visible files are canonicalized into a per-user registry before higher-level agent attachment linkage
+- user creation/bootstrap eagerly provisions deterministic host and Docker workspace resources for later execution tooling
 
 ## Backend Layering
 
@@ -153,7 +156,8 @@ Cross-page consistency:
 - agent threads are user-owned instead of admin-global; admins can still access everything or impersonate a user
 - review apply uses the approving reviewer principal for scoped entry resolution and owner attribution, not mutable runtime settings identity
 - only image and PDF attachments are accepted in agent messages
-- no arbitrary code execution tools in agent runtime
+- active agent runs still have no arbitrary code execution tools; the provisioned workspace container is reserved for later execution tooling
+- provisioned workspaces mount only the owning user's canonical file root at `/data` as read-only and do not expose `bill_helper.db`
 
 ## Out of Scope (Current)
 

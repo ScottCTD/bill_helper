@@ -13,7 +13,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": apiProxyTarget
+      "/api": {
+        target: apiProxyTarget,
+        ws: true
+      }
     }
   }
 });

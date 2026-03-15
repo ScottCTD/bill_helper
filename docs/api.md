@@ -20,6 +20,7 @@ This file is the API index. Use it to find the focused API docs under `docs/api/
 - `api/core_ledger.md`: accounts, entries, groups, filter-groups, and dashboard endpoints.
 - `api/catalogs_and_settings.md`: auth, admin, users, entities, tags, taxonomies, currencies, and runtime settings endpoints.
 - `api/agent.md`: thread, message, run, tool-call, review, and attachment endpoints.
+- `api/workspace.md`: per-user sandbox lifecycle and file-tree endpoints.
 
 ## Related Docs
 

@@ -46,6 +46,7 @@ Primary tables:
 - `entry_group_members`: direct membership rows connecting a group to either an entry or a child group.
 - `accounts`, `account_snapshots`: account metadata and reconciliation checkpoints.
 - `users`: normalized owners used by entries/accounts/groups/filter groups.
+- `user_files`: canonical per-user registry for durable uploads and future workspace artifacts.
 - `entities`: normalized names for `from`/`to` and account-linked entities.
 - `tags`, `entry_tags`: tag catalog and many-to-many entry mapping.
 - `filter_groups`: per-user saved analytics filters with recursive rule definitions.
@@ -55,8 +56,9 @@ Primary tables:
 Agent review tables:
 
 - `agent_threads`, `agent_messages`, `agent_runs`, `agent_tool_calls`
-- `agent_change_items`, `agent_review_actions`
+- `agent_change_items`, `agent_review_actions`, `agent_message_attachments`
 - `agent_threads.owner_user_id` scopes the agent timeline and all nested run resources to a specific user
+- attachment rows now reference canonical `user_files` records under `{data_dir}/user_files/{user_id}/uploads/...`
 
 Note: entry-level status has been removed; review state lives in `agent_change_items`.
 
@@ -178,24 +180,31 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `0012_remove_related_link_type`
   - `0013_add_account_markdown_body`
   - `0014_remove_account_institution_type`
-  - `0015_add_agent_tool_call_output_text`
-  - `0016_add_user_memory_to_runtime_settings`
-  - `0017_rename_tag_category_taxonomy`
-  - `0018_add_tag_description`
-  - `0019_add_transfer_entry_kind`
-  - `0020_add_agent_message_attachment_original_filename`
-  - `0021_add_agent_run_context_tokens`
-  - `0022_agent_run_events_and_tool_lifecycle`
-  - `0023_add_agent_provider_config`
-  - `0024_entity_root_accounts`
-  - `0025_user_memory_json_list`
-  - `0026_entry_groups_v2`
+- `0015_add_agent_tool_call_output_text`
+- `0016_add_user_memory_to_runtime_settings`
+- `0017_rename_tag_category_taxonomy`
+- `0018_add_tag_description`
+- `0019_add_transfer_entry_kind`
+- `0020_add_agent_message_attachment_original_filename`
+- `0021_add_agent_run_context_tokens`
+- `0022_agent_run_events_and_tool_lifecycle`
+- `0023_add_agent_provider_config`
+- `0024_entity_root_accounts`
+- `0025_user_memory_json_list`
+- `0026_entry_groups_v2`
+- `0027_add_agent_bulk_concurrency_setting`
+- `0028_add_available_agent_models_to_runtime_settings`
+- `0029_add_agent_run_surface`
+- `0030_add_account_agent_change_types`
+- `0031_add_user_is_admin`
 - `0032_add_filter_groups`
 - `0033_multi_user_security`
 - `0034_add_entry_tagging_model_to_runtime_settings`
+- `0035_add_user_files_and_agent_workspace`
 - Operational commands:
   - `uv run alembic upgrade head`
   - `uv run python scripts/bootstrap_admin.py --name <user> --password <pass>`
+  - `docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .`
   - `uv run bill-helper-api`
   - `uv run pytest`
   - `uv run python scripts/check_docs_sync.py`
@@ -204,6 +213,8 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
   - `BILL_HELPER_DEFAULT_CURRENCY_CODE`
   - `BILL_HELPER_DASHBOARD_CURRENCY_CODE`
   - `BILL_HELPER_AGENT_MODEL`
+  - `BILL_HELPER_AGENT_WORKSPACE_ENABLED`
+  - `BILL_HELPER_AGENT_WORKSPACE_IMAGE`
   - provider credentials for selected model (for example `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`)
 
 ## Current Constraints and Limitations

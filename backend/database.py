@@ -13,6 +13,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.config import Settings, get_settings
 from backend.db_meta import Base
+import backend.models_agent  # noqa: F401
+import backend.models_files  # noqa: F401
+import backend.models_finance  # noqa: F401
+import backend.models_settings  # noqa: F401
 
 
 def _sqlite_connect_args(database_url: str) -> dict[str, object]:
@@ -48,12 +52,17 @@ def get_session_maker() -> sessionmaker[Session]:
     return build_session_maker(get_engine())
 
 
-# Backward-compatible alias for existing scripts/tests that import SessionLocal.
-SessionLocal = get_session_maker()
+class _SessionLocalProxy:
+    def __call__(self) -> Session:
+        return get_session_maker()()
+
+
+# Backward-compatible callable alias for existing scripts/tests that import SessionLocal.
+SessionLocal = _SessionLocalProxy()
 
 
 def open_session() -> Session:
-    return SessionLocal()
+    return get_session_maker()()
 
 
 def get_db() -> Generator[Session, None, None]:

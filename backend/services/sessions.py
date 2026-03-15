@@ -82,6 +82,36 @@ def list_active_sessions(db: Session) -> list[UserSession]:
     return rows
 
 
+def count_active_sessions_for_user(db: Session, *, user_id: str) -> int:
+    return len(
+        list(
+            db.scalars(
+                select(UserSession.id).where(
+                    UserSession.user_id == user_id,
+                    or_(
+                        UserSession.expires_at.is_(None),
+                        UserSession.expires_at > utc_now(),
+                    ),
+                )
+            )
+        )
+    )
+
+
+def load_session_by_id(db: Session, *, session_id: str) -> UserSession | None:
+    session_row = db.scalar(
+        select(UserSession)
+        .where(UserSession.id == session_id)
+        .options(joinedload(UserSession.user))
+    )
+    if session_row is None:
+        return None
+    if is_session_expired(session_row):
+        _prune_expired_session(db, session_row)
+        return None
+    return session_row
+
+
 def revoke_session_by_id(db: Session, *, session_id: str) -> bool:
     session_row = db.get(UserSession, session_id)
     if session_row is None:

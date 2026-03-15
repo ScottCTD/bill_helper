@@ -5,10 +5,10 @@
  * - Outputs: React components and UI helpers exported by `AuthProvider`.
  * - Side effects: React rendering and user event wiring.
  */
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { getAuthSession, login, loginAsAdminUser, logout } from "../../lib/api";
+import { getAuthSession, login, loginAsAdminUser, logout, startWorkspace } from "../../lib/api";
 import type { AuthLoginResponse, AuthSession } from "../../lib/types";
 import {
   AUTH_STATE_CHANGE_EVENT,
@@ -34,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<AuthStatus>(() => (getStoredAuthToken() ? "loading" : "unauthenticated"));
   const [session, setSession] = useState<AuthSession | null>(null);
+  const autoStartedWorkspaceSessionIdRef = useRef<string | null>(null);
 
   async function refreshSession() {
     const token = getStoredAuthToken();
@@ -80,6 +81,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener(AUTH_STATE_CHANGE_EVENT, handleAuthStateChange);
     };
   }, [queryClient]);
+
+  useEffect(() => {
+    const sessionId = session?.session_id ?? null;
+    if (status !== "authenticated" || sessionId === null) {
+      autoStartedWorkspaceSessionIdRef.current = null;
+      return;
+    }
+    if (autoStartedWorkspaceSessionIdRef.current === sessionId) {
+      return;
+    }
+    autoStartedWorkspaceSessionIdRef.current = sessionId;
+    void startWorkspace().catch(() => undefined);
+  }, [session?.session_id, status]);
 
   async function loginWithPassword(payload: { username: string; password: string }) {
     const response = await login(payload);

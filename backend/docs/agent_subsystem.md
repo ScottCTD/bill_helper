@@ -59,7 +59,13 @@
 - `backend/services/agent/execution.py`
   - message intake, run start, background continuation, and execution facade for non-runtime callers
 - `backend/services/agent/attachments.py`
-  - attachment file lifecycle helpers
+  - message-to-canonical-file linkage helpers
+- `backend/services/user_files.py`
+  - canonical per-user file storage, hashing, path management, and artifact promotion helpers
+- `backend/services/agent_workspace.py`
+  - per-user workspace spec building plus Docker-backed workspace provisioning/start-stop helpers
+- `backend/services/docker_cli.py`
+  - thin Docker CLI adapter for image, volume, container, and exec lifecycle commands
 - `backend/services/agent/attachment_content.py`
   - public attachment-content seam for message-history callers and tests
 - `backend/services/agent/attachment_content_pdf.py`
@@ -113,10 +119,10 @@
 - `backend/routers/agent_attachments.py`
   - attachment file download endpoint
 - `backend/routers/agent_threads.py`
-  - also owns the message-create HTTP translation, SSE event formatting, upload-root wiring, and background-session launch helpers used only by the thread send endpoints
+  - also owns the message-create HTTP translation, SSE event formatting, and background-session launch helpers used only by the thread send endpoints
 - delegates message validation and run lifecycle policy to `backend/services/agent/execution.py`
 - accepts an optional `surface` form field on message-send routes and persists it onto the created run for background continuation
-- delegates attachment storage and cleanup to `backend/services/agent/attachments.py`
+- delegates canonical upload storage to `backend/services/user_files.py` through `backend/services/agent/execution.py`
 - starts background runs with injected session factories from `get_session_maker()`
 - all agent endpoints require an explicit authenticated request principal; non-admin users are scoped to their own threads while admins can access every thread
 
@@ -159,11 +165,14 @@ Endpoints:
 - `send_intermediate_update` is persisted as a `reasoning_update` event, not as a fake tool call
 - malformed tool-call JSON now persists an explicit tool-call error with raw argument text and decode metadata instead of being silently rewritten to an empty argument object
 - attachment-bearing user turns reach the model as ordered content parts: attachment text, then attachment images, then the typed user prompt
+- new agent uploads are written into the canonical per-user store under `{data_dir}/user_files/{owner_user_id}/uploads/...`, and `agent_message_attachments` link to those canonical rows instead of owning file metadata directly
 - PDFs use PyMuPDF first and then local Tesseract OCR only when native text extraction fails
 - interruption marks runs as `failed` and injects interruption context into the next turn
 - pending proposals can be updated or removed in later turns while still `PENDING_REVIEW`
 - reviewed proposal context now includes reviewer override values when `payload_override` changed the approved payload, so later turns can see concrete edited values instead of only changed field names
 - run snapshots expose persisted `surface`, explicit `reply_surface`, and `terminal_assistant_reply`, so read-time formatting overrides do not masquerade as the stored run surface
+- deleting a thread removes attachment linkage rows but intentionally leaves canonical uploaded payload files in place
+- per-user workspace provisioning is wired from user lifecycle services only; the active agent tool/runtime surface still does not expose code execution inside those containers
 
 ## Review And Apply Behavior
 

@@ -10,6 +10,7 @@ from backend.db_meta import Base
 
 # Import domain models so metadata includes all tables.
 from backend import models_agent  # noqa: F401
+from backend import models_files  # noqa: F401
 from backend import models_finance  # noqa: F401
 from backend import models_settings  # noqa: F401
 

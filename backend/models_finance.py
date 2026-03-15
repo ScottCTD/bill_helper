@@ -112,6 +112,10 @@ class User(Base):
         foreign_keys="FilterGroup.owner_user_id",
         cascade="all, delete-orphan",
     )
+    owned_files: Mapped[list["UserFile"]] = relationship(
+        foreign_keys="UserFile.owner_user_id",
+        cascade="all, delete-orphan",
+    )
     sessions: Mapped[list[UserSession]] = relationship(
         back_populates="user",
         foreign_keys="UserSession.user_id",

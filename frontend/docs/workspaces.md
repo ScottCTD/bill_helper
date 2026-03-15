@@ -149,6 +149,21 @@
 - page shell delegates the actual CRUD surface to `frontend/src/features/filterGroups/FilterGroupsManager.tsx`
 - each saved group exposes a direct `View matching entries` link that opens the entries workspace scoped to that group
 
+## Workspace
+
+### `frontend/src/pages/WorkspacePage.tsx`
+
+- dedicated current-user workspace page at `/workspace`
+- route is IDE-first and strips away extra page chrome: when the workspace is healthy, the page is just the embedded `code-server` iframe rather than a tree-first CRUD layout
+- the workspace shell stays mounted under the authenticated app chrome, so switching from `/workspace` to another in-app route and back reuses the same iframe instead of remounting `code-server`
+- the IDE opens the `/workspace` volume root, which now contains two user-facing top-level folders: `workspace/` for writable working files and `user_data/`, a symlink to the read-only canonical user file tree (`/data/user_data/{uploads,artifacts}`) rendered with human filenames instead of raw storage UUIDs
+- the workspace image ships with the web-compatible `chocolatedesue.modern-pdf-preview` extension preinstalled so PDFs in `user_data/` open inside the browser IDE instead of falling back to binary text
+- the embedded `code-server` runtime writes default user settings that disable built-in VS Code AI surfaces, move the workbench side bar to the right to avoid fighting the app-level nav on the left, and open PDFs in single-page mode by default
+- on entry, the page calls `POST /workspace/ide/session` to start the workspace if needed, mint the narrow workspace cookie, and load the proxied IDE
+- while the IDE session or iframe is still starting, the stage shows a centered loading spinner instead of static copy cards
+- degraded or narrow/mobile states now use one minimal fallback card only; the old in-app file-tree/details surface was removed instead of being kept as a compatibility panel
+- narrow/mobile viewports do not embed the IDE; they show a desktop-first message only
+
 ## Settings
 
 ### `frontend/src/pages/SettingsPage.tsx`

@@ -35,6 +35,8 @@ describe("Sidebar", () => {
     );
 
     expect(screen.queryByText("Local-first ledger with AI review")).not.toBeInTheDocument();
+    const workspaceLink = screen.getByRole("link", { name: "Workspace" });
+    expect(workspaceLink).toHaveAttribute("href", "/workspace");
     const adminLink = screen.getByRole("link", { name: "Admin" });
     expect(adminLink).toHaveAttribute("href", "/admin");
     expect(screen.getByTestId("auth-session-card")).toBeInTheDocument();
@@ -62,6 +64,7 @@ describe("Sidebar", () => {
     );
 
     expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Workspace" })).toHaveAttribute("href", "/workspace");
     expect(screen.getByTestId("auth-session-card")).toBeInTheDocument();
 
     const footer = container.querySelector(".sidebar-footer");

@@ -10,6 +10,7 @@
 - `pyproject.toml`: Python package metadata, dependencies, scripts, pytest config.
 - `uv.lock`: locked Python dependency graph for `uv`.
 - `alembic.ini`: Alembic runtime/logging configuration.
+- `docker/`: Dockerfiles for local sandbox/runtime images, including the agent workspace image.
 - `ios/`: SwiftUI iOS MVP workspace containing the app shell target, shared mobile core sources, feature surfaces, `ios/docs/` client notes, and focused API/unit tests.
 - `telegram/`: top-level Telegram transport package with `telegram/README.md`, `telegram/docs/` implementation notes, config, PTB application/handler wiring, the `telegram/ptb.py` import-collision shim/re-export for `python-telegram-bot`, polling/webhook intake adapters, file/reply helpers, and targeted tests for the bot integration surface.
 
@@ -51,6 +52,7 @@
 - `versions/0032_add_filter_groups.py`: adds principal-owned saved filter-group definitions for dashboard classification and analytics slices.
 - `versions/0033_multi_user_security.py`: adds password hashes and sessions, makes owned resources explicitly user-scoped, and migrates user deletion to cascade semantics.
 - `versions/0034_add_entry_tagging_model_to_runtime_settings.py`: adds the optional runtime override for inline AI entry tag suggestions (`runtime_settings.entry_tagging_model`).
+- `versions/0035_add_user_files_and_agent_workspace.py`: adds the canonical `user_files` registry, rewires historical agent attachments to it, and introduces per-user workspace provisioning support.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
@@ -64,6 +66,7 @@
 - `enums_agent.py`: agent run/review/message enums.
 - `models_finance.py`: ledger/account/entity/tag/taxonomy/filter-group/entry ORM models.
 - `models_agent.py`: agent thread/run/tool-call/change/review ORM models.
+- `models_files.py`: canonical per-user durable file registry ORM model.
 - `models_settings.py`: runtime settings ORM model and table mapping.
 - `contracts_groups.py`: shared group create/update contracts and the typed group-member target payload used by schemas, routers, services, and group-member apply flows.
 - `contracts_users.py`: shared user create/update contracts reused by schemas, routers, and services.
@@ -73,6 +76,7 @@
 - `schemas_agent.py`: agent thread/message/run/review request/response schemas.
 - `schemas_auth.py`: auth, admin-user, and admin-session request/response schemas.
 - `schemas_settings.py`: runtime settings request/response schemas.
+- `schemas_workspace.py`: current-user workspace snapshot and recursive file-tree schemas.
 - `auth/`: request-principal contracts, explicit dev-session header parsing, and FastAPI auth dependencies.
 - `validation/`: neutral validation/normalization helpers plus shared contract field types used by schemas, services, and tool-input models.
 - `main.py`: FastAPI app creation, routing, CORS, health check.
@@ -95,6 +99,7 @@
 - `dashboard.py`: monthly analytics endpoint.
 - `agent.py`: append-only agent thread/message/run/review endpoints.
 - `settings.py`: runtime settings read/update endpoints backed by `models_settings.py` / `schemas_settings.py`, with env fallback where applicable and DB-backed list-form `user_memory`.
+- `workspace.py`: current-user workspace snapshot, explicit start/stop endpoints, IDE launch endpoint, and same-origin IDE proxy routes for the per-user sandbox.
 - non-admin principal scope applies to owned-resource routes (`accounts`, `entries`, `users`, `groups`, `dashboard`).
 - shared dictionary mutation routes (`entities`, `tags`, `taxonomies` POST/PATCH, plus entity and tag DELETE) require admin principal.
 
@@ -117,6 +122,12 @@
 - `serializers.py`: ORM-to-schema mapping helpers.
 - `taxonomy.py`: shared taxonomy normalization, term assignment, and usage-count helpers.
 - `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, including DB-backed ordered `user_memory` and `available_agent_models` support.
+- `user_files.py`: canonical per-user file path management, atomic writes/imports, hashing, and artifact-promotion helpers.
+- `user_file_workspace_view.py`: backend-managed read-only workspace mirror stored under each user's canonical file root and exposed inside the IDE as `/workspace/user_data`.
+- `docker_cli.py`: thin Docker CLI adapter for image/volume/container lifecycle helpers.
+- `agent_workspace.py`: deterministic per-user workspace spec construction plus Docker-backed provisioning/start-stop/remove helpers.
+- `workspace_browser.py`: current-user workspace snapshot shaping for lifecycle and IDE launch state.
+- `workspace_ide.py`: IDE launch-cookie helpers plus same-origin proxy header policy for `code-server`.
 - `agent/`: agent runtime, tool execution, prompt-size counting, serialization, prompt/model adapters, and review apply handlers.
   - `tool_args/`: focused tool-input package for read filters, progress/session commands, thread rename, and pending-proposal admin wrappers.
   - `session_tools/`: session-scoped non-proposal tool handlers for progress updates, add-only memory appends, and thread rename operations.
@@ -126,7 +137,7 @@
   - `error_policy.py`: shared recoverable-error policy/result primitives and contextual fallback logging.
   - `run_orchestrator.py`: shared run-step state machine used by runtime sync/stream adapters and benchmark runner.
   - `execution.py`: agent execution-policy service (message intake/run lifecycle/context-token reads) plus benchmark/test execution facade methods.
-  - `attachments.py`: attachment lifecycle helpers for upload persistence and thread-level directory cleanup.
+  - `attachments.py`: message-to-canonical-file linkage helpers for attachment rows.
   - `attachment_content.py`: public attachment-content seam plus vision capability checks.
   - `attachment_content_pdf.py`: PDF text extraction, OCR fallback, render, and recoverable parse helpers.
   - `attachment_content_assembly.py`: attachment display-name, data-url, and model-content assembly helpers.
@@ -155,6 +166,7 @@
 - `test_migrations_core.py`: migration regression coverage, including legacy link-to-typed-group conversion.
 - `test_taxonomies.py`: taxonomy endpoints and tag/entity category assignment behavior tests.
 - `test_auth_boundaries.py`: app-level principal dependency boundary regression tests.
+- `test_workspace.py`: current-user workspace API coverage for snapshot scoping and disabled-mode lifecycle semantics.
 - `test_benchmark_seed_workflows.py`: benchmark/seed workflow regression tests.
 
 ## Frontend (`/frontend`)
@@ -199,6 +211,7 @@
 - `DashboardPage.tsx`: tabbed interactive analytics dashboard (overview/daily/breakdowns/insights) backed by Recharts.
 - `LoginPage.tsx`: password sign-in page for the browser app.
 - `AdminPage.tsx`: admin-only user/session management workspace.
+- `WorkspacePage.tsx`: current-user workspace IDE shell with iframe launch and minimal degraded/mobile fallback states.
 - `SettingsPage.tsx`: thin runtime-settings page shell that composes the `features/settings` controller and section modules.
 - `EntriesPage.tsx`: list/filter/delete entries and open popup create/edit editor.
 - `EntryDetailPage.tsx`: show entry detail, direct-group context, direct-group graph, and popup editing.
@@ -209,12 +222,13 @@
 - `AccountsPage.test.tsx`: page-level integration tests for account create, snapshot, and delete flows.
 - `EntriesPage.test.tsx`: page-level integration tests for missing-entity markers in the entries table.
 - `PropertiesPage.test.tsx`: page-level integration tests for taxonomy and property delete flows.
+- `WorkspacePage.test.tsx`: page-level integration tests for workspace IDE launch, degraded states, and narrow-screen fallback.
 
 #### Feature Modules (`/frontend/src/features`)
 
 - `auth/`
   - `storage.ts`: localStorage-backed bearer token helpers.
-  - `AuthProvider.tsx`: app-wide auth context and `/auth/me` bootstrap.
+  - `AuthProvider.tsx`: app-wide auth context, `/auth/me` bootstrap, and best-effort workspace auto-start after auth restoration.
   - `AuthSessionCard.tsx`: sidebar logout control that reflects the signed-in user.
 - `accounts/`
   - `useAccountsPageModel.ts`: query/mutation orchestration, derived state, and action handlers.
@@ -242,6 +256,8 @@
 
 - `types.ts`: shared TS API/data types.
 - `api.ts`: fetch wrappers and API request functions, including shared bearer-token injection plus admin/auth helpers.
+- `types/workspace.ts`: workspace snapshot and recursive file-tree contracts.
+- `api/workspace.ts`: current-user workspace snapshot and start/stop request helpers.
 - `format.ts`: money formatting and date helpers.
 - `queryKeys.ts`: centralized TanStack Query key factory for all domains.
 - `queryInvalidation.ts`: shared cache invalidation rules after mutations/review actions, including group-driven entry/group refresh.
@@ -267,7 +283,7 @@
 - `/scripts/bootstrap_admin.py`: create or reset an admin password-backed login and upgrade the database to head when needed.
 - `/scripts/setup_shared_env.sh`: copies `.env` (or `.env.example`) to `~/.config/bill-helper/.env` for cross-worktree secret sharing.
 - `/scripts/check_docs_sync.py`: docs consistency checks (migration refs + stale term detection + index links).
-- `/.data` (runtime, legacy): per-worktree SQLite DB override location (ignored in git). Default data location is `~/.local/share/bill-helper/`.
+- `/.data` (runtime, legacy): per-worktree SQLite DB override location (ignored in git). Default data location is `~/.local/share/bill_helper/`.
 
 ## Benchmark (`/benchmark`)
 

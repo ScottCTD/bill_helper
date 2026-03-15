@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 
 from backend.database import get_session_maker
 from backend.models_finance import UserSession
+from backend.routers import admin as admin_router
+from backend.routers import auth as auth_router
 from backend.services.passwords import password_reset_required_hash
 from backend.services.users import create_user_with_unique_name, find_user_by_name
 
@@ -34,6 +36,24 @@ def test_logout_revokes_current_session_and_blocks_token_reuse(client):
         assert db.get(UserSession, session_id) is None
     finally:
         db.close()
+
+
+def test_login_triggers_best_effort_workspace_start(anonymous_client, monkeypatch):
+    started_user_ids: list[str] = []
+    monkeypatch.setattr(
+        auth_router,
+        "queue_best_effort_user_workspace_start",
+        lambda *, user_id: started_user_ids.append(user_id),
+    )
+
+    response = _login(
+        anonymous_client,
+        username="admin",
+        password="admin-password",
+    )
+
+    response.raise_for_status()
+    assert started_user_ids == [response.json()["user"]["id"]]
 
 
 def test_admin_can_revoke_another_users_session(client, anonymous_client):
@@ -72,10 +92,50 @@ def test_admin_can_revoke_another_users_session(client, anonymous_client):
     assert revoked_response.json()["detail"] == "Invalid or expired session."
 
 
+def test_logout_stops_workspace_only_when_last_session_is_revoked(anonymous_client, monkeypatch):
+    stopped_user_ids: list[str] = []
+    monkeypatch.setattr(
+        auth_router,
+        "queue_best_effort_user_workspace_stop",
+        lambda *, user_id: stopped_user_ids.append(user_id),
+    )
+
+    first_login = _login(
+        anonymous_client,
+        username="admin",
+        password="admin-password",
+    )
+    second_login = _login(
+        anonymous_client,
+        username="admin",
+        password="admin-password",
+    )
+    first_login.raise_for_status()
+    second_login.raise_for_status()
+
+    first_headers = {"Authorization": f"Bearer {first_login.json()['token']}"}
+    second_headers = {"Authorization": f"Bearer {second_login.json()['token']}"}
+
+    first_logout = anonymous_client.post("/api/v1/auth/logout", headers=first_headers)
+    assert first_logout.status_code == 204
+    assert stopped_user_ids == []
+
+    second_logout = anonymous_client.post("/api/v1/auth/logout", headers=second_headers)
+    assert second_logout.status_code == 204
+    assert stopped_user_ids == [second_login.json()["user"]["id"]]
+
+
 def test_admin_login_as_returns_impersonation_session_with_target_scope(
     client,
     anonymous_client,
+    monkeypatch,
 ):
+    started_user_ids: list[str] = []
+    monkeypatch.setattr(
+        admin_router,
+        "queue_best_effort_user_workspace_start",
+        lambda *, user_id: started_user_ids.append(user_id),
+    )
     create_response = client.post(
         "/api/v1/admin/users",
         json={"name": "alice", "password": "alice-password"},
@@ -110,6 +170,7 @@ def test_admin_login_as_returns_impersonation_session_with_target_scope(
     admin_response = anonymous_client.get("/api/v1/admin/users", headers=impersonation_headers)
     assert admin_response.status_code == 403
     assert admin_response.json()["detail"] == "Only admin principal can access this resource."
+    assert started_user_ids == [alice["id"]]
 
 
 def test_change_password_rotates_login_credentials(client, anonymous_client):
@@ -206,3 +267,34 @@ def test_logout_removes_current_session_from_admin_session_listing(
     finally:
         db.close()
     assert session_id not in session_ids
+
+
+def test_admin_session_revoke_stops_workspace_when_last_session_disappears(client, anonymous_client, monkeypatch):
+    stopped_user_ids: list[str] = []
+    monkeypatch.setattr(
+        admin_router,
+        "queue_best_effort_user_workspace_stop",
+        lambda *, user_id: stopped_user_ids.append(user_id),
+    )
+
+    create_response = client.post(
+        "/api/v1/admin/users",
+        json={"name": "alice", "password": "alice-password"},
+    )
+    create_response.raise_for_status()
+    alice = create_response.json()
+
+    alice_login = _login(
+        anonymous_client,
+        username="alice",
+        password="alice-password",
+    )
+    alice_login.raise_for_status()
+    alice_headers = {"Authorization": f"Bearer {alice_login.json()['token']}"}
+    me_response = anonymous_client.get("/api/v1/auth/me", headers=alice_headers)
+    me_response.raise_for_status()
+
+    revoke_response = client.delete(f"/api/v1/admin/sessions/{me_response.json()['session_id']}")
+
+    assert revoke_response.status_code == 204
+    assert stopped_user_ids == [alice["id"]]

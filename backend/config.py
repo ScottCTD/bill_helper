@@ -14,9 +14,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ── XDG-conventional shared paths ────────────────────────────────────────────
 # Config: ~/.config/bill-helper/.env    (secrets — shared across worktrees)
-# Data:   ~/.local/share/bill-helper/   (SQLite DB, logs — shared across worktrees)
+# Data:   ~/.local/share/bill_helper/   (SQLite DB, logs — shared across worktrees)
 SHARED_ENV_FILE = Path.home() / ".config" / "bill-helper" / ".env"
-SHARED_DATA_DIR = Path.home() / ".local" / "share" / "bill-helper"
+SHARED_DATA_DIR = Path.home() / ".local" / "share" / "bill_helper"
 
 # Layered env-file cascade (first file wins for duplicate keys):
 #   1. Real environment variables        — highest priority (production / CI)
@@ -30,6 +30,7 @@ DEFAULT_CORS_SCHEME = "http"
 DEFAULT_CORS_HOST = "localhost"
 DEFAULT_CORS_PORT = 5173
 DEFAULT_AGENT_MODEL = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+DEFAULT_AGENT_WORKSPACE_IMAGE = "bill-helper-agent-workspace:latest"
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:
@@ -126,6 +127,9 @@ class Settings(BaseSettings):
             "BILL_HELPER_AGENT_API_KEY",
         ),
     )
+    agent_workspace_enabled: bool = True
+    agent_workspace_image: str = DEFAULT_AGENT_WORKSPACE_IMAGE
+    agent_workspace_docker_binary: str = "docker"
 
     @model_validator(mode="after")
     def _derive_database_url(self) -> Settings:

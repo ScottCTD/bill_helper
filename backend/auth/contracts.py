@@ -20,5 +20,11 @@ class RequestPrincipal:
     is_admin_impersonation: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class AuthenticatedSessionContext:
+    principal: RequestPrincipal
+    session_token: str
+
+
 def is_admin_principal(principal: RequestPrincipal) -> bool:
     return principal.is_admin

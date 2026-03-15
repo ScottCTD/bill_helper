@@ -346,6 +346,34 @@ def test_delete_thread_rejects_running_run(client, monkeypatch):
     assert final_status != "running"
 
 
+def test_uploaded_attachments_are_stored_under_canonical_user_files(client, monkeypatch):
+    from backend.config import get_settings
+
+    patch_model(monkeypatch, lambda _messages: {"role": "assistant", "content": "Attachment processed."})
+
+    thread = create_thread(client)
+    send_message(
+        client,
+        thread["id"],
+        "Process the receipt",
+        files=[("receipt.png", b"\x89PNG\r\n\x1a\n", "image/png")],
+    )
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    attachment_paths = [
+        Path(attachment["file_path"])
+        for message in detail["messages"]
+        for attachment in message["attachments"]
+    ]
+
+    assert attachment_paths
+    expected_root = get_settings().data_dir / "user_files"
+    assert all(expected_root in path.parents for path in attachment_paths)
+    assert all(path.exists() for path in attachment_paths)
+
+
 def test_thread_list_marks_running_threads(client, monkeypatch):
     block_model = Event()
     block_model.clear()
@@ -380,7 +408,7 @@ def test_thread_list_marks_running_threads(client, monkeypatch):
     assert listed_row["has_running_run"] is False
 
 
-def test_delete_thread_removes_uploaded_attachment_files(client, monkeypatch):
+def test_delete_thread_keeps_canonical_uploaded_attachment_files(client, monkeypatch):
     patch_model(monkeypatch, lambda _messages: {"role": "assistant", "content": "Attachment processed."})
 
     thread = create_thread(client)
@@ -404,7 +432,7 @@ def test_delete_thread_removes_uploaded_attachment_files(client, monkeypatch):
 
     delete_response = client.delete(f"/api/v1/agent/threads/{thread['id']}")
     assert delete_response.status_code == 204
-    assert all(not path.exists() for path in attachment_paths)
+    assert all(path.exists() for path in attachment_paths)
 
 
 def test_default_agent_model_matches_config_default():

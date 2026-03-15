@@ -22,6 +22,11 @@ const DashboardPage = lazy(async () => {
   return { default: module.DashboardPage };
 });
 
+const WorkspacePage = lazy(async () => {
+  const module = await import("./pages/WorkspacePage");
+  return { default: module.WorkspacePage };
+});
+
 const FilterGroupsPage = lazy(async () => {
   const module = await import("./pages/FilterGroupsPage");
   return { default: module.FilterGroupsPage };
@@ -72,6 +77,10 @@ const AdminPage = lazy(async () => {
   return { default: module.AdminPage };
 });
 
+function WorkspaceRoutePlaceholder() {
+  return null;
+}
+
 function defaultSidebarCollapsed() {
   if (typeof window === "undefined") {
     return false;
@@ -82,6 +91,7 @@ function defaultSidebarCollapsed() {
 function ProtectedShell() {
   const auth = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(defaultSidebarCollapsed);
+  const [hasVisitedWorkspace, setHasVisitedWorkspace] = useState(false);
   const appMainRef = useRef<HTMLElement | null>(null);
   const { panelWidth: sidebarWidth, handleMouseDown: handleSidebarResizeMouseDown } = useResizablePanel({
     storageKey: "app-sidebar-width",
@@ -91,6 +101,16 @@ function ProtectedShell() {
     edge: "left"
   });
   const location = useLocation();
+  const isWorkspaceRoute = location.pathname === "/workspace";
+  const shouldRenderWorkspaceSurface = isWorkspaceRoute || hasVisitedWorkspace;
+  const appMainClassName = isWorkspaceRoute ? "app-main app-main-immersive" : "app-main app-main-padded";
+  const appContentClassName = isWorkspaceRoute ? "app-content app-content-immersive" : "app-content";
+
+  useEffect(() => {
+    if (isWorkspaceRoute) {
+      setHasVisitedWorkspace(true);
+    }
+  }, [isWorkspaceRoute]);
 
   useEffect(() => {
     if (!(appMainRef.current instanceof HTMLElement)) {
@@ -146,12 +166,17 @@ function ProtectedShell() {
         />
       ) : null}
 
-      <main ref={appMainRef} className="app-main app-main-padded">
-        <div className="app-content">
+      <main ref={appMainRef} className={appMainClassName}>
+        <div className={appContentClassName}>
           {auth.session.is_admin_impersonation ? (
             <div className="impersonation-banner">
               Impersonating {auth.session.user.name}. Log out when you want to end this session.
             </div>
+          ) : null}
+          {shouldRenderWorkspaceSurface ? (
+            <Suspense fallback={<p>Loading workspace...</p>}>
+              <WorkspacePage isActive={isWorkspaceRoute} />
+            </Suspense>
           ) : null}
           <Suspense fallback={<p>Loading page...</p>}>
             <Outlet />
@@ -177,6 +202,7 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedShell />}>
           <Route path="/" element={<HomePage />} />
+          <Route path="/workspace" element={<WorkspaceRoutePlaceholder />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/filters" element={<FilterGroupsPage />} />
           <Route path="/entries" element={<EntriesPage />} />

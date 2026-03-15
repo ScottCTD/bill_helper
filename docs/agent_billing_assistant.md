@@ -88,7 +88,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 - `DELETE /api/v1/agent/threads/{thread_id}`: delete one thread history
   - blocked with `409` while the thread has any `running` run
   - cascades DB removal of thread messages/runs/change items/review actions
-  - removes persisted upload directories under `{data_dir}/agent_uploads/<message_id>/...`
+  - leaves canonical upload payloads in `{data_dir}/user_files/{owner_user_id}/uploads/...`
 - `GET /api/v1/agent/threads/{thread_id}`: fetch full thread detail
 - `POST /api/v1/agent/threads/{thread_id}/messages`: send message and run agent (non-streaming)
   - used by Bulk mode after creating one fresh thread per attached file
@@ -103,7 +103,7 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 
 | Setting                            | Env                                                           | Default                       | Notes                                                                                           |
 | ---------------------------------- | ------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------- |
-| `agent_model`                      | `BILL_HELPER_AGENT_MODEL`                                     | `bedrock/us.anthropic.claude-sonnet-4-6` | Default model name; runtime override supported via `/api/v1/settings`                           |
+| `agent_model`                      | `BILL_HELPER_AGENT_MODEL`                                     | `bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0` | Default model name; runtime override supported via `/api/v1/settings`                 |
 | `agent_max_steps`                  | `BILL_HELPER_AGENT_MAX_STEPS`                                 | `100`                         | Max tool loop iterations                                                                        |
 | `agent_bulk_max_concurrent_threads` | `BILL_HELPER_AGENT_BULK_MAX_CONCURRENT_THREADS`               | `4`                           | Max fresh threads Bulk mode starts concurrently                                                 |
 | `current_user_timezone`            | `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE` | `America/Toronto`             | User-local date basis for the system-prompt current-date section                                |
@@ -114,6 +114,9 @@ The agent is a tool-calling LLM (LiteLLM provider routing) with a review-gated m
 | `agent_retry_backoff_multiplier`   | `BILL_HELPER_AGENT_RETRY_BACKOFF_MULTIPLIER`                  | `2.0`                         | Exponential growth factor                                                                       |
 | `agent_max_images_per_message`     | `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE`                    | `4`                           | Image/PDF attachment count limit                                                                |
 | `agent_max_image_size_bytes`       | `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES`                      | `5242880`                     | Per-attachment size limit for image/PDF uploads                                                 |
+| `agent_workspace_enabled`          | `BILL_HELPER_AGENT_WORKSPACE_ENABLED`                         | `true`                        | Enables eager per-user workspace provisioning                                                   |
+| `agent_workspace_image`            | `BILL_HELPER_AGENT_WORKSPACE_IMAGE`                           | `bill-helper-agent-workspace:latest` | Prebuilt image tag for per-user workspaces                                               |
+| `agent_workspace_docker_binary`    | `BILL_HELPER_AGENT_WORKSPACE_DOCKER_BINARY`                   | `docker`                      | Docker CLI binary used for workspace lifecycle commands                                         |
 
 
 Retry behavior notes:

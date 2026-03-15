@@ -267,7 +267,31 @@ Deletion semantics:
 - soft-deleting an entry removes its direct `entry_group_members` row if one exists
 - deleting a group is allowed only when it has no direct members and is not attached as a child group
 
-## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`, `0020_add_agent_message_attachment_original_filename`, `0021_add_agent_run_context_tokens`, `0022_agent_run_events_and_tool_lifecycle`, `0029_add_agent_run_surface`, `0030_add_account_agent_change_types`)
+## Agent Tables (`0006_agent_append_only_core`, `0008_agent_run_usage_metrics`, `0015_add_agent_tool_call_output_text`, `0020_add_agent_message_attachment_original_filename`, `0021_add_agent_run_context_tokens`, `0022_agent_run_events_and_tool_lifecycle`, `0029_add_agent_run_surface`, `0030_add_account_agent_change_types`, `0035_add_user_files_and_agent_workspace`)
+
+## `user_files`
+
+Purpose: canonical registry for durable user-visible files, including agent uploads and future workspace artifacts.
+
+Fields:
+
+- `id` (PK UUID string)
+- `owner_user_id` (FK -> `users.id`)
+- `storage_area` (`upload` or `artifact`)
+- `source_type` (string origin marker such as `agent_message_attachment`)
+- `stored_relative_path` (owner-local relative path under `user_files/{user_id}`)
+- `original_filename`
+- `display_name`
+- `mime_type`
+- `size_bytes`
+- `sha256` (nullable)
+- `created_at`
+
+Operational notes:
+
+- files live under `{data_dir}/user_files/{user_id}/{uploads,artifacts}`
+- `(owner_user_id, stored_relative_path)` is unique
+- deleting a thread removes attachment rows but does not delete canonical file payloads from disk
 
 ## `agent_threads`
 
@@ -294,20 +318,19 @@ Fields:
 
 ## `agent_message_attachments`
 
-Purpose: uploaded image/PDF references tied to user messages.
+Purpose: message-level linkage from a user message to one canonical `user_files` row.
 
 Fields:
 
 - `id` (PK UUID string)
 - `message_id` (FK -> `agent_messages.id`)
-- `mime_type`
-- `original_filename` (nullable upload filename used for model-visible attachment labels on new uploads)
-- `file_path`
+- `user_file_id` (FK -> `user_files.id`)
 - `created_at`
 
 Operational note:
 
-- files are written to `{data_dir}/agent_uploads/<message_id>/...`
+- new uploads are persisted under `{data_dir}/user_files/{owner_user_id}/uploads/...`
+- serializers keep the current attachment API surface by deriving `mime_type`, `original_filename`, and absolute `file_path` from the linked `user_files` row
 
 ## `agent_runs`
 

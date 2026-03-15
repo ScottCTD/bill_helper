@@ -5,14 +5,14 @@
 # - Side effects: module-local behavior only.
 from __future__ import annotations
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Cookie, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.services.principals import build_request_principal
 from backend.services.sessions import load_session_by_token
 
-from .contracts import AUTHORIZATION_SCHEME, RequestPrincipal
+from .contracts import AUTHORIZATION_SCHEME, AuthenticatedSessionContext, RequestPrincipal
 
 
 def _parse_bearer_token(authorization_header: str | None) -> str | None:
@@ -25,15 +25,16 @@ def _parse_bearer_token(authorization_header: str | None) -> str | None:
     return normalized_token or None
 
 
-def get_current_principal(
-    db: Session = Depends(get_db),
-    authorization_header: str | None = Header(default=None, alias="Authorization"),
-) -> RequestPrincipal:
-    token = _parse_bearer_token(authorization_header)
+def _build_authenticated_session_context(
+    *,
+    db: Session,
+    token: str | None,
+    missing_detail: str,
+) -> AuthenticatedSessionContext:
     if token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid Authorization header.",
+            detail=missing_detail,
         )
     session_row = load_session_by_token(db, token=token)
     if session_row is None:
@@ -41,7 +42,44 @@ def get_current_principal(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired session.",
         )
-    return build_request_principal(user=session_row.user, session=session_row)
+    return AuthenticatedSessionContext(
+        principal=build_request_principal(user=session_row.user, session=session_row),
+        session_token=token,
+    )
+
+
+def get_current_auth_context(
+    db: Session = Depends(get_db),
+    authorization_header: str | None = Header(default=None, alias="Authorization"),
+) -> AuthenticatedSessionContext:
+    token = _parse_bearer_token(authorization_header)
+    return _build_authenticated_session_context(
+        db=db,
+        token=token,
+        missing_detail="Missing or invalid Authorization header.",
+    )
+
+
+def get_current_principal(
+    auth_context: AuthenticatedSessionContext = Depends(get_current_auth_context),
+) -> RequestPrincipal:
+    return auth_context.principal
+
+
+def get_current_principal_from_cookie(
+    cookie_name: str,
+):
+    def _dependency(
+        db: Session = Depends(get_db),
+        session_cookie: str | None = Cookie(default=None, alias=cookie_name),
+    ) -> RequestPrincipal:
+        return _build_authenticated_session_context(
+            db=db,
+            token=session_cookie,
+            missing_detail="Missing workspace session cookie.",
+        ).principal
+
+    return _dependency
 
 
 def require_admin_principal(

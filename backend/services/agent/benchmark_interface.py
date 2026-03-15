@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from backend.enums_agent import AgentMessageRole, AgentRunStatus
 from backend.models_agent import AgentMessage, AgentMessageAttachment, AgentRun, AgentThread
 from backend.models_finance import User
+from backend.services.agent.attachments import create_message_attachment
 from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.model_client import AgentModelError
 from backend.services.agent.principal_scope import load_thread_owner_user
@@ -35,6 +36,7 @@ from backend.services.agent.run_orchestrator import (
 from backend.services.agent.runtime import call_model
 from backend.services.agent.tool_runtime import execute_tool
 from backend.services.agent.tool_types import ToolContext
+from backend.services.user_files import SOURCE_TYPE_AGENT_ATTACHMENT, STORAGE_AREA_UPLOAD, import_user_file_from_path
 from backend.services.runtime_settings import resolve_runtime_settings
 
 PROPOSAL_TOOL_NAMES = {
@@ -180,12 +182,20 @@ def _create_benchmark_run(
     db.flush()
 
     for attachment in attachments:
-        db.add(
-            AgentMessageAttachment(
-                message_id=user_message.id,
-                mime_type=attachment.mime_type,
-                file_path=attachment.file_path,
-            )
+        user_file = import_user_file_from_path(
+            db,
+            owner_user_id=owner_user.id,
+            storage_area=STORAGE_AREA_UPLOAD,
+            source_type=SOURCE_TYPE_AGENT_ATTACHMENT,
+            source_path=Path(attachment.file_path),
+            mime_type=attachment.mime_type,
+            original_filename=Path(attachment.file_path).name,
+            move_source=False,
+        )
+        create_message_attachment(
+            db,
+            message_id=user_message.id,
+            user_file=user_file,
         )
     db.flush()
 

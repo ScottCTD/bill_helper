@@ -31,6 +31,8 @@ TELEGRAM_LOG_NAME = "telegram"
 SHUTDOWN_GRACE_SECONDS = 5.0
 POLL_INTERVAL_SECONDS = 0.2
 VITE_CACHE_DIR = ROOT_DIR / "frontend" / "node_modules" / ".vite"
+CHECK_TRUE_EXIT_CODE = 10
+CHECK_FALSE_EXIT_CODE = 11
 
 STAMP_CHECK_CODE = (
     "from backend.database import build_engine, build_session_maker; "
@@ -41,7 +43,7 @@ STAMP_CHECK_CODE = (
     "should_stamp = should_stamp_existing_schema(db); "
     "db.close(); "
     "eng.dispose(); "
-    "raise SystemExit(0 if should_stamp else 1)"
+    f"raise SystemExit({CHECK_TRUE_EXIT_CODE} if should_stamp else {CHECK_FALSE_EXIT_CODE})"
 )
 SEED_CHECK_CODE = (
     "from backend.database import build_engine, build_session_maker; "
@@ -52,7 +54,7 @@ SEED_CHECK_CODE = (
     "should_seed = should_seed_demo_data(db); "
     "db.close(); "
     "eng.dispose(); "
-    "raise SystemExit(0 if should_seed else 1)"
+    f"raise SystemExit({CHECK_TRUE_EXIT_CODE} if should_seed else {CHECK_FALSE_EXIT_CODE})"
 )
 
 
@@ -142,7 +144,7 @@ class DevUpRunner:
 
     def _prepare_environment(self) -> None:
         print("Checking migration metadata...")
-        if self._run_python_check(STAMP_CHECK_CODE) == 0:
+        if self._run_python_check(STAMP_CHECK_CODE) == CHECK_TRUE_EXIT_CODE:
             print("Detected existing schema without Alembic revision metadata. Stamping head...")
             self._run_command(["uv", "run", "alembic", "stamp", "head"])
 
@@ -150,7 +152,7 @@ class DevUpRunner:
         self._run_command(["uv", "run", "alembic", "upgrade", "head"])
 
         print("Checking whether demo seed is needed...")
-        if self._run_python_check(SEED_CHECK_CODE) == 0:
+        if self._run_python_check(SEED_CHECK_CODE) == CHECK_TRUE_EXIT_CODE:
             seed_csv = os.getenv("BILL_HELPER_SEED_CREDIT_CSV", "").strip()
             if seed_csv:
                 print(f"No accounts found. Seeding demo data from {seed_csv}...")
@@ -245,7 +247,27 @@ class DevUpRunner:
         subprocess.run(command, cwd=cwd or self.root_dir, check=True)
 
     def _run_python_check(self, code: str) -> int:
-        completed = subprocess.run([sys.executable, "-c", code], cwd=self.root_dir, check=False)
+        command = [sys.executable, "-c", code]
+        completed = subprocess.run(
+            command,
+            cwd=self.root_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode not in {CHECK_TRUE_EXIT_CODE, CHECK_FALSE_EXIT_CODE}:
+            if completed.stdout:
+                sys.stdout.write(completed.stdout)
+                sys.stdout.flush()
+            if completed.stderr:
+                sys.stderr.write(completed.stderr)
+                sys.stderr.flush()
+            raise subprocess.CalledProcessError(
+                completed.returncode,
+                command,
+                output=completed.stdout,
+                stderr=completed.stderr,
+            )
         return completed.returncode
 
     def _telegram_configured(self) -> bool:

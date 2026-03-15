@@ -264,7 +264,7 @@ The most recent snapshot produces one **open interval** from that snapshot to to
 ## 9. Configuration and Data Paths
 
 - **Config cascade:** Env vars → `.env` in CWD → `~/.config/bill-helper/.env` → defaults.
-- **Data:** Default `~/.local/share/bill-helper/` for SQLite and agent uploads. Override via `BILL_HELPER_DATA_DIR` or `BILL_HELPER_DATABASE_URL`.
+- **Data:** Default `~/.local/share/bill_helper/` for SQLite and agent uploads. Override via `BILL_HELPER_DATA_DIR` or `BILL_HELPER_DATABASE_URL`.
 - Shared config and data support Git worktree workflows (secrets and DB shared across worktrees).
 
 ---
@@ -272,7 +272,7 @@ The most recent snapshot produces one **open interval** from that snapshot to to
 ## 10. Dev Tooling
 
 - **Config cascade:** Env vars → `.env` in CWD → `~/.config/bill-helper/.env` → defaults.
-- **Data:** Default `~/.local/share/bill-helper/` for SQLite and agent uploads. Override via `BILL_HELPER_DATA_DIR` or `BILL_HELPER_DATABASE_URL`.
+- **Data:** Default `~/.local/share/bill_helper/` for SQLite and agent uploads. Override via `BILL_HELPER_DATA_DIR` or `BILL_HELPER_DATABASE_URL`.
 - Shared config and data support Git worktree workflows (secrets and DB shared across worktrees).
 
 ## 10. Dev Tooling
@@ -296,4 +296,3 @@ The most recent snapshot produces one **open interval** from that snapshot to to
 - SQLite for persistence.
 - Telegram API for the bot.
 - Not implemented: bank sync, CSV import, external financial APIs.
-
