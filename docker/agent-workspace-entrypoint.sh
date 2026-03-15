@@ -35,7 +35,9 @@ if settings_path.exists():
 
 settings_data["chat.disableAIFeatures"] = True
 settings_data["chat.agent.enabled"] = False
+settings_data["workbench.startupEditor"] = "none"
 settings_data["workbench.sideBar.location"] = "right"
+settings_data["security.workspace.trust.enabled"] = False
 settings_data["modernPdfViewer.defaultSpreadMode"] = "none"
 settings_path.write_text(
     json.dumps(settings_data, indent=2, sort_keys=True) + "\n",

@@ -56,7 +56,7 @@ Response shape:
 
 - `launch_url`: relative same-origin IDE URL, typically `/api/v1/workspace/ide/?folder=/workspace`
 - when the IDE opens `/workspace`, the writable volume root exposes `workspace/` for writable user files and `user_data/` as a symlink into the canonical read-only file tree (`/data/user_data/{uploads,artifacts}`), with friendly names derived from `display_name` / original filename while editor state is kept in a hidden internal directory
-- the shipped workspace image also preinstalls the `chocolatedesue.modern-pdf-preview` extension so PDF entries in `user_data/` can render directly inside the IDE
+- the shipped workspace image also preinstalls the `chocolatedesue.modern-pdf-preview` extension and seeds minimal `code-server` user defaults so first launch skips the welcome page, keeps the opened folder trusted, and renders PDF entries in `user_data/` directly inside the IDE
 - `snapshot`: the same workspace snapshot shape returned by `GET /workspace`
 
 Behavior notes:

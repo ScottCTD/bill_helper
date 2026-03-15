@@ -300,7 +300,9 @@ def test_workspace_container_mounts_data_read_only_and_workspace_persists(worksp
         assert "persisted" in persisted.stdout
         assert '"chat.disableAIFeatures": true' in code_server_settings.stdout
         assert '"chat.agent.enabled": false' in code_server_settings.stdout
+        assert '"workbench.startupEditor": "none"' in code_server_settings.stdout
         assert '"workbench.sideBar.location": "right"' in code_server_settings.stdout
+        assert '"security.workspace.trust.enabled": false' in code_server_settings.stdout
         assert '"modernPdfViewer.defaultSpreadMode": "none"' in code_server_settings.stdout
         assert "chocolatedesue.modern-pdf-preview" in installed_extensions.stdout
         assert "tomoki1207.pdf" not in installed_extensions.stdout
