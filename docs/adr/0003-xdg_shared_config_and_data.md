@@ -4,6 +4,8 @@
 - Date: 2026-03-04
 - Deciders: scottcui
 
+Update 2026-03-14: ADR 0007 supersedes the original agent-file sublayout. Shared data still lives under `~/.local/share/bill_helper/`, but durable user-visible files now live under `user_files/{user_id}/{uploads,artifacts}` instead of `agent_uploads/`.
+
 ## Context
 
 Bill Helper stores configuration (`.env`) and data (`.data/bill_helper.db`, agent uploads) in the repository working tree. Both paths are gitignored.
@@ -25,7 +27,7 @@ Adopt [XDG Base Directory Specification](https://specifications.freedesktop.org/
 | Purpose | Path | XDG variable |
 |---------|------|-------------|
 | Configuration (secrets) | `~/.config/bill-helper/.env` | `XDG_CONFIG_HOME` |
-| Application data (DB, uploads) | `~/.local/share/bill-helper/` | `XDG_DATA_HOME` |
+| Application data (DB, uploads) | `~/.local/share/bill_helper/` | `XDG_DATA_HOME` |
 
 ### Configuration Cascade
 
@@ -56,13 +58,13 @@ A new `data_dir` setting controls where application data lives. `database_url` i
 ```
 Priority 1:  BILL_HELPER_DATABASE_URL       (explicit DB URL — e.g., PostgreSQL in prod)
 Priority 2:  BILL_HELPER_DATA_DIR           (custom data dir → DB path derived)
-Priority 3:  Default                         (~/.local/share/bill-helper/)
+Priority 3:  Default                         (~/.local/share/bill_helper/)
 ```
 
 Implementation in `backend/config.py`:
 
 ```python
-SHARED_DATA_DIR = Path.home() / ".local" / "share" / "bill-helper"
+SHARED_DATA_DIR = Path.home() / ".local" / "share" / "bill_helper"
 
 class Settings(BaseSettings):
     data_dir: Path = SHARED_DATA_DIR
@@ -78,18 +80,19 @@ class Settings(BaseSettings):
 ### Data Directory Contents
 
 ```
-~/.local/share/bill-helper/
-├── bill_helper.db          # SQLite database
-└── agent_uploads/          # File attachments from agent conversations
-    └── {message_id}/
-        └── {filename}
+~/.local/share/bill_helper/
+├── bill_helper.db                # SQLite database
+└── user_files/                   # Canonical per-user durable files
+    └── {user_id}/
+        ├── uploads/
+        └── artifacts/
 ```
 
 ### Environment-Specific Behavior
 
 | Environment | Config source | Data source | Notes |
 |-------------|--------------|-------------|-------|
-| **Dev (default)** | `~/.config/bill-helper/.env` | `~/.local/share/bill-helper/` | Shared across all worktrees |
+| **Dev (default)** | `~/.config/bill-helper/.env` | `~/.local/share/bill_helper/` | Shared across all worktrees |
 | **Dev (isolated)** | `.env` in CWD | Set `BILL_HELPER_DATA_DIR=./.data` in local `.env` | Per-worktree isolation |
 | **Production** | Platform env vars | `BILL_HELPER_DATABASE_URL` points to managed DB | No `.env` files |
 | **CI / Tests** | `BILL_HELPER_DATABASE_URL` override | Per-run temp DB | Tests use `.data/test_bill_helper.db` |
@@ -102,7 +105,7 @@ All code that previously used hardcoded `.data/` paths was updated to read from 
 |--------|--------|-------|
 | `backend/config.py` | `database_url = "sqlite:///./.data/..."` | `data_dir` + `model_validator` derivation |
 | `backend/main.py` | `Path(".data").mkdir(...)` | `settings.ensure_data_dir()` |
-| `backend/routers/agent.py` | `Path(".data") / "agent_uploads"` | `get_settings().data_dir / "agent_uploads"` |
+| `backend/services/user_files.py` | `Path(".data") / "agent_uploads"` | `get_settings().data_dir / "user_files"` |
 | `benchmark/snapshot.py` | `REPO_ROOT / ".data" / "bill_helper.db"` | `get_settings().data_dir / "bill_helper.db"` |
 | `scripts/seed_defaults.py` | `REPO_ROOT / ".data" / "bill_helper.db"` | `get_settings().data_dir / "bill_helper.db"` |
 | `alembic/env.py` | _(no change — already reads from Settings)_ | Same |
@@ -121,7 +124,7 @@ All code that previously used hardcoded `.data/` paths was updated to read from 
 
 ### Negative
 
-- **Migration required:** Existing data in `.data/` must be moved to `~/.local/share/bill-helper/`. A helper script (`scripts/setup_shared_env.sh`) and manual migration handle this.
+- **Migration required:** Existing data in `.data/` must be moved to `~/.local/share/bill_helper/`. A helper script (`scripts/setup_shared_env.sh`) and manual migration handle this.
 - **Shared mutable state:** Two worktrees running simultaneously against the same SQLite DB may hit locking. SQLite WAL mode mitigates this for read-heavy workloads, but concurrent writes from two servers are not supported. For parallel dev servers, use `BILL_HELPER_DATA_DIR=./.data` to isolate.
 - **Home directory dependency:** The default paths assume `~` is writable and stable. Docker/CI environments may need explicit overrides via `BILL_HELPER_DATA_DIR`.
 

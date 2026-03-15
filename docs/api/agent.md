@@ -46,7 +46,7 @@ Behavior:
 
 - lookup is thread-owner scoped
 - cascades deletes for messages, runs, tool calls, change items, and review actions
-- removes local upload directories under `{data_dir}/agent_uploads/<message_id>/...`
+- keeps canonical uploaded file payloads under `{data_dir}/user_files/{owner_user_id}/uploads/...`
 - rejects delete when any run in the thread is still running
 
 Errors:
@@ -89,7 +89,7 @@ Behavior:
 
 - thread lookup is owner-scoped
 - validates attachment count and size limits
-- persists the message and attachments
+- persists the message and stores uploaded attachments under `{data_dir}/user_files/{owner_user_id}/uploads/...`
 - creates an `agent_runs` row with initial `status=running`
 - starts bounded tool-calling execution in background
 - PDFs are parsed with PyMuPDF first; vision-capable models also receive rendered page images

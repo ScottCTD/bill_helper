@@ -670,4 +670,104 @@
       @apply w-full justify-end;
     }
   }
+
+  .workspace-ide-page {
+    @apply flex h-full min-h-0 flex-col;
+  }
+
+  .workspace-ide-page-hidden {
+    @apply hidden;
+  }
+
+  .workspace-ide-layout {
+    @apply grid min-h-0 flex-1;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-ide-stage {
+    @apply relative min-h-0 bg-muted/65;
+  }
+
+  .workspace-ide-frame {
+    @apply block h-full min-h-0 w-full border-0 bg-background;
+  }
+
+  .workspace-ide-frame-loading {
+    @apply opacity-0;
+  }
+
+  .workspace-ide-stage-shell {
+    @apply flex h-full items-center justify-center p-5;
+  }
+
+  .workspace-ide-stage-state {
+    @apply flex w-full max-w-3xl items-start gap-3 rounded-xl border border-border/80 bg-card px-5 py-4 shadow-[var(--shadow-sm)];
+  }
+
+  .workspace-ide-stage-state-warning {
+    @apply border-warning/25 bg-warning/10;
+  }
+
+  .workspace-ide-stage-state-error {
+    @apply border-destructive/25 bg-destructive/10;
+  }
+
+  .workspace-ide-stage-icon {
+    @apply mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/75 bg-secondary/65 text-muted-foreground;
+  }
+
+  .workspace-ide-stage-copy {
+    @apply grid gap-1;
+  }
+
+  .workspace-ide-stage-action {
+    @apply pt-2;
+  }
+
+  .workspace-ide-stage-title {
+    @apply m-0 text-sm font-semibold text-foreground;
+  }
+
+  .workspace-ide-stage-description {
+    @apply m-0 text-sm leading-6 text-muted-foreground;
+  }
+
+  .workspace-ide-loading-shell {
+    @apply absolute inset-0 z-10 flex items-center justify-center backdrop-blur-sm;
+    background-color: hsl(var(--background) / 0.78);
+  }
+
+  .workspace-ide-loading-card {
+    @apply flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-border/85 bg-card px-6 py-7 text-center shadow-[var(--shadow-md)];
+  }
+
+  .workspace-ide-loading-spinner {
+    @apply h-8 w-8 animate-spin text-muted-foreground;
+  }
+
+  .workspace-ide-loading-copy {
+    @apply grid gap-1.5;
+  }
+
+  .workspace-ide-loading-title {
+    @apply m-0 text-sm font-semibold text-foreground;
+  }
+
+  .workspace-ide-loading-description {
+    @apply m-0 text-sm leading-6 text-muted-foreground;
+  }
+
+  @media (max-width: 960px) {
+    .workspace-ide-stage-shell {
+      @apply p-4;
+    }
+
+    .workspace-ide-stage-state {
+      @apply max-w-none;
+    }
+
+    .workspace-ide-loading-card {
+      @apply mx-4;
+    }
+  }
 }

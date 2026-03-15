@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
+
+import pytest
 
 
 def test_snapshot_module_create_list_and_restore(tmp_path, monkeypatch):
@@ -160,6 +163,7 @@ def test_seed_defaults_seed_accounts_uses_entity_root_account_ids(tmp_path):
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
+    import backend.models_files  # noqa: F401
     import backend.models_finance  # noqa: F401
     import backend.models_settings  # noqa: F401
     from backend.db_meta import Base
@@ -175,6 +179,34 @@ def test_seed_defaults_seed_accounts_uses_entity_root_account_ids(tmp_path):
         assert credit.id == credit.entity.id
         assert debit.owner_user_id == user.id
         assert credit.owner_user_id == user.id
+
+
+def test_database_module_registers_user_file_mappers(tmp_path):
+    from sqlalchemy import select
+    from sqlalchemy.orm import sessionmaker
+
+    from backend.database import build_engine_for_url
+    from backend.db_meta import Base
+    from backend.models_finance import User
+
+    assert "user_files" in Base.metadata.tables
+
+    engine = build_engine_for_url(f"sqlite:///{tmp_path / 'runtime.sqlite'}")
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine, future=True)
+    with SessionLocal() as db:
+        assert db.scalar(select(User.id).limit(1)) is None
+
+
+def test_dev_up_python_check_raises_for_unexpected_exit(tmp_path):
+    from scripts.dev_up import CHECK_FALSE_EXIT_CODE, DevUpRunner
+
+    runner = DevUpRunner(root_dir=tmp_path)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        runner._run_python_check("raise RuntimeError('boom')")
+
+    assert runner._run_python_check(f"raise SystemExit({CHECK_FALSE_EXIT_CODE})") == CHECK_FALSE_EXIT_CODE
 
 
 def test_seed_demo_parsers_and_location_detection():

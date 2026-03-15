@@ -5,15 +5,20 @@
 # - Side effects: FastAPI routing and HTTP error translation.
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from backend.auth.contracts import RequestPrincipal
 from backend.auth.dependencies import get_current_principal
 from backend.database import get_db
 from backend.schemas_auth import AuthLoginRequest, AuthLoginResponse, AuthSessionRead, AuthUserRead
+from backend.routers.workspace import clear_workspace_cookie_on_logout
+from backend.services.agent_workspace import (
+    queue_best_effort_user_workspace_start,
+    queue_best_effort_user_workspace_stop,
+)
 from backend.services.crud_policy import PolicyViolation
-from backend.services.sessions import create_session, revoke_current_session
+from backend.services.sessions import count_active_sessions_for_user, create_session, revoke_current_session
 from backend.services.users import authenticate_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -49,6 +54,7 @@ def login(
 
     token, session_row = create_session(db, user=user)
     db.commit()
+    queue_best_effort_user_workspace_start(user_id=user.id)
     return AuthLoginResponse(
         token=token,
         user=AuthUserRead.model_validate(user),
@@ -59,6 +65,7 @@ def login(
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
+    response: Response,
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_current_principal),
 ) -> None:
@@ -68,7 +75,10 @@ def logout(
             detail="Current session is missing a session id.",
         )
     revoke_current_session(db, session_id=principal.session_id)
+    if count_active_sessions_for_user(db, user_id=principal.user_id) == 0:
+        queue_best_effort_user_workspace_stop(user_id=principal.user_id)
     db.commit()
+    clear_workspace_cookie_on_logout(response)
 
 
 @router.get("/me", response_model=AuthSessionRead)

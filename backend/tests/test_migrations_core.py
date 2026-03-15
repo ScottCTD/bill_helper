@@ -302,6 +302,125 @@ def test_migration_0026_converts_legacy_links_to_typed_groups(tmp_path):
         assert roles[split_child_two_id] == "CHILD"
 
 
+def test_migration_0035_creates_user_files_and_backfills_agent_attachments(tmp_path, monkeypatch):
+    from backend.config import get_settings
+
+    database_url = _sqlite_url(tmp_path, "migration_0035.sqlite")
+    cfg = _build_alembic_config(database_url)
+    data_dir = tmp_path / "data"
+    monkeypatch.setenv("BILL_HELPER_DATA_DIR", str(data_dir))
+    get_settings.cache_clear()
+    command.upgrade(cfg, "0034_add_entry_tagging_model_to_runtime_settings")
+
+    engine = create_engine(database_url, future=True)
+    now = datetime.now(timezone.utc)
+    user_id = str(uuid4())
+    thread_id = str(uuid4())
+    message_id = str(uuid4())
+    attachment_id = str(uuid4())
+    legacy_upload_dir = data_dir / "agent_uploads" / message_id
+    legacy_upload_dir.mkdir(parents=True, exist_ok=True)
+    legacy_upload_path = legacy_upload_dir / "receipt.png"
+    legacy_upload_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                INSERT INTO users (id, name, password_hash, is_admin, created_at, updated_at)
+                VALUES (:id, :name, :password_hash, :is_admin, :created_at, :updated_at)
+                """
+            ),
+            {
+                "id": user_id,
+                "name": "migration-user",
+                "password_hash": "hash",
+                "is_admin": 0,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO agent_threads (id, owner_user_id, title, created_at, updated_at)
+                VALUES (:id, :owner_user_id, NULL, :created_at, :updated_at)
+                """
+            ),
+            {
+                "id": thread_id,
+                "owner_user_id": user_id,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO agent_messages (id, thread_id, role, content_markdown, created_at)
+                VALUES (:id, :thread_id, 'user', 'hello', :created_at)
+                """
+            ),
+            {
+                "id": message_id,
+                "thread_id": thread_id,
+                "created_at": now,
+            },
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO agent_message_attachments
+                  (id, message_id, mime_type, original_filename, file_path, created_at)
+                VALUES
+                  (:id, :message_id, :mime_type, :original_filename, :file_path, :created_at)
+                """
+            ),
+            {
+                "id": attachment_id,
+                "message_id": message_id,
+                "mime_type": "image/png",
+                "original_filename": "receipt.png",
+                "file_path": str(legacy_upload_path),
+                "created_at": now,
+            },
+        )
+
+    command.upgrade(cfg, "0035_add_user_files_and_agent_workspace")
+
+    migrated_path = data_dir / "user_files" / user_id / "uploads" / f"{attachment_id}.png"
+    with engine.begin() as connection:
+        user_file_row = connection.execute(
+            text(
+                """
+                SELECT owner_user_id, storage_area, source_type, stored_relative_path, mime_type
+                FROM user_files
+                """
+            )
+        ).mappings().one()
+        attachment_row = connection.execute(
+            text(
+                """
+                SELECT user_file_id
+                FROM agent_message_attachments
+                WHERE id = :attachment_id
+                """
+            ),
+            {"attachment_id": attachment_id},
+        ).mappings().one()
+
+    assert user_file_row["owner_user_id"] == user_id
+    assert user_file_row["storage_area"] == "upload"
+    assert user_file_row["source_type"] == "agent_message_attachment"
+    assert user_file_row["stored_relative_path"] == f"uploads/{attachment_id}.png"
+    assert user_file_row["mime_type"] == "image/png"
+    assert attachment_row["user_file_id"]
+    assert migrated_path.exists()
+    assert not legacy_upload_path.exists()
+
+    get_settings.cache_clear()
+
+
 def test_migration_0031_adds_users_is_admin_column(tmp_path):
     database_url = _sqlite_url(tmp_path, "migration_0031.sqlite")
     cfg = _build_alembic_config(database_url)

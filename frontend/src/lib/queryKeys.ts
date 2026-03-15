@@ -67,6 +67,9 @@ export const queryKeys = {
     threadRoot: ["agent", "thread"] as const,
     thread: (threadId: string) => ["agent", "thread", threadId] as const
   },
+  workspace: {
+    snapshot: ["workspace", "snapshot"] as const
+  },
   admin: {
     users: ["admin", "users"] as const,
     sessions: ["admin", "sessions"] as const

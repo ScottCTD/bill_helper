@@ -93,14 +93,29 @@ class AgentMessageAttachment(Base):
     message_id: Mapped[str] = mapped_column(
         ForeignKey("agent_messages.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    mime_type: Mapped[str] = mapped_column(String(255), nullable=False)
-    original_filename: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    user_file_id: Mapped[str] = mapped_column(
+        ForeignKey("user_files.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
 
     message: Mapped[AgentMessage] = relationship(back_populates="attachments")
+    user_file: Mapped["UserFile"] = relationship(back_populates="attachments")
+
+    @property
+    def mime_type(self) -> str:
+        return self.user_file.mime_type
+
+    @property
+    def original_filename(self) -> str | None:
+        return self.user_file.original_filename
+
+    @property
+    def file_path(self) -> str:
+        from backend.services.user_files import resolve_user_file_path
+
+        return str(resolve_user_file_path(self.user_file))
 
 
 class AgentRun(Base):

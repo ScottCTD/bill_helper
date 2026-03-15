@@ -11,6 +11,8 @@ Defines typed API models for:
 - auth/admin (`AuthSession`, `AuthLoginResponse`, `AdminSession`)
 - runtime settings (`RuntimeSettings`, `RuntimeSettingsOverrides`)
 - agent domain (`AgentThread*`, `AgentMessage*`, `AgentRun`, `AgentToolCall`, `AgentChangeItem`, `AgentReviewAction`)
+- workspace domain (`WorkspaceSnapshot`, `WorkspaceIdeSession`)
+  - workspace snapshots now expose IDE readiness and degraded launch state for the IDE-first route
 
 Current contract highlights:
 
@@ -26,7 +28,7 @@ Responsibilities:
 - JSON and FormData request handling
 - injects `Authorization: Bearer <token>` from `localStorage` before protected requests
 - clears the stored token on `401`
-- exposes route helpers across ledger, catalog, settings, agent, auth, and admin domains
+- exposes route helpers across ledger, catalog, settings, agent, auth, admin, and workspace domains
 
 Notable client methods:
 
@@ -56,6 +58,7 @@ Current auth-related keys:
 - `auth.session`
 - `admin.users`
 - `admin.sessions`
+- `workspace.snapshot`
 
 ## State Strategy
 
@@ -78,4 +81,5 @@ Current behavior:
 
 - app startup validates any stored token with `GET /auth/me`
 - invalid or expired tokens are cleared automatically
+- once auth is restored, the provider also fires one best-effort `POST /workspace/start` for that session so the per-user IDE comes back after reloads and backend restarts
 - successful admin impersonation swaps the stored token and refreshes the whole app scope

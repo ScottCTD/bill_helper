@@ -4,6 +4,7 @@
 
 - `uv` for Python environment, scripts, and tests
 - `node` + `npm` for the frontend
+- `docker` for the default agent-workspace provisioning flow and Docker-backed workspace tests
 - `tesseract` if you want OCR fallback for image-only or redacted PDF uploads
 
 ## First-Time Setup
@@ -31,9 +32,10 @@ Shared secrets and shared data therefore work across Git worktrees by default.
 
 ### Shared Data Directory
 
-Application data defaults to `~/.local/share/bill-helper/`.
+Application data defaults to `~/.local/share/bill_helper/`.
 
-- default SQLite path: `~/.local/share/bill-helper/bill_helper.db`
+- default SQLite path: `~/.local/share/bill_helper/bill_helper.db`
+- canonical user-visible files: `~/.local/share/bill_helper/user_files/{user_id}/{uploads,artifacts}`
 - override with `BILL_HELPER_DATABASE_URL`
 - or override the root directory with `BILL_HELPER_DATA_DIR`
 
@@ -49,7 +51,7 @@ BILL_HELPER_DATA_DIR=./.data
 |----------|---------|-------------|
 | `BILL_HELPER_APP_NAME` | `Bill Helper` | Application display name |
 | `BILL_HELPER_API_PREFIX` | `/api/v1` | API route prefix |
-| `BILL_HELPER_DATA_DIR` | `~/.local/share/bill-helper` | Shared data directory |
+| `BILL_HELPER_DATA_DIR` | `~/.local/share/bill_helper` | Shared data directory |
 | `BILL_HELPER_DATABASE_URL` | _(derived from data dir)_ | SQLAlchemy database URL |
 | `BILL_HELPER_CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed CORS origins |
 | `CURRENT_USER_TIMEZONE` | `America/Toronto` | Timezone for agent date context |
@@ -69,8 +71,33 @@ BILL_HELPER_DATA_DIR=./.data
 | `BILL_HELPER_AGENT_RETRY_BACKOFF_MULTIPLIER` | `2.0` | Retry backoff multiplier |
 | `BILL_HELPER_AGENT_MAX_IMAGE_SIZE_BYTES` | `5242880` | Per-attachment size limit |
 | `BILL_HELPER_AGENT_MAX_IMAGES_PER_MESSAGE` | `4` | Max image/PDF uploads per message |
+| `BILL_HELPER_AGENT_WORKSPACE_ENABLED` | `true` | Enable eager per-user Docker workspace provisioning |
+| `BILL_HELPER_AGENT_WORKSPACE_IMAGE` | `bill-helper-agent-workspace:latest` | Prebuilt image tag for per-user workspaces |
+| `BILL_HELPER_AGENT_WORKSPACE_DOCKER_BINARY` | `docker` | Docker CLI binary used for workspace lifecycle commands |
 | `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL` | _(none)_ | Optional custom provider endpoint |
 | `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY` | _(none)_ | Optional custom provider API key |
+
+## Agent Workspace Provisioning
+
+The backend now provisions one deterministic workspace definition per user:
+
+- host files: `{data_dir}/user_files/{user_id}/{uploads,artifacts}`
+- named volume: `bill-helper-workspace-{user_id}`
+- named container: `bill-helper-sandbox-{user_id}`
+- mounts: `/data` read-only from the user's canonical files and `/workspace` from the named volume
+
+Build the local image before running admin bootstrap or creating users through the admin API:
+
+```bash
+docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .
+```
+
+Behavior notes:
+
+- the backend does not auto-build this image
+- when workspace provisioning is enabled, admin bootstrap and user creation fail with a provisioning error if the configured image tag is missing
+- set `BILL_HELPER_AGENT_WORKSPACE_ENABLED=0` in environments where you intentionally do not want Docker-backed provisioning
+- if the backend itself runs inside Docker, it still needs host-daemon access through `/var/run/docker.sock` or `DOCKER_HOST` to manage sibling user workspaces
 
 ## Provider Credentials
 
@@ -146,6 +173,7 @@ Current revisions:
 - `0032_add_filter_groups`
 - `0033_multi_user_security`
 - `0034_add_entry_tagging_model_to_runtime_settings`
+- `0035_add_user_files_and_agent_workspace`
 
 ## Seed Data
 
@@ -234,6 +262,12 @@ uv run python scripts/check_llm_design.py
 cd frontend && npm run test && npm run test:e2e && npm run build
 cd ..
 uv run python scripts/check_docs_sync.py
+```
+
+When the agent workspace image changes, also rebuild it locally:
+
+```bash
+docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .
 ```
 
 ## Migration Workflow

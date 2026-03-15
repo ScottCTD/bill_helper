@@ -35,6 +35,7 @@ Current behavior:
 - `backend/schemas_agent.py`: thread, message, run, change-item, and review contracts
 - `backend/schemas_settings.py`: runtime settings request/response contracts
 - `backend/schemas_auth.py`: login, session, admin-user, and admin-session contracts
+- `backend/schemas_workspace.py`: per-user workspace snapshot, IDE launch, and recursive file-tree contracts
 
 Important read models:
 
@@ -56,6 +57,8 @@ Important read models:
 - `backend/services/users.py`
 - `backend/services/access_scope.py`
 - `backend/services/runtime_settings.py`
+- `backend/services/workspace_browser.py`
+- `backend/services/workspace_ide.py`
 
 Shared policy helpers:
 
@@ -89,18 +92,20 @@ Protected routers:
 - `taxonomies.py`
 - `currencies.py`
 - `settings.py`
+- `workspace.py`
 - split agent routers under `backend/routers/agent_*`
 
 Router behavior:
 
 - routers own HTTP translation only
-- all protected routers depend on `get_current_principal`
+- most protected routers depend on `get_current_principal`
 - finance, catalog, and agent lookups are owner-scoped through `access_scope.py`
 - non-admin principals are restricted to their own owned resources
 - admin principals can read and mutate all owned resources
 - account and entry create/update flows default `owner_user_id` to the current principal unless an admin explicitly assigns another user on supported finance routes
 - entity, tag, and taxonomy mutations are authenticated-user accessible and create records for the caller's own scope
 - settings writes stay admin-only because runtime settings are app-global
+- workspace snapshot/start/stop routes are bearer-authenticated and current-user scoped, while the proxied IDE subroutes are current-user scoped through the narrow workspace cookie issued by `POST /workspace/ide/session`
 
 ## Agent HTTP Ownership
 
@@ -117,4 +122,5 @@ Current rules:
 - `docs/api/core_ledger.md`
 - `docs/api/catalogs_and_settings.md`
 - `docs/api/agent.md`
+- `docs/api/workspace.md`
 - `docs/data_model.md`

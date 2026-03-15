@@ -17,7 +17,7 @@ from starlette import status
 from backend.database import open_session
 from backend.enums_agent import AgentMessageRole, AgentRunStatus
 from backend.models_agent import AgentMessage, AgentMessageAttachment, AgentRun, AgentThread
-from backend.services.agent.attachments import store_attachment_bytes
+from backend.services.agent.attachments import create_message_attachment
 from backend.services.agent.context_tokens import count_context_tokens
 from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.runtime import (
@@ -26,6 +26,7 @@ from backend.services.agent.runtime import (
     start_agent_run,
 )
 from backend.services.agent.tool_runtime import build_openai_tool_schemas
+from backend.services.user_files import SOURCE_TYPE_AGENT_ATTACHMENT, STORAGE_AREA_UPLOAD, store_user_file_bytes
 from backend.services.runtime_settings import resolve_runtime_settings
 from backend.validation.runtime_settings import normalize_text_or_none
 
@@ -85,7 +86,6 @@ async def create_user_message_and_start_run(
     thread_id: str,
     content: str,
     files: list[UploadFile],
-    upload_root: Path,
     db: Session,
     model_name: str | None = None,
     surface: str = "app",
@@ -141,20 +141,19 @@ async def create_user_message_and_start_run(
                 detail=f"Attachment too large. Max bytes allowed is {settings.agent_max_image_size_bytes}.",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
-        path = store_attachment_bytes(
-            upload_root=upload_root,
-            message_id=user_message.id,
+        user_file = store_user_file_bytes(
+            db,
+            owner_user_id=thread.owner_user_id,
+            storage_area=STORAGE_AREA_UPLOAD,
+            source_type=SOURCE_TYPE_AGENT_ATTACHMENT,
             mime_type=mime_type,
-            original_filename=upload.filename,
             file_bytes=file_bytes,
+            original_filename=upload.filename,
         )
-        db.add(
-            AgentMessageAttachment(
-                message_id=user_message.id,
-                mime_type=mime_type,
-                original_filename=upload.filename,
-                file_path=path,
-            )
+        create_message_attachment(
+            db,
+            message_id=user_message.id,
+            user_file=user_file,
         )
 
     thread.updated_at = utc_now()

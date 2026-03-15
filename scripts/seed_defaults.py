@@ -291,6 +291,7 @@ def seed_all(
 def reset_local_db() -> None:
     """Drop all tables, recreate, seed defaults, stamp Alembic."""
     import backend.models_agent  # noqa: F401
+    import backend.models_files  # noqa: F401
     import backend.models_finance  # noqa: F401
     import backend.models_settings  # noqa: F401
     from backend.db_meta import Base

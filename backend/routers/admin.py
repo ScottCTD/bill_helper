@@ -20,7 +20,17 @@ from backend.schemas_auth import (
     AuthUserRead,
 )
 from backend.schemas_finance import UserRead
-from backend.services.sessions import create_session, list_active_sessions, revoke_session_by_id
+from backend.services.agent_workspace import (
+    queue_best_effort_user_workspace_start,
+    queue_best_effort_user_workspace_stop,
+)
+from backend.services.sessions import (
+    count_active_sessions_for_user,
+    create_session,
+    list_active_sessions,
+    load_session_by_id,
+    revoke_session_by_id,
+)
 from backend.services.users import (
     build_user_read,
     create_user_for_admin,
@@ -122,6 +132,7 @@ def login_as_user(
         is_admin_impersonation=True,
     )
     db.commit()
+    queue_best_effort_user_workspace_start(user_id=user.id)
     return AuthLoginResponse(
         token=token,
         user=AuthUserRead.model_validate(user),
@@ -156,7 +167,12 @@ def delete_admin_session(
     db: Session = Depends(get_db),
     _: RequestPrincipal = Depends(require_admin_principal),
 ) -> None:
+    session_row = load_session_by_id(db, session_id=session_id)
+    if session_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     deleted = revoke_session_by_id(db, session_id=session_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    if count_active_sessions_for_user(db, user_id=session_row.user_id) == 0:
+        queue_best_effort_user_workspace_stop(user_id=session_row.user_id)
     db.commit()

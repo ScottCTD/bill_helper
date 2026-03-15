@@ -25,6 +25,7 @@ from backend.routers import (
     tags,
     taxonomies,
     users,
+    workspace,
 )
 from backend.routers.agent import router as agent_router
 from backend.routers.accounts import router as accounts_router
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
             prefix=app_settings.api_prefix,
             dependencies=protected_dependencies,
         )
+    app.include_router(workspace.router, prefix=app_settings.api_prefix)
 
     return app
 

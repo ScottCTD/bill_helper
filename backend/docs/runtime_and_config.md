@@ -10,6 +10,7 @@
 - LiteLLM for model-provider routing
 - PyMuPDF for PDF extraction and rendering
 - local `tesseract` as OCR fallback
+- Docker CLI for per-user workspace provisioning
 
 ## Entry Points
 
@@ -34,7 +35,7 @@ Core settings:
 
 - `APP_NAME`
 - `API_PREFIX` (default `/api/v1`)
-- `DATA_DIR` (default `~/.local/share/bill-helper`)
+- `DATA_DIR` (default `~/.local/share/bill_helper`)
 - `DATABASE_URL` (derived from `DATA_DIR` unless explicitly set)
 - `CORS_ORIGINS` (default `http://localhost:5173`)
 - `CURRENT_USER_TIMEZONE` / `BILL_HELPER_CURRENT_USER_TIMEZONE`
@@ -48,6 +49,9 @@ Agent settings:
 - `AGENT_BULK_MAX_CONCURRENT_THREADS`
 - retry policy fields
 - image and attachment limit fields
+- `AGENT_WORKSPACE_ENABLED`
+- `AGENT_WORKSPACE_IMAGE`
+- `AGENT_WORKSPACE_DOCKER_BINARY`
 - `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL`
 - `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY`
 
@@ -69,6 +73,35 @@ Behavior notes:
 - only agent execution is blocked (`503`) when LiteLLM cannot resolve credentials for the configured model
 - env-file variables are mirrored into `os.environ` so provider SDKs and LiteLLM can see shared secrets
 - `get_settings()` caches environment settings with `lru_cache`
+
+## Agent Workspace Provisioning
+
+Relevant modules:
+
+- `backend/services/user_files.py`
+- `backend/services/agent_workspace.py`
+- `backend/services/workspace_browser.py`
+- `backend/services/workspace_ide.py`
+- `backend/services/docker_cli.py`
+- `docker/agent-workspace.dockerfile`
+
+Current behavior:
+
+- user creation and admin bootstrap eagerly create `{data_dir}/user_files/{user_id}/{uploads,artifacts}`
+- when `agent_workspace_enabled=true`, those same flows also ensure the named Docker volume `bill-helper-workspace-{user_id}` and the named `code-server` container definition `bill-helper-sandbox-{user_id}`
+- the provisioned container mounts the user's canonical file root at `/data` as read-only and a named volume at `/workspace`; the IDE-visible `user_data/` tree is no longer a separate bind mount
+- the workspace image runs `code-server` as its main process, publishes its IDE port to localhost only, and uses a structured volume root where editable files live under `/workspace/workspace` and `/workspace/user_data` is a symlink to `/data/user_data/{uploads,artifacts}`, exposing friendly-name symlinks instead of raw storage UUIDs
+- the workspace image preinstalls the OpenVSX web-compatible PDF viewer extension `chocolatedesue.modern-pdf-preview` and syncs it into each workspace so mounted PDFs can open inside browser-based `code-server` without manual extension setup
+- the workspace entrypoint expects the current layout only: `/workspace/workspace`, `/workspace/.ide`, and `/workspace/user_data -> /data/user_data`; if `user_data` is not a symlink, startup fails instead of migrating old layouts
+- `ensure_user_workspace_provisioned()` enforces the current image/label/port/mount contract and recreates mismatched containers onto the current revision without compatibility shims for older mount layouts
+- `GET /api/v1/workspace` reports current container state, IDE readiness, and degraded launch reason for the authenticated user
+- when the configured workspace image is missing, `GET /api/v1/workspace` returns a snapshot with `status="image_missing"` so the UI can still explain the missing image instead of returning `503`
+- `POST /api/v1/workspace/start` and `POST /api/v1/workspace/stop` remain explicit lifecycle controls, but login and auth bootstrap now trigger best-effort background start attempts so the IDE is usually ready before the user opens `/workspace`
+- `POST /api/v1/workspace/ide/session` mints a narrow `HttpOnly` workspace cookie for `/api/v1/workspace/ide/` and launches the same-origin IDE proxy without inventing a second auth model
+- logging out only stops the workspace after the user's last active app session disappears
+- the backend assumes `agent_workspace_image` already exists and returns a provisioning error if it does not
+- the image can be built locally with `docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .`
+- if the backend itself runs inside Docker, it still needs host-daemon access via `/var/run/docker.sock` or `DOCKER_HOST` to manage sibling user workspaces
 
 ## Session Auth Runtime
 
@@ -145,6 +178,6 @@ Auth guidance:
   - `build_engine(settings)`
   - `build_session_maker(engine)`
   - cached runtime accessors `get_engine()` and `get_session_maker()`
-  - request dependency `get_db()` and helper `open_session()`
+  - request dependency `get_db()` and helper `open_session()`, both of which now resolve the current cached sessionmaker instead of a stale import-time alias
 - SQLite engines use `check_same_thread=False`
 - scripts, tests, and migrations should construct dedicated engines/sessions instead of relying on runtime globals when isolation matters

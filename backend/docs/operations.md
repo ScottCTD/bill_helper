@@ -36,6 +36,7 @@
 - `0032_add_filter_groups`
 - `0033_multi_user_security`
 - `0034_add_entry_tagging_model_to_runtime_settings`
+- `0035_add_user_files_and_agent_workspace`
 
 Commands:
 
@@ -47,6 +48,7 @@ Commands:
 Useful commands:
 
 - bootstrap/reset admin: `uv run python scripts/bootstrap_admin.py --name <user> --password <pass>`
+- build workspace image: `docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .`
 - py-compile touched modules: `uv run python -m py_compile ...`
 - backend tests: `OPENROUTER_API_KEY=test uv run pytest backend/tests -q`
 - docs sync: `uv run python scripts/check_docs_sync.py`
@@ -55,8 +57,11 @@ Useful commands:
 
 - session auth stores only SHA-256 token digests in `sessions`
 - deleting a user cascades through owned finance resources, agent threads, and sessions
-- agent uploads persist under `{data_dir}/agent_uploads`
-- deleting a thread removes its attachment directories under `{data_dir}/agent_uploads/<message_id>/...`
+- canonical user-visible files persist under `{data_dir}/user_files/{user_id}/{uploads,artifacts}`
+- agent message attachments are durable `user_files` rows linked from `agent_message_attachments`
+- deleting a thread removes thread-scoped DB rows only; it no longer deletes uploaded payload files from disk
+- admin bootstrap and user-create flows eagerly provision user file roots plus named Docker workspace resources when workspace provisioning is enabled
+- user deletion removes the named workspace container, named workspace volume, and `{data_dir}/user_files/{user_id}`
 - non-stream sends run in a background thread; stream sends emit SSE from the request and resume in background on disconnect if needed
 - runtime settings are global to the app instance even though finance and agent resources are user-owned
 - dashboard/filter-group reads lazily provision default filter groups per user
@@ -68,6 +73,7 @@ Useful commands:
 - runtime settings remain global, not per user
 - `agent_api_key` runtime overrides are stored as plaintext in the local DB for this prototype
 - OCR fallback requires a local `tesseract` executable
+- workspace provisioning requires a prebuilt local Docker image and host-daemon access; the backend does not build the image itself
 - streaming uses SSE only; there is no websocket transport
 - no autonomous or scheduled agent runs
 - taxonomy assignments use string `subject_id` values without cross-table FK enforcement

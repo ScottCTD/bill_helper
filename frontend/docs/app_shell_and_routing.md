@@ -30,10 +30,12 @@ Current shell behavior:
 - unauthenticated users are redirected to `/login`
 - authenticated users see the shared sidebar plus route content
 - impersonation sessions show a banner above protected content
-- collapsible left sidebar (`Sidebar.tsx`) with navigation links for `Agent`, `Dashboard`, `Filters`, `Entries`, `Entities`, `Groups`, `Accounts`, `Properties`, and `Settings`
+- collapsible left sidebar (`Sidebar.tsx`) with navigation links for `Agent`, `Workspace`, `Dashboard`, `Filters`, `Entries`, `Entities`, `Groups`, `Accounts`, `Properties`, and `Settings`
 - admin users also get a dedicated `Admin` button in the expanded sidebar footer above the session card
 - the session card in the sidebar footer shows only the current account name and a logout action
 - route pages are lazy-loaded via `React.lazy` and `Suspense`
+- `/workspace` is the one protected route that switches the shell into an immersive no-padding content mode so the IDE iframe can take the full main column
+- the workspace IDE shell stays mounted inside the protected app shell after first visit, so navigating to another protected route and back to `/workspace` reuses the same iframe instead of remounting it
 - the rich markdown editor bundle is loaded only when an editor dialog opens; development builds surface the exact runtime error above the textarea fallback, while production keeps the fallback generic
 - desktop sidebar is resizable and persisted in `localStorage`
 - on small screens the sidebar starts collapsed and can slide open
@@ -42,6 +44,7 @@ Route map:
 
 - `/login` -> password sign-in page
 - `/` -> agent home chat
+- `/workspace` -> current-user browser IDE with minimal degraded/mobile fallback states
 - `/dashboard` -> dashboard analytics
 - `/filters` -> saved filter-group workspace
 - `/entries` -> entry list

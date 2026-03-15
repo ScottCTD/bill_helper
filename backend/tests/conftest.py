@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 _test_db_dir = tempfile.mkdtemp(prefix="bill_helper_test_")
 os.environ["BILL_HELPER_DATABASE_URL"] = f"sqlite:///{_test_db_dir}/test_bill_helper.db"
+os.environ["BILL_HELPER_AGENT_WORKSPACE_ENABLED"] = "0"
 os.environ["GOOGLE_API_KEY"] = "test-google-key"
 os.environ["GEMINI_API_KEY"] = "test-gemini-key"
 

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 import json
-from pathlib import Path
 from threading import Thread
 from typing import Literal
 
@@ -18,13 +17,13 @@ from sqlalchemy.orm import Session, load_only, selectinload
 
 from backend.auth.contracts import RequestPrincipal
 from backend.auth.dependencies import get_current_principal
-from backend.config import get_settings
 from backend.database import get_db
 from backend.database import get_session_maker
 from backend.enums_agent import AgentChangeStatus, AgentRunStatus, SUPPORTED_AGENT_CHANGE_TYPES
 from backend.models_agent import (
     AgentChangeItem,
     AgentMessage,
+    AgentMessageAttachment,
     AgentRun,
     AgentThread,
     AgentToolCall,
@@ -38,10 +37,6 @@ from backend.schemas_agent import (
     AgentThreadUpdate,
 )
 from backend.services.access_scope import agent_thread_owner_filter, load_agent_thread_for_principal
-from backend.services.agent.attachments import (
-    delete_attachment_directories,
-    thread_attachment_directories,
-)
 from backend.services.agent.execution import (
     AgentExecutionPolicyError,
     create_user_message_and_start_run,
@@ -71,10 +66,6 @@ def sse_event(event_type: str, payload: dict[str, object]) -> str:
     return f"event: {event_type}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
 
 
-def agent_upload_root() -> Path:
-    return get_settings().data_dir / "agent_uploads"
-
-
 def open_background_session() -> Session:
     return get_session_maker()()
 
@@ -93,7 +84,6 @@ async def create_user_message_run_or_503(
             thread_id=thread_id,
             content=content,
             files=files,
-            upload_root=agent_upload_root(),
             db=db,
             model_name=model_name,
             surface=surface,
@@ -195,10 +185,8 @@ def delete_thread(
             detail="Cannot delete a thread while an agent run is still running.",
         )
 
-    attachment_directories = thread_attachment_directories(thread, upload_root=agent_upload_root())
     db.delete(thread)
     db.commit()
-    delete_attachment_directories(attachment_directories)
 
 
 @router.patch("/threads/{thread_id}", response_model=AgentThreadRead)
@@ -227,7 +215,9 @@ def get_thread_detail(
         thread_id=thread_id,
         principal=principal,
         stmt=select(AgentThread).options(
-            selectinload(AgentThread.messages).selectinload(AgentMessage.attachments),
+            selectinload(AgentThread.messages)
+            .selectinload(AgentMessage.attachments)
+            .selectinload(AgentMessageAttachment.user_file),
             selectinload(AgentThread.runs).selectinload(AgentRun.events),
             selectinload(AgentThread.runs).selectinload(AgentRun.assistant_message),
             selectinload(AgentThread.runs)

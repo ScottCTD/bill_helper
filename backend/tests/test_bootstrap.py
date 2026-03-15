@@ -149,6 +149,7 @@ def test_bootstrap_admin_script_creates_admin_in_isolated_data_dir(tmp_path):
     env = {
         **dict(os.environ),
         "BILL_HELPER_DATA_DIR": str(data_dir),
+        "BILL_HELPER_AGENT_WORKSPACE_ENABLED": "0",
     }
     env.pop("BILL_HELPER_DATABASE_URL", None)
 
