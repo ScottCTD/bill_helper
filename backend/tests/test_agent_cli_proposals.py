@@ -7,7 +7,7 @@ def _run_headers(run_id: str) -> dict[str, str]:
     return {"X-Bill-Helper-Agent-Run-Id": run_id}
 
 
-def test_thread_proposal_routes_create_update_get_list_and_remove(client, monkeypatch) -> None:
+def test_thread_proposal_routes_create_get_and_list(client, monkeypatch) -> None:
     patch_model(monkeypatch, lambda _messages: {"role": "assistant", "content": "ok"})
 
     thread = create_thread(client)
@@ -46,24 +46,6 @@ def test_thread_proposal_routes_create_update_get_list_and_remove(client, monkey
     listed = list_response.json()
     assert listed["returned_count"] == 1
     assert listed["proposals"][0]["proposal_id"] == created["proposal_id"]
-
-    update_response = client.patch(
-        f"/api/v1/agent/threads/{thread['id']}/proposals/{created['proposal_short_id']}",
-        headers=_run_headers(run["id"]),
-        json={"patch_map": {"name": "dining"}},
-    )
-    update_response.raise_for_status()
-    updated = update_response.json()
-    assert updated["payload"]["name"] == "dining"
-
-    delete_response = client.delete(
-        f"/api/v1/agent/threads/{thread['id']}/proposals/{created['proposal_short_id']}",
-        headers=_run_headers(run["id"]),
-    )
-    delete_response.raise_for_status()
-    deleted = delete_response.json()
-    assert deleted["removed"] is True
-    assert deleted["proposal_id"] == created["proposal_id"]
 
 
 def test_thread_proposal_routes_require_run_header(client, monkeypatch) -> None:

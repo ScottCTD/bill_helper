@@ -238,8 +238,8 @@ def validate_proposed_entity_reference(context: ToolContext, entity_name: str) -
     if has_pending_create_entity_root_proposal(context, entity_name):
         return
     raise ValueError(
-        f"entity not found: '{entity_name}'. Use an existing entity or propose_create_entity "
-        "or propose_create_account for it in the current thread first."
+        f"entity not found: '{entity_name}'. Use an existing entity or create an entity/account proposal "
+        "for it in the current thread first."
     )
 
 

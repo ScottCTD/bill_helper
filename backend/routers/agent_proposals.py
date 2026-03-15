@@ -13,11 +13,9 @@ from backend.auth.dependencies import get_current_principal
 from backend.database import get_db
 from backend.schemas_agent import (
     AgentProposalCreateRequest,
-    AgentProposalDeleteRead,
     AgentProposalListQuery,
     AgentProposalListRead,
     AgentProposalRecordRead,
-    AgentProposalUpdateRequest,
 )
 from backend.services.access_scope import load_agent_thread_for_principal
 from backend.services.agent.proposal_http import (
@@ -25,10 +23,7 @@ from backend.services.agent.proposal_http import (
     create_thread_proposal,
     get_thread_proposal,
     list_thread_proposals,
-    remove_thread_proposal,
-    update_thread_proposal,
 )
-from backend.services.agent.tool_args.read import ListProposalsArgs
 
 
 router = APIRouter(
@@ -63,7 +58,11 @@ def list_proposals_for_thread(
     context = build_thread_tool_context(db, principal=principal, thread_id=thread_id, run_id=run_id)
     result = list_thread_proposals(
         context,
-        query=ListProposalsArgs.model_validate(query.model_dump(exclude_none=True)),
+        proposal_type=query.proposal_type,
+        proposal_status=query.proposal_status,
+        change_action=query.change_action,
+        proposal_id=query.proposal_id,
+        limit=query.limit,
     )
     return AgentProposalListRead.model_validate(result)
 
@@ -98,42 +97,5 @@ def create_proposal_for_thread(
             payload_json=payload.payload_json,
         )
     )
-    db.commit()
-    return result
-
-
-@router.patch("/threads/{thread_id}/proposals/{proposal_id}", response_model=AgentProposalRecordRead)
-def update_proposal_for_thread(
-    thread_id: str,
-    proposal_id: str,
-    payload: AgentProposalUpdateRequest,
-    run_id: str = Depends(_require_agent_run_id),
-    db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
-) -> AgentProposalRecordRead:
-    load_agent_thread_for_principal(db, thread_id=thread_id, principal=principal)
-    context = build_thread_tool_context(db, principal=principal, thread_id=thread_id, run_id=run_id)
-    result = AgentProposalRecordRead.model_validate(
-        update_thread_proposal(
-            context,
-            proposal_id=proposal_id,
-            patch_map=payload.patch_map,
-        )
-    )
-    db.commit()
-    return result
-
-
-@router.delete("/threads/{thread_id}/proposals/{proposal_id}", response_model=AgentProposalDeleteRead)
-def delete_proposal_for_thread(
-    thread_id: str,
-    proposal_id: str,
-    run_id: str = Depends(_require_agent_run_id),
-    db: Session = Depends(get_db),
-    principal: RequestPrincipal = Depends(get_current_principal),
-) -> AgentProposalDeleteRead:
-    load_agent_thread_for_principal(db, thread_id=thread_id, principal=principal)
-    context = build_thread_tool_context(db, principal=principal, thread_id=thread_id, run_id=run_id)
-    result = AgentProposalDeleteRead.model_validate(remove_thread_proposal(context, proposal_id=proposal_id))
     db.commit()
     return result

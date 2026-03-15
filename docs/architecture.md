@@ -50,7 +50,7 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 3. backend creates `agent_runs` row (`running`)
 4. runtime executes bounded tool-calling loop via LiteLLM using configured provider model
 5. each tool call is persisted to `agent_tool_calls`
-6. `billengine` proposal commands create `agent_change_items` (`PENDING_REVIEW`)
+6. `bh` proposal commands create `agent_change_items` (`PENDING_REVIEW`)
 7. stream path emits incremental `text_delta` plus persisted `run_event` payloads (run start/finish, reasoning updates, and per-tool lifecycle events)
 8. runtime enforces a final assistant message and marks run `completed` or `failed`
 
@@ -75,12 +75,12 @@ Execution model:
 
 - `run_workspace_command` executes inside the per-user workspace container
 - the workspace receives injected backend/auth/thread/run env per invocation
-- Bill Helper app-state reads and proposal/review actions go through the installed `billengine` CLI
+- Bill Helper app-state reads and proposal/review actions go through the installed `bh` CLI
 - local file and shell work stays in the workspace terminal rather than adding more specialized model-facing tools
 
 Contract notes:
 
-- the model-visible tool catalog is intentionally small; app operations should prefer `billengine` over raw `curl` or ad hoc Python when a command exists
+- the model-visible tool catalog is intentionally small; app operations should prefer `bh` over raw `curl` or ad hoc Python when a command exists
 - proposal lifecycle remains review-gated even though the agent now reaches it through CLI commands instead of direct proposal tools
 - thread-scoped proposal commands require the active thread and run context so proposal history stays attached to the invoking run
 
@@ -154,7 +154,7 @@ Cross-page consistency:
 - agent threads are user-owned instead of admin-global; admins can still access everything or impersonate a user
 - review apply uses the approving reviewer principal for scoped entry resolution and owner attribution, not mutable runtime settings identity
 - only image and PDF attachments are accepted in agent messages
-- active agent runs have workspace terminal execution through `run_workspace_command`; Bill Helper app operations are expected to flow through `billengine`
+- active agent runs have workspace terminal execution through `run_workspace_command`; Bill Helper app operations are expected to flow through `bh`
 - provisioned workspaces mount only the owning user's canonical file root at `/data` as read-only and do not expose `bill_helper.db`
 
 ## Out of Scope (Current)

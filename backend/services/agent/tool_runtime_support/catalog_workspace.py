@@ -16,8 +16,8 @@ WORKSPACE_TOOLS: dict[str, AgentToolDefinition] = {
         description=(
             "Run a shell command inside the current user's workspace container. "
             "Use this for local filesystem work under /workspace, read-only inspection under /data, "
-            "and Bill Helper app operations through the installed `billengine` executable. "
-            "Prefer `billengine` over raw curl or ad hoc Python when the task is about Bill Helper state. "
+            "and Bill Helper app operations through the installed `bh` executable. "
+            "Prefer `bh` over raw curl or ad hoc Python when the task is about Bill Helper state. "
             "The backend injects the current run/thread/auth context automatically."
         ),
         args_model=RunWorkspaceCommandArgs,

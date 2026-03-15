@@ -6,7 +6,7 @@ Scope rules:
 
 - non-admin principals can access only their own threads and all child resources under those threads
 - admin principals can access any thread and may impersonate a user when they need an exact end-user scope
-- thread-scoped proposal routes also require `X-Bill-Helper-Agent-Run-Id` so the backend can associate new or revised proposals with the active agent run that invoked `billengine`
+- thread-scoped proposal routes also require `X-Bill-Helper-Agent-Run-Id` so the backend can associate new or revised proposals with the active agent run that invoked `bh`
 
 ## Threads
 
@@ -226,29 +226,6 @@ Behavior:
 - validates payloads with the same normalization/ownership rules used by the internal proposal handlers
 - associates the new `AgentChangeItem` with the active run from `X-Bill-Helper-Agent-Run-Id`
 - supports the full current proposal set: entry, account, snapshot, group, group-member, tag, and entity changes
-
-### `PATCH /agent/threads/{thread_id}/proposals/{proposal_id}`
-
-Update one pending proposal by patch map. Response: `AgentProposalRecordRead`
-
-Body:
-
-- `patch_map`
-
-Errors:
-
-- `404` proposal not found
-- `409` proposal is no longer pending
-- `400` invalid patch or normalization failure
-
-### `DELETE /agent/threads/{thread_id}/proposals/{proposal_id}`
-
-Remove one pending proposal. Response: `AgentProposalDeleteRead`
-
-Errors:
-
-- `404` proposal not found
-- `409` proposal is no longer pending
 
 ### `POST /agent/change-items/{item_id}/approve`
 

@@ -21,7 +21,7 @@
 - **Routers:** HTTP translation only (parsing, response mapping, status codes).
 - **Services:** Domain logic and orchestration.
 - **Storage:** Dedicated service modules, not routers.
-- **Data flow:** Client → router → service → models; agent proposals are created through the workspace terminal plus `billengine`, applied only after human review.
+- **Data flow:** Client → router → service → models; agent proposals are created through the workspace terminal plus `bh`, applied only after human review.
 
 ---
 
@@ -44,9 +44,9 @@
 
 **Workspace app interface:**
 
-- The workspace image includes the `billengine` CLI.
-- Bill Helper reads and proposal/review actions now go through `billengine` instead of a large direct CRUD tool catalog.
-- Current CLI coverage includes threads, entries, accounts, snapshots, reconciliation, groups, entities, tags, proposals, reviews, and workspace status.
+- The workspace image includes the `bh` CLI.
+- Bill Helper reads and proposal/review actions now go through `bh` instead of a large direct CRUD tool catalog.
+- Current CLI coverage includes status, entries, accounts, snapshots, reconciliation, groups, entities, tags, and current-thread proposals.
 
 ### 2.3 Agent Run Lifecycle
 
@@ -65,7 +65,7 @@
 - **Model selection:** Dropdown to pick from available models; can change mid-conversation.
 - **Bulk mode:** One thread per attached file, concurrent limit configurable.
 - **Run interrupt:** User can stop a running agent.
-- **Review results:** Prepended to latest message for continuation; agent iteratively improves proposals after feedback. Pending proposals stay editable across turns; agent can update or remove a pending proposal by id through `billengine`.
+- **Review results:** Prepended to latest message for continuation; agent iteratively improves proposals after feedback and inspects prior proposal state through `bh proposals list|get`.
 - **Tool lifecycle:** Queued → running → completed/cancelled; collapsible observability (arguments, output).
 - **Usage tracking:** Context tokens, input/output/cache tokens, cost estimates; thread-level footnote.
 - **Custom provider:** Configurable base URL and API key in settings.

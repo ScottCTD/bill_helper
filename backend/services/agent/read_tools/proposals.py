@@ -108,7 +108,6 @@ def proposal_to_public_record(item: AgentChangeItem) -> dict[str, Any]:
         "proposal_type": metadata.proposal_type,
         "change_action": metadata.change_action,
         "change_type": item.change_type.value,
-        "proposal_tool_name": metadata.proposal_tool_name,
         "status": item.status.value,
         "proposal_summary": proposal_summary(item),
         "rationale_text": item.rationale_text,

@@ -16,6 +16,7 @@ from backend.services.agent_workspace import (
     require_user_workspace_ide_host_port,
     start_user_workspace,
 )
+from backend.services.workspace_cli_env import refresh_workspace_cli_env
 
 WORKSPACE_IDE_SESSION_COOKIE_NAME = "bill-helper.workspace-session"
 HOP_BY_HOP_HEADERS = {
@@ -52,6 +53,11 @@ def launch_user_workspace_ide(
     settings: Settings | None = None,
 ) -> WorkspaceIdeLaunchView:
     start_user_workspace(user_id=user_id, settings=settings)
+    refresh_workspace_cli_env(
+        user_id=user_id,
+        session_token=session_token,
+        settings=settings,
+    )
     runtime = build_user_workspace_runtime(user_id=user_id, settings=settings)
     if runtime.status != "running" or not runtime.ide_ready:
         detail = runtime.degraded_reason or "Workspace IDE is unavailable."

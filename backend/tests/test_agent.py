@@ -684,13 +684,13 @@ def test_system_prompt_requires_entry_updates_before_tag_delete():
     assert prompt.index(reference_phrase) < prompt.index(update_phrase) < prompt.index(delete_phrase)
 
 
-def test_system_prompt_guides_pending_proposal_revisions_and_removals():
+def test_system_prompt_guides_pending_proposal_inspection_without_direct_revision_commands():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
-    inspect_phrase = "Use `billengine proposals list` to inspect proposal history in the current thread"
-    revise_phrase = "If the user asks to revise an existing pending proposal, prefer `billengine proposals update`"
-    remove_phrase = "If the user asks to discard/cancel/remove a pending proposal, use `billengine proposals remove`"
+    inspect_phrase = "Use `bh proposals list` to inspect proposal history in the current thread"
+    revise_phrase = "Do not assume pending proposals are directly editable through `bh`."
+    remove_phrase = "If the user wants a different end state, inspect existing proposals first"
 
     assert inspect_phrase in prompt
     assert revise_phrase in prompt
@@ -767,7 +767,7 @@ def test_system_prompt_stages_first_proposal_before_parallel_batches():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
-    assert "Do not start a proposal workflow with a large parallel `billengine proposals create` batch." in prompt
+    assert "Do not start a proposal workflow with a large parallel batch of `bh entries create`, `bh tags create`, `bh entities create`, `bh accounts create`, or `bh groups create` commands." in prompt
     assert "Start with one representative proposal command first" in prompt
     assert "After the first proposal succeeds and the pattern is validated" in prompt
 
@@ -1233,7 +1233,7 @@ def test_thread_title_stays_untitled_without_rename_tool(client, monkeypatch):
     assert detail_response.json()["thread"]["title"] is None
 
 
-def test_run_workspace_command_tool_description_mentions_billengine_and_workspace():
+def test_run_workspace_command_tool_description_mentions_bh_and_workspace():
     from backend.services.agent.tools import build_openai_tool_schemas
 
     tool_by_name = {
@@ -1242,8 +1242,60 @@ def test_run_workspace_command_tool_description_mentions_billengine_and_workspac
     }
     description = str(tool_by_name["run_workspace_command"]["description"])
     assert "workspace container" in description
-    assert "`billengine`" in description
-    assert "Prefer `billengine` over raw curl or ad hoc Python" in description
+    assert "`bh`" in description
+    assert "Prefer `bh` over raw curl or ad hoc Python" in description
+
+
+def test_run_workspace_command_tool_schema_includes_exact_argument_descriptions():
+    from backend.services.agent.tools import build_openai_tool_schemas
+
+    tool_by_name = {
+        tool["function"]["name"]: tool["function"]
+        for tool in build_openai_tool_schemas()
+    }
+    properties = tool_by_name["run_workspace_command"]["parameters"]["properties"]
+
+    assert properties["command"]["description"] == (
+        "Shell command to run inside the current user's workspace container. "
+        "Use `bh` for Bill Helper app operations and standard shell commands for local file work."
+    )
+    assert properties["cwd"]["description"] == (
+        "Optional working directory inside the workspace container. Defaults to /workspace/workspace."
+    )
+    assert properties["timeout_seconds"]["description"] == (
+        "Command timeout in seconds. Defaults to 120. Allowed range: 1 to 600."
+    )
+
+
+def test_system_prompt_embeds_bh_cheat_sheet_only():
+    from backend.cli.reference import render_bh_cheat_sheet
+    from backend.services.agent.prompts import system_prompt
+
+    prompt = system_prompt()
+
+    assert "### `bh` Cheat Sheet" in prompt
+    assert render_bh_cheat_sheet() in prompt
+    assert "billengine" not in prompt.lower()
+
+
+def test_agent_feature_doc_embeds_generated_runtime_tool_and_bh_sections():
+    from backend.cli.reference import render_bh_cheat_sheet
+    from backend.services.agent.tool_reference import render_runtime_tool_contract_markdown
+
+    doc_path = Path("docs/features/agent_billing_assistant.md")
+    document = doc_path.read_text(encoding="utf-8")
+
+    runtime_start = "<!-- GENERATED:runtime-tool-contracts:start -->"
+    runtime_end = "<!-- GENERATED:runtime-tool-contracts:end -->"
+    bh_start = "<!-- GENERATED:bh-cheat-sheet:start -->"
+    bh_end = "<!-- GENERATED:bh-cheat-sheet:end -->"
+
+    runtime_block = document.split(runtime_start, maxsplit=1)[1].split(runtime_end, maxsplit=1)[0].strip()
+    bh_block = document.split(bh_start, maxsplit=1)[1].split(bh_end, maxsplit=1)[0].strip()
+
+    assert runtime_block == render_runtime_tool_contract_markdown().strip()
+    assert bh_block == render_bh_cheat_sheet().strip()
+    assert "billengine" not in document.lower()
 
 
 def test_run_persists_tool_calls(client, monkeypatch):
@@ -4326,7 +4378,7 @@ def test_reviewed_items_are_injected_into_followup_turn(client, monkeypatch):
     followup_content = followup_user.get("content")
     assert isinstance(followup_content, str)
     assert "Review results from your previous proposals:" in followup_content
-    assert "propose_create_tag" in followup_content
+    assert "bh tags create" in followup_content
     assert "review_action=reject" in followup_content
     assert "Use type recurring instead" in followup_content
     assert followup_content.index("Review results from your previous proposals:") < followup_content.index("User feedback:")
@@ -4872,7 +4924,7 @@ def test_list_proposals_tool_can_filter_group_domain(client, monkeypatch):
     assert proposal["proposal_id"] == created_item["id"]
     assert proposal["proposal_type"] == "group"
     assert proposal["change_type"] == "create_group"
-    assert proposal["proposal_tool_name"] == "propose_create_group"
+    assert proposal["proposal_type"] == "group"
 
 
 def test_list_proposals_tool_can_lookup_single_proposal_by_short_id(client, monkeypatch):
@@ -4944,7 +4996,7 @@ def test_list_proposals_tool_can_lookup_single_proposal_by_short_id(client, monk
     assert proposal["proposal_type"] == "tag"
     assert proposal["change_action"] == "create"
     assert proposal["change_type"] == "create_tag"
-    assert proposal["proposal_tool_name"] == "propose_create_tag"
+    assert proposal["proposal_type"] == "tag"
     assert proposal["status"] == "APPLIED"
     assert proposal["payload"]["name"] == "reviewed tag"
     assert proposal["rationale_text"] == "Agent proposed creating a tag."

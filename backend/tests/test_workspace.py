@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
 from backend.config import get_settings
 from backend.database import get_session_maker
@@ -135,6 +136,57 @@ def test_workspace_ide_session_sets_workspace_cookie(client, monkeypatch) -> Non
     assert response.json()["launch_url"] == "/api/v1/workspace/ide/?folder=/workspace"
     assert response.json()["snapshot"]["ide_ready"] is True
     assert WORKSPACE_IDE_SESSION_COOKIE_NAME in response.headers.get("set-cookie", "")
+
+
+def test_launch_user_workspace_ide_refreshes_workspace_cli_env(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "backend.services.workspace_ide.start_user_workspace",
+        lambda **kwargs: captured.setdefault("started", kwargs["user_id"]),
+    )
+    monkeypatch.setattr(
+        "backend.services.workspace_ide.refresh_workspace_cli_env",
+        lambda **kwargs: captured.setdefault("refreshed", kwargs),
+    )
+    monkeypatch.setattr(
+        "backend.services.workspace_ide.build_user_workspace_runtime",
+        lambda **_kwargs: SimpleNamespace(
+            status="running",
+            ide_ready=True,
+            ide_launch_path="/api/v1/workspace/ide/",
+            degraded_reason=None,
+        ),
+    )
+
+    class _Request:
+        url = type("_Url", (), {"scheme": "http"})()
+
+    class _Response:
+        def __init__(self) -> None:
+            self.cookies: list[tuple[str, str]] = []
+
+        def set_cookie(self, key: str, value: str, **_kwargs) -> None:
+            self.cookies.append((key, value))
+
+    launch = WorkspaceIdeLaunchView(launch_url="")
+    response = _Response()
+    request = _Request()
+
+    launch = workspace_router.launch_user_workspace_ide(
+        user_id="user-1",
+        request=request,
+        response=response,
+        session_token="session-token",
+    )
+
+    assert launch.launch_url == "/api/v1/workspace/ide/?folder=/workspace"
+    assert captured["started"] == "user-1"
+    assert captured["refreshed"] == {
+        "user_id": "user-1",
+        "session_token": "session-token",
+        "settings": None,
+    }
 
 
 def test_start_and_stop_workspace_endpoints_are_noops_when_workspace_is_disabled(client) -> None:

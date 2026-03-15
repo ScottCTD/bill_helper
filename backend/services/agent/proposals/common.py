@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from backend.auth.contracts import RequestPrincipal
 from backend.enums_agent import AgentChangeStatus, AgentChangeType
 from backend.models_agent import AgentChangeItem, AgentRun
-from backend.services.agent.read_tools.common import tool_principal_scope
+from backend.services.agent.principal_scope import load_run_principal
 from backend.services.agent.tool_results import format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 from backend.validation.finance_names import normalize_entity_name
@@ -174,9 +174,21 @@ def resolve_proposal_by_id(
 
 
 def require_tool_principal(context: ToolContext) -> RequestPrincipal:
-    principal_name, principal_user_id, principal_is_admin = tool_principal_scope(context)
-    if principal_user_id is None:
-        raise ValueError("Tool principal is unavailable for this run.")
+    if (
+        context.principal_name is not None
+        or context.principal_user_id is not None
+        or context.principal_is_admin is not None
+    ):
+        principal_name = context.principal_name
+        principal_user_id = context.principal_user_id
+        principal_is_admin = bool(context.principal_is_admin)
+    else:
+        principal = load_run_principal(context.db, run_id=context.run_id)
+        if principal is None:
+            raise ValueError("Tool principal is unavailable for this run.")
+        principal_name = principal.user_name
+        principal_user_id = principal.user_id
+        principal_is_admin = principal.is_admin
     return RequestPrincipal(
         user_id=principal_user_id,
         user_name=principal_name or "(unknown)",

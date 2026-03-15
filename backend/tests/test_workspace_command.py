@@ -17,7 +17,7 @@ class _FakeWorkspaceSpec:
     container_name: str = "bill-helper-sandbox-user-1"
 
 
-def test_run_workspace_command_injects_billengine_context_and_scrubs_token(client, monkeypatch) -> None:
+def test_run_workspace_command_injects_cli_context_and_scrubs_token(client, monkeypatch) -> None:
     patch_model(monkeypatch, lambda _messages: {"role": "assistant", "content": "ok"})
 
     thread = create_thread(client)
@@ -37,7 +37,7 @@ def test_run_workspace_command_injects_billengine_context_and_scrubs_token(clien
 
         def fake_exec_in_container(**kwargs):
             captured.update(kwargs)
-            token = kwargs["env"]["BILLENGINE_AUTH_TOKEN"]
+            token = kwargs["env"]["BH_AUTH_TOKEN"]
             return SimpleNamespace(
                 returncode=0,
                 stdout=f"token={token}",
@@ -57,15 +57,16 @@ def test_run_workspace_command_injects_billengine_context_and_scrubs_token(clien
                 principal_user_id=thread_row.owner_user_id,
                 principal_is_admin=False,
             ),
-            RunWorkspaceCommandArgs(command="billengine status"),
+            RunWorkspaceCommandArgs(command="bh status"),
         )
     finally:
         db.close()
 
     assert result.status.value == "ok"
-    assert captured["command"] == ["bash", "-lc", "billengine status"]
+    assert captured["command"] == ["bash", "-lc", "bh status"]
     assert captured["workdir"] == "/workspace/workspace"
-    assert captured["env"]["BILLENGINE_THREAD_ID"] == thread["id"]
-    assert captured["env"]["BILLENGINE_RUN_ID"] == run["id"]
-    assert captured["env"]["BILLENGINE_API_BASE_URL"]
+    assert captured["env"]["BH_THREAD_ID"] == thread["id"]
+    assert captured["env"]["BH_RUN_ID"] == run["id"]
+    assert captured["env"]["BH_API_BASE_URL"]
+    assert captured["env"]["BH_AUTH_TOKEN"]
     assert result.output_json["stdout"] == "token=***"

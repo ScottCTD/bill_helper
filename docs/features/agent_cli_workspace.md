@@ -1,6 +1,6 @@
 # Agent CLI Workspace
 
-This feature doc describes the current agent execution model built around the workspace terminal and the `billengine` CLI.
+This feature doc describes the current agent execution model built around the workspace terminal and the `bh` CLI.
 
 ## Why This Exists
 
@@ -9,7 +9,7 @@ The old model-visible tool catalog kept growing across reads, proposals, and rev
 - it consumed model context with many overlapping tool descriptions
 - it made extension work expensive because every new domain capability wanted a new model-facing tool
 
-The current design reduces the model-visible surface to one general workspace terminal tool plus a few tiny session tools, then moves Bill Helper app operations behind the installed `billengine` CLI.
+The current design reduces the model-visible surface to one general workspace terminal tool plus a few tiny session tools, then moves Bill Helper app operations behind the installed `bh` CLI.
 
 ## Current Model-Visible Tool Surface
 
@@ -22,7 +22,7 @@ The runtime catalog exposed to the model now contains only:
 
 This means the old direct CRUD/read tool surface is fully replaced at the model boundary.
 
-The old read/proposal/review handler modules still exist in backend code, but they are now internal building blocks behind backend APIs and `billengine`.
+The old read/proposal/review handler modules still exist in backend code, but they are now internal building blocks behind backend APIs and `bh`.
 
 ## Workspace Command Contract
 
@@ -38,54 +38,48 @@ Default behavior:
 
 Injected env per invocation:
 
-- `BILLENGINE_API_BASE_URL`
-- `BILLENGINE_AUTH_TOKEN`
-- `BILLENGINE_THREAD_ID`
-- `BILLENGINE_RUN_ID`
-- `BILLENGINE_WORKSPACE_ROOT`
-- `BILLENGINE_DATA_ROOT`
+- `BH_API_BASE_URL`
+- `BH_AUTH_TOKEN`
+- `BH_THREAD_ID`
+- `BH_RUN_ID`
+- `BH_WORKSPACE_ROOT`
+- `BH_DATA_ROOT`
 
 The auth token is a short-lived backend session created for the thread owner and revoked after the command finishes.
 
-## What `billengine` Does
+For human IDE terminal use, workspace IDE launch also refreshes `/workspace/.ide/bh-env.json` plus a sourced shell snippet so `bh` works without manual env exports.
 
-`billengine` is a thin HTTP client installed in the workspace image.
+## What `bh` Does
+
+`bh` is a thin HTTP client installed in the workspace image.
 
 It does not mutate the DB directly. All authoritative state changes still go through backend routes and review/apply workflows.
 
 Current command groups:
 
 - `status`
-- `threads list|show|create|rename`
-- `entries list|get`
-- `accounts list|snapshots|reconciliation`
-- `groups list|get`
-- `entities list`
-- `tags list`
-- `proposals list|get|create|update|remove`
-- `reviews approve|reject|reopen`
-- `workspace status`
-
-Output defaults:
-
-- TTY: `text`
-- non-TTY: `json`
+- `entries list|get|create|update|remove`
+- `accounts list|snapshots|reconciliation|create|update|remove`
+- `groups list|get|create|update|remove|add-member|remove-member`
+- `entities list|create|update|remove`
+- `tags list|create|update|remove`
+- `proposals list|get`
 
 ## Proposal And Review Flow
 
 Proposal lifecycle is now thread-scoped in the CLI:
 
-1. the agent or a human-in-workspace runs `billengine proposals create ...`
+1. the agent runs a resource-scoped `bh ... create|update|remove|add-member|remove-member ...` command
 2. backend stores a pending `AgentChangeItem`
-3. the review UI or CLI review command approves, rejects, or reopens it
+3. the review UI approves, rejects, or reopens it
 4. approval applies the change through existing backend apply handlers
 
 Thread-scoped proposal commands depend on:
 
-- `BILLENGINE_THREAD_ID`
-- `BILLENGINE_RUN_ID`
+- `BH_THREAD_ID`
+- `BH_RUN_ID`
 
-That lets every proposal stay attached to a concrete thread/run review history.
+That lets every proposal stay attached to a concrete thread/run review history, and it also keeps proposal commands unavailable in ordinary human IDE terminals.
 
 ## API Surface Behind The CLI
 
@@ -94,10 +88,8 @@ Key proposal routes:
 - `GET /api/v1/agent/threads/{thread_id}/proposals`
 - `GET /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
 - `POST /api/v1/agent/threads/{thread_id}/proposals`
-- `PATCH /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
-- `DELETE /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
 
-Review routes remain the existing:
+Review routes remain frontend-driven human review endpoints:
 
 - `POST /api/v1/agent/change-items/{item_id}/approve`
 - `POST /api/v1/agent/change-items/{item_id}/reject`
@@ -108,7 +100,7 @@ Review routes remain the existing:
 The configured workspace image must include:
 
 - the Bill Helper Python package
-- the `billengine` console entry point
+- the `bh` console entry point
 - the normal shell/file utilities the agent relies on
 
 The current image is built from:
@@ -124,7 +116,7 @@ At the runtime boundary, yes: the old direct CRUD tools are replaced.
 That means:
 
 - the model no longer receives `list_*`, `propose_*`, `update_pending_proposal`, or `remove_pending_proposal` as direct tools
-- the model should use `run_workspace_command` plus `billengine`
+- the model should use `run_workspace_command` plus `bh`
 
 What is still retained internally:
 
@@ -139,15 +131,15 @@ Those internals remain valuable because the CLI and proposal HTTP routes reuse t
 
 - `BILL_HELPER_WORKSPACE_BACKEND_BASE_URL` controls container-to-backend reachability and defaults to `http://host.docker.internal:8000/api/v1`
 - local e2e runs that start the backend on a different port must override that env
-- direct `curl` or ad hoc Python from the workspace is still possible, but the prompt and docs now prefer `billengine` whenever a command exists
+- direct `curl` or ad hoc Python from the workspace is still possible, but the prompt and docs now prefer `bh` whenever a command exists
+- human IDE terminals read API/auth defaults from `/workspace/.ide/bh-env.json` when explicit env vars are absent
 
 ## Verification Expectations
 
 When this surface changes, useful checks include:
 
 - CLI command execution inside the workspace container
-- proposal create/list/get/update/remove through `billengine`
-- review approve/reject/reopen through `billengine`
+- proposal create/list/get through `bh`
 - browser review/apply flow on a disposable backend
 - workspace container startup with the current image
 

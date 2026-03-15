@@ -182,26 +182,12 @@ class AgentProposalCreateRequest(AgentSchema):
     change_type: AgentChangeType
     payload_json: dict[str, Any]
 
-
-class AgentProposalUpdateRequest(AgentSchema):
-    patch_map: dict[str, Any]
-
-
-class AgentProposalDeleteRead(AgentSchema):
-    proposal_id: str
-    proposal_short_id: str
-    change_type: AgentChangeType
-    removed: bool
-    removed_payload: dict[str, Any]
-
-
 class AgentProposalRecordRead(AgentSchema):
     proposal_id: str
     proposal_short_id: str
     proposal_type: str
     change_action: str
     change_type: AgentChangeType
-    proposal_tool_name: str
     status: AgentChangeStatus
     proposal_summary: str
     rationale_text: str

@@ -27,7 +27,7 @@ dependencies = [
 
 [project.scripts]
 bill-helper-api = "backend.main:main"
-billengine = "backend.cli.main:main"
+bh = "backend.cli.main:main"
 
 [build-system]
 requires = ["hatchling>=1.25.0"]

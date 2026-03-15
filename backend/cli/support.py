@@ -1,4 +1,4 @@
-"""Shared support helpers for the `billengine` CLI.
+"""Shared support helpers for the `bh` CLI.
 
 CALLING SPEC:
     build_cli_context(output_format=None) -> CliContext
@@ -19,13 +19,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import os
+from pathlib import Path
 import sys
 from typing import Any
 
 import httpx
 
+from backend.cli.rendering import render_output
+
 
 _RUN_ID_HEADER = "X-Bill-Helper-Agent-Run-Id"
+_WORKSPACE_CLI_CONFIG_PATH = Path("/workspace/.ide/bh-env.json")
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,14 +48,31 @@ class CliError(RuntimeError):
 
 
 def build_cli_context(*, output_format: str | None = None) -> CliContext:
-    api_base_url = _required_env("BILLENGINE_API_BASE_URL")
-    auth_token = _required_env("BILLENGINE_AUTH_TOKEN")
-    resolved_format = output_format or ("text" if sys.stdout.isatty() else "json")
+    workspace_config = _load_workspace_cli_config()
+    api_base_url = _required_value(
+        env_names=("BH_API_BASE_URL",),
+        workspace_config=workspace_config,
+        config_key="api_base_url",
+        error_message=(
+            "Missing CLI API base URL. Set BH_API_BASE_URL "
+            "or launch the workspace IDE so /workspace/.ide/bh-env.json is created."
+        ),
+    )
+    auth_token = _required_value(
+        env_names=("BH_AUTH_TOKEN",),
+        workspace_config=workspace_config,
+        config_key="auth_token",
+        error_message=(
+            "Missing CLI auth token. Set BH_AUTH_TOKEN "
+            "or launch the workspace IDE so /workspace/.ide/bh-env.json is created."
+        ),
+    )
+    resolved_format = output_format or ("text" if sys.stdout.isatty() else "compact")
     return CliContext(
         api_base_url=api_base_url.rstrip("/"),
         auth_token=auth_token,
-        thread_id=_optional_env("BILLENGINE_THREAD_ID"),
-        run_id=_optional_env("BILLENGINE_RUN_ID"),
+        thread_id=_first_env(("BH_THREAD_ID",)),
+        run_id=_first_env(("BH_RUN_ID",)),
         output_format=resolved_format,
     )
 
@@ -69,7 +90,7 @@ def request_json(
     if include_run_id:
         run_id = (context.run_id or "").strip()
         if not run_id:
-            raise CliError("This command requires BILLENGINE_RUN_ID in the environment.")
+            raise CliError("This command requires BH_RUN_ID in the environment.")
         headers[_RUN_ID_HEADER] = run_id
     response = httpx.request(
         method,
@@ -103,20 +124,57 @@ def request_json(
 def resolve_thread_id(context: CliContext, *, override: str | None = None) -> str:
     candidate = (override or context.thread_id or "").strip()
     if not candidate:
-        raise CliError("This command requires --thread or BILLENGINE_THREAD_ID.")
+        raise CliError("This command requires BH_THREAD_ID. Proposal commands are only available during agent runs.")
     return candidate
 
 
-def resolve_proposal_id(context: CliContext, *, thread_id: str, proposal_id: str) -> str:
-    _, payload = request_json(
-        context,
-        "GET",
-        f"/agent/threads/{thread_id}/proposals/{proposal_id}",
-        include_run_id=True,
+def resolve_entry_id(context: CliContext, *, entry_id: str) -> str:
+    return _resolve_entry_id(context, entry_id=entry_id)
+
+
+def resolve_account_id(context: CliContext, *, account_id: str) -> str:
+    payload = _list_accounts(context)
+    return _resolve_id_from_records(
+        records=payload,
+        candidate_id=account_id,
+        resource_label="account",
     )
-    if not isinstance(payload, dict) or "proposal_id" not in payload:
-        raise CliError("Unable to resolve proposal id.")
-    return str(payload["proposal_id"])
+
+
+def resolve_account_name(context: CliContext, *, account_ref: str) -> str:
+    records = _list_accounts(context)
+    normalized = account_ref.strip().lower()
+    if not normalized:
+        raise CliError("Missing account reference.")
+    exact_name_matches = [
+        record
+        for record in records
+        if str(record.get("name") or "").strip().lower() == normalized
+    ]
+    if len(exact_name_matches) == 1:
+        return str(exact_name_matches[0]["name"])
+    if len(exact_name_matches) > 1:
+        names = ", ".join(str(record.get("name")) for record in exact_name_matches[:5])
+        raise CliError(f"Ambiguous account reference '{account_ref}'. Use one of: {names}")
+
+    resolved_id = _resolve_id_from_records(
+        records=records,
+        candidate_id=account_ref,
+        resource_label="account",
+    )
+    matched = next((record for record in records if str(record.get("id") or "") == resolved_id), None)
+    if matched is None:
+        raise CliError(f"Unable to resolve account reference '{account_ref}'.")
+    return str(matched["name"])
+
+
+def resolve_group_id(context: CliContext, *, group_id: str) -> str:
+    _, payload = request_json(context, "GET", "/groups")
+    return _resolve_id_from_records(
+        records=payload if isinstance(payload, list) else [],
+        candidate_id=group_id,
+        resource_label="group",
+    )
 
 
 def load_json_argument(*, inline_json: str | None, json_file: str | None) -> Any:
@@ -133,21 +191,34 @@ def load_json_argument(*, inline_json: str | None, json_file: str | None) -> Any
         raise CliError(f"Invalid JSON input: {exc}") from exc
 
 
-def print_output(payload: Any, *, output_format: str) -> None:
-    if output_format == "json":
-        print(json.dumps(payload, indent=2, sort_keys=True))
-        return
-    if isinstance(payload, (dict, list)):
-        print(json.dumps(payload, indent=2, sort_keys=True))
-        return
-    print(str(payload))
+def print_output(payload: Any, *, output_format: str, render_key: str | None = None) -> None:
+    print(render_output(payload, output_format=output_format, render_key=render_key))
 
 
-def _required_env(name: str) -> str:
-    value = _optional_env(name)
-    if value is None:
-        raise CliError(f"Missing required environment variable {name}.")
-    return value
+def _required_value(
+    *,
+    env_names: tuple[str, ...],
+    workspace_config: dict[str, Any],
+    config_key: str,
+    error_message: str,
+) -> str:
+    env_value = _first_env(env_names)
+    if env_value is not None:
+        return env_value
+    config_value = workspace_config.get(config_key)
+    if isinstance(config_value, str):
+        normalized = config_value.strip()
+        if normalized:
+            return normalized
+    raise CliError(error_message)
+
+
+def _first_env(names: tuple[str, ...]) -> str | None:
+    for name in names:
+        value = _optional_env(name)
+        if value is not None:
+            return value
+    return None
 
 
 def _optional_env(name: str) -> str | None:
@@ -156,7 +227,87 @@ def _optional_env(name: str) -> str | None:
     return normalized or None
 
 
+def _load_workspace_cli_config() -> dict[str, Any]:
+    try:
+        raw_text = _WORKSPACE_CLI_CONFIG_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {}
+    except OSError as exc:
+        raise CliError(f"Failed to read {_WORKSPACE_CLI_CONFIG_PATH}: {exc}") from exc
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise CliError(f"Invalid workspace CLI config at {_WORKSPACE_CLI_CONFIG_PATH}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise CliError(f"Invalid workspace CLI config at {_WORKSPACE_CLI_CONFIG_PATH}: expected object.")
+    return payload
+
+
 def _clean_mapping(values: dict[str, Any] | None) -> dict[str, Any] | None:
     if values is None:
         return None
     return {key: value for key, value in values.items() if value is not None}
+
+
+def _list_accounts(context: CliContext) -> list[dict[str, Any]]:
+    _, payload = request_json(context, "GET", "/accounts")
+    return payload if isinstance(payload, list) else []
+
+
+def _resolve_entry_id(context: CliContext, *, entry_id: str) -> str:
+    normalized = entry_id.strip()
+    if not normalized:
+        raise CliError("Missing entry id.")
+    offset = 0
+    limit = 200
+    prefix_matches: list[dict[str, Any]] = []
+    while offset < 5000:
+        _, payload = request_json(
+            context,
+            "GET",
+            "/entries",
+            params={"limit": limit, "offset": offset},
+        )
+        if not isinstance(payload, dict):
+            break
+        items = payload.get("items")
+        if not isinstance(items, list) or not items:
+            break
+        for record in items:
+            record_id = str(record.get("id") or "").strip()
+            if record_id.lower() == normalized.lower():
+                return record_id
+            if record_id.lower().startswith(normalized.lower()):
+                prefix_matches.append(record)
+        if len(items) < limit:
+            break
+        offset += limit
+    return _resolve_id_from_records(
+        records=prefix_matches,
+        candidate_id=normalized,
+        resource_label="entry",
+        allow_exact=False,
+    )
+
+
+def _resolve_id_from_records(
+    *,
+    records: list[dict[str, Any]],
+    candidate_id: str,
+    resource_label: str,
+    allow_exact: bool = True,
+) -> str:
+    normalized = candidate_id.strip().lower()
+    if not normalized:
+        raise CliError(f"Missing {resource_label} id.")
+    if allow_exact:
+        exact = [record for record in records if str(record.get("id") or "").lower() == normalized]
+        if exact:
+            return str(exact[0]["id"])
+    matches = [record for record in records if str(record.get("id") or "").lower().startswith(normalized)]
+    if len(matches) == 1:
+        return str(matches[0]["id"])
+    if len(matches) > 1:
+        candidates = ", ".join(str(record.get("id")) for record in matches[:5])
+        raise CliError(f"Ambiguous {resource_label} id '{candidate_id}'. Use one of: {candidates}")
+    raise CliError(f"Unable to resolve {resource_label} id '{candidate_id}'.")

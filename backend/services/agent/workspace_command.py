@@ -96,12 +96,12 @@ def _execute_workspace_command(context: ToolContext, *, args: RunWorkspaceComman
     spec = start_user_workspace(user_id=principal_user_id, settings=settings)
     session_token, session_id = _create_temporary_session(user_id=principal_user_id)
     env = {
-        "BILLENGINE_API_BASE_URL": settings.workspace_backend_base_url,
-        "BILLENGINE_AUTH_TOKEN": session_token,
-        "BILLENGINE_THREAD_ID": thread_id,
-        "BILLENGINE_RUN_ID": context.run_id,
-        "BILLENGINE_WORKSPACE_ROOT": _DEFAULT_WORKSPACE_ROOT,
-        "BILLENGINE_DATA_ROOT": _DEFAULT_DATA_ROOT,
+        "BH_API_BASE_URL": settings.workspace_backend_base_url,
+        "BH_AUTH_TOKEN": session_token,
+        "BH_THREAD_ID": thread_id,
+        "BH_RUN_ID": context.run_id,
+        "BH_WORKSPACE_ROOT": _DEFAULT_WORKSPACE_ROOT,
+        "BH_DATA_ROOT": _DEFAULT_DATA_ROOT,
     }
     command_cwd = args.cwd or _DEFAULT_WORKSPACE_ROOT
     started_at = monotonic()

@@ -92,7 +92,7 @@ Current behavior:
 - when `agent_workspace_enabled=true`, those same flows also ensure the named Docker volume `bill-helper-workspace-{user_id}` and the named `code-server` container definition `bill-helper-sandbox-{user_id}`
 - the provisioned container mounts the user's canonical file root at `/data` as read-only and a named volume at `/workspace`; the IDE-visible `user_data/` tree is no longer a separate bind mount
 - the workspace image runs `code-server` as its main process, publishes its IDE port to localhost only, and uses a structured volume root where editable files live under `/workspace/workspace` and `/workspace/user_data` is a symlink to `/data/user_data/{uploads,artifacts}`, exposing friendly-name symlinks instead of raw storage UUIDs
-- the workspace image also installs the Python package entrypoint `billengine`, which the agent uses from the workspace terminal for backend-backed app operations
+- the workspace image also installs the Python package entrypoint `bh`, which the agent uses from the workspace terminal for backend-backed app operations
 - the workspace image preinstalls the OpenVSX web-compatible PDF viewer extension `chocolatedesue.modern-pdf-preview`, syncs it into each workspace, and seeds minimal `code-server` user defaults so first launch skips the welcome page, keeps folders trusted, and opens mounted PDFs in single-page mode without manual setup
 - the workspace entrypoint expects the current layout only: `/workspace/workspace`, `/workspace/.ide`, and `/workspace/user_data -> /data/user_data`; if `user_data` is not a symlink, startup fails instead of migrating old layouts
 - `ensure_user_workspace_provisioned()` enforces the current image/label/port/mount contract and recreates mismatched containers onto the current revision without compatibility shims for older mount layouts
@@ -104,7 +104,7 @@ Current behavior:
 - the backend assumes `agent_workspace_image` already exists and returns a provisioning error if it does not
 - the image can be built locally with `docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .`
 - container creation adds `host.docker.internal -> host-gateway` so local workspace commands can reach the configured backend base URL on Linux as well as Docker Desktop setups
-- workspace terminal execution injects `BILLENGINE_API_BASE_URL`, `BILLENGINE_AUTH_TOKEN`, `BILLENGINE_THREAD_ID`, and `BILLENGINE_RUN_ID` per command; the short-lived bearer token is created and revoked by the backend around each terminal invocation
+- workspace terminal execution injects `BH_API_BASE_URL`, `BH_AUTH_TOKEN`, `BH_THREAD_ID`, and `BH_RUN_ID` per command; the short-lived bearer token is created and revoked by the backend around each terminal invocation
 - if the backend itself runs inside Docker, it still needs host-daemon access via `/var/run/docker.sock` or `DOCKER_HOST` to manage sibling user workspaces
 
 ## Session Auth Runtime
