@@ -6,7 +6,7 @@ import pytest
 
 from backend.cli import main as cli_main
 from backend.cli.rendering import render_output
-from backend.cli.support import CliError, build_cli_context, resolve_entry_id
+from backend.cli.support import CliError, build_cli_context, resolve_entry_id, resolve_proposal_id
 from backend.tests.test_entries import create_account, create_entry
 
 
@@ -231,6 +231,37 @@ def test_resolve_entry_id_accepts_short_prefix(client, monkeypatch) -> None:
     resolved = resolve_entry_id(build_cli_context(output_format="json"), entry_id=entry["id"][:8])
 
     assert resolved == entry["id"]
+
+
+def test_resolve_proposal_id_accepts_short_prefix(client, monkeypatch) -> None:
+    monkeypatch.setenv("BH_API_BASE_URL", "http://testserver/api/v1")
+    monkeypatch.setenv("BH_AUTH_TOKEN", "token")
+    monkeypatch.setenv("BH_RUN_ID", "run-123")
+
+    def fake_request_json(context, method, path, **kwargs):
+        assert method == "GET"
+        assert path == "/agent/threads/thread-123/proposals"
+        assert kwargs.get("include_run_id") is True
+        return 200, {
+            "returned_count": 1,
+            "total_available": 1,
+            "proposals": [
+                {
+                    "proposal_id": "293272a6-44da-42cc-b2e4-43644a729979",
+                    "proposal_short_id": "293272a6",
+                }
+            ],
+        }
+
+    monkeypatch.setattr("backend.cli.support.request_json", fake_request_json)
+
+    resolved = resolve_proposal_id(
+        build_cli_context(output_format="json"),
+        thread_id="thread-123",
+        proposal_id="293272a6",
+    )
+
+    assert resolved == "293272a6-44da-42cc-b2e4-43644a729979"
 
 
 def test_group_and_account_lists_render_short_ids() -> None:

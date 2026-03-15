@@ -28,6 +28,7 @@ from backend.cli.support import (
     resolve_account_name,
     resolve_entry_id,
     resolve_group_id,
+    resolve_proposal_id,
     resolve_thread_id,
 )
 
@@ -486,6 +487,11 @@ def _handle_tags_remove(args: argparse.Namespace, context: CliContext) -> Any:
 
 def _handle_proposals_list(args: argparse.Namespace, context: CliContext) -> Any:
     thread_id = resolve_thread_id(context)
+    resolved_proposal_id = (
+        resolve_proposal_id(context, thread_id=thread_id, proposal_id=args.proposal_id)
+        if args.proposal_id is not None
+        else None
+    )
     _, payload = request_json(
         context,
         "GET",
@@ -494,7 +500,7 @@ def _handle_proposals_list(args: argparse.Namespace, context: CliContext) -> Any
             "proposal_type": args.proposal_type,
             "proposal_status": args.proposal_status,
             "change_action": args.change_action,
-            "proposal_id": args.proposal_id,
+            "proposal_id": resolved_proposal_id,
             "limit": args.limit,
         },
         include_run_id=True,
@@ -504,10 +510,11 @@ def _handle_proposals_list(args: argparse.Namespace, context: CliContext) -> Any
 
 def _handle_proposals_get(args: argparse.Namespace, context: CliContext) -> Any:
     thread_id = resolve_thread_id(context)
+    resolved_proposal_id = resolve_proposal_id(context, thread_id=thread_id, proposal_id=args.proposal_id)
     _, payload = request_json(
         context,
         "GET",
-        f"/agent/threads/{thread_id}/proposals/{args.proposal_id}",
+        f"/agent/threads/{thread_id}/proposals/{resolved_proposal_id}",
         include_run_id=True,
     )
     return payload

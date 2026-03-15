@@ -177,6 +177,28 @@ def resolve_group_id(context: CliContext, *, group_id: str) -> str:
     )
 
 
+def resolve_proposal_id(context: CliContext, *, thread_id: str, proposal_id: str) -> str:
+    normalized = proposal_id.strip()
+    if not normalized:
+        raise CliError("Missing proposal id.")
+    _, payload = request_json(
+        context,
+        "GET",
+        f"/agent/threads/{thread_id}/proposals",
+        params={"limit": 5000},
+        include_run_id=True,
+    )
+    records = payload.get("proposals") if isinstance(payload, dict) else []
+    if not isinstance(records, list):
+        records = []
+    return _resolve_id_from_records(
+        records=records,
+        candidate_id=normalized,
+        resource_label="proposal",
+        id_field="proposal_id",
+    )
+
+
 def load_json_argument(*, inline_json: str | None, json_file: str | None) -> Any:
     if bool(inline_json) == bool(json_file):
         raise CliError("Provide exactly one of the inline JSON or file JSON options.")
@@ -296,18 +318,19 @@ def _resolve_id_from_records(
     candidate_id: str,
     resource_label: str,
     allow_exact: bool = True,
+    id_field: str = "id",
 ) -> str:
     normalized = candidate_id.strip().lower()
     if not normalized:
         raise CliError(f"Missing {resource_label} id.")
     if allow_exact:
-        exact = [record for record in records if str(record.get("id") or "").lower() == normalized]
+        exact = [record for record in records if str(record.get(id_field) or "").lower() == normalized]
         if exact:
-            return str(exact[0]["id"])
-    matches = [record for record in records if str(record.get("id") or "").lower().startswith(normalized)]
+            return str(exact[0][id_field])
+    matches = [record for record in records if str(record.get(id_field) or "").lower().startswith(normalized)]
     if len(matches) == 1:
-        return str(matches[0]["id"])
+        return str(matches[0][id_field])
     if len(matches) > 1:
-        candidates = ", ".join(str(record.get("id")) for record in matches[:5])
+        candidates = ", ".join(str(record.get(id_field)) for record in matches[:5])
         raise CliError(f"Ambiguous {resource_label} id '{candidate_id}'. Use one of: {candidates}")
     raise CliError(f"Unable to resolve {resource_label} id '{candidate_id}'.")
