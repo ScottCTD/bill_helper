@@ -14,6 +14,7 @@ from backend.tests.agent_test_utils import (
     flatten_user_content,
     patch_model,
     send_message,
+    wait_for_run_completion,
 )
 from backend.tests.test_entries import create_account, create_entry, create_group
 
@@ -257,18 +258,8 @@ def test_thread_detail_prefers_running_run_context_tokens(client, monkeypatch):
     assert detail["runs"][0]["context_tokens"] == 400
 
     proceed_second_call.set()
-
-    deadline = time.monotonic() + 1.0
-    while time.monotonic() < deadline:
-        run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
-        run_response.raise_for_status()
-        payload = run_response.json()
-        if payload["status"] != "running":
-            assert payload["context_tokens"] == 400
-            return
-        time.sleep(0.01)
-
-    raise AssertionError("Timed out waiting for multi-step run to complete")
+    payload = wait_for_run_completion(client, run["id"], timeout_seconds=1.0)
+    assert payload["context_tokens"] == 400
 
 
 def test_delete_thread_removes_thread_from_list_and_detail(client):
@@ -334,16 +325,8 @@ def test_delete_thread_rejects_running_run(client, monkeypatch):
     assert delete_response.json()["detail"] == "Cannot delete a thread while an agent run is still running."
 
     block_model.set()
-    deadline = time.monotonic() + 2.0
-    final_status = "running"
-    while time.monotonic() < deadline:
-        run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
-        run_response.raise_for_status()
-        final_status = str(run_response.json().get("status") or "running")
-        if final_status != "running":
-            break
-        time.sleep(0.01)
-    assert final_status != "running"
+    final_run = wait_for_run_completion(client, run["id"])
+    assert final_run["status"] != "running"
 
 
 def test_uploaded_attachments_are_stored_under_canonical_user_files(client, monkeypatch):
@@ -394,13 +377,7 @@ def test_thread_list_marks_running_threads(client, monkeypatch):
     assert listed_row["has_running_run"] is True
 
     block_model.set()
-    deadline = time.monotonic() + 2.0
-    while time.monotonic() < deadline:
-        run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
-        run_response.raise_for_status()
-        if run_response.json().get("status") != "running":
-            break
-        time.sleep(0.01)
+    wait_for_run_completion(client, run["id"])
 
     list_response = client.get("/api/v1/agent/threads")
     list_response.raise_for_status()
@@ -1623,8 +1600,12 @@ def test_final_message_strips_empty_pending_review_footer(client, monkeypatch):
 
 
 def test_send_message_returns_running_while_agent_executes(client, monkeypatch):
+    entered_model = Event()
+    release_model = Event()
+
     def slow_model(_messages):
-        time.sleep(0.35)
+        entered_model.set()
+        release_model.wait(timeout=1.0)
         return {"role": "assistant", "content": "Done."}
 
     patch_model(monkeypatch, slow_model)
@@ -1639,19 +1620,12 @@ def test_send_message_returns_running_while_agent_executes(client, monkeypatch):
 
     assert run["status"] == "running"
     assert run["assistant_message_id"] is None
+    assert entered_model.wait(timeout=1.0)
 
-    deadline = time.monotonic() + 3.0
-    while time.monotonic() < deadline:
-        run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
-        run_response.raise_for_status()
-        payload = run_response.json()
-        if payload["status"] != "running":
-            assert payload["status"] == "completed"
-            assert payload["assistant_message_id"] is not None
-            return
-        time.sleep(0.02)
-
-    raise AssertionError("Run did not complete in time")
+    release_model.set()
+    payload = wait_for_run_completion(client, run["id"], timeout_seconds=2.0)
+    assert payload["status"] == "completed"
+    assert payload["assistant_message_id"] is not None
 
 
 def test_stream_message_endpoint_emits_real_time_events(client, monkeypatch):
@@ -2063,8 +2037,12 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
 
 
 def test_interrupt_running_run_stops_background_processing(client, monkeypatch):
+    entered_model = Event()
+    release_model = Event()
+
     def slow_model(_messages):
-        time.sleep(0.35)
+        entered_model.set()
+        release_model.wait(timeout=1.0)
         return {"role": "assistant", "content": "Done."}
 
     patch_model(monkeypatch, slow_model)
@@ -2077,6 +2055,7 @@ def test_interrupt_running_run_stops_background_processing(client, monkeypatch):
     response.raise_for_status()
     run = response.json()
     assert run["status"] == "running"
+    assert entered_model.wait(timeout=1.0)
 
     interrupt_response = client.post(f"/api/v1/agent/runs/{run['id']}/interrupt")
     interrupt_response.raise_for_status()
@@ -2084,10 +2063,8 @@ def test_interrupt_running_run_stops_background_processing(client, monkeypatch):
     assert interrupted["status"] == "failed"
     assert interrupted["error_text"] == "Run interrupted by user."
 
-    time.sleep(0.45)
-    run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
-    run_response.raise_for_status()
-    payload = run_response.json()
+    release_model.set()
+    payload = wait_for_run_completion(client, run["id"], timeout_seconds=2.0)
     assert payload["status"] == "failed"
     assert payload["assistant_message_id"] is None
     assert payload["error_text"] == "Run interrupted by user."
@@ -2107,8 +2084,12 @@ def test_interrupt_completed_run_is_noop(client, monkeypatch):
 
 
 def test_interrupted_previous_run_context_is_injected_into_followup_turn(client, monkeypatch):
+    entered_model = Event()
+    release_model = Event()
+
     def slow_model(_messages):
-        time.sleep(0.35)
+        entered_model.set()
+        release_model.wait(timeout=1.0)
         return {"role": "assistant", "content": "Done."}
 
     patch_model(monkeypatch, slow_model)
@@ -2121,6 +2102,7 @@ def test_interrupted_previous_run_context_is_injected_into_followup_turn(client,
     first_response.raise_for_status()
     first_run = first_response.json()
     assert first_run["status"] == "running"
+    assert entered_model.wait(timeout=1.0)
 
     interrupt_response = client.post(f"/api/v1/agent/runs/{first_run['id']}/interrupt")
     interrupt_response.raise_for_status()
@@ -2128,6 +2110,9 @@ def test_interrupted_previous_run_context_is_injected_into_followup_turn(client,
     assert interrupted["status"] == "failed"
     assert interrupted["assistant_message_id"] is None
     assert interrupted["error_text"] == "Run interrupted by user."
+
+    release_model.set()
+    wait_for_run_completion(client, first_run["id"], timeout_seconds=2.0)
 
     captured_messages: list[list[dict]] = []
 

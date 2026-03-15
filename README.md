@@ -77,7 +77,8 @@ Open the web app, sign in at `/login`, and use the password-backed session for a
 
 - backend only: `uv run bill-helper-api`
 - frontend only: `cd frontend && npm run dev`
-- backend tests: `OPENROUTER_API_KEY=test uv run pytest backend/tests -q`
+- backend tests (fast default): `OPENROUTER_API_KEY=test uv run pytest backend/tests -q -m "not workspace_docker"`
+- backend workspace tests: `OPENROUTER_API_KEY=test uv run pytest backend/tests/test_agent_workspace.py -q -m workspace_docker`
 - LLM design check: `uv run python scripts/check_llm_design.py`
 - frontend tests: `cd frontend && npm run test`
 - browser e2e tests: `cd frontend && npm run test:e2e`
@@ -146,8 +147,11 @@ docs/                     # Extended documentation
 ## Testing
 
 ```bash
-# Backend
-OPENROUTER_API_KEY=test uv run pytest backend/tests -q
+# Backend (fast default)
+OPENROUTER_API_KEY=test uv run pytest backend/tests -q -m "not workspace_docker"
+
+# Backend workspace/Docker coverage
+OPENROUTER_API_KEY=test uv run pytest backend/tests/test_agent_workspace.py -q -m workspace_docker
 
 # Frontend
 cd frontend && npm run test

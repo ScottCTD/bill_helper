@@ -50,7 +50,8 @@ Useful commands:
 - bootstrap/reset admin: `uv run python scripts/bootstrap_admin.py --name <user> --password <pass>`
 - build workspace image: `docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .`
 - py-compile touched modules: `uv run python -m py_compile ...`
-- backend tests: `OPENROUTER_API_KEY=test uv run pytest backend/tests -q`
+- backend tests (fast default): `OPENROUTER_API_KEY=test uv run pytest backend/tests -q -m "not workspace_docker"`
+- backend workspace tests (run when changing workspace lifecycle or IDE proxy behavior): `OPENROUTER_API_KEY=test uv run pytest backend/tests/test_agent_workspace.py -q -m workspace_docker`
 - docs sync: `uv run python scripts/check_docs_sync.py`
 
 ## Operational Impact

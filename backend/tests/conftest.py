@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from functools import lru_cache
 import os
+from pathlib import Path
 import tempfile
 import threading
 import time
@@ -26,8 +28,31 @@ from backend.services.agent.execution import run_agent_in_background  # noqa: E4
 from backend.services.passwords import hash_password  # noqa: E402
 from backend.services.users import create_or_reset_admin_user, find_user_by_name  # noqa: E402
 
-engine = build_engine()
-app = create_app()
+DB_TEST_FIXTURES = {"anonymous_client", "auth_headers", "client", "db_session"}
+DB_TEST_MODULES = {
+    "test_agent_read_handlers.py",
+    "test_bootstrap.py",
+    "test_entries_service.py",
+    "test_runtime_settings_service.py",
+    "test_taxonomy_service.py",
+}
+
+
+@lru_cache(maxsize=1)
+def _test_engine():
+    return build_engine()
+
+
+@lru_cache(maxsize=1)
+def _test_app():
+    return create_app()
+
+
+def _needs_managed_test_database(request: pytest.FixtureRequest) -> bool:
+    test_path = Path(str(request.node.path))
+    if test_path.name in DB_TEST_MODULES:
+        return True
+    return any(name in DB_TEST_FIXTURES for name in request.fixturenames)
 
 
 def _wait_for_background_agent_threads(timeout_seconds: float = 2.0) -> None:
@@ -45,7 +70,12 @@ def _wait_for_background_agent_threads(timeout_seconds: float = 2.0) -> None:
 
 
 @pytest.fixture(autouse=True)
-def reset_db() -> None:
+def manage_test_database(request: pytest.FixtureRequest) -> None:
+    if not _needs_managed_test_database(request):
+        yield
+        return
+
+    engine = _test_engine()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     db = get_session_maker()()
@@ -61,7 +91,7 @@ def reset_db() -> None:
 
 @pytest.fixture()
 def client() -> TestClient:
-    with TestClient(app) as test_client:
+    with TestClient(_test_app()) as test_client:
         response = test_client.post(
             "/api/v1/auth/login",
             json={"username": "admin", "password": "admin-password"},
@@ -73,7 +103,7 @@ def client() -> TestClient:
 
 @pytest.fixture()
 def anonymous_client() -> TestClient:
-    with TestClient(app) as test_client:
+    with TestClient(_test_app()) as test_client:
         yield test_client
 
 

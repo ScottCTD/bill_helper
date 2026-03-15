@@ -22,6 +22,24 @@ def create_thread(client) -> dict:
     return response.json()
 
 
+def wait_for_run_completion(
+    client,
+    run_id: str,
+    *,
+    timeout_seconds: float = 2.0,
+) -> dict:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        run_response = client.get(f"/api/v1/agent/runs/{run_id}")
+        run_response.raise_for_status()
+        run = run_response.json()
+        if run.get("status") != "running":
+            return run
+        time.sleep(0.01)
+
+    raise AssertionError("Timed out waiting for agent run to complete")
+
+
 def send_message(
     client,
     thread_id: str,
@@ -55,17 +73,7 @@ def send_message(
     if not wait_for_completion or run.get("status") != "running":
         return run
 
-    run_id = run["id"]
-    deadline = time.monotonic() + timeout_seconds
-    while time.monotonic() < deadline:
-        run_response = client.get(f"/api/v1/agent/runs/{run_id}")
-        run_response.raise_for_status()
-        run = run_response.json()
-        if run.get("status") != "running":
-            return run
-        time.sleep(0.01)
-
-    raise AssertionError("Timed out waiting for agent run to complete")
+    return wait_for_run_completion(client, run["id"], timeout_seconds=timeout_seconds)
 
 
 def build_pdf_bytes(page_texts: list[str]) -> bytes:

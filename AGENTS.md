@@ -59,7 +59,8 @@ These rules apply to any coding agent working in this repository.
 ### Architecture Verification Gates
 
 - `uv run python -m py_compile ...` on touched Python modules
-- `OPENROUTER_API_KEY=test uv run pytest backend/tests -q`
+- `OPENROUTER_API_KEY=test uv run pytest backend/tests -q -m "not workspace_docker"`
+- `OPENROUTER_API_KEY=test uv run pytest backend/tests/test_agent_workspace.py -q -m workspace_docker` when the change touches workspace lifecycle or IDE proxy behavior
 - `uv run python scripts/check_llm_design.py`
 - `uv run python scripts/check_docs_sync.py`
 

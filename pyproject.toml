@@ -43,6 +43,9 @@ packages = ["backend", "telegram"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
+markers = [
+    "workspace_docker: Docker-backed workspace lifecycle and proxy tests; exclude from the fast default backend suite",
+]
 
 [dependency-groups]
 dev = [

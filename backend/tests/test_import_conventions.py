@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from functools import lru_cache
 from pathlib import Path
 
 
@@ -68,8 +69,26 @@ AGENT_ROUTER_SPLIT_MODULES = (
 )
 
 
+@lru_cache(maxsize=None)
+def _parsed_module(path: Path) -> ast.Module:
+    return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+
+@lru_cache(maxsize=None)
+def _source_python_paths(roots: tuple[Path, ...]) -> tuple[Path, ...]:
+    paths: list[Path] = []
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*.py"):
+            if "tests" in path.parts:
+                continue
+            paths.append(path)
+    return tuple(paths)
+
+
 def _assert_marker_module(path: Path) -> None:
-    module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    module = _parsed_module(path)
     non_docstring_nodes = [
         node
         for node in module.body
@@ -83,7 +102,7 @@ def _assert_marker_module(path: Path) -> None:
 
 
 def _defined_class_names(path: Path) -> set[str]:
-    module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    module = _parsed_module(path)
     return {
         node.name
         for node in module.body
@@ -107,10 +126,8 @@ def test_service_package_init_modules_are_marker_only() -> None:
 
 def test_backend_modules_do_not_import_agent_api_from_backend_services() -> None:
     violations: list[str] = []
-    for path in BACKEND_DIR.rglob("*.py"):
-        if "tests" in path.parts:
-            continue
-        module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for path in _source_python_paths((BACKEND_DIR,)):
+        module = _parsed_module(path)
         for node in ast.walk(module):
             if not isinstance(node, ast.ImportFrom):
                 continue
@@ -125,33 +142,28 @@ def test_backend_modules_do_not_import_agent_api_from_backend_services() -> None
 
 def test_repo_modules_do_not_import_domain_facade_god_modules() -> None:
     violations: list[str] = []
-    for root in (BACKEND_DIR, BENCHMARK_DIR, SCRIPTS_DIR):
-        if not root.exists():
-            continue
-        for path in root.rglob("*.py"):
-            if "tests" in path.parts:
+    for path in _source_python_paths((BACKEND_DIR, BENCHMARK_DIR, SCRIPTS_DIR)):
+        module = _parsed_module(path)
+        for node in ast.walk(module):
+            if isinstance(node, ast.ImportFrom):
+                if node.module not in BANNED_DOMAIN_FACADES:
+                    continue
+                relpath = path.relative_to(REPO_ROOT)
+                violations.append(
+                    f"{relpath}:{node.lineno} imports from '{node.module}' "
+                    "(use *_finance/*_agent domain modules)"
+                )
                 continue
-            module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-            for node in ast.walk(module):
-                if isinstance(node, ast.ImportFrom):
-                    if node.module not in BANNED_DOMAIN_FACADES:
-                        continue
-                    relpath = path.relative_to(REPO_ROOT)
-                    violations.append(
-                        f"{relpath}:{node.lineno} imports from '{node.module}' "
-                        "(use *_finance/*_agent domain modules)"
-                    )
+            if not isinstance(node, ast.Import):
+                continue
+            for alias in node.names:
+                if alias.name not in BANNED_DOMAIN_FACADES:
                     continue
-                if not isinstance(node, ast.Import):
-                    continue
-                for alias in node.names:
-                    if alias.name not in BANNED_DOMAIN_FACADES:
-                        continue
-                    relpath = path.relative_to(REPO_ROOT)
-                    violations.append(
-                        f"{relpath}:{node.lineno} imports '{alias.name}' "
-                        "(use *_finance/*_agent domain modules)"
-                    )
+                relpath = path.relative_to(REPO_ROOT)
+                violations.append(
+                    f"{relpath}:{node.lineno} imports '{alias.name}' "
+                    "(use *_finance/*_agent domain modules)"
+                )
     assert not violations, "Import explicit domain modules instead of facades:\n" + "\n".join(violations)
 
 
@@ -169,10 +181,10 @@ def test_production_modules_do_not_import_tool_args_barrel() -> None:
     violations: list[str] = []
     tool_args_package_init = AGENT_TOOL_ARGS_PACKAGE / "__init__.py"
 
-    for path in BACKEND_DIR.rglob("*.py"):
-        if "tests" in path.parts or path == tool_args_package_init:
+    for path in _source_python_paths((BACKEND_DIR,)):
+        if path == tool_args_package_init:
             continue
-        module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        module = _parsed_module(path)
         for node in ast.walk(module):
             if isinstance(node, ast.ImportFrom):
                 if node.module != "backend.services.agent.tool_args":
@@ -309,7 +321,7 @@ def test_schema_modules_do_not_import_service_modules() -> None:
         BACKEND_DIR / "schemas_finance.py",
         SETTINGS_SCHEMA_PATH,
     ):
-        module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        module = _parsed_module(path)
         for node in ast.walk(module):
             if isinstance(node, ast.ImportFrom):
                 if not (node.module or "").startswith("backend.services"):
@@ -356,7 +368,7 @@ def test_runtime_settings_contracts_are_split_from_finance_modules() -> None:
 
 def test_runtime_settings_service_does_not_import_api_schemas() -> None:
     service_path = BACKEND_DIR / "services" / "runtime_settings.py"
-    module = ast.parse(service_path.read_text(encoding="utf-8"), filename=str(service_path))
+    module = _parsed_module(service_path)
     violations: list[str] = []
     for node in ast.walk(module):
         if isinstance(node, ast.ImportFrom) and node.module == "backend.schemas_settings":
@@ -393,7 +405,7 @@ def test_finance_write_services_do_not_import_http_write_schemas() -> None:
     ]
     violations: list[str] = []
     for service_path in service_paths:
-        module = ast.parse(service_path.read_text(encoding="utf-8"), filename=str(service_path))
+        module = _parsed_module(service_path)
         for node in ast.walk(module):
             if isinstance(node, ast.ImportFrom) and node.module == "backend.schemas_finance":
                 imported_names = {alias.name for alias in node.names}

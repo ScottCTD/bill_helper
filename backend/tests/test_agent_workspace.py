@@ -38,6 +38,8 @@ from backend.services.user_files import (
     store_user_file_bytes,
 )
 from backend.services.workspace_ide import WORKSPACE_IDE_SESSION_COOKIE_NAME
+
+pytestmark = pytest.mark.workspace_docker
 from backend.services.workspace_browser import build_user_workspace_snapshot
 from backend.services.users import (
     create_or_reset_admin_user,

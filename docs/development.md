@@ -257,7 +257,9 @@ Run these after behavior, schema, API, tooling, or UI changes:
 
 ```bash
 uv run python -m py_compile backend
-OPENROUTER_API_KEY=test uv run pytest backend/tests -q
+OPENROUTER_API_KEY=test uv run pytest backend/tests -q -m "not workspace_docker"
+# Run this as well when touching workspace lifecycle or IDE proxy behavior:
+OPENROUTER_API_KEY=test uv run pytest backend/tests/test_agent_workspace.py -q -m workspace_docker
 uv run python scripts/check_llm_design.py
 cd frontend && npm run test && npm run test:e2e && npm run build
 cd ..
@@ -386,7 +388,7 @@ Operational impact:
 
 - Before scanning, review generated/runtime/vendor/build directories and exclude only obvious non-source paths directly; questionable exclude candidates must be surfaced to the user first.
 - Typical commands are `uv run desloppify scan --path .`, `uv run desloppify next`, the printed `uv run desloppify resolve ...` command for each completed item, and periodic `uv run desloppify plan` / `scan` refreshes when the queue shifts.
-- Behavior, schema, or tooling fixes that come out of the queue must still pass the repository verification gates, including `OPENROUTER_API_KEY=test uv run pytest backend/tests -q` and `uv run python scripts/check_docs_sync.py`.
+- Behavior, schema, or tooling fixes that come out of the queue must still pass the repository verification gates, including `OPENROUTER_API_KEY=test uv run pytest backend/tests -q -m "not workspace_docker"` and `uv run python scripts/check_docs_sync.py`. Also run `OPENROUTER_API_KEY=test uv run pytest backend/tests/test_agent_workspace.py -q -m workspace_docker` when the change touches workspace lifecycle or IDE proxy behavior.
 
 Affected files/modules:
 
@@ -465,7 +467,8 @@ Any behavior, schema, API, tooling, or UI change must update the relevant stable
 
 Recommended before merging:
 
-1. `uv run pytest`
-2. `npm run build` (from `frontend/`)
-3. `uv run python scripts/check_docs_sync.py`
+1. `OPENROUTER_API_KEY=test uv run pytest backend/tests -q -m "not workspace_docker"`
+2. `OPENROUTER_API_KEY=test uv run pytest backend/tests/test_agent_workspace.py -q -m workspace_docker` when touching workspace lifecycle or IDE proxy behavior
+3. `npm run build` (from `frontend/`)
+4. `uv run python scripts/check_docs_sync.py`
 The Playwright harness starts the backend on disposable non-default ports and copies the shared app data directory into a temporary location before applying migrations, so browser coverage stays isolated from the primary local database.

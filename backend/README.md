@@ -29,6 +29,8 @@ This file is intentionally thin. Canonical backend documentation lives in `./doc
 ## Verify
 
 ```bash
-uv run pytest
+OPENROUTER_API_KEY=test uv run pytest backend/tests -q -m "not workspace_docker"
+# Also run this when changing workspace lifecycle or IDE proxy behavior:
+OPENROUTER_API_KEY=test uv run pytest backend/tests/test_agent_workspace.py -q -m workspace_docker
 uv run python scripts/check_docs_sync.py
 ```
