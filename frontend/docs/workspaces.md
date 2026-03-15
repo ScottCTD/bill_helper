@@ -147,6 +147,10 @@
 - dedicated first-class filter-group workspace at `/filters`
 - route shell now uses the shared page header plus one primary workspace section
 - page shell delegates the actual CRUD surface to `frontend/src/features/filterGroups/FilterGroupsManager.tsx`
+- the workspace now uses a master-detail layout: a selectable filter-group list on the left and one focused editor on the right, with the list stacking above the editor on small screens
+- the primary editor hides the raw backend `rule_summary` prose and instead uses a guided include/exclude rule builder with literal `AND` / `OR` controls
+- tag-based conditions use the shared `TagMultiSelect` component with the existing tag catalog instead of a comma-separated text field
+- nested rule groups still work, but they are moved behind an `Advanced` mode that opens automatically for already-nested rules
 - each saved group exposes a direct `View matching entries` link that opens the entries workspace scoped to that group
 
 ## Workspace

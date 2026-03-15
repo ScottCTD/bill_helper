@@ -79,12 +79,14 @@ Default groups can have their rules edited, but their names stay fixed. Custom g
   - month mode uses the selected month payload
   - year mode aggregates the largest-expense rows across the selected year's month payloads
 - `frontend/src/pages/FilterGroupsPage.tsx`:
-  - first-class `/filters` workspace linked from the left navigation as `Filter`
-  - recursive saved-rule editor for default and custom groups
+  - first-class `/filters` workspace linked from the left navigation as `Filters`
+  - master-detail filter-group workspace with a guided include/exclude editor for the common flat-rule path
+  - nested logic remains available through an `Advanced` mode that opens automatically for already-nested rules
+  - tag conditions reuse the shared `TagMultiSelect` instead of a comma-separated text field
   - per-group deep links into `/entries?filter_group_id=...`
 
 Interactive charting is powered by Recharts.
-`frontend/src/features/filterGroups/FilterGroupEditorCard.tsx` provides the recursive include/exclude editor used on the filter page.
+`frontend/src/features/filterGroups/FilterGroupsManager.tsx` coordinates the filter-group workspace, while the focused editor modules under `frontend/src/features/filterGroups/` render the guided and advanced rule editors.
 
 ## Tests
 
