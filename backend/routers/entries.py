@@ -46,6 +46,7 @@ from backend.services.filter_groups import (
     entry_matches_filter_group,
     get_filter_group_definition,
     list_account_entity_ids_for_principal,
+    list_filter_group_definitions,
 )
 from backend.services.groups import entry_group_options
 from backend.services.serializers import entry_to_detail_schema, entry_to_schema
@@ -256,6 +257,10 @@ def list_entries(
             filter_group_id=filters.filter_group_id,
             principal=principal,
         )
+        filter_groups = list_filter_group_definitions(
+            db,
+            principal=principal,
+        )
         account_entity_ids = list_account_entity_ids_for_principal(
             db,
             principal=principal,
@@ -267,6 +272,7 @@ def list_entries(
                 entry,
                 filter_group=filter_group,
                 account_entity_ids=account_entity_ids,
+                filter_groups=filter_groups,
             )
         ]
         total = len(matching_entries)

@@ -31,8 +31,12 @@ from backend.schemas_finance import (
     DashboardWeekdaySpendingPoint,
 )
 from backend.services.access_scope import account_owner_filter, entry_owner_filter
-from backend.services.filter_group_rules import FilterEntryContext, evaluate_filter_group_rule
-from backend.services.filter_groups import FilterGroupDefinition, list_filter_group_definitions
+from backend.services.filter_groups import (
+    FilterGroupDefinition,
+    build_filter_entry_context,
+    list_filter_group_definitions,
+    matching_filter_group_keys,
+)
 from backend.services.finance_reconciliation import (
     build_dashboard_reconciliation_summary,
     build_reconciliation,
@@ -268,30 +272,14 @@ def _list_non_transfer_entries_for_window(
     ]
 
 
-def _entry_filter_context(
-    entry: Entry,
-    *,
-    account_entity_ids: set[str],
-) -> FilterEntryContext:
-    return FilterEntryContext(
-        kind=entry.kind,
-        tag_names=frozenset(tag.name.strip().lower() for tag in entry.tags if tag.name),
-        is_internal_transfer=_is_internal_account_transfer(entry, account_entity_ids),
-    )
-
-
 def _matching_filter_group_keys(
     *,
     entry: Entry,
     filter_groups: list[FilterGroupDefinition],
     account_entity_ids: set[str],
 ) -> list[str]:
-    context = _entry_filter_context(entry, account_entity_ids=account_entity_ids)
-    return [
-        filter_group.key
-        for filter_group in filter_groups
-        if evaluate_filter_group_rule(filter_group.rule, context)
-    ]
+    context = build_filter_entry_context(entry, account_entity_ids=account_entity_ids)
+    return matching_filter_group_keys(context=context, filter_groups=filter_groups)
 
 
 def _rollup_expense_entries(

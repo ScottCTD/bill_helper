@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FilterGroupsManager } from "./FilterGroupsManager";
+import { FilterGroupsPage } from "../../pages/FilterGroupsPage";
 import type { FilterGroup, Tag } from "../../lib/types";
 import { createFilterGroup, deleteFilterGroup, listFilterGroups, listTags, updateFilterGroup } from "../../lib/api";
 
@@ -55,7 +55,7 @@ function cloneFilterGroups(value: FilterGroup[]): FilterGroup[] {
   return JSON.parse(JSON.stringify(value)) as FilterGroup[];
 }
 
-function renderManager() {
+function renderPage() {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -66,13 +66,13 @@ function renderManager() {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <FilterGroupsManager />
+        <FilterGroupsPage />
       </MemoryRouter>
     </QueryClientProvider>
   );
 }
 
-describe("FilterGroupsManager", () => {
+describe("FilterGroupsPage", () => {
   let currentFilterGroups: FilterGroup[];
 
   beforeEach(() => {
@@ -101,6 +101,15 @@ describe("FilterGroupsManager", () => {
         position: 2,
         is_default: true,
         description: "Recurring obligations."
+      }),
+      createFilterGroupFixture({
+        id: "fg-untagged",
+        key: "untagged",
+        name: "untagged",
+        position: 3,
+        is_default: true,
+        description: "Expense entries with no tags, or tagged expense entries that do not match any other saved filter group. This group is computed automatically and cannot be edited.",
+        rule_summary: "kind is expense and is not an internal transfer and (has no tags or matches no other saved filter group)"
       })
     ];
 
@@ -145,16 +154,17 @@ describe("FilterGroupsManager", () => {
   });
 
   it("selects the first group and does not render the raw backend rule summary", async () => {
-    renderManager();
+    renderPage();
 
     expect(await screen.findByDisplayValue("day-to-day")).toBeInTheDocument();
     expect(screen.queryByText(/tags include alcohol_bars/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Guided" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
 
   it("protects unsaved changes when switching away from a new draft", async () => {
     const user = userEvent.setup();
-    renderManager();
+    renderPage();
 
     await screen.findByDisplayValue("day-to-day");
     await user.click(screen.getByRole("button", { name: "New custom group" }));
@@ -173,14 +183,18 @@ describe("FilterGroupsManager", () => {
     expect(screen.queryByDisplayValue("Trip budget")).not.toBeInTheDocument();
   });
 
-  it("creates a new custom group and keeps the returned group selected", async () => {
+  it("creates a new custom group from the page header and keeps the returned group selected", async () => {
     const user = userEvent.setup();
-    renderManager();
+    renderPage();
 
     await screen.findByDisplayValue("day-to-day");
     await user.click(screen.getByRole("button", { name: "New custom group" }));
+    const createButton = screen.getByRole("button", { name: "Create group" });
+    expect(createButton).toBeDisabled();
+
     await user.type(screen.getByLabelText("Name"), "Trips");
     await user.type(screen.getByLabelText("Description"), "Travel expenses.");
+    expect(screen.getByRole("button", { name: "Create group" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "Create group" }));
 
@@ -193,7 +207,7 @@ describe("FilterGroupsManager", () => {
 
   it("deletes the selected custom group and moves selection to the next group", async () => {
     const user = userEvent.setup();
-    renderManager();
+    renderPage();
 
     await screen.findByDisplayValue("day-to-day");
     await user.click(screen.getByRole("button", { name: /Travel/ }));
@@ -205,5 +219,20 @@ describe("FilterGroupsManager", () => {
       expect(vi.mocked(deleteFilterGroup).mock.calls[0]?.[0]).toBe("fg-travel");
     });
     expect(await screen.findByDisplayValue("Fixed")).toBeInTheDocument();
+  });
+
+  it("renders untagged as a read-only system panel and hides the header save action", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByDisplayValue("day-to-day");
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /untagged/i }));
+
+    expect(await screen.findByText("Computed automatically")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View matching entries" })).toHaveAttribute("href", "/entries?filter_group_id=fg-untagged");
   });
 });

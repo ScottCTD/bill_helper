@@ -151,6 +151,64 @@ def test_entry_filters_by_filter_group(client):
     assert [item["name"] for item in fixed_entries.json()["items"]] == ["Rent"]
 
 
+def test_entry_filters_by_computed_untagged_filter_group(client):
+    account_id = create_account(client)
+    client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-04",
+            "name": "No tag cash expense",
+            "amount_minor": 500,
+            "currency_code": "USD",
+            "tags": [],
+        },
+    ).raise_for_status()
+    client.post(
+        "/api/v1/entries",
+        json={
+            "account_id": account_id,
+            "kind": "EXPENSE",
+            "occurred_at": "2026-01-05",
+            "name": "Misc expense",
+            "amount_minor": 800,
+            "currency_code": "USD",
+            "tags": ["misc"],
+        },
+    ).raise_for_status()
+
+    create_group_response = client.post(
+        "/api/v1/filter-groups",
+        json={
+            "name": "all expenses",
+            "rule": {
+                "include": {
+                    "type": "group",
+                    "operator": "AND",
+                    "children": [
+                        {"type": "condition", "field": "entry_kind", "operator": "is", "value": "EXPENSE"},
+                    ],
+                }
+            },
+        },
+    )
+    create_group_response.raise_for_status()
+
+    filter_groups_response = client.get("/api/v1/filter-groups")
+    filter_groups_response.raise_for_status()
+    untagged_group = next(
+        group for group in filter_groups_response.json() if group["key"] == "untagged"
+    )
+
+    untagged_entries = client.get(
+        "/api/v1/entries",
+        params={"filter_group_id": untagged_group["id"]},
+    )
+    untagged_entries.raise_for_status()
+    assert [item["name"] for item in untagged_entries.json()["items"]] == ["No tag cash expense"]
+
+
 def test_group_membership_updates_entry_context_and_allows_group_delete_after_unassign(client):
     account_id = create_account(client)
     entry = create_entry(client, account_id, "Entry 1")

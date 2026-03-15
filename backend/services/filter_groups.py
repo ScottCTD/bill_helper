@@ -39,6 +39,16 @@ DEFAULT_FILTER_GROUP_COLORS = {
     "transfers": "#6d28d9",
     "untagged": "#6b7280",
 }
+UNTAGGED_FILTER_GROUP_KEY = "untagged"
+UNTAGGED_FILTER_GROUP_DESCRIPTION = (
+    "Expense entries with no tags, or tagged expense entries that do not match "
+    "any other saved filter group. This group is computed automatically and "
+    "cannot be edited."
+)
+UNTAGGED_FILTER_GROUP_RULE_SUMMARY = (
+    "kind is expense and is not an internal transfer and "
+    "(has no tags or matches no other saved filter group)"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,48 +210,15 @@ DEFAULT_FILTER_GROUP_SPECS: tuple[_DefaultFilterGroupSpec, ...] = (
         ),
     ),
     _DefaultFilterGroupSpec(
-        key="untagged",
+        key=UNTAGGED_FILTER_GROUP_KEY,
         name="untagged",
-        description=(
-            "Expense entries that do not match the default day-to-day, one-time, fixed, "
-            "or transfer definitions and need review."
-        ),
+        description=UNTAGGED_FILTER_GROUP_DESCRIPTION,
         color=DEFAULT_FILTER_GROUP_COLORS["untagged"],
         position=4,
         rule=FilterGroupRule(
             include=_group(
                 "AND",
                 _condition(field="entry_kind", operator="is", value="EXPENSE"),
-                _condition(
-                    field="tags",
-                    operator="has_none",
-                    value=[
-                        "grocery",
-                        "dining_out",
-                        "coffee_snacks",
-                        "transportation",
-                        "personal_care",
-                        "pharmacy",
-                        "alcohol_bars",
-                        "fitness",
-                        "entertainment",
-                        "subscriptions",
-                        "home",
-                        "pets",
-                        "health_medical",
-                        "one_time",
-                        "housing",
-                        "utilities",
-                        "internet_mobile",
-                        "insurance",
-                        "interest_expense",
-                        "taxes",
-                        "debt_payment",
-                        "e_transfer",
-                        "cash_withdrawal",
-                        "savings_investments",
-                    ],
-                ),
             ),
             exclude=_group(
                 "AND",
@@ -343,6 +320,8 @@ def update_filter_group(
         filter_group_id=filter_group_id,
         principal=principal,
     )
+    if row.key == UNTAGGED_FILTER_GROUP_KEY:
+        raise PolicyViolation.conflict("The untagged filter group is computed automatically and cannot be edited")
 
     if "name" in payload.model_fields_set:
         normalized_name = normalize_filter_group_name(payload.name or "")
@@ -418,12 +397,12 @@ def build_filter_group_read(definition: FilterGroupDefinition) -> FilterGroupRea
         id=definition.id,
         key=definition.key,
         name=definition.name,
-        description=definition.description,
+        description=_filter_group_description(definition),
         color=definition.color,
         is_default=definition.is_default,
         position=definition.position,
         rule=definition.rule,
-        rule_summary=summarize_filter_group_rule(definition.rule),
+        rule_summary=_filter_group_rule_summary(definition),
         created_at=definition.created_at,
         updated_at=definition.updated_at,
     )
@@ -452,8 +431,24 @@ def entry_matches_filter_group(
     *,
     filter_group: FilterGroupDefinition,
     account_entity_ids: set[str],
+    filter_groups: list[FilterGroupDefinition],
 ) -> bool:
-    context = FilterEntryContext(
+    context = build_filter_entry_context(
+        entry,
+        account_entity_ids=account_entity_ids,
+    )
+    return filter_group.key in matching_filter_group_keys(
+        context=context,
+        filter_groups=filter_groups,
+    )
+
+
+def build_filter_entry_context(
+    entry: Entry,
+    *,
+    account_entity_ids: set[str],
+) -> FilterEntryContext:
+    return FilterEntryContext(
         kind=EntryKind(entry.kind),
         tag_names=frozenset(tag.name.strip().lower() for tag in entry.tags if tag.name),
         is_internal_transfer=(
@@ -463,7 +458,28 @@ def entry_matches_filter_group(
             and entry.to_entity_id in account_entity_ids
         ),
     )
-    return evaluate_filter_group_rule(filter_group.rule, context)
+
+
+def matching_filter_group_keys(
+    *,
+    context: FilterEntryContext,
+    filter_groups: list[FilterGroupDefinition],
+) -> list[str]:
+    regular_matches = {
+        filter_group.key
+        for filter_group in filter_groups
+        if filter_group.key != UNTAGGED_FILTER_GROUP_KEY and evaluate_filter_group_rule(filter_group.rule, context)
+    }
+    include_untagged = _context_matches_untagged(context, has_other_matches=bool(regular_matches))
+    matching_keys: list[str] = []
+    for filter_group in filter_groups:
+        if filter_group.key == UNTAGGED_FILTER_GROUP_KEY:
+            if include_untagged:
+                matching_keys.append(filter_group.key)
+            continue
+        if filter_group.key in regular_matches:
+            matching_keys.append(filter_group.key)
+    return matching_keys
 
 
 def _assert_unique_name(
@@ -504,3 +520,25 @@ def _normalize_optional_text(value: str | None) -> str | None:
         return None
     normalized = " ".join(value.split()).strip()
     return normalized or None
+
+
+def _context_matches_untagged(
+    context: FilterEntryContext,
+    *,
+    has_other_matches: bool,
+) -> bool:
+    if context.kind != EntryKind.EXPENSE or context.is_internal_transfer:
+        return False
+    return not context.tag_names or not has_other_matches
+
+
+def _filter_group_description(definition: FilterGroupDefinition) -> str | None:
+    if definition.key == UNTAGGED_FILTER_GROUP_KEY:
+        return UNTAGGED_FILTER_GROUP_DESCRIPTION
+    return definition.description
+
+
+def _filter_group_rule_summary(definition: FilterGroupDefinition) -> str:
+    if definition.key == UNTAGGED_FILTER_GROUP_KEY:
+        return UNTAGGED_FILTER_GROUP_RULE_SUMMARY
+    return summarize_filter_group_rule(definition.rule)

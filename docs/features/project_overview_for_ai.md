@@ -226,11 +226,11 @@ The most recent snapshot produces one **open interval** from that snapshot to to
 
 ### 7.6 Filter Groups
 
-**What they are:** Reusable, user-editable saved filter definitions that classify entries for analytics. They are not hard-coded buckets — users can inspect, edit, and create custom groups.
+**What they are:** Reusable saved filter definitions that classify entries for analytics. Most groups are user-editable; the built-in `untagged` group is a computed system bucket.
 
-**Default groups:** Five built-in groups provisioned per user: day-to-day (routine spending — groceries, dining, transport, etc.), one-time (irregular purchases), fixed (recurring obligations — rent, insurance, utilities), transfers (external money movement), untagged (entries not matching other groups, needing review).
+**Default groups:** Five built-in groups provisioned per user: day-to-day (routine spending — groceries, dining, transport, etc.), one-time (irregular purchases), fixed (recurring obligations — rent, insurance, utilities), transfers (external money movement), untagged (expense entries with no tags, or tagged expense entries that match no other saved group, needing review).
 
-**Rule model:** Each filter group has include and exclude conditions. Rules support: entry kind, tag inclusion, tag exclusion, internal-transfer flag, nested AND/OR logic. Default group rules can be edited; custom groups can overlap with each other.
+**Rule model:** Each editable filter group has include and exclude conditions. Rules support: entry kind, tag inclusion, tag exclusion, internal-transfer flag, nested AND/OR logic. Default groups other than `untagged` can be edited; custom groups can overlap with each other.
 
 **Usage:** Filter groups power dashboard expense breakdowns, daily/monthly charts, projections, and largest-expense classification. Entries list can open filtered by a chosen group. Internal transfers (both from and to are accounts) are excluded from dashboard KPIs and charts.
 

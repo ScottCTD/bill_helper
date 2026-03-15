@@ -148,7 +148,9 @@
 - route shell now uses the shared page header plus one primary workspace section
 - page shell delegates the actual CRUD surface to `frontend/src/features/filterGroups/FilterGroupsManager.tsx`
 - the workspace now uses a master-detail layout: a selectable filter-group list on the left and one focused editor on the right, with the list stacking above the editor on small screens
+- the primary `Create group` / `Save changes` action now sits in the route-level page header and reflects the currently selected editor session
 - the primary editor hides the raw backend `rule_summary` prose and instead uses a guided include/exclude rule builder with literal `AND` / `OR` controls
+- the built-in `untagged` group is a computed system bucket and opens as a read-only detail panel instead of the normal editor
 - tag-based conditions use the shared `TagMultiSelect` component with the existing tag catalog instead of a comma-separated text field
 - nested rule groups still work, but they are moved behind an `Advanced` mode that opens automatically for already-nested rules
 - each saved group exposes a direct `View matching entries` link that opens the entries workspace scoped to that group

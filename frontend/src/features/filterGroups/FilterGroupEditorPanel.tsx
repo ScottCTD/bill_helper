@@ -26,7 +26,6 @@ interface FilterGroupEditorPanelProps {
   mutationError?: string | null;
   tagLoadError?: string | null;
   onChange: (nextFormState: FilterGroupEditorFormState) => void;
-  onSubmit: () => void;
   onDelete?: () => void;
 }
 
@@ -39,10 +38,8 @@ export function FilterGroupEditorPanel({
   mutationError,
   tagLoadError,
   onChange,
-  onSubmit,
   onDelete
 }: FilterGroupEditorPanelProps) {
-  const saveLabel = session.kind === "new" ? "Create group" : "Save changes";
   const title = session.formState.name.trim() || (session.kind === "new" ? "New custom group" : "Unnamed filter group");
 
   function updateFormState(patch: Partial<FilterGroupEditorFormState>) {
@@ -168,16 +165,13 @@ export function FilterGroupEditorPanel({
         {tagLoadError ? <p className="error">Failed to load tags for the editor: {tagLoadError}</p> : null}
         {mutationError ? <p className="error">{mutationError}</p> : null}
 
-        <div className="flex flex-wrap justify-end gap-2">
-          {onDelete ? (
+        {onDelete ? (
+          <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="outline" disabled={isPending} onClick={onDelete}>
               Delete
             </Button>
-          ) : null}
-          <Button type="button" disabled={isPending || !session.formState.name.trim() || !isDirty} onClick={onSubmit}>
-            {isPending ? "Saving..." : saveLabel}
-          </Button>
-        </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

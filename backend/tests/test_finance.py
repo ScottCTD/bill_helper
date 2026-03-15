@@ -595,3 +595,80 @@ def test_filter_groups_support_default_provisioning_and_custom_overlap(client):
 
     delete_response = client.delete(f"/api/v1/filter-groups/{custom_group['id']}")
     assert delete_response.status_code == 204
+
+
+def test_untagged_filter_group_is_computed_and_non_editable(client):
+    account = create_account(client)
+    create_entry(
+        client,
+        account["id"],
+        "EXPENSE",
+        1100,
+        "2026-01-04",
+        name="No tag cash expense",
+    )
+    create_entry(
+        client,
+        account["id"],
+        "EXPENSE",
+        2200,
+        "2026-01-05",
+        name="Misc expense",
+        tags=["misc"],
+    )
+    create_entry(
+        client,
+        account["id"],
+        "EXPENSE",
+        3300,
+        "2026-01-06",
+        name="Coffee",
+        tags=["coffee_snacks"],
+    )
+
+    initial_dashboard = client.get("/api/v1/dashboard", params={"month": "2026-01"})
+    initial_dashboard.raise_for_status()
+    initial_filter_groups = {
+        item["key"]: item for item in initial_dashboard.json()["filter_groups"]
+    }
+    assert initial_filter_groups["untagged"]["total_minor"] == 3300
+    assert initial_filter_groups["day_to_day"]["total_minor"] == 3300
+
+    list_response = client.get("/api/v1/filter-groups")
+    list_response.raise_for_status()
+    untagged_group = next(item for item in list_response.json() if item["key"] == "untagged")
+    assert "cannot be edited" in (untagged_group["description"] or "")
+    assert "matches no other saved filter group" in untagged_group["rule_summary"]
+
+    update_response = client.patch(
+        f"/api/v1/filter-groups/{untagged_group['id']}",
+        json={"description": "Manual override"},
+    )
+    assert update_response.status_code == 409
+
+    custom_group_response = client.post(
+        "/api/v1/filter-groups",
+        json={
+            "name": "all expenses",
+            "description": "Catch-all expense bucket.",
+            "rule": {
+                "include": {
+                    "type": "group",
+                    "operator": "AND",
+                    "children": [
+                        {"type": "condition", "field": "entry_kind", "operator": "is", "value": "EXPENSE"},
+                    ],
+                }
+            },
+        },
+    )
+    custom_group_response.raise_for_status()
+
+    updated_dashboard = client.get("/api/v1/dashboard", params={"month": "2026-01"})
+    updated_dashboard.raise_for_status()
+    updated_filter_groups = {
+        item["key"]: item for item in updated_dashboard.json()["filter_groups"]
+    }
+    assert updated_filter_groups["untagged"]["total_minor"] == 1100
+    assert updated_filter_groups["day_to_day"]["total_minor"] == 3300
+    assert updated_filter_groups[custom_group_response.json()["key"]]["total_minor"] == 6600

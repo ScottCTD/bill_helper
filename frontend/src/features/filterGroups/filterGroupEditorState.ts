@@ -9,6 +9,7 @@ import type { FilterGroup, FilterGroupRule } from "../../lib/types";
 import { buildDefaultRule, normalizeRule } from "./filterGroupRuleUtils";
 
 export const DEFAULT_FILTER_GROUP_COLOR = "#64748b";
+export const UNTAGGED_FILTER_GROUP_KEY = "untagged";
 
 export type FilterGroupEditorTarget = { kind: "new" } | { kind: "existing"; filterGroupId: string };
 
@@ -29,6 +30,7 @@ export type FilterGroupEditorSession =
   | {
       kind: "existing";
       filterGroupId: string;
+      filterGroupKey: string;
       isDefault: boolean;
       formState: FilterGroupEditorFormState;
       baselineState: FilterGroupEditorFormState;
@@ -69,6 +71,7 @@ export function createExistingEditorSession(filterGroup: FilterGroup): FilterGro
   return {
     kind: "existing",
     filterGroupId: filterGroup.id,
+    filterGroupKey: filterGroup.key,
     isDefault: filterGroup.is_default,
     formState,
     baselineState: formState
@@ -120,4 +123,9 @@ export function pickNextFilterGroupId(filterGroups: FilterGroup[], deletedFilter
     return filterGroups[0]?.id ?? null;
   }
   return filterGroups[deletedIndex + 1]?.id ?? filterGroups[deletedIndex - 1]?.id ?? null;
+}
+
+
+export function isSystemUntaggedSession(session: FilterGroupEditorSession | null): boolean {
+  return session?.kind === "existing" && session.filterGroupKey === UNTAGGED_FILTER_GROUP_KEY;
 }

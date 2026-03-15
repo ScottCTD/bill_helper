@@ -38,7 +38,7 @@ Current rule engine supports:
 - nested `AND` / `OR` groups
 - separate `include` and optional `exclude` trees
 
-Default groups can have their rules edited, but their names stay fixed. Custom groups can overlap with default groups and with each other.
+Default groups other than `untagged` can have their rules edited, but their names stay fixed. The built-in `untagged` group is computed automatically: it includes expense entries with no tags, plus tagged expense entries that match no other saved group, and it stays read-only. Custom groups can overlap with default groups and with each other.
 
 ## Backend Flow
 
@@ -81,6 +81,8 @@ Default groups can have their rules edited, but their names stay fixed. Custom g
 - `frontend/src/pages/FilterGroupsPage.tsx`:
   - first-class `/filters` workspace linked from the left navigation as `Filters`
   - master-detail filter-group workspace with a guided include/exclude editor for the common flat-rule path
+  - the primary `Create group` / `Save changes` action lives in the route-level page header instead of the editor footer
+  - the built-in `untagged` group renders as a read-only system panel rather than the normal editor
   - nested logic remains available through an `Advanced` mode that opens automatically for already-nested rules
   - tag conditions reuse the shared `TagMultiSelect` instead of a comma-separated text field
   - per-group deep links into `/entries?filter_group_id=...`

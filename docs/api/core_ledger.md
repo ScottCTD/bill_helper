@@ -315,6 +315,7 @@ Behavior:
 - provisions and persists the built-in default groups on first read
 - results are always scoped to the requesting principal
 - each row includes the recursive `rule` tree plus `rule_summary`
+- the built-in `untagged` row is a computed system group: it matches expense entries with no tags, or tagged expense entries that match no other saved filter group; internal transfers stay excluded
 
 ### `POST /filter-groups`
 
@@ -337,8 +338,9 @@ Update one saved filter group. Response: `FilterGroupRead`
 
 Behavior:
 
-- default groups may update `description`, `color`, and `rule`
+- default groups other than `untagged` may update `description`, `color`, and `rule`
 - default groups cannot be renamed
+- the built-in `untagged` group is computed and cannot be edited
 - custom groups may be renamed
 - `422` when no updatable fields are provided
 
