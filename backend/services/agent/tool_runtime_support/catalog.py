@@ -8,17 +8,13 @@ from __future__ import annotations
 from collections.abc import Collection
 from typing import Any
 
-from backend.services.agent.tool_runtime_support.catalog_proposals import PROPOSAL_TOOLS
-from backend.services.agent.tool_runtime_support.catalog_read import READ_TOOLS
 from backend.services.agent.tool_runtime_support.catalog_session import SESSION_TOOLS
 from backend.services.agent.tool_runtime_support.catalog_workspace import WORKSPACE_TOOLS
 from backend.services.agent.tool_runtime_support.definitions import AgentToolDefinition
 
 
 TOOLS: dict[str, AgentToolDefinition] = {
-    **READ_TOOLS,
     **SESSION_TOOLS,
-    **PROPOSAL_TOOLS,
     **WORKSPACE_TOOLS,
 }
 EXPOSED_RUNTIME_TOOL_NAMES: tuple[str, ...] = (

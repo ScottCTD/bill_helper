@@ -246,7 +246,7 @@ def test_agent_review_workflow_is_grouped_in_a_package() -> None:
 def test_agent_read_tools_are_grouped_in_a_package() -> None:
     assert not REMOVED_AGENT_READ_HANDLER_MODULE.exists(), "read tools should stay split into the read_tools package"
     assert AGENT_READ_TOOLS_PACKAGE.is_dir(), "read_tools package should exist"
-    for name in ("catalog.py", "common.py", "entries.py", "groups.py", "proposals.py"):
+    for name in ("catalog.py", "common.py", "entries.py", "groups.py", "accounts.py"):
         assert (AGENT_READ_TOOLS_PACKAGE / name).exists(), f"missing read tool module: {name}"
 
 
@@ -270,9 +270,8 @@ def test_agent_tool_runtime_uses_grouped_support_modules() -> None:
     assert AGENT_TOOL_RUNTIME_SUPPORT_PACKAGE.is_dir(), "tool_runtime support package should exist"
     for name in (
         "catalog.py",
-        "catalog_proposals.py",
-        "catalog_read.py",
         "catalog_session.py",
+        "catalog_workspace.py",
         "definitions.py",
         "execution.py",
         "schema.py",

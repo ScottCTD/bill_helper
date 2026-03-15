@@ -50,7 +50,7 @@ def _seed_tool_heavy_thread(
             for tool_index in range(tool_calls_per_run):
                 tool_call = AgentToolCall(
                     run_id=run.id,
-                    tool_name="list_entries",
+                    tool_name="run_workspace_command",
                     input_json={
                         "query": f"run-{run_index}-tool-{tool_index}",
                         "filters": ["expense", "cad", "recent"] * 8,

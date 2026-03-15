@@ -31,13 +31,13 @@
 - `backend/services/agent/tool_runtime.py`
   - thin public seam for tool contracts plus runtime execution entrypoints
 - `backend/services/agent/tool_runtime_support/`
-  - grouped tool-runtime internals: `definitions.py` for tool metadata, `schema.py` for OpenAI schema inlining, `catalog_*.py` for internal tool-family registration plus the reduced model-visible runtime set, `catalog.py` for the merged registry, and `execution.py` for retry/error policy
+  - grouped tool-runtime internals: `definitions.py` for tool metadata, `schema.py` for OpenAI schema inlining, `catalog_session.py` and `catalog_workspace.py` for the live runtime tool registry, `catalog.py` for merged runtime lookup, and `execution.py` for retry/error policy
 - `backend/services/agent/pricing.py`
   - LiteLLM-backed pricing helper
 - `backend/services/agent/tool_args/`
   - focused tool-input package: `read.py` for read filters, `shared.py` for progress/common args, `threads.py` for thread rename args, `memory.py` for add-only memory args, and `proposal_admin.py` for pending-proposal/group-membership tool inputs
 - `backend/services/agent/read_tools/`
-  - read-tool package: `entries.py` for entry lookup ranking, `catalog.py` for tag/entity/account lookup, `groups.py` for group lookup/detail formatting, `proposals.py` for proposal history inspection, and `common.py` for shared ranking/principal-scope formatting helpers
+  - internal lookup helper package: `entries.py` for entry lookup ranking, `catalog.py` for tag/entity/account lookup helpers, `groups.py` for group lookup/detail formatting helpers, `accounts.py` for snapshot/reconciliation helpers, and `common.py` for shared ranking/principal-scope formatting helpers
 - `backend/services/agent/session_tools/`
   - session-tool package: `progress.py` for `send_intermediate_update`, `memory.py` for add-only persistent memory appends, and `threads.py` for short thread-topic updates
 - `backend/services/agent/workspace_command.py`
@@ -49,7 +49,7 @@
 - `backend/services/agent/group_references.py`
   - shared group-id alias lookup plus compact public group summary/detail formatting for group reads and group proposals
 - `backend/services/agent/proposal_metadata.py`
-  - canonical mapping from `change_type` to proposal domain/action/tool name for proposal history formatting, CLI responses, and review summaries
+  - canonical mapping from `change_type` to proposal domain/action/`bh` command labels for proposal history formatting, CLI responses, and review summaries
 - `backend/services/agent/threads.py`
   - thread-title normalization plus rename persistence helpers shared by the router and tool handler
 - `backend/services/agent/tools.py`

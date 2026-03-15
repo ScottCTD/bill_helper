@@ -37,7 +37,7 @@ The old read/proposal/review modules still exist internally, but no longer as di
 | Runtime-visible tool catalog | `backend/services/agent/tool_runtime_support/catalog.py`, `backend/services/agent/tool_runtime_support/catalog_session.py`, `backend/services/agent/tool_runtime_support/catalog_workspace.py` | Exact tool schemas exposed to the model |
 | Workspace execution | `backend/services/agent/workspace_command.py`, `backend/services/docker_cli.py`, `backend/services/agent_workspace.py` | Workspace startup, short-lived session injection, shell execution, output truncation, and secret scrubbing |
 | CLI | `backend/cli/main.py`, `backend/cli/support.py`, `backend/cli/rendering.py`, `backend/cli/reference.py` | Thin HTTP client, compact/text rendering, and prompt/doc reference metadata |
-| Internal domain helpers | `backend/services/agent/read_tools/`, `backend/services/agent/proposals/`, `backend/services/agent/proposal_http.py`, `backend/services/agent/proposal_patching.py` | Lookup, proposal normalization, metadata, and patching reused behind APIs and review/apply |
+| Internal domain helpers | `backend/services/agent/read_tools/`, `backend/services/agent/proposals/`, `backend/services/agent/proposal_http.py`, `backend/services/agent/proposal_patching.py` | Lookup helpers plus proposal normalization, metadata, and patching reused behind APIs and review/apply |
 | Review/apply | `backend/services/agent/reviews/`, `backend/services/agent/apply/`, `backend/routers/agent.py`, `backend/routers/agent_proposals.py` | Proposal inspection, approve/reject/reopen transitions, reviewer overrides, and canonical mutations |
 | Frontend agent UI | `frontend/src/features/agent/` | Thread list, composer, run timeline, tool blocks, and review modal |
 

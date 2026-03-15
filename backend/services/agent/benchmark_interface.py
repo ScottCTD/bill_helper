@@ -12,8 +12,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.enums_agent import AgentMessageRole, AgentRunStatus
-from backend.models_agent import AgentMessage, AgentMessageAttachment, AgentRun, AgentThread
+from backend.enums_agent import AgentChangeType, AgentMessageRole, AgentRunStatus
+from backend.models_agent import AgentChangeItem, AgentMessage, AgentMessageAttachment, AgentRun, AgentThread
 from backend.models_finance import User
 from backend.services.agent.attachments import create_message_attachment
 from backend.services.agent.message_history import build_llm_messages
@@ -39,11 +39,6 @@ from backend.services.agent.tool_types import ToolContext
 from backend.services.user_files import SOURCE_TYPE_AGENT_ATTACHMENT, STORAGE_AREA_UPLOAD, import_user_file_from_path
 from backend.services.runtime_settings import resolve_runtime_settings
 
-PROPOSAL_TOOL_NAMES = {
-    "propose_create_tag",
-    "propose_create_entity",
-    "propose_create_entry",
-}
 BENCHMARK_ENTRY_NOTES_KEY = "markdown_notes"
 
 
@@ -92,7 +87,6 @@ class _PreparedToolCall:
 @dataclass(slots=True)
 class _BenchmarkRunState:
     trace_steps: list[BenchmarkTraceStep] = field(default_factory=list)
-    proposal_inputs: list[dict[str, Any]] = field(default_factory=list)
     final_assistant_content: str = ""
     execution_error: str | None = None
 
@@ -124,28 +118,25 @@ def _redact_image_content(messages: list[dict[str, Any]]) -> list[dict[str, Any]
     return redacted
 
 
-def _predictions_from_proposals(proposals: list[dict[str, Any]]) -> BenchmarkPredictionSet:
+def _predictions_from_change_items(change_items: list[AgentChangeItem]) -> BenchmarkPredictionSet:
     predictions = BenchmarkPredictionSet()
-    for proposal in proposals:
-        tool_name = proposal.get("tool_name")
-        arguments = proposal.get("arguments")
-        if not isinstance(arguments, dict):
-            continue
-        if tool_name == "propose_create_tag":
+    for item in change_items:
+        arguments = item.payload_json
+        if item.change_type == AgentChangeType.CREATE_TAG:
             predictions.tags.append(
                 {
                     "name": arguments.get("name"),
                     "type": arguments.get("type"),
                 }
             )
-        elif tool_name == "propose_create_entity":
+        elif item.change_type == AgentChangeType.CREATE_ENTITY:
             predictions.entities.append(
                 {
                     "name": arguments.get("name"),
                     "category": arguments.get("category"),
                 }
             )
-        elif tool_name == "propose_create_entry":
+        elif item.change_type == AgentChangeType.CREATE_ENTRY:
             entry_prediction = {
                 "kind": arguments.get("kind"),
                 "date": arguments.get("date"),
@@ -372,17 +363,6 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
                 "content": result.output_text,
             }
         )
-        if (
-            prepared_tool_call.decode_error is None
-            and prepared_tool_call.tool_name in PROPOSAL_TOOL_NAMES
-        ):
-            self._state.proposal_inputs.append(
-                {
-                    "tool_name": prepared_tool_call.tool_name,
-                    "arguments": dict(prepared_tool_call.arguments),
-                }
-            )
-
         if self._trace_step is not None:
             self._trace_step.tool_results.append(
                 {
@@ -486,7 +466,14 @@ def run_benchmark_case(
         )
 
     total_wall_clock_ms = int((time.monotonic() - overall_start) * 1000)
-    predictions = _predictions_from_proposals(state.proposal_inputs)
+    change_items = list(
+        db.scalars(
+            select(AgentChangeItem)
+            .where(AgentChangeItem.run_id == run.id)
+            .order_by(AgentChangeItem.created_at.asc())
+        )
+    )
+    predictions = _predictions_from_change_items(change_items)
     db.refresh(run, attribute_names=["status", "error_text"])
     return BenchmarkCaseExecution(
         run_status=run.status.value,
