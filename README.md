@@ -51,6 +51,8 @@ uv run alembic upgrade head
 docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .
 ```
 
+The workspace image now installs the `billengine` CLI so agent runs can operate on Bill Helper state from the workspace terminal without direct DB access.
+
 ### Create or reset an admin login
 
 ```bash
@@ -102,6 +104,7 @@ Open the web app, sign in at `/login`, and use the password-backed session for a
 5. Review proposals in the diff modal and approve, reject, or edit them.
 
 The agent never mutates your data directly. Every create, update, or delete goes through a proposal -> review -> apply pipeline.
+For app-state operations, the agent now uses the workspace terminal plus the installed `billengine` CLI rather than the older large direct tool catalog.
 
 ## Configuration
 
@@ -114,6 +117,7 @@ All settings use a `BILL_HELPER_` prefix and can be set via `.env` or the in-app
 | `BILL_HELPER_AGENT_WORKSPACE_ENABLED` | `true` | Enable eager per-user Docker workspace provisioning |
 | `BILL_HELPER_AGENT_WORKSPACE_IMAGE` | `bill-helper-agent-workspace:latest` | Prebuilt Docker image tag used for per-user workspaces |
 | `BILL_HELPER_AGENT_WORKSPACE_DOCKER_BINARY` | `docker` | Docker CLI binary used for workspace lifecycle commands |
+| `BILL_HELPER_WORKSPACE_BACKEND_BASE_URL` | `http://host.docker.internal:8000/api/v1` | Backend API base URL injected into workspace terminal commands and `billengine` |
 | `BILL_HELPER_DEFAULT_CURRENCY_CODE` | `CAD` | Default currency for new entries |
 | `BILL_HELPER_DASHBOARD_CURRENCY_CODE` | `CAD` | Currency used in dashboard analytics |
 | `CURRENT_USER_TIMEZONE` | `America/Toronto` | Timezone for agent date context |

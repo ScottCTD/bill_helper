@@ -21,6 +21,7 @@ from .read import (
 )
 from .shared import EmptyArgs, INTERMEDIATE_UPDATE_TOOL_NAME, SendIntermediateUpdateArgs
 from .threads import RenameThreadArgs
+from .workspace_command import RunWorkspaceCommandArgs
 
 __all__ = [
     "AddUserMemoryArgs",
@@ -39,4 +40,5 @@ __all__ = [
     "RenameThreadArgs",
     "SendIntermediateUpdateArgs",
     "UpdatePendingProposalArgs",
+    "RunWorkspaceCommandArgs",
 ]

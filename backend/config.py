@@ -31,6 +31,7 @@ DEFAULT_CORS_HOST = "localhost"
 DEFAULT_CORS_PORT = 5173
 DEFAULT_AGENT_MODEL = "bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0"
 DEFAULT_AGENT_WORKSPACE_IMAGE = "bill-helper-agent-workspace:latest"
+DEFAULT_WORKSPACE_BACKEND_BASE_URL = "http://host.docker.internal:8000/api/v1"
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:
@@ -130,6 +131,7 @@ class Settings(BaseSettings):
     agent_workspace_enabled: bool = True
     agent_workspace_image: str = DEFAULT_AGENT_WORKSPACE_IMAGE
     agent_workspace_docker_binary: str = "docker"
+    workspace_backend_base_url: str = DEFAULT_WORKSPACE_BACKEND_BASE_URL
 
     @model_validator(mode="after")
     def _derive_database_url(self) -> Settings:

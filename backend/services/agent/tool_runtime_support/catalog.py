@@ -11,6 +11,7 @@ from typing import Any
 from backend.services.agent.tool_runtime_support.catalog_proposals import PROPOSAL_TOOLS
 from backend.services.agent.tool_runtime_support.catalog_read import READ_TOOLS
 from backend.services.agent.tool_runtime_support.catalog_session import SESSION_TOOLS
+from backend.services.agent.tool_runtime_support.catalog_workspace import WORKSPACE_TOOLS
 from backend.services.agent.tool_runtime_support.definitions import AgentToolDefinition
 
 
@@ -18,7 +19,14 @@ TOOLS: dict[str, AgentToolDefinition] = {
     **READ_TOOLS,
     **SESSION_TOOLS,
     **PROPOSAL_TOOLS,
+    **WORKSPACE_TOOLS,
 }
+EXPOSED_RUNTIME_TOOL_NAMES: tuple[str, ...] = (
+    "rename_thread",
+    "send_intermediate_update",
+    "add_user_memory",
+    "run_workspace_command",
+)
 
 
 def build_openai_tool_schemas(
@@ -26,7 +34,7 @@ def build_openai_tool_schemas(
     tool_names: Collection[str] | None = None,
 ) -> list[dict[str, Any]]:
     if tool_names is None:
-        return [tool.openai_tool_schema for tool in TOOLS.values()]
+        tool_names = EXPOSED_RUNTIME_TOOL_NAMES
 
     requested_names = set(tool_names)
     unknown_names = requested_names.difference(TOOLS)

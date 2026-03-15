@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 from sqlalchemy import select
 from fastapi.testclient import TestClient
 
@@ -8,6 +10,7 @@ from backend.models_finance import UserSession
 from backend.routers import admin as admin_router
 from backend.routers import auth as auth_router
 from backend.services.passwords import password_reset_required_hash
+from backend.services.sessions import create_session, utc_now
 from backend.services.users import create_user_with_unique_name, find_user_by_name
 
 
@@ -237,6 +240,34 @@ def test_login_rejects_users_marked_for_password_reset(anonymous_client):
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Password reset is required for this user."
+
+
+def test_auth_me_accepts_session_rows_with_naive_expiry_timestamps(anonymous_client):
+    db = get_session_maker()()
+    try:
+        user = create_user_with_unique_name(
+            db,
+            raw_name="naive-expiry-user",
+            password="ignored-password",
+        )
+        token, session_row = create_session(
+            db,
+            user=user,
+            expires_at=utc_now() + timedelta(minutes=10),
+        )
+        session_row.expires_at = session_row.expires_at.replace(tzinfo=None)
+        db.add(session_row)
+        db.commit()
+    finally:
+        db.close()
+
+    response = anonymous_client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    response.raise_for_status()
+    assert response.json()["user"]["name"] == "naive-expiry-user"
 
 def test_logout_removes_current_session_from_admin_session_listing(
     client,

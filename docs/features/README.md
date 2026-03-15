@@ -4,6 +4,7 @@ This directory holds cross-cutting feature docs that describe product flows span
 
 ## Files
 
+- `agent_cli_workspace.md`: workspace-terminal and `billengine` execution model for the agent.
 - `entry_lifecycle.md`: entry creation, editing, grouping, deletion, and related review/apply flow references.
 - `dashboard_analytics.md`: dashboard KPI, chart, and analytics behavior across backend and clients.
 - `account_reconciliation.md`: account workspace, reconciliation, and snapshot behavior across backend and clients.

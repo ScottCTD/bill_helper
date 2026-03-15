@@ -50,7 +50,7 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 3. backend creates `agent_runs` row (`running`)
 4. runtime executes bounded tool-calling loop via LiteLLM using configured provider model
 5. each tool call is persisted to `agent_tool_calls`
-6. proposal tools create `agent_change_items` (`PENDING_REVIEW`)
+6. `billengine` proposal commands create `agent_change_items` (`PENDING_REVIEW`)
 7. stream path emits incremental `text_delta` plus persisted `run_event` payloads (run start/finish, reasoning updates, and per-tool lifecycle events)
 8. runtime enforces a final assistant message and marks run `completed` or `failed`
 
@@ -64,27 +64,25 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 
 ## Tooling Model (Current)
 
-Read tools:
+Model-visible tools:
 
-- `list_entries`
-- `list_accounts`
-- `list_tags`
-- `list_entities`
-- `list_proposals`
+- `run_workspace_command`
+- `send_intermediate_update`
+- `rename_thread`
+- `add_user_memory`
 
-Proposal tools:
+Execution model:
 
-- entries: `propose_create_entry`, `propose_update_entry`, `propose_delete_entry`
-- accounts: `propose_create_account`, `propose_update_account`, `propose_delete_account`
-- tags: `propose_create_tag`, `propose_update_tag`, `propose_delete_tag`
-- entities: `propose_create_entity`, `propose_update_entity`, `propose_delete_entity`
+- `run_workspace_command` executes inside the per-user workspace container
+- the workspace receives injected backend/auth/thread/run env per invocation
+- Bill Helper app-state reads and proposal/review actions go through the installed `billengine` CLI
+- local file and shell work stays in the workspace terminal rather than adding more specialized model-facing tools
 
 Contract notes:
 
-- model-facing tool interfaces avoid requiring full domain IDs; entry mutations prefer `entry_id` aliases from `list_entries`
-- account mutations are first-class proposals; generic entity proposals reject `category="account"` and account grounding/editing should use `list_accounts`
-- entry update/delete fall back to selectors: `date + amount_minor + from_entity + to_entity + name`
-- entry-id or selector ambiguity is reported to the model as a tool error so the model asks user clarification
+- the model-visible tool catalog is intentionally small; app operations should prefer `billengine` over raw `curl` or ad hoc Python when a command exists
+- proposal lifecycle remains review-gated even though the agent now reaches it through CLI commands instead of direct proposal tools
+- thread-scoped proposal commands require the active thread and run context so proposal history stays attached to the invoking run
 
 ## Agent Internal Boundaries (Refactor Baseline)
 
@@ -143,7 +141,7 @@ Cross-page consistency:
 ### Agent-assisted writes
 
 1. user prompts agent
-2. runtime gathers context via read tools and records traces
+2. runtime gathers context via workspace terminal commands and records traces
 3. runtime creates proposal item(s) only
 4. reviewer approves/rejects each item
 5. apply service creates resource transactionally
@@ -156,7 +154,7 @@ Cross-page consistency:
 - agent threads are user-owned instead of admin-global; admins can still access everything or impersonate a user
 - review apply uses the approving reviewer principal for scoped entry resolution and owner attribution, not mutable runtime settings identity
 - only image and PDF attachments are accepted in agent messages
-- active agent runs still have no arbitrary code execution tools; the provisioned workspace container is reserved for later execution tooling
+- active agent runs have workspace terminal execution through `run_workspace_command`; Bill Helper app operations are expected to flow through `billengine`
 - provisioned workspaces mount only the owning user's canonical file root at `/data` as read-only and do not expose `bill_helper.db`
 
 ## Out of Scope (Current)

@@ -6,6 +6,7 @@ Scope rules:
 
 - non-admin principals can access only their own threads and all child resources under those threads
 - admin principals can access any thread and may impersonate a user when they need an exact end-user scope
+- thread-scoped proposal routes also require `X-Bill-Helper-Agent-Run-Id` so the backend can associate new or revised proposals with the active agent run that invoked `billengine`
 
 ## Threads
 
@@ -181,6 +182,73 @@ Errors:
 - `404` run not found
 
 ## Review Actions
+
+## Thread-Scoped Proposals
+
+### `GET /agent/threads/{thread_id}/proposals`
+
+List proposals in one thread. Response: `AgentProposalListRead`
+
+Query params:
+
+- `proposal_type`
+- `proposal_status`
+- `change_action`
+- `proposal_id`
+- `limit`
+
+Behavior:
+
+- uses the same thread-scoped proposal history model as the prior internal proposal-history tooling
+- supports full proposal ids and unique short-id prefixes
+- returns proposal summaries, payloads, review metadata, and timestamps
+
+### `GET /agent/threads/{thread_id}/proposals/{proposal_id}`
+
+Fetch one proposal by full id or unique short-id prefix. Response: `AgentProposalRecordRead`
+
+Errors:
+
+- `400` ambiguous short id
+- `404` proposal not found
+
+### `POST /agent/threads/{thread_id}/proposals`
+
+Create one review-gated proposal in the active thread/run. Response: `201 AgentProposalRecordRead`
+
+Body:
+
+- `change_type`
+- `payload_json`
+
+Behavior:
+
+- validates payloads with the same normalization/ownership rules used by the internal proposal handlers
+- associates the new `AgentChangeItem` with the active run from `X-Bill-Helper-Agent-Run-Id`
+- supports the full current proposal set: entry, account, snapshot, group, group-member, tag, and entity changes
+
+### `PATCH /agent/threads/{thread_id}/proposals/{proposal_id}`
+
+Update one pending proposal by patch map. Response: `AgentProposalRecordRead`
+
+Body:
+
+- `patch_map`
+
+Errors:
+
+- `404` proposal not found
+- `409` proposal is no longer pending
+- `400` invalid patch or normalization failure
+
+### `DELETE /agent/threads/{thread_id}/proposals/{proposal_id}`
+
+Remove one pending proposal. Response: `AgentProposalDeleteRead`
+
+Errors:
+
+- `404` proposal not found
+- `409` proposal is no longer pending
 
 ### `POST /agent/change-items/{item_id}/approve`
 

@@ -622,7 +622,7 @@ def test_system_prompt_requires_duplicate_then_reconcile_then_propose_entries():
 
     prompt = system_prompt()
     duplicate_phrase = "Before proposing any entry, check for duplicates"
-    reconcile_phrase = "list existing tags, accounts, and entities, then propose any missing records first"
+    reconcile_phrase = "inspect existing tags, accounts, and entities first, then propose any missing records"
     propose_phrase = "Only after duplicate checks and tag/entity reconciliation, propose entries"
 
     assert duplicate_phrase in prompt
@@ -636,7 +636,7 @@ def test_system_prompt_uses_duplicate_enrichment_before_create():
 
     prompt = system_prompt()
     assert "If a duplicate exists, check whether the new input adds complementary information." in prompt
-    assert "prefer propose_update_entry for the existing entry instead of propose_create_entry." in prompt
+    assert "prefer revising the existing entry with an update proposal instead of creating a duplicate proposal." in prompt
 
 
 def test_system_prompt_mentions_snapshot_and_reconciliation_tools():
@@ -646,9 +646,9 @@ def test_system_prompt_mentions_snapshot_and_reconciliation_tools():
     assert "Treat snapshots as bank balance checkpoints for one account on a specific date." in prompt
     assert "Reconciliation is interval-based, not lifetime-based:" in prompt
     assert "Entries on a snapshot date belong to the interval ending at that snapshot." in prompt
-    assert "Use propose_create_snapshot" in prompt
-    assert "use list_snapshots" in prompt
-    assert "Use get_reconciliation" in prompt
+    assert "Use snapshot proposals" in prompt
+    assert "inspect the account's existing checkpoints" in prompt
+    assert "Use reconciliation reads" in prompt
 
 
 def test_system_prompt_requires_canonical_name_normalization_examples():
@@ -675,8 +675,8 @@ def test_system_prompt_requires_entry_updates_before_tag_delete():
 
     prompt = system_prompt()
     reference_phrase = "Check whether entries still reference the tag."
-    update_phrase = "propose update_entry changes first to remove/replace that tag on affected entries."
-    delete_phrase = "Only propose delete_tag after references are cleared."
+    update_phrase = "update or replace the tag on affected entries first."
+    delete_phrase = "Only then create the delete-tag proposal."
 
     assert reference_phrase in prompt
     assert update_phrase in prompt
@@ -688,9 +688,9 @@ def test_system_prompt_guides_pending_proposal_revisions_and_removals():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
-    inspect_phrase = "Use list_proposals to inspect proposal history in the current thread"
-    revise_phrase = "If the user asks to revise an existing pending proposal, prefer update_pending_proposal"
-    remove_phrase = "If the user asks to discard/cancel/remove a pending proposal, use remove_pending_proposal"
+    inspect_phrase = "Use `billengine proposals list` to inspect proposal history in the current thread"
+    revise_phrase = "If the user asks to revise an existing pending proposal, prefer `billengine proposals update`"
+    remove_phrase = "If the user asks to discard/cancel/remove a pending proposal, use `billengine proposals remove`"
 
     assert inspect_phrase in prompt
     assert revise_phrase in prompt
@@ -704,10 +704,10 @@ def test_system_prompt_includes_grouping_workflow_rules():
     prompt = system_prompt()
     assert "### Grouping" in prompt
     assert "#### Group Proposal Workflow" in prompt
-    assert "Before mutating an existing group, use list_groups" in prompt
-    assert "Before proposing group membership changes involving entries, use list_entries" in prompt
+    assert "Before mutating an existing group, inspect the current group first" in prompt
+    assert "Before proposing group membership changes involving entries, inspect entries first" in prompt
     assert "After proposing a new entry, check whether it should join an existing recurring, split, or bundle group." in prompt
-    assert "inspect the likely group with list_groups and propose_update_group_membership to add the entry." in prompt
+    assert "inspect the likely group and then create the group-membership proposal." in prompt
     assert "pending create_group and create_entry proposal ids" in prompt
     assert "dependencies must be approved and applied" in prompt
 
@@ -760,15 +760,15 @@ def test_system_prompt_prefers_parallel_tool_calls_for_independent_work():
 
     prompt = system_prompt()
     assert "Prefer parallel tool calls when tasks are independent." in prompt
-    assert "call them in the same tool-call batch instead of one by one." in prompt
+    assert "batch only when the results do not depend on each other." in prompt
 
 
 def test_system_prompt_stages_first_proposal_before_parallel_batches():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
-    assert "Do not start a proposal workflow with a large parallel propose_* batch." in prompt
-    assert "Start with one representative propose_* call first" in prompt
+    assert "Do not start a proposal workflow with a large parallel `billengine proposals create` batch." in prompt
+    assert "Start with one representative proposal command first" in prompt
     assert "After the first proposal succeeds and the pattern is validated" in prompt
 
 
@@ -1010,37 +1010,21 @@ def test_system_prompt_guides_thread_naming_policy():
     assert "Keep thread titles concise and topical" in prompt
 
 
-def test_tool_catalog_removes_legacy_read_tools_and_adds_crud_proposals():
+def test_tool_catalog_exposes_only_terminal_and_retained_session_tools():
     from backend.services.agent.tools import build_openai_tool_schemas
 
     names = [tool["function"]["name"] for tool in build_openai_tool_schemas()]
     assert "search_entries" not in names
-    assert "list_accounts" in names
-    assert "list_entries" in names
-    assert "list_groups" in names
-    assert "list_proposals" in names
     assert "add_user_memory" in names
     assert "rename_thread" in names
     assert "send_intermediate_update" in names
-    assert "propose_create_group" in names
-    assert "propose_update_group" in names
-    assert "propose_delete_group" in names
-    assert "propose_update_group_membership" in names
-    assert "propose_update_entry" in names
-    assert "propose_delete_entry" in names
-    assert "propose_update_tag" in names
-    assert "propose_delete_tag" in names
-    assert "propose_update_entity" in names
-    assert "propose_delete_entity" in names
-    assert "propose_create_account" in names
-    assert "propose_update_account" in names
-    assert "propose_delete_account" in names
-    assert "list_snapshots" in names
-    assert "get_reconciliation" in names
-    assert "propose_create_snapshot" in names
-    assert "propose_delete_snapshot" in names
-    assert "update_pending_proposal" in names
-    assert "remove_pending_proposal" in names
+    assert "run_workspace_command" in names
+    assert names == [
+        "add_user_memory",
+        "rename_thread",
+        "send_intermediate_update",
+        "run_workspace_command",
+    ]
 
 
 def test_intermediate_update_tool_description_requires_first_call_for_tool_runs():
@@ -1249,111 +1233,17 @@ def test_thread_title_stays_untitled_without_rename_tool(client, monkeypatch):
     assert detail_response.json()["thread"]["title"] is None
 
 
-def test_list_tags_tool_description_mentions_tag_descriptions():
+def test_run_workspace_command_tool_description_mentions_billengine_and_workspace():
     from backend.services.agent.tools import build_openai_tool_schemas
 
     tool_by_name = {
         tool["function"]["name"]: tool["function"]
         for tool in build_openai_tool_schemas()
     }
-    description = str(tool_by_name["list_tags"]["description"])
-    assert "tag descriptions" in description
-
-
-def test_list_proposals_tool_description_mentions_lifecycle_history():
-    from backend.services.agent.tools import build_openai_tool_schemas
-
-    tool_by_name = {
-        tool["function"]["name"]: tool["function"]
-        for tool in build_openai_tool_schemas()
-    }
-    description = str(tool_by_name["list_proposals"]["description"])
-    assert "current thread" in description
-    assert "proposal_id" in description
-    assert "pending, rejected, applied, or failed proposals" in description
-
-
-def test_entry_proposal_tool_descriptions_define_markdown_notes_style():
-    from backend.services.agent.tools import build_openai_tool_schemas
-
-    tool_by_name = {
-        tool["function"]["name"]: tool["function"]
-        for tool in build_openai_tool_schemas()
-    }
-    create_description = str(tool_by_name["propose_create_entry"]["description"])
-    update_description = str(tool_by_name["propose_update_entry"]["description"])
-
-    assert "pending create_entity proposals already in the current thread" in create_description
-    assert "When markdown_notes is provided" in create_description
-    assert "avoid headings" in create_description
-    assert "ordered/unordered lists" in create_description
-
-    assert "When patch.markdown_notes is provided" in update_description
-    assert "avoid headings" in update_description
-    assert "ordered/unordered lists" in update_description
-
-
-def test_entry_tool_descriptions_prefer_entry_id_aliases():
-    from backend.services.agent.tools import build_openai_tool_schemas
-
-    tool_by_name = {
-        tool["function"]["name"]: tool["function"]
-        for tool in build_openai_tool_schemas()
-    }
-
-    list_description = str(tool_by_name["list_entries"]["description"])
-    update_description = str(tool_by_name["propose_update_entry"]["description"])
-    delete_description = str(tool_by_name["propose_delete_entry"]["description"])
-
-    assert "entry_id alias" in list_description
-    assert "Use source for broad text search across entry name, from_entity, and to_entity" in list_description
-    assert "Prefer entry_id from list_entries" in update_description
-    assert "Prefer entry_id from list_entries" in delete_description
-
-
-def test_group_tool_descriptions_define_group_lookup_and_membership_dependencies():
-    from backend.services.agent.tools import build_openai_tool_schemas
-
-    tool_by_name = {
-        tool["function"]["name"]: tool["function"]
-        for tool in build_openai_tool_schemas()
-    }
-
-    list_description = str(tool_by_name["list_groups"]["description"])
-    membership_description = str(tool_by_name["propose_update_group_membership"]["description"])
-
-    assert "group_id alias" in list_description
-    assert "detail mode" in list_description
-    assert "pending create_group proposal" in membership_description
-    assert "target.entry_ref may reference an existing entry_id" in membership_description
-    assert "member_role is required for SPLIT-group adds" in membership_description
-
-
-def test_entry_tool_schemas_inline_local_refs():
-    from backend.services.agent.tools import build_openai_tool_schemas
-
-    tool_by_name = {
-        tool["function"]["name"]: tool["function"]
-        for tool in build_openai_tool_schemas()
-    }
-
-    def contains_ref(value):
-        if isinstance(value, dict):
-            if "$ref" in value:
-                return True
-            return any(contains_ref(item) for item in value.values())
-        if isinstance(value, list):
-            return any(contains_ref(item) for item in value)
-        return False
-
-    create_schema = tool_by_name["propose_create_entry"]["parameters"]
-    update_schema = tool_by_name["propose_update_entry"]["parameters"]
-    delete_schema = tool_by_name["propose_delete_entry"]["parameters"]
-
-    assert not contains_ref(create_schema)
-    assert not contains_ref(update_schema)
-    assert not contains_ref(delete_schema)
-    assert create_schema["properties"]["kind"]["enum"] == ["EXPENSE", "INCOME", "TRANSFER"]
+    description = str(tool_by_name["run_workspace_command"]["description"])
+    assert "workspace container" in description
+    assert "`billengine`" in description
+    assert "Prefer `billengine` over raw curl or ad hoc Python" in description
 
 
 def test_run_persists_tool_calls(client, monkeypatch):
