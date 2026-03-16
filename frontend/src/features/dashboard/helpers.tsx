@@ -37,7 +37,9 @@ const DASHBOARD_BAR_COLORS = [
   "rgb(var(--chart-segment-3))",
   "rgb(var(--chart-segment-4))",
   "rgb(var(--chart-segment-5))",
-  "rgb(var(--chart-segment-6))"
+  "rgb(var(--chart-segment-6))",
+  "rgb(var(--chart-segment-7))",
+  "rgb(var(--chart-segment-8))"
 ];
 
 const DASHBOARD_PIE_COLORS = [
@@ -46,7 +48,9 @@ const DASHBOARD_PIE_COLORS = [
   "rgb(var(--chart-pie-3))",
   "rgb(var(--chart-pie-4))",
   "rgb(var(--chart-pie-5))",
-  "rgb(var(--chart-pie-6))"
+  "rgb(var(--chart-pie-6))",
+  "rgb(var(--chart-pie-7))",
+  "rgb(var(--chart-pie-8))"
 ];
 
 export const DASHBOARD_PIE_ANIMATION_PROPS = {

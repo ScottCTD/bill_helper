@@ -14,9 +14,9 @@ import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 
 const navItems = [
+  { to: "/dashboard", label: "Dashboard", icon: Home },
   { to: "/", label: "Agent", icon: Bot },
   { to: "/workspace", label: "Workspace", icon: FolderTree },
-  { to: "/dashboard", label: "Dashboard", icon: Home },
   { to: "/accounts", label: "Accounts", icon: CreditCard },
   { to: "/entries", label: "Entries", icon: Layers3 },
   { to: "/groups", label: "Groups", icon: Network },
