@@ -8,6 +8,8 @@
 
 import { clearStoredAuthToken, getStoredAuthToken } from "../../features/auth/storage";
 import type {
+  AgentDashboard,
+  AgentDashboardRangeKey,
   AgentChangeItem,
   AgentRun,
   AgentStreamEvent,
@@ -87,8 +89,32 @@ function buildAgentMessageFormData(content: string, files: File[], modelName?: s
   return formData;
 }
 
+function buildAgentDashboardQueryString(payload: {
+  range: AgentDashboardRangeKey;
+  models: string[];
+  surfaces: string[];
+}): string {
+  const params = new URLSearchParams();
+  params.set("range", payload.range);
+  payload.models.forEach((modelName) => {
+    params.append("model", modelName);
+  });
+  payload.surfaces.forEach((surface) => {
+    params.append("surface", surface);
+  });
+  return params.toString();
+}
+
 export function listAgentThreads(): Promise<AgentThreadSummary[]> {
   return request<AgentThreadSummary[]>("/api/v1/agent/threads");
+}
+
+export function getAgentDashboard(payload: {
+  range: AgentDashboardRangeKey;
+  models: string[];
+  surfaces: string[];
+}): Promise<AgentDashboard> {
+  return request<AgentDashboard>(`/api/v1/agent/dashboard?${buildAgentDashboardQueryString(payload)}`);
 }
 
 export function createAgentThread(payload?: { title?: string | null }): Promise<AgentThread> {

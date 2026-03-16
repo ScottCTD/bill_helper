@@ -34,6 +34,8 @@
   - grouped tool-runtime internals: `definitions.py` for tool metadata, `schema.py` for OpenAI schema inlining, `catalog_session.py` and `catalog_terminal.py` for the live runtime tool registry, `catalog.py` for merged runtime lookup, and `execution.py` for retry/error policy
 - `backend/services/agent/pricing.py`
   - LiteLLM-backed pricing helper
+- `backend/services/agent_dashboard.py`
+  - principal-scoped agent usage analytics read model for dashboard charts, tables, and KPI cards
 - `backend/services/agent/tool_args/`
   - focused tool-input package: `read.py` for read filters, `shared.py` for progress/common args, `threads.py` for thread rename args, `memory.py` for add-only memory args, and `proposal_admin.py` for pending-proposal/group-membership tool inputs
 - `backend/services/agent/read_tools/`
@@ -110,6 +112,8 @@
 
 - `backend/routers/agent.py`
   - thin aggregator that includes the split HTTP modules below
+- `backend/routers/agent_dashboard.py`
+  - agent dashboard analytics HTTP translation
 - `backend/routers/agent_threads.py`
   - thread list/detail plus message-send and stream endpoints
 - `backend/routers/agent_runs.py`
@@ -130,6 +134,7 @@
 
 Endpoints:
 
+- `GET /api/v1/agent/dashboard`
 - `GET /api/v1/agent/threads`
 - `POST /api/v1/agent/threads`
 - `PATCH /api/v1/agent/threads/{thread_id}`
@@ -161,6 +166,7 @@ Endpoints:
 - runs also carry their `change_items`; the frontend flattens those per-run proposal lists into one thread review model
 - serializer output skips legacy persisted change rows whose enum values are still recognized for hydration but no longer part of the supported client review surface
 - run snapshots aggregate usage metrics and derived USD pricing; prompt-side costs use cache-aware LiteLLM rates when cache usage is present and stay folded into the existing `input_cost_usd`/`total_cost_usd` fields
+- `GET /api/v1/agent/dashboard` rolls those persisted run usage counters into principal-scoped KPI cards, cost timeline buckets, model/surface breakdowns, and top expensive-run rows for the dashboard UI
 
 ## Current Agent Execution Behavior
 

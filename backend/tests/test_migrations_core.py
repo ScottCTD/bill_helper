@@ -929,3 +929,14 @@ def test_migration_0030_adds_account_agent_change_types(tmp_path):
         ).scalar_one()
 
     assert stored_change_type == "CREATE_ACCOUNT"
+
+
+def test_head_migration_includes_agent_run_created_at_index(tmp_path):
+    database_url = _sqlite_url(tmp_path, "migration_head.sqlite")
+    command.upgrade(_build_alembic_config(database_url), "head")
+
+    engine = create_engine(database_url, future=True)
+    inspector = inspect(engine)
+    run_indexes = {row["name"] for row in inspector.get_indexes("agent_runs")}
+
+    assert "ix_agent_runs_created_at" in run_indexes

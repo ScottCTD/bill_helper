@@ -155,4 +155,3 @@ Follow existing dashboard pattern from `frontend/src/pages/DashboardPage.tsx`:
 - Agent models: `backend/models_agent.py`
 - Pricing service: `backend/services/agent/pricing.py`
 - Agent serializers: `backend/services/agent/serializers.py`
-

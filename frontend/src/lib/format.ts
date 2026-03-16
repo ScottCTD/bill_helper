@@ -15,6 +15,15 @@ export function formatMinor(amountMinor: number, currencyCode: string): string {
   return `${normalizedCurrencyCode} ${amountText}`;
 }
 
+export function formatUsd(amountUsd: number): string {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4
+  }).format(amountUsd);
+}
+
 export function formatMinorCompact(amountMinor: number): string {
   const value = amountMinor / 100;
   return new Intl.NumberFormat(undefined, {

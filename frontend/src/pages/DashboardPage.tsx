@@ -13,6 +13,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { WorkspaceSection } from "../components/layout/WorkspaceSection";
 import { WorkspaceToolbar } from "../components/layout/WorkspaceToolbar";
 import { Button } from "../components/ui/button";
+import { AgentCostDashboard } from "../features/dashboard/AgentCostDashboard";
 import {
   DashboardBreakdownsPanel,
   DashboardDailyPanel,
@@ -383,6 +384,8 @@ export function DashboardPage() {
             groupNamesByKey={groupNamesByKey}
           />
         ) : null}
+
+        {activeTab === "agent" ? <AgentCostDashboard /> : null}
       </div>
 
       <DashboardTimelineRail

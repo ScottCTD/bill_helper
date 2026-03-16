@@ -145,6 +145,24 @@ Usage notes:
 
 ## Runs And Tool Calls
 
+### `GET /agent/dashboard`
+
+Get principal-scoped agent usage analytics for the dashboard. Response: `AgentDashboardRead`
+
+Query params:
+
+- `range`: `7d` | `30d` | `90d` | `all` (`30d` default)
+- repeated `model`: optional exact model-name filters
+- repeated `surface`: optional exact surface filters (`app`, `telegram`)
+
+Behavior:
+
+- only includes terminal runs (`completed` and `failed`)
+- scopes runs through the owning thread principal, like the rest of the agent read surface
+- derives USD costs from persisted token counters and the existing LiteLLM pricing helper
+- returns summary metrics, cost-over-time buckets, token distribution, per-model rows, per-surface rows, and top expensive runs
+- `90d` resolves to weekly buckets; `all` resolves to monthly buckets; shorter ranges stay daily
+
 ### `GET /agent/runs/{run_id}`
 
 Get a run snapshot. Response: `AgentRunRead`

@@ -53,6 +53,7 @@
 - `versions/0033_multi_user_security.py`: adds password hashes and sessions, makes owned resources explicitly user-scoped, and migrates user deletion to cascade semantics.
 - `versions/0034_add_entry_tagging_model_to_runtime_settings.py`: adds the optional runtime override for inline AI entry tag suggestions (`runtime_settings.entry_tagging_model`).
 - `versions/0035_add_user_files_and_agent_workspace.py`: adds the canonical `user_files` registry, rewires historical agent attachments to it, and introduces per-user workspace provisioning support.
+- `versions/0036_add_agent_run_created_at_index.py`: adds an index on `agent_runs.created_at` for range-based agent dashboard analytics reads.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)

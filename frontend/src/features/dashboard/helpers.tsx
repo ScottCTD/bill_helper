@@ -11,14 +11,15 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 import { formatMinor } from "../../lib/format";
 import type { Dashboard } from "../../lib/types";
 
-export type DashboardTab = "overview" | "daily" | "breakdowns" | "insights";
+export type DashboardTab = "overview" | "daily" | "breakdowns" | "insights" | "agent";
 export type DashboardViewMode = "month" | "year";
 
 export const DASHBOARD_TABS: Array<{ id: DashboardTab; label: string; description: string }> = [
   { id: "overview", label: "Overview", description: "Month snapshot, projection, and filter-group mix" },
   { id: "daily", label: "Spending", description: "Daily spending and month-over-month filter-group comparisons" },
   { id: "breakdowns", label: "Breakdowns", description: "From / to / tag analysis" },
-  { id: "insights", label: "Insights", description: "Weekdays, yearly views, outliers, and reconciliation" }
+  { id: "insights", label: "Insights", description: "Weekdays, yearly views, outliers, and reconciliation" },
+  { id: "agent", label: "Agent", description: "Usage cost, token mix, surface comparison, and expensive runs" }
 ];
 
 export const CHART_COLORS = {

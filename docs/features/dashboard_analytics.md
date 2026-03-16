@@ -6,6 +6,7 @@ This doc is the fast path for understanding dashboard metrics, filter-group clas
 
 - `GET /api/v1/dashboard`
 - `GET /api/v1/dashboard/timeline`
+- `GET /api/v1/agent/dashboard`
 - `GET/POST/PATCH/DELETE /api/v1/filter-groups`
 - dashboard-specific backend aggregations
 - frontend dashboard tabs/charts and the first-class filter workspace
@@ -42,9 +43,9 @@ Default groups other than `untagged` can have their rules edited, but their name
 
 ## Backend Flow
 
-1. `backend/routers/dashboard.py` validates the `month` format, exposes both the month payload and a discrete expense-period timeline feed, delegates to `backend/services/finance.py`, and commits any lazily-provisioned default filter groups.
+1. `backend/routers/dashboard.py` validates the `month` format, exposes both the month payload and a discrete expense-period timeline feed, delegates to `backend/services/finance_dashboard.py`, and commits any lazily-provisioned default filter groups.
 2. `backend/services/filter_groups.py` loads or creates the caller's saved filter groups and returns parsed rule definitions.
-3. `backend/services/finance.py` resolves dashboard currency/runtime settings, computes:
+3. `backend/services/finance_dashboard.py` resolves dashboard currency/runtime settings, computes:
    - overall expense/income/net KPIs
    - filter-group month totals
    - daily expense series by filter group
@@ -53,8 +54,9 @@ Default groups other than `untagged` can have their rules edited, but their name
    - weekday distribution
    - largest expenses with matching filter-group keys
    - current-month projection plus projected filter-group totals
-4. `backend/routers/filter_groups.py` exposes CRUD for saved filter groups and also commits default provisioning on first read.
-5. `backend/routers/entries.py` can apply a saved filter group server-side via `filter_group_id`, so the entries workspace can open the exact matching ledger rows for any group.
+4. `backend/routers/agent_dashboard.py` exposes a separate principal-scoped agent usage read model backed by `backend/services/agent_dashboard.py`; it filters to terminal runs, derives USD pricing from persisted token counters, and returns KPI cards, time buckets, token slices, model rows, surface rows, and top expensive runs.
+5. `backend/routers/filter_groups.py` exposes CRUD for saved filter groups and also commits default provisioning on first read.
+6. `backend/routers/entries.py` can apply a saved filter group server-side via `filter_group_id`, so the entries workspace can open the exact matching ledger rows for any group.
 
 ## Frontend Mapping
 
@@ -78,6 +80,11 @@ Default groups other than `untagged` can have their rules edited, but their name
   - largest expenses table with matching group badges
   - month mode uses the selected month payload
   - year mode aggregates the largest-expense rows across the selected year's month payloads
+- `Agent` tab:
+  - separate agent spend controls for `7d` / `30d` / `90d` / `all`
+  - model and surface toggle filters backed by `GET /api/v1/agent/dashboard`
+  - KPI cards for cost, token volume, average spend, cache hit rate, dominant model, and failure rate
+  - cost-over-time area chart, input/output token pie, surface comparison bars, model breakdown table, and top expensive-run table
 - `frontend/src/pages/FilterGroupsPage.tsx`:
   - first-class `/filters` workspace linked from the left navigation as `Filters`
   - master-detail filter-group workspace with a guided include/exclude editor for the common flat-rule path
@@ -101,3 +108,4 @@ Interactive charting is powered by Recharts.
 - Shares in `dashboard.filter_groups[*].share` are calculated against total monthly expense; overlapping custom groups can make the summed shares exceed `1.0`.
 - The yearly dashboard view is assembled on the frontend from repeated month-scoped `GET /api/v1/dashboard` reads for the selected year and its previous year; no separate yearly endpoint exists yet.
 - `GET /api/v1/dashboard/timeline` returns the discrete month list that drives the floating picker rail; the frontend derives the visible year list from that month feed.
+- Agent usage analytics are range-based rather than month/year-based; the `Agent` tab keeps its own filters and does not reuse the finance timeline rail state for queries.

@@ -65,7 +65,15 @@ export const queryKeys = {
   agent: {
     threads: ["agent", "threads"] as const,
     threadRoot: ["agent", "thread"] as const,
-    thread: (threadId: string) => ["agent", "thread", threadId] as const
+    thread: (threadId: string) => ["agent", "thread", threadId] as const,
+    dashboard: (payload: { range: string; models: string[]; surfaces: string[] }) =>
+      [
+        "agent",
+        "dashboard",
+        payload.range,
+        [...payload.models].sort().join(","),
+        [...payload.surfaces].sort().join(",")
+      ] as const
   },
   workspace: {
     snapshot: ["workspace", "snapshot"] as const

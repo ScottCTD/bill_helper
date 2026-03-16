@@ -147,7 +147,7 @@ class AgentRun(Base):
     cache_write_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, nullable=False
+        DateTime(timezone=True), default=utc_now, nullable=False, index=True
     )
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
