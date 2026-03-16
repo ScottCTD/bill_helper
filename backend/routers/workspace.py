@@ -222,7 +222,7 @@ async def _safe_websocket_close(
     reason: str | None = None,
 ) -> None:
     try:
-        await websocket.close(code=code, reason=reason)
+        await websocket.close(code=_upstream_close_code(code), reason=reason)
     except RuntimeError:
         return
 

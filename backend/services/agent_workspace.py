@@ -346,6 +346,54 @@ def queue_best_effort_user_workspace_stop(
     ).start()
 
 
+def stop_user_workspace_best_effort(
+    *,
+    user_id: str,
+    settings: Settings | None = None,
+) -> None:
+    resolved_settings = settings or get_settings()
+    try:
+        stop_user_workspace(user_id=user_id, settings=resolved_settings)
+    except PolicyViolation as error:
+        logger.warning(
+            "Workspace stop failed for user %s: %s",
+            user_id,
+            error.detail,
+        )
+    except Exception:
+        logger.exception("Workspace stop crashed for user %s", user_id)
+
+
+def stop_all_user_workspaces_best_effort(
+    *,
+    settings: Settings | None = None,
+) -> None:
+    resolved_settings = settings or get_settings()
+    if not _workspace_provisioning_enabled(resolved_settings):
+        return
+    spec = build_user_workspace_spec(user_id="placeholder", settings=resolved_settings)
+    try:
+        container_names = docker_cli.list_container_names(
+            docker_binary=spec.docker_binary,
+            filters=["label=bill-helper.role=agent-workspace"],
+        )
+    except docker_cli.DockerCliError as error:
+        logger.warning("Workspace shutdown sweep failed to list containers: %s", error)
+        return
+    for container_name in container_names:
+        try:
+            docker_cli.stop_container(
+                docker_binary=spec.docker_binary,
+                container_name=container_name,
+            )
+        except docker_cli.DockerCliError as error:
+            logger.warning(
+                "Workspace shutdown sweep failed for container %s: %s",
+                container_name,
+                error,
+            )
+
+
 def _workspace_container_needs_recreate(*, spec: UserWorkspaceSpec) -> bool:
     if not docker_cli.container_exists(
         docker_binary=spec.docker_binary,

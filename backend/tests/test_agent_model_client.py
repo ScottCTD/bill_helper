@@ -129,15 +129,15 @@ def test_complete_stream_merges_cumulative_tool_call_deltas_without_corrupting_a
                             "delta": {
                                 "tool_calls": [
                                     {
-                                        "index": 0,
-                                        "id": "call_1",
-                                        "type": "function",
-                                        "function": {
-                                            "name": "propose_",
-                                            "arguments": '{"kind":"EXP',
-                                        },
-                                    }
-                                ]
+                                            "index": 0,
+                                            "id": "call_1",
+                                            "type": "function",
+                                            "function": {
+                                                "name": "ter",
+                                                "arguments": '{"command":"bh',
+                                            },
+                                        }
+                                    ]
                             }
                         }
                     ]
@@ -147,14 +147,14 @@ def test_complete_stream_merges_cumulative_tool_call_deltas_without_corrupting_a
                         {
                             "delta": {
                                 "tool_calls": [
-                                    {
-                                        "index": 0,
-                                        "function": {
-                                            "name": "propose_create_entry",
-                                            "arguments": '{"kind":"EXPENSE","date":"2026-03-02"}',
-                                        },
-                                    }
-                                ]
+                                        {
+                                            "index": 0,
+                                            "function": {
+                                                "name": "terminal",
+                                                "arguments": '{"command":"bh tags list"}',
+                                            },
+                                        }
+                                    ]
                             }
                         }
                     ]
@@ -171,12 +171,12 @@ def test_complete_stream_merges_cumulative_tool_call_deltas_without_corrupting_a
         {
             "id": "call_1",
             "type": "function",
-            "function": {
-                "name": "propose_create_entry",
-                "arguments": '{"kind":"EXPENSE","date":"2026-03-02"}',
-            },
-        }
-    ]
+                "function": {
+                    "name": "terminal",
+                    "arguments": '{"command":"bh tags list"}',
+                },
+            }
+        ]
 
 
 def test_complete_retries_before_failing(monkeypatch):
@@ -216,7 +216,7 @@ def test_complete_omits_tool_fields_when_explicit_tools_override_is_empty(monkey
             {
                 "type": "function",
                 "function": {
-                    "name": "list_entries",
+                    "name": "terminal",
                     "description": "List entries",
                     "parameters": {"type": "object", "properties": {}},
                 },

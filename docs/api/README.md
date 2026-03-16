@@ -6,7 +6,7 @@ Use this directory when the top-level API index is still too broad.
 
 - `core_ledger.md`: accounts, snapshots, reconciliation, entries, groups, filter groups, and dashboard.
 - `catalogs_and_settings.md`: auth, admin, users, entities, tags, taxonomies, currencies, and runtime settings.
-- `agent.md`: agent threads, messages, runs, tool calls, change-item review, and attachments.
+- `agent.md`: agent threads, thread-scoped proposals, messages, runs, tool calls, change-item review, and attachments.
 - `workspace.md`: per-user sandbox lifecycle and current file-tree reads.
 
 ## Fastest Path By Question

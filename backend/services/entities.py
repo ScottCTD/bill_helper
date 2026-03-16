@@ -90,6 +90,8 @@ def read_entity_category(db: Session, entity: Entity) -> str | None:
     )
     if category is not None:
         return category
+    if is_account_entity(entity):
+        return "account"
     return entity.category
 
 
@@ -160,6 +162,14 @@ def ensure_entity_is_not_account_backed(entity: Entity) -> None:
 
 
 def list_entities_with_usage(db: Session, *, principal: RequestPrincipal) -> list[EntityUsageRow]:
+    account_exists_subquery = (
+        select(Account.id)
+        .where(
+            Account.id == Entity.id,
+            owner_user_filter(Account.owner_user_id, principal),
+        )
+        .exists()
+    )
     entry_scope = _entity_entry_scope(principal)
     from_count_subquery = (
         select(func.count(Entry.id))
@@ -238,6 +248,7 @@ def list_entities_with_usage(db: Session, *, principal: RequestPrincipal) -> lis
             net_amount_mixed_currencies_subquery.label("net_amount_mixed_currencies"),
         )
         .where(entity_owner_filter(principal))
+        .where(~account_exists_subquery)
         .order_by(func.lower(Entity.name).asc())
     ).all()
     return [

@@ -16,7 +16,6 @@ from backend.models_agent import (
     AgentMessage,
     AgentReviewAction,
     AgentRun,
-    AgentToolCall,
 )
 from backend.services.agent.proposal_metadata import proposal_metadata_for_change_type
 
@@ -44,60 +43,8 @@ def _review_window_actions(
     return list(db.scalars(stmt))
 
 
-def _proposal_tool_name_for_change_type(change_type_value: str) -> str:
-    return proposal_metadata_for_change_type(change_type_value).proposal_tool_name
-
-
-def _proposal_tool_calls_for_runs(
-    db: Session,
-    *,
-    run_ids: list[str],
-    tool_names: set[str],
-) -> dict[tuple[str, str], list[AgentToolCall]]:
-    if not run_ids or not tool_names:
-        return {}
-    calls = list(
-        db.scalars(
-            select(AgentToolCall)
-            .where(
-                AgentToolCall.run_id.in_(run_ids),
-                AgentToolCall.tool_name.in_(tool_names),
-            )
-            .order_by(AgentToolCall.created_at.asc())
-        )
-    )
-    by_key: dict[tuple[str, str], list[AgentToolCall]] = {}
-    for call in calls:
-        key = (call.run_id, call.tool_name)
-        by_key.setdefault(key, []).append(call)
-    return by_key
-
-
-def _pick_source_tool_call(
-    *,
-    item: AgentChangeItem,
-    tool_name: str,
-    candidates: dict[tuple[str, str], list[AgentToolCall]],
-    used_call_ids: set[str],
-) -> AgentToolCall | None:
-    run_id = item.run_id
-    pool = candidates.get((run_id, tool_name), [])
-    if not pool:
-        return None
-
-    # Prefer the first unused call created at/after the change item; fallback to first unused.
-    for call in pool:
-        if call.id in used_call_ids:
-            continue
-        if call.created_at >= item.created_at:
-            used_call_ids.add(call.id)
-            return call
-    for call in pool:
-        if call.id in used_call_ids:
-            continue
-        used_call_ids.add(call.id)
-        return call
-    return None
+def _proposal_cli_command_for_change_type(change_type_value: str) -> str:
+    return proposal_metadata_for_change_type(change_type_value).cli_command
 
 
 def build_review_results_prefix_for_current_turn(
@@ -137,15 +84,6 @@ def build_review_results_prefix_for_current_turn(
     if not actions:
         return None
 
-    run_ids = sorted({action.change_item.run_id for action in actions if action.change_item is not None})
-    tool_names = {
-        _proposal_tool_name_for_change_type(action.change_item.change_type.value)
-        for action in actions
-        if action.change_item is not None
-    }
-    calls_by_key = _proposal_tool_calls_for_runs(db, run_ids=run_ids, tool_names=tool_names)
-    used_call_ids: set[str] = set()
-
     lines = ["Review results from your previous proposals:"]
     ordinal = 1
 
@@ -161,24 +99,13 @@ def build_review_results_prefix_for_current_turn(
         item = action.change_item
         if item is None:
             continue
-        source_call = _pick_source_tool_call(
-            item=item,
-            tool_name=_proposal_tool_name_for_change_type(item.change_type.value),
-            candidates=calls_by_key,
-            used_call_ids=used_call_ids,
-        )
-        source_output_json = (
-            source_call.output_json
-            if source_call is not None and isinstance(source_call.output_json, dict)
-            else {}
-        )
-        proposal_id = source_output_json.get("proposal_id") or item.id
+        proposal_id = item.id
         short_id = proposal_id[:8]
         note = item.review_note or action.note
         override_summary = _payload_override_summary(note)
-        tool_name = _proposal_tool_name_for_change_type(item.change_type.value)
+        cli_command = _proposal_cli_command_for_change_type(item.change_type.value)
         lines.append(
-            f"{ordinal}. {tool_name} proposal_id={proposal_id} proposal_short_id={short_id} "
+            f"{ordinal}. {cli_command} proposal_id={proposal_id} proposal_short_id={short_id} "
             f"review_action={action.action.value} review_item_status={item.status.value} "
             f"review_note={note or '(none)'}"
             + (f" review_override={override_summary}" if override_summary else "")

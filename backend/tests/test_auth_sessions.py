@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 from sqlalchemy import select
 from fastapi.testclient import TestClient
 
@@ -8,6 +10,7 @@ from backend.models_finance import UserSession
 from backend.routers import admin as admin_router
 from backend.routers import auth as auth_router
 from backend.services.passwords import password_reset_required_hash
+from backend.services.sessions import create_session, utc_now
 from backend.services.users import create_user_with_unique_name, find_user_by_name
 
 
@@ -92,11 +95,11 @@ def test_admin_can_revoke_another_users_session(client, anonymous_client):
     assert revoked_response.json()["detail"] == "Invalid or expired session."
 
 
-def test_logout_stops_workspace_only_when_last_session_is_revoked(anonymous_client, monkeypatch):
+def test_logout_stops_workspace_even_when_other_sessions_exist(anonymous_client, monkeypatch):
     stopped_user_ids: list[str] = []
     monkeypatch.setattr(
         auth_router,
-        "queue_best_effort_user_workspace_stop",
+        "stop_user_workspace_best_effort",
         lambda *, user_id: stopped_user_ids.append(user_id),
     )
 
@@ -118,11 +121,14 @@ def test_logout_stops_workspace_only_when_last_session_is_revoked(anonymous_clie
 
     first_logout = anonymous_client.post("/api/v1/auth/logout", headers=first_headers)
     assert first_logout.status_code == 204
-    assert stopped_user_ids == []
+    assert stopped_user_ids == [first_login.json()["user"]["id"]]
 
     second_logout = anonymous_client.post("/api/v1/auth/logout", headers=second_headers)
     assert second_logout.status_code == 204
-    assert stopped_user_ids == [second_login.json()["user"]["id"]]
+    assert stopped_user_ids == [
+        first_login.json()["user"]["id"],
+        second_login.json()["user"]["id"],
+    ]
 
 
 def test_admin_login_as_returns_impersonation_session_with_target_scope(
@@ -238,6 +244,34 @@ def test_login_rejects_users_marked_for_password_reset(anonymous_client):
     assert response.status_code == 403
     assert response.json()["detail"] == "Password reset is required for this user."
 
+
+def test_auth_me_accepts_session_rows_with_naive_expiry_timestamps(anonymous_client):
+    db = get_session_maker()()
+    try:
+        user = create_user_with_unique_name(
+            db,
+            raw_name="naive-expiry-user",
+            password="ignored-password",
+        )
+        token, session_row = create_session(
+            db,
+            user=user,
+            expires_at=utc_now() + timedelta(minutes=10),
+        )
+        session_row.expires_at = session_row.expires_at.replace(tzinfo=None)
+        db.add(session_row)
+        db.commit()
+    finally:
+        db.close()
+
+    response = anonymous_client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    response.raise_for_status()
+    assert response.json()["user"]["name"] == "naive-expiry-user"
+
 def test_logout_removes_current_session_from_admin_session_listing(
     client,
     anonymous_client,
@@ -269,11 +303,11 @@ def test_logout_removes_current_session_from_admin_session_listing(
     assert session_id not in session_ids
 
 
-def test_admin_session_revoke_stops_workspace_when_last_session_disappears(client, anonymous_client, monkeypatch):
+def test_admin_session_revoke_stops_workspace_immediately(client, anonymous_client, monkeypatch):
     stopped_user_ids: list[str] = []
     monkeypatch.setattr(
         admin_router,
-        "queue_best_effort_user_workspace_stop",
+        "stop_user_workspace_best_effort",
         lambda *, user_id: stopped_user_ids.append(user_id),
     )
 

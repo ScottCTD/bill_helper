@@ -4,7 +4,7 @@ These rules apply to any coding agent working in this repository.
 
 ## Working Style
 
-- This project is a prototype. Prefer simplification and replacement over compatibility shims.
+- This project is a prototype. Prefer simplification and replacement over compatibility shims. After a refactor/new feature, remove and refactor ANY legacy code and behaviors radically.
 - Use `uv` for Python dependency management, scripts, tests, and tooling.
 - Keep docs synchronized with code changes in the same work item.
 - Except for preserved special filenames such as `README.md`, `AGENTS.md`, and `SKILL.md`, name non-code files in lowercase ASCII with hyphens between semantic fields, underscores within each field, and dates written as `YYYY_MM_DD`, for example `2026_03_13-agent_workspace.md`.
@@ -93,6 +93,7 @@ These rules apply to any coding agent working in this repository.
 - Include affected files or modules, operational impact, and constraints where relevant.
 - Stable docs explain how the system works now.
 - Temporary implementation notes belong in `tasks/`, not in stable reference pages.
+- Hard rule: never write absolute local filesystem paths, worktree paths, home-directory paths, or other machine-specific paths into committed repo files. Use paths relative to the project root instead. Treat leaking local paths as a privacy/security issue.
 
 ### Required Verification
 

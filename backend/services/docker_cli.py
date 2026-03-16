@@ -27,14 +27,24 @@ def _run_docker(
     docker_binary: str,
     args: list[str],
     capture_output: bool = True,
+    timeout_seconds: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     command = [docker_binary, *args]
-    result = subprocess.run(
-        command,
-        capture_output=capture_output,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=capture_output,
+            text=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise DockerCliError(
+            command=command,
+            exit_code=124,
+            stderr=f"docker command timed out after {timeout_seconds} seconds",
+            stdout=(error.stdout or ""),
+        ) from error
     if result.returncode != 0:
         raise DockerCliError(
             command=command,
@@ -47,7 +57,7 @@ def _run_docker(
 
 def image_exists(*, docker_binary: str, image: str) -> bool:
     try:
-        _run_docker(docker_binary=docker_binary, args=["image", "inspect", image])
+        _run_docker(docker_binary=docker_binary, args=["inspect", image])
         return True
     except DockerCliError:
         return False
@@ -130,6 +140,7 @@ def create_container(
         args.extend(["--publish", f"127.0.0.1::{tcp_port}/tcp"])
     for key, value in sorted((labels or {}).items()):
         args.extend(["--label", f"{key}={value}"])
+    args.extend(["--add-host", "host.docker.internal:host-gateway"])
     args.append(image)
     _run_docker(docker_binary=docker_binary, args=args)
 
@@ -150,15 +161,42 @@ def stop_container(*, docker_binary: str, container_name: str) -> None:
             raise
 
 
+def list_container_names(
+    *,
+    docker_binary: str,
+    all_containers: bool = False,
+    filters: list[str] | None = None,
+) -> list[str]:
+    args = ["ps"]
+    if all_containers:
+        args.append("--all")
+    for item in filters or []:
+        args.extend(["--filter", item])
+    args.extend(["--format", "{{.Names}}"])
+    result = _run_docker(docker_binary=docker_binary, args=args)
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
 def exec_in_container(
     *,
     docker_binary: str,
     container_name: str,
     command: list[str],
+    env: dict[str, str] | None = None,
+    workdir: str | None = None,
+    timeout_seconds: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    args = ["exec"]
+    if workdir:
+        args.extend(["--workdir", workdir])
+    for key, value in sorted((env or {}).items()):
+        args.extend(["--env", f"{key}={value}"])
+    args.append(container_name)
+    args.extend(command)
     return _run_docker(
         docker_binary=docker_binary,
-        args=["exec", container_name, *command],
+        args=args,
+        timeout_seconds=timeout_seconds,
     )
 
 

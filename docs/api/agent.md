@@ -6,6 +6,7 @@ Scope rules:
 
 - non-admin principals can access only their own threads and all child resources under those threads
 - admin principals can access any thread and may impersonate a user when they need an exact end-user scope
+- thread-scoped proposal routes also require `X-Bill-Helper-Agent-Run-Id` so the backend can associate new or revised proposals with the active agent run that invoked `bh`
 
 ## Threads
 
@@ -181,6 +182,81 @@ Errors:
 - `404` run not found
 
 ## Review Actions
+
+## Thread-Scoped Proposals
+
+### `GET /agent/threads/{thread_id}/proposals`
+
+List proposals in one thread. Response: `AgentProposalListRead`
+
+Query params:
+
+- `proposal_type`
+- `proposal_status`
+- `change_action`
+- `proposal_id`
+- `limit`
+
+Behavior:
+
+- uses the same thread-scoped proposal history model as the prior internal proposal-history tooling
+- accepts canonical proposal ids only; `bh` resolves displayed short ids before the final API call
+- returns proposal summaries, payloads, review metadata, and timestamps
+
+### `GET /agent/threads/{thread_id}/proposals/{proposal_id}`
+
+Fetch one proposal by canonical full id. Response: `AgentProposalRecordRead`
+
+Errors:
+
+- `404` proposal not found
+
+### `POST /agent/threads/{thread_id}/proposals`
+
+Create one review-gated proposal in the active thread/run. Response: `201 AgentProposalRecordRead`
+
+Body:
+
+- `change_type`
+- `payload_json`
+
+Behavior:
+
+- validates payloads with the same normalization/ownership rules used by the internal proposal handlers
+- associates the new `AgentChangeItem` with the active run from `X-Bill-Helper-Agent-Run-Id`
+- supports the full current proposal set: entry, account, snapshot, group, group-member, tag, and entity changes
+
+### `PATCH /agent/threads/{thread_id}/proposals/{proposal_id}`
+
+Update one pending proposal by canonical full id. Response: `AgentProposalRecordRead`
+
+Body:
+
+- `patch_map`
+
+Behavior:
+
+- only `PENDING_REVIEW` proposals are mutable
+- validates patch-map roots by change type before applying the update
+- validates the patched payload against the stored proposal payload contract before saving it
+
+Errors:
+
+- `400` invalid patch or proposal is not pending
+- `404` proposal not found
+
+### `DELETE /agent/threads/{thread_id}/proposals/{proposal_id}`
+
+Remove one pending proposal by canonical full id. Response: `204 No Content`
+
+Behavior:
+
+- only `PENDING_REVIEW` proposals are removable
+
+Errors:
+
+- `400` proposal is not pending
+- `404` proposal not found
 
 ### `POST /agent/change-items/{item_id}/approve`
 

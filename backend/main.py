@@ -5,6 +5,8 @@
 # - Side effects: module-local behavior only.
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+import logging
 import uvicorn
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,13 +32,27 @@ from backend.routers import (
 from backend.routers.agent import router as agent_router
 from backend.routers.accounts import router as accounts_router
 from backend.services.crud_policy import PolicyViolation
+from backend.services.agent_workspace import stop_all_user_workspaces_best_effort
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _app_lifespan(_app: FastAPI):
+    try:
+        yield
+    finally:
+        try:
+            stop_all_user_workspaces_best_effort()
+        except Exception:
+            logger.exception("Workspace shutdown sweep crashed during app shutdown")
 
 
 def create_app() -> FastAPI:
     app_settings = get_settings()
     app_settings.ensure_data_dir()
 
-    app = FastAPI(title=app_settings.app_name)
+    app = FastAPI(title=app_settings.app_name, lifespan=_app_lifespan)
 
     @app.exception_handler(PolicyViolation)
     def handle_policy_violation(_request: Request, error: PolicyViolation) -> JSONResponse:

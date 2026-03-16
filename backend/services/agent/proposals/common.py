@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from backend.auth.contracts import RequestPrincipal
 from backend.enums_agent import AgentChangeStatus, AgentChangeType
 from backend.models_agent import AgentChangeItem, AgentRun
-from backend.services.agent.read_tools.common import tool_principal_scope
+from backend.services.agent.principal_scope import load_run_principal
 from backend.services.agent.tool_results import format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 from backend.validation.finance_names import normalize_entity_name
@@ -140,43 +140,38 @@ def has_pending_create_entity_root_proposal(
     )
 
 
-def resolve_pending_proposal_by_id(context: ToolContext, proposal_id: str) -> AgentChangeItem | None:
-    return resolve_proposal_by_id(
-        context,
-        proposal_id,
-        items=pending_proposals_for_thread(context),
-        detail_label="pending proposals",
-    )
-
-
 def resolve_proposal_by_id(
     context: ToolContext,
     proposal_id: str,
     *,
     items: list[AgentChangeItem] | None = None,
-    detail_label: str = "thread proposals",
 ) -> AgentChangeItem | None:
     proposal_items = proposals_for_thread(context) if items is None else items
     if not proposal_items:
         return None
 
-    exact = next((item for item in proposal_items if item.id.lower() == proposal_id.lower()), None)
-    if exact is not None:
-        return exact
-
-    matches = [item for item in proposal_items if item.id.lower().startswith(proposal_id.lower())]
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        example_ids = [item.id[:8] for item in matches[:5]]
-        raise ValueError(f"proposal_id '{proposal_id}' is ambiguous across {detail_label}: {example_ids}")
-    return None
+    normalized = proposal_id.strip().lower()
+    if not normalized:
+        return None
+    return next((item for item in proposal_items if item.id.lower() == normalized), None)
 
 
 def require_tool_principal(context: ToolContext) -> RequestPrincipal:
-    principal_name, principal_user_id, principal_is_admin = tool_principal_scope(context)
-    if principal_user_id is None:
-        raise ValueError("Tool principal is unavailable for this run.")
+    if (
+        context.principal_name is not None
+        or context.principal_user_id is not None
+        or context.principal_is_admin is not None
+    ):
+        principal_name = context.principal_name
+        principal_user_id = context.principal_user_id
+        principal_is_admin = bool(context.principal_is_admin)
+    else:
+        principal = load_run_principal(context.db, run_id=context.run_id)
+        if principal is None:
+            raise ValueError("Tool principal is unavailable for this run.")
+        principal_name = principal.user_name
+        principal_user_id = principal.user_id
+        principal_is_admin = principal.is_admin
     return RequestPrincipal(
         user_id=principal_user_id,
         user_name=principal_name or "(unknown)",

@@ -21,7 +21,7 @@
 - **Routers:** HTTP translation only (parsing, response mapping, status codes).
 - **Services:** Domain logic and orchestration.
 - **Storage:** Dedicated service modules, not routers.
-- **Data flow:** Client → router → service → models; agent proposals are created by tools, applied only after human review.
+- **Data flow:** Client → router → service → models; agent proposals are created through the workspace terminal plus `bh`, applied only after human review.
 
 ---
 
@@ -35,26 +35,18 @@
 
 ### 2.2 Agent Tools
 
-**Read tools:**
+**Model-visible tools:**
 
-- `list_entries` – entries by date, range, source, name, from/to entity, tags, kind.
-- List tags, accounts, snapshots, entities, groups, proposals.
+- `terminal` – executes `bash -lc` inside the per-user workspace container with injected backend/auth/thread/run env.
+- `send_intermediate_update` – short user-visible progress note.
+- `rename_thread` – rename current thread.
+- `add_user_memory` – append persistent memory items (add-only).
 
-**Session tools:**
+**Workspace app interface:**
 
-- Add user memory – append persistent memory items (add-only).
-- Rename thread – rename current thread.
-- Send intermediate update – short user-visible progress note.
-
-**Proposal tools:**
-
-- **Entries:** create, update, delete.
-- **Groups:** create, update, delete, update membership.
-- **Tags:** create, update, delete.
-- **Entities:** create, update, delete.
-- **Accounts:** create, update, delete.
-- **Snapshots:** create, delete.
-- **Pending:** update or remove pending proposals.
+- The workspace image includes the `bh` CLI.
+- Bill Helper reads and proposal/review actions now go through `bh` instead of a large direct CRUD tool catalog.
+- Current CLI coverage includes status, entries, accounts, snapshots, reconciliation, groups, entities, tags, and current-thread proposals.
 
 ### 2.3 Agent Run Lifecycle
 
@@ -73,7 +65,7 @@
 - **Model selection:** Dropdown to pick from available models; can change mid-conversation.
 - **Bulk mode:** One thread per attached file, concurrent limit configurable.
 - **Run interrupt:** User can stop a running agent.
-- **Review results:** Prepended to latest message for continuation; agent iteratively improves proposals after feedback. Pending proposals stay editable across turns; agent can update a pending proposal by id.
+- **Review results:** Prepended to latest message for continuation; agent iteratively improves proposals after feedback and inspects prior proposal state through `bh proposals list|get`.
 - **Tool lifecycle:** Queued → running → completed/cancelled; collapsible observability (arguments, output).
 - **Usage tracking:** Context tokens, input/output/cache tokens, cost estimates; thread-level footnote.
 - **Custom provider:** Configurable base URL and API key in settings.
@@ -81,7 +73,7 @@
 - **Parallel threads:** Multiple threads can run concurrently; composer is thread-scoped (Send on idle thread even when another runs).
 - **Running indicator:** Sidebar shows which threads have active runs.
 - **Agent context:** Receives account markdown notes in system prompt for grounding.
-- **Tool contract:** No domain IDs in model-facing tool args/outputs; natural-key selectors (date+amount+from+to+name for entries). Entry create requires from_entity and to_entity.
+- **Tool contract:** The model-facing tool surface stays small; domain operations are expressed as CLI calls inside the workspace terminal. Proposal history remains thread-scoped and review-gated.
 
 ### 2.5 Review Workflow
 
@@ -99,9 +91,9 @@
 
 - **Core:** Accounts (CRUD, snapshots, reconciliation), entries (CRUD, filtering, group context), groups, filter groups, dashboard (KPIs, charts, timeline).
 - **Catalogs:** Entities, tags, users, taxonomies, currencies.
-- **Agent:** Threads, messages, runs, reviews, attachments.
+- **Agent:** Threads, messages, runs, reviews, attachments, workspace terminal execution.
 - **Settings:** Runtime settings.
-- **Auth:** Principal header; admin required for agent routes.
+- **Auth:** Password-backed bearer sessions for the app and API.
 
 ### 3.2 Data and Integration
 

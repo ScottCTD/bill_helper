@@ -4,11 +4,7 @@
 # - Outputs: package-level exports for `backend/services/agent/tool_args`.
 # - Side effects: import-time package wiring only.
 from .memory import AddUserMemoryArgs
-from .proposal_admin import (
-    ProposeUpdateGroupMembershipArgs,
-    RemovePendingProposalArgs,
-    UpdatePendingProposalArgs,
-)
+from .proposal_admin import ProposeUpdateGroupMembershipArgs
 from .read import (
     GetReconciliationArgs,
     ListAccountsArgs,
@@ -20,6 +16,7 @@ from .read import (
     ListTagsArgs,
 )
 from .shared import EmptyArgs, INTERMEDIATE_UPDATE_TOOL_NAME, SendIntermediateUpdateArgs
+from .terminal import RunTerminalArgs
 from .threads import RenameThreadArgs
 
 __all__ = [
@@ -35,8 +32,7 @@ __all__ = [
     "ListSnapshotsArgs",
     "ListTagsArgs",
     "ProposeUpdateGroupMembershipArgs",
-    "RemovePendingProposalArgs",
     "RenameThreadArgs",
+    "RunTerminalArgs",
     "SendIntermediateUpdateArgs",
-    "UpdatePendingProposalArgs",
 ]

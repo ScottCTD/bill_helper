@@ -28,10 +28,13 @@ Use the docs in layers:
 - `documentation_system.md`: doc ownership rules and anti-drift process.
 - `llm_oriented_design.md`: non-iOS LLM-oriented design baseline used by coding agents and architecture refactors.
 - `features/README.md`: cross-cutting feature-doc index.
+- `features/agent_billing_assistant.md`: detailed billing assistant runtime, prompt, tool, and CLI contract doc.
+- `features/system_prompt_example.md`: rendered example of the full current agent system prompt for the `app` surface using the local database context.
+- `features/agent_cli_workspace.md`: agent workspace terminal plus `bh` feature behavior.
 - `features/entry_lifecycle.md`: focused entry-domain flow map.
 - `features/dashboard_analytics.md`: focused dashboard analytics flow map.
 - `features/account_reconciliation.md`: focused account reconciliation flow map.
-- `agent_billing_assistant.md`: billing assistant prompt/tool design notes.
+- `agent_billing_assistant.md`: pointer to the canonical feature doc.
 - `adr/README.md`: ADR index and process.
 
 ## Task Tracking And Archive

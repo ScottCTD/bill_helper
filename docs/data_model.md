@@ -434,10 +434,9 @@ Fields:
 
 ## Derived Rules
 
-- `agent_change_items` are created as `PENDING_REVIEW` by proposal tools.
-- proposal tools include proposal ids in tool outputs so subsequent turns can target existing pending items.
-- pending proposals can be updated in-place (status remains `PENDING_REVIEW`) via agent tooling before human review.
-- pending proposals can also be removed from the pending pool via agent tooling (`remove_pending_proposal` deletes the pending row).
+- `agent_change_items` are created as `PENDING_REVIEW` by proposal creation commands.
+- proposal create/list/get responses include proposal ids so later turns can target existing pending items.
+- pending proposals remain inspectable while `PENDING_REVIEW` via thread-scoped proposal reads before human review.
 - only `PENDING_REVIEW` items can be approved/rejected.
 - approving applies exactly one proposed mutation and records review action.
 - rejecting records review action and does not create domain resources.

@@ -43,7 +43,6 @@ def normalize_update_entry_payload(context: ToolContext, payload: dict[str, Any]
         change_type=AgentChangeType.UPDATE_ENTRY,
         payload={
             "entry_id": payload.get("entry_id"),
-            "selector": payload.get("selector"),
             "patch": payload.get("patch"),
         },
         model_type=UpdateEntryPayload,
@@ -52,7 +51,6 @@ def normalize_update_entry_payload(context: ToolContext, payload: dict[str, Any]
     normalized_payload = normalized_entry_reference_payload(
         context,
         entry_id=parsed.entry_id,
-        selector=parsed.selector,
     )
     normalized_payload["patch"] = normalize_update_entry_patch_for_payload(parsed.patch)
     return normalized_payload
@@ -63,14 +61,12 @@ def normalize_delete_entry_payload(context: ToolContext, payload: dict[str, Any]
         change_type=AgentChangeType.DELETE_ENTRY,
         payload={
             "entry_id": payload.get("entry_id"),
-            "selector": payload.get("selector"),
         },
         model_type=DeleteEntryPayload,
     )
     return normalized_entry_reference_payload(
         context,
         entry_id=parsed.entry_id,
-        selector=parsed.selector,
     )
 
 

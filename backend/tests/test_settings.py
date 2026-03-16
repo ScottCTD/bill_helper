@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from unittest.mock import patch
 
 from backend.tests.agent_test_utils import create_thread, patch_model, send_message
@@ -228,35 +227,7 @@ def test_settings_override_updates_agent_model_for_new_runs(client, monkeypatch)
 
 
 def test_default_currency_override_applies_to_agent_entry_proposals_and_apply(client, monkeypatch):
-    def fake_model(messages):
-        if messages[-1]["role"] == "tool":
-            return {"role": "assistant", "content": "Entry proposal prepared."}
-        return {
-            "role": "assistant",
-            "content": "",
-            "tool_calls": [
-                {
-                    "id": "call_propose_entry",
-                    "type": "function",
-                    "function": {
-                        "name": "propose_create_entry",
-                        "arguments": json.dumps(
-                            {
-                                "kind": "EXPENSE",
-                                "date": "2026-02-10",
-                                "name": "Settings Currency Test",
-                                "amount_minor": 1435,
-                                "from_entity": "Main Checking",
-                                "to_entity": "Cafe",
-                                "tags": ["food"],
-                            }
-                        ),
-                    },
-                }
-            ],
-        }
-
-    patch_model(monkeypatch, fake_model)
+    patch_model(monkeypatch, lambda _messages: {"role": "assistant", "content": "Entry proposal prepared."})
     update_response = client.patch("/api/v1/settings", json={"default_currency_code": "eur"})
     update_response.raise_for_status()
     assert update_response.json()["default_currency_code"] == "EUR"
@@ -268,14 +239,33 @@ def test_default_currency_override_applies_to_agent_entry_proposals_and_apply(cl
     tag_response.raise_for_status()
 
     thread = create_thread(client)
-    run = send_message(client, thread["id"], "Please add the cafe expense.")
+    run = send_message(client, thread["id"], "Create proposal context.")
     assert run["status"] == "completed"
-    assert run["change_items"]
+    proposal_response = client.post(
+        f"/api/v1/agent/threads/{thread['id']}/proposals",
+        headers={"X-Bill-Helper-Agent-Run-Id": run["id"]},
+        json={
+            "change_type": "create_entry",
+            "payload_json": {
+                "kind": "EXPENSE",
+                "date": "2026-02-10",
+                "name": "Settings Currency Test",
+                "amount_minor": 1435,
+                "from_entity": "Main Checking",
+                "to_entity": "Cafe",
+                "tags": ["food"],
+            },
+        },
+    )
+    proposal_response.raise_for_status()
+    proposed_item = proposal_response.json()
 
-    proposed_item = run["change_items"][0]
-    assert proposed_item["payload_json"]["currency_code"] == "EUR"
+    assert proposed_item["payload"]["currency_code"] == "EUR"
 
-    approve_response = client.post(f"/api/v1/agent/change-items/{proposed_item['id']}/approve", json={})
+    approve_response = client.post(
+        f"/api/v1/agent/change-items/{proposed_item['proposal_id']}/approve",
+        json={},
+    )
     approve_response.raise_for_status()
     approved_payload = approve_response.json()
     assert approved_payload["status"] == "APPLIED"

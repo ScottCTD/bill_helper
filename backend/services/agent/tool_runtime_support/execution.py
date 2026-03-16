@@ -20,6 +20,10 @@ from backend.services.runtime_settings import resolve_runtime_settings
 logger = logging.getLogger(__name__)
 
 
+def _json_safe_validation_details(exc: ValidationError) -> list[dict[str, Any]]:
+    return exc.errors(include_context=False)
+
+
 def execute_tool(name: str, arguments: dict[str, Any], context: ToolContext) -> ToolExecutionResult:
     definition = TOOLS.get(name)
     if definition is None:
@@ -28,7 +32,7 @@ def execute_tool(name: str, arguments: dict[str, Any], context: ToolContext) -> 
     try:
         parsed = definition.args_model.model_validate(arguments)
     except ValidationError as exc:
-        return error_result("invalid tool arguments", details=exc.errors())
+        return error_result("invalid tool arguments", details=_json_safe_validation_details(exc))
 
     settings = resolve_runtime_settings(context.db)
     retrying = Retrying(

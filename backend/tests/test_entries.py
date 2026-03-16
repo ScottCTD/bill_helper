@@ -783,11 +783,7 @@ def test_accounts_are_entities_linked_to_users(client):
     entities_response.raise_for_status()
     entities = entities_response.json()
     entity_names = {entity["name"] for entity in entities}
-    assert "Checking" in entity_names
-    matching = next(entity for entity in entities if entity["name"] == "Checking")
-    assert matching["category"] is None
-    assert matching["is_account"] is True
-    assert account["id"] == matching["id"]
+    assert "Checking" not in entity_names
     assert "entity_id" not in account
     assert account["owner_user_id"] is not None
 
@@ -1098,8 +1094,8 @@ def test_catalog_reads_are_scoped_by_principal(client, auth_headers):
     assert admin_vendor_row["entry_count"] == 1
     assert alice_vendor_row["from_count"] == 1
     assert alice_vendor_row["entry_count"] == 1
-    assert any(entity["name"] == "Admin Checking" for entity in admin_entities)
-    assert any(entity["name"] == "Alice Checking" for entity in admin_entities)
+    assert all(entity["name"] != "Admin Checking" for entity in admin_entities)
+    assert all(entity["name"] != "Alice Checking" for entity in admin_entities)
 
     alice_entities_response = client.get("/api/v1/entities", headers=alice_headers)
     alice_entities_response.raise_for_status()
@@ -1107,9 +1103,9 @@ def test_catalog_reads_are_scoped_by_principal(client, auth_headers):
     alice_vendor_row = next(entity for entity in alice_entities if entity["id"] == alice_vendor["id"])
     assert alice_vendor_row["from_count"] == 1
     assert alice_vendor_row["entry_count"] == 1
-    assert any(entity["name"] == "Alice Checking" for entity in alice_entities)
     assert all(entity["id"] != admin_vendor["id"] for entity in alice_entities)
     assert all(entity["name"] != "Admin Checking" for entity in alice_entities)
+    assert all(entity["name"] != "Alice Checking" for entity in alice_entities)
 
     admin_tags_response = client.get("/api/v1/tags")
     admin_tags_response.raise_for_status()

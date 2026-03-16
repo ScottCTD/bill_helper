@@ -31,25 +31,25 @@
 - `backend/services/agent/tool_runtime.py`
   - thin public seam for tool contracts plus runtime execution entrypoints
 - `backend/services/agent/tool_runtime_support/`
-  - grouped tool-runtime internals: `definitions.py` for tool metadata, `schema.py` for OpenAI schema inlining, `catalog_*.py` for read/session/proposal tool-family registration, `catalog.py` for the merged registry, and `execution.py` for retry/error policy
+  - grouped tool-runtime internals: `definitions.py` for tool metadata, `schema.py` for OpenAI schema inlining, `catalog_session.py` and `catalog_terminal.py` for the live runtime tool registry, `catalog.py` for merged runtime lookup, and `execution.py` for retry/error policy
 - `backend/services/agent/pricing.py`
   - LiteLLM-backed pricing helper
 - `backend/services/agent/tool_args/`
   - focused tool-input package: `read.py` for read filters, `shared.py` for progress/common args, `threads.py` for thread rename args, `memory.py` for add-only memory args, and `proposal_admin.py` for pending-proposal/group-membership tool inputs
 - `backend/services/agent/read_tools/`
-  - read-tool package: `entries.py` for entry lookup ranking, `catalog.py` for tag/entity/account lookup, `groups.py` for group lookup/detail formatting, `proposals.py` for proposal history inspection, and `common.py` for shared ranking/principal-scope formatting helpers
+  - internal lookup helper package: `entries.py` for entry lookup ranking, `catalog.py` for tag/entity/account lookup helpers, `groups.py` for group lookup/detail formatting helpers, `accounts.py` for snapshot/reconciliation helpers, and `common.py` for shared ranking/principal-scope formatting helpers
 - `backend/services/agent/session_tools/`
   - session-tool package: `progress.py` for `send_intermediate_update`, `memory.py` for add-only persistent memory appends, and `threads.py` for short thread-topic updates
+- `backend/services/agent/terminal.py`
+  - workspace terminal execution helper that injects per-command auth/thread/run context and executes shell commands inside the per-user workspace container
 - `backend/services/agent/proposals/`
-  - proposal-family package: `common.py` for shared proposal/thread helpers, `catalog.py` for tag/entity/account proposals, `entries.py` for entry proposal handlers, `groups.py` for group CRUD proposal flows, `group_memberships/` for membership canonicalization, validation, and handlers, family-owned normalization modules plus a small `normalization.py` registry for proposal payload canonicalization, and `pending.py` for pending-proposal edit/remove tools
+  - proposal-family package: `common.py` for shared proposal/thread helpers, `catalog.py` for tag/entity/account proposals, `entries.py` for entry proposal handlers, `groups.py` for group CRUD proposal flows, `group_memberships/` for membership canonicalization, validation, and handlers, family-owned normalization modules plus a small `normalization.py` registry for proposal payload canonicalization
 - `backend/services/agent/entry_references.py`
   - shared entry lookup helpers for `entry_id` aliases, selector fallback, and public entry snapshots
 - `backend/services/agent/group_references.py`
-  - shared group-id alias lookup plus compact public group summary/detail formatting for `list_groups` and group proposals
+  - shared group-id alias lookup plus compact public group summary/detail formatting for group reads and group proposals
 - `backend/services/agent/proposal_metadata.py`
-  - canonical mapping from `change_type` to proposal domain/action/tool name for `list_proposals`, history, and review summaries
-- `backend/services/agent/proposal_patching.py`
-  - patch-map helpers for pending proposal edits
+  - canonical mapping from `change_type` to proposal domain/action/`bh` command labels for proposal history formatting, CLI responses, and review summaries
 - `backend/services/agent/threads.py`
   - thread-title normalization plus rename persistence helpers shared by the router and tool handler
 - `backend/services/agent/tools.py`
@@ -91,6 +91,8 @@
 - prompt rendering carries a run surface hint so Telegram-directed turns can request plain-text-friendly final answers
 - `Current User Context` includes timezone/date bullets plus `Entity Category Reference` and `Account Context`
 - `Agent Memory` is rendered as a markdown unordered list built from persisted runtime-setting memory items
+- the model-visible tool catalog is intentionally small: `rename_thread`, `send_intermediate_update`, `add_user_memory`, and `terminal`
+- app-state reads and proposal lifecycle work now flow through the workspace terminal and the installed `bh` CLI rather than the older large direct read/proposal tool list
 - duplicate-entry checks should happen before new entry proposals
 - tag/entity naming should stay canonical and generalized
 - tag-delete proposals may proceed while referenced; proposal previews should surface impact counts and apply removes entry junction rows by cascade
@@ -98,9 +100,7 @@
 - `add_user_memory` is an add-only tool for explicit remember-this requests; mutate/remove requests must be declined
 - `rename_thread` should run right after the first user message in a new thread, then only when the user explicitly asks or the topic materially changes
 - untitled threads are runtime-gated to expose only the `rename_thread` tool on the first model step; most models also receive an explicit required `tool_choice`, but `openrouter/qwen/qwen3.5-27b` falls back to tool-list restriction only because OpenRouter rejects explicit `tool_choice` for that model in thinking mode
-- model-facing tool interfaces avoid requiring full domain IDs; entry mutations prefer `entry_id` aliases from `list_entries` with selector fallback
-- `list_entries(source=...)` mirrors the Entries table broad text search across entry name, from-entity, and to-entity, and it applies the same owner-scope rules as normal entry reads using the resolved `ToolContext` principal
-- existing-group mutations prefer `group_id` aliases from `list_groups`
+- `terminal` injects backend URL, a short-lived bearer session, current thread id, and current run id on every execution; the agent does not supply those manually
 - the prompt has a dedicated `Grouping` section that combines fixed `BUNDLE` / `SPLIT` / `RECURRING` semantics, examples, and workflow guidance
 - after proposing a new entry, the prompt instructs the agent to check whether an existing recurring, split, or bundle group should absorb it and to propose the membership change when needed
 - group membership proposals may reference pending `create_group` and `create_entry` proposal ids in the same thread; approval is blocked until those dependencies are applied
@@ -114,6 +114,8 @@
   - thread list/detail plus message-send and stream endpoints
 - `backend/routers/agent_runs.py`
   - run detail, tool-call detail, and interrupt endpoints
+- `backend/routers/agent_proposals.py`
+  - thread-scoped proposal list/get/create HTTP translation for the `bh` CLI
 - `backend/routers/agent_reviews.py`
   - approve/reject/reopen HTTP translation for review actions
 - `backend/routers/agent_attachments.py`
@@ -135,6 +137,11 @@ Endpoints:
 - `GET /api/v1/agent/threads/{thread_id}`
 - `POST /api/v1/agent/threads/{thread_id}/messages`
 - `POST /api/v1/agent/threads/{thread_id}/messages/stream`
+- `GET /api/v1/agent/threads/{thread_id}/proposals`
+- `GET /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
+- `POST /api/v1/agent/threads/{thread_id}/proposals`
+- `PATCH /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
+- `DELETE /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
 - `GET /api/v1/agent/runs/{run_id}`
 - `GET /api/v1/agent/tool-calls/{tool_call_id}`
 - `POST /api/v1/agent/runs/{run_id}/interrupt`
@@ -168,11 +175,12 @@ Endpoints:
 - new agent uploads are written into the canonical per-user store under `{data_dir}/user_files/{owner_user_id}/uploads/...`, and `agent_message_attachments` link to those canonical rows instead of owning file metadata directly
 - PDFs use PyMuPDF first and then local Tesseract OCR only when native text extraction fails
 - interruption marks runs as `failed` and injects interruption context into the next turn
-- pending proposals can be updated or removed in later turns while still `PENDING_REVIEW`
+- pending proposals remain inspectable in later turns while still `PENDING_REVIEW`
 - reviewed proposal context now includes reviewer override values when `payload_override` changed the approved payload, so later turns can see concrete edited values instead of only changed field names
 - run snapshots expose persisted `surface`, explicit `reply_surface`, and `terminal_assistant_reply`, so read-time formatting overrides do not masquerade as the stored run surface
 - deleting a thread removes attachment linkage rows but intentionally leaves canonical uploaded payload files in place
-- per-user workspace provisioning is wired from user lifecycle services only; the active agent tool/runtime surface still does not expose code execution inside those containers
+- the active agent runtime now exposes full workspace terminal execution through `terminal`; app-state operations are expected to go through the installed `bh` CLI inside that terminal
+- proposal HTTP routes are thread-scoped and require `X-Bill-Helper-Agent-Run-Id` so `bh` can keep new proposals attached to the invoking run
 
 ## Review And Apply Behavior
 
@@ -182,7 +190,7 @@ Endpoints:
 - group-member approvals that reference pending `create_group` / `create_entry` proposals are blocked until those dependencies are applied; rejected or failed dependencies leave the member proposal unapprovable until edited or removed
 - apply-time group-member resolution canonicalizes existing short `group_id` and `entry_id` aliases to full ids before scoped lookup and membership matching, so approval semantics match proposal-time alias handling
 - review apply uses the approving reviewer principal for principal-scoped entry lookup and for owner attribution on newly created entry/account/group resources; mutable runtime settings remain only as a non-request fallback
-- `update_pending_proposal` re-runs group conflict checks after normalization, so revised group create/update/delete/member proposals cannot be patched into duplicate or conflicting pending states
+- group proposal creation still re-runs normalization and conflict checks so duplicate or conflicting group/member proposals are rejected inside one thread
 - `backend/services/agent/apply/` owns the actual domain mutation after approval, including group create/rename/delete and group membership add/remove
 - `backend/services/agent/message_history_prefixes.py` prepends compact review outcome lines before the next user feedback message and includes `review_override=...` when reviewer edits changed the applied payload
 - group-member proposal previews now carry enough entry fields, including `markdown_notes`, for the frontend to render a locked full-entry snapshot during review

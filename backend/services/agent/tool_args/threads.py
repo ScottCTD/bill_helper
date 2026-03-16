@@ -18,7 +18,7 @@ class RenameThreadArgs(ToolArgsModel):
     title: str = Field(
         min_length=1,
         max_length=THREAD_TITLE_MAX_LENGTH,
-        description="Short thread title/topic in 1-5 words.",
+        description="Short thread title/topic in 1-3 words.",
     )
 
     @field_validator("title")

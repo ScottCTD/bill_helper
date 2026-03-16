@@ -38,6 +38,11 @@ RUN pip install --no-cache-dir \
     python-dateutil \
     requests
 
+COPY pyproject.toml README.md /opt/bill-helper/
+COPY backend /opt/bill-helper/backend
+COPY telegram /opt/bill-helper/telegram
+RUN pip install --no-cache-dir /opt/bill-helper
+
 RUN useradd --create-home --shell /bin/bash app \
     && mkdir -p /workspace /data \
     && chown -R app:app /workspace /data /home/app /opt/code-server-preinstalled-vsix

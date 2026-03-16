@@ -168,3 +168,45 @@ class AgentChangeItemRejectRequest(AgentSchema):
 class AgentChangeItemReopenRequest(AgentSchema):
     note: str | None = None
     payload_override: dict[str, Any] | None = None
+
+
+class AgentProposalListQuery(AgentSchema):
+    proposal_type: str | None = None
+    proposal_status: AgentChangeStatus | None = None
+    change_action: str | None = None
+    proposal_id: str | None = Field(default=None, min_length=4, max_length=36)
+    limit: int = Field(default=10, ge=1)
+
+
+class AgentProposalCreateRequest(AgentSchema):
+    change_type: AgentChangeType
+    payload_json: dict[str, Any]
+
+
+class AgentProposalUpdateRequest(AgentSchema):
+    patch_map: dict[str, Any]
+
+
+class AgentProposalRecordRead(AgentSchema):
+    proposal_id: str
+    proposal_short_id: str
+    proposal_type: str
+    change_action: str
+    change_type: AgentChangeType
+    status: AgentChangeStatus
+    proposal_summary: str
+    rationale_text: str
+    payload: dict[str, Any]
+    review_note: str | None = None
+    applied_resource_type: str | None = None
+    applied_resource_id: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    run_id: str
+    review_actions: list[AgentReviewActionRead] = Field(default_factory=list)
+
+
+class AgentProposalListRead(AgentSchema):
+    returned_count: int
+    total_available: int
+    proposals: list[AgentProposalRecordRead]

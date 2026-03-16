@@ -14,37 +14,37 @@ from backend.enums_agent import AgentChangeType
 class ProposalMetadata:
     change_action: str
     proposal_type: str
-    proposal_tool_name: str
+    cli_command: str
 
 
 _METADATA_BY_CHANGE_TYPE: dict[str, ProposalMetadata] = {
-    AgentChangeType.CREATE_ENTRY.value: ProposalMetadata("create", "entry", "propose_create_entry"),
-    AgentChangeType.UPDATE_ENTRY.value: ProposalMetadata("update", "entry", "propose_update_entry"),
-    AgentChangeType.DELETE_ENTRY.value: ProposalMetadata("delete", "entry", "propose_delete_entry"),
-    AgentChangeType.CREATE_GROUP.value: ProposalMetadata("create", "group", "propose_create_group"),
-    AgentChangeType.UPDATE_GROUP.value: ProposalMetadata("update", "group", "propose_update_group"),
-    AgentChangeType.DELETE_GROUP.value: ProposalMetadata("delete", "group", "propose_delete_group"),
+    AgentChangeType.CREATE_ENTRY.value: ProposalMetadata("create", "entry", "bh entries create"),
+    AgentChangeType.UPDATE_ENTRY.value: ProposalMetadata("update", "entry", "bh entries update"),
+    AgentChangeType.DELETE_ENTRY.value: ProposalMetadata("delete", "entry", "bh entries remove"),
+    AgentChangeType.CREATE_GROUP.value: ProposalMetadata("create", "group", "bh groups create"),
+    AgentChangeType.UPDATE_GROUP.value: ProposalMetadata("update", "group", "bh groups update"),
+    AgentChangeType.DELETE_GROUP.value: ProposalMetadata("delete", "group", "bh groups remove"),
     AgentChangeType.CREATE_GROUP_MEMBER.value: ProposalMetadata(
         "create",
         "group",
-        "propose_update_group_membership",
+        "bh groups add-member",
     ),
     AgentChangeType.DELETE_GROUP_MEMBER.value: ProposalMetadata(
         "delete",
         "group",
-        "propose_update_group_membership",
+        "bh groups remove-member",
     ),
-    AgentChangeType.CREATE_TAG.value: ProposalMetadata("create", "tag", "propose_create_tag"),
-    AgentChangeType.UPDATE_TAG.value: ProposalMetadata("update", "tag", "propose_update_tag"),
-    AgentChangeType.DELETE_TAG.value: ProposalMetadata("delete", "tag", "propose_delete_tag"),
-    AgentChangeType.CREATE_ENTITY.value: ProposalMetadata("create", "entity", "propose_create_entity"),
-    AgentChangeType.UPDATE_ENTITY.value: ProposalMetadata("update", "entity", "propose_update_entity"),
-    AgentChangeType.DELETE_ENTITY.value: ProposalMetadata("delete", "entity", "propose_delete_entity"),
-    AgentChangeType.CREATE_ACCOUNT.value: ProposalMetadata("create", "account", "propose_create_account"),
-    AgentChangeType.UPDATE_ACCOUNT.value: ProposalMetadata("update", "account", "propose_update_account"),
-    AgentChangeType.DELETE_ACCOUNT.value: ProposalMetadata("delete", "account", "propose_delete_account"),
-    AgentChangeType.CREATE_SNAPSHOT.value: ProposalMetadata("create", "snapshot", "propose_create_snapshot"),
-    AgentChangeType.DELETE_SNAPSHOT.value: ProposalMetadata("delete", "snapshot", "propose_delete_snapshot"),
+    AgentChangeType.CREATE_TAG.value: ProposalMetadata("create", "tag", "bh tags create"),
+    AgentChangeType.UPDATE_TAG.value: ProposalMetadata("update", "tag", "bh tags update"),
+    AgentChangeType.DELETE_TAG.value: ProposalMetadata("delete", "tag", "bh tags remove"),
+    AgentChangeType.CREATE_ENTITY.value: ProposalMetadata("create", "entity", "bh entities create"),
+    AgentChangeType.UPDATE_ENTITY.value: ProposalMetadata("update", "entity", "bh entities update"),
+    AgentChangeType.DELETE_ENTITY.value: ProposalMetadata("delete", "entity", "bh entities remove"),
+    AgentChangeType.CREATE_ACCOUNT.value: ProposalMetadata("create", "account", "bh accounts create"),
+    AgentChangeType.UPDATE_ACCOUNT.value: ProposalMetadata("update", "account", "bh accounts update"),
+    AgentChangeType.DELETE_ACCOUNT.value: ProposalMetadata("delete", "account", "bh accounts remove"),
+    AgentChangeType.CREATE_SNAPSHOT.value: ProposalMetadata("create", "snapshot", "bh snapshots create"),
+    AgentChangeType.DELETE_SNAPSHOT.value: ProposalMetadata("delete", "snapshot", "bh snapshots remove"),
 }
 
 
@@ -52,5 +52,5 @@ def proposal_metadata_for_change_type(change_type: AgentChangeType | str) -> Pro
     key = change_type.value if isinstance(change_type, AgentChangeType) else str(change_type)
     return _METADATA_BY_CHANGE_TYPE.get(
         key,
-        ProposalMetadata("snapshot", "other", "proposal_tool_result"),
+        ProposalMetadata("snapshot", "other", "bh proposals get"),
     )

@@ -74,6 +74,7 @@ BILL_HELPER_DATA_DIR=./.data
 | `BILL_HELPER_AGENT_WORKSPACE_ENABLED` | `true` | Enable eager per-user Docker workspace provisioning |
 | `BILL_HELPER_AGENT_WORKSPACE_IMAGE` | `bill-helper-agent-workspace:latest` | Prebuilt image tag for per-user workspaces |
 | `BILL_HELPER_AGENT_WORKSPACE_DOCKER_BINARY` | `docker` | Docker CLI binary used for workspace lifecycle commands |
+| `BILL_HELPER_WORKSPACE_BACKEND_BASE_URL` | `http://host.docker.internal:8000/api/v1` | Backend API base URL used by workspace terminal commands and the installed `bh` CLI |
 | `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL` | _(none)_ | Optional custom provider endpoint |
 | `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY` | _(none)_ | Optional custom provider API key |
 
@@ -307,6 +308,7 @@ Backend agent modules:
 - `backend/services/agent/tool_args/`
 - `backend/services/agent/proposals/`
 - `backend/services/agent/read_tools/`
+- `backend/services/agent/terminal.py`
 - `backend/services/agent/proposal_patching.py`
 - `backend/services/agent/tool_runtime.py`
 - `backend/services/agent/tool_runtime_support/`

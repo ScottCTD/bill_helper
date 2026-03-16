@@ -19,6 +19,12 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_utc_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def hash_session_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -48,7 +54,9 @@ def _prune_expired_session(db: Session, session_row: UserSession) -> None:
 
 
 def is_session_expired(session_row: UserSession) -> bool:
-    return session_row.expires_at is not None and session_row.expires_at <= utc_now()
+    if session_row.expires_at is None:
+        return False
+    return _as_utc_datetime(session_row.expires_at) <= utc_now()
 
 
 def load_session_by_token(db: Session, *, token: str) -> UserSession | None:
