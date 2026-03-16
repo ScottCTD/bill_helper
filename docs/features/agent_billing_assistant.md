@@ -63,12 +63,9 @@ The system prompt is a markdown document with:
 - `## Identity`
 - `## Operating Rules`
 - `### Tool Use`
-- `### Progress Updates`
-- `### Memory`
 - `## bh Reference`
 - `## Proposal Workflow`
-- `### General`
-- `### Pending Proposals`
+- proposal workflow rules for duplicate checks, proposal inspection, and proposal revision
 - `## Domain Rules`
 - domain-specific rules for entries, tags, entities, accounts, snapshots, and groups
 - `## Error Recovery`
@@ -106,19 +103,19 @@ Arguments:
 
 Description:
 
-Rename the current thread to a short 1-5 word topic. Use this right after the first user message in a new thread. After that, only rename when the user explicitly asks or the topic shifts substantially.
+Rename the current thread to a short 1-3 word topic. Use this right after the first user message in a new thread. After that, only rename when the user explicitly asks or the topic shifts substantially.
 
 Arguments:
 
 - `title: string` required
-  description: Short thread title/topic in 1-5 words.
+  description: Short thread title/topic in 1-3 words.
   constraints: minLength=1, maxLength=80
 
 ### `send_intermediate_update`
 
 Description:
 
-Share a brief, user-visible progress update (supports markdown). If a task needs tool calls, call this first to describe what you are about to do before other tools. Then use sparingly for meaningful transitions between distinct tool-call batches; do not call this on every step.
+Call this tool before calling other tools (but after rename_thread). Call this tool again only for meaningful transitions between tool calls; do not call it on every tool step.
 
 Arguments:
 
@@ -309,14 +306,14 @@ When this surface changes, useful checks include:
 
 ## Related Files
 
-- [backend/cli/main.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/cli/main.py)
-- [backend/cli/support.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/cli/support.py)
-- [backend/cli/rendering.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/cli/rendering.py)
-- [backend/cli/reference.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/cli/reference.py)
-- [backend/services/agent/tool_runtime_support/catalog.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/services/agent/tool_runtime_support/catalog.py)
-- [backend/services/agent/tool_runtime_support/catalog_workspace.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/services/agent/tool_runtime_support/catalog_workspace.py)
-- [backend/services/agent/system_prompt.j2](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/services/agent/system_prompt.j2)
-- [backend/services/agent/prompts.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/services/agent/prompts.py)
-- [backend/services/agent/workspace_command.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/services/agent/workspace_command.py)
-- [backend/services/workspace_cli_env.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/services/workspace_cli_env.py)
-- [backend/routers/agent_proposals.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/routers/agent_proposals.py)
+- [backend/cli/main.py](../../backend/cli/main.py)
+- [backend/cli/support.py](../../backend/cli/support.py)
+- [backend/cli/rendering.py](../../backend/cli/rendering.py)
+- [backend/cli/reference.py](../../backend/cli/reference.py)
+- [backend/services/agent/tool_runtime_support/catalog.py](../../backend/services/agent/tool_runtime_support/catalog.py)
+- [backend/services/agent/tool_runtime_support/catalog_workspace.py](../../backend/services/agent/tool_runtime_support/catalog_workspace.py)
+- [backend/services/agent/system_prompt.j2](../../backend/services/agent/system_prompt.j2)
+- [backend/services/agent/prompts.py](../../backend/services/agent/prompts.py)
+- [backend/services/agent/workspace_command.py](../../backend/services/agent/workspace_command.py)
+- [backend/services/workspace_cli_env.py](../../backend/services/workspace_cli_env.py)
+- [backend/routers/agent_proposals.py](../../backend/routers/agent_proposals.py)

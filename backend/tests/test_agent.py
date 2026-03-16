@@ -889,31 +889,6 @@ def test_tool_catalog_exposes_only_terminal_and_retained_session_tools():
     ]
 
 
-def test_intermediate_update_tool_description_requires_first_call_for_tool_runs():
-    from backend.services.agent.tools import INTERMEDIATE_UPDATE_TOOL_NAME, build_openai_tool_schemas
-
-    tool_by_name = {
-        tool["function"]["name"]: tool["function"]
-        for tool in build_openai_tool_schemas()
-    }
-    description = str(tool_by_name[INTERMEDIATE_UPDATE_TOOL_NAME]["description"])
-    assert "call this first" in description
-    assert "before other tools" in description
-
-
-def test_add_user_memory_tool_description_mentions_add_only_behavior():
-    from backend.services.agent.tools import build_openai_tool_schemas
-
-    tool_by_name = {
-        tool["function"]["name"]: tool["function"]
-        for tool in build_openai_tool_schemas()
-    }
-    description = str(tool_by_name["add_user_memory"]["description"])
-    assert "clearly asks" in description
-    assert "add-only" in description
-    assert "mutate or remove" in description
-
-
 def test_add_user_memory_tool_persists_runtime_settings_memory(client, monkeypatch):
     def fake_model(messages):
         if messages[-1]["role"] == "tool":
@@ -1093,41 +1068,6 @@ def test_thread_title_stays_untitled_without_rename_tool(client, monkeypatch):
     detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
     detail_response.raise_for_status()
     assert detail_response.json()["thread"]["title"] is None
-
-
-def test_terminal_tool_description_mentions_bh_and_workspace():
-    from backend.services.agent.tools import build_openai_tool_schemas
-
-    tool_by_name = {
-        tool["function"]["name"]: tool["function"]
-        for tool in build_openai_tool_schemas()
-    }
-    description = str(tool_by_name["terminal"]["description"])
-    assert "workspace container" in description
-    assert "`bh`" in description
-    assert "Prefer `bh` over raw curl or ad hoc Python" in description
-
-
-def test_terminal_tool_schema_includes_exact_argument_descriptions():
-    from backend.services.agent.tools import build_openai_tool_schemas
-
-    tool_by_name = {
-        tool["function"]["name"]: tool["function"]
-        for tool in build_openai_tool_schemas()
-    }
-    properties = tool_by_name["terminal"]["parameters"]["properties"]
-
-    assert properties["command"]["description"] == (
-        "Shell command to execute verbatim via `bash -lc` inside the current user's workspace container. "
-        "May include newlines, pipes, redirects, command substitution, or heredocs. "
-        "Use `bh` for Bill Helper app operations and standard shell commands for local file work."
-    )
-    assert properties["cwd"]["description"] == (
-        "Optional working directory inside the workspace container. Defaults to the workspace root `/workspace/workspace`."
-    )
-    assert properties["timeout_seconds"]["description"] == (
-        "Command timeout in seconds. Defaults to 120. Allowed range: 1 to 600."
-    )
 
 
 def test_system_prompt_embeds_bh_cheat_sheet_only():

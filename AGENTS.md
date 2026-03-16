@@ -93,6 +93,7 @@ These rules apply to any coding agent working in this repository.
 - Include affected files or modules, operational impact, and constraints where relevant.
 - Stable docs explain how the system works now.
 - Temporary implementation notes belong in `tasks/`, not in stable reference pages.
+- Hard rule: never write absolute local filesystem paths, worktree paths, home-directory paths, or other machine-specific paths into committed repo files. Use paths relative to the project root instead. Treat leaking local paths as a privacy/security issue.
 
 ### Required Verification
 

@@ -110,7 +110,7 @@ The configured workspace image must include:
 
 The current image is built from:
 
-- [docker/agent-workspace.dockerfile](/Users/scottcui/.codex/worktrees/479c/bill_helper/docker/agent-workspace.dockerfile)
+- [docker/agent-workspace.dockerfile](../../docker/agent-workspace.dockerfile)
 
 It installs the package from the repository source tree so the CLI is available at runtime.
 
@@ -150,10 +150,10 @@ When this surface changes, useful checks include:
 
 ## Related Files
 
-- [backend/cli/support.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/cli/support.py)
-- [backend/cli/main.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/cli/main.py)
-- [backend/services/agent/workspace_command.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/services/agent/workspace_command.py)
-- [backend/services/agent/tool_runtime_support/catalog.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/services/agent/tool_runtime_support/catalog.py)
-- [backend/services/agent/tool_runtime_support/catalog_workspace.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/services/agent/tool_runtime_support/catalog_workspace.py)
-- [backend/routers/agent_proposals.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/routers/agent_proposals.py)
-- [backend/services/agent/proposal_http.py](/Users/scottcui/.codex/worktrees/479c/bill_helper/backend/services/agent/proposal_http.py)
+- [backend/cli/support.py](../../backend/cli/support.py)
+- [backend/cli/main.py](../../backend/cli/main.py)
+- [backend/services/agent/workspace_command.py](../../backend/services/agent/workspace_command.py)
+- [backend/services/agent/tool_runtime_support/catalog.py](../../backend/services/agent/tool_runtime_support/catalog.py)
+- [backend/services/agent/tool_runtime_support/catalog_workspace.py](../../backend/services/agent/tool_runtime_support/catalog_workspace.py)
+- [backend/routers/agent_proposals.py](../../backend/routers/agent_proposals.py)
+- [backend/services/agent/proposal_http.py](../../backend/services/agent/proposal_http.py)

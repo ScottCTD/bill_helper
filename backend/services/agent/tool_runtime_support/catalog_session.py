@@ -31,7 +31,7 @@ SESSION_TOOLS: dict[str, AgentToolDefinition] = {
     "rename_thread": AgentToolDefinition(
         name="rename_thread",
         description=(
-            "Rename the current thread to a short 1-5 word topic. Use this right after the first user "
+            "Rename the current thread to a short 1-3 word topic. Use this right after the first user "
             "message in a new thread. After that, only rename when the user explicitly asks or the topic "
             "shifts substantially."
         ),
@@ -41,10 +41,9 @@ SESSION_TOOLS: dict[str, AgentToolDefinition] = {
     INTERMEDIATE_UPDATE_TOOL_NAME: AgentToolDefinition(
         name=INTERMEDIATE_UPDATE_TOOL_NAME,
         description=(
-            "Share a brief, user-visible progress update (supports markdown). "
-            "If a task needs tool calls, call this first "
-            "to describe what you are about to do before other tools. Then use sparingly for meaningful "
-            "transitions between distinct tool-call batches; do not call this on every step."
+            "Call this tool before calling other tools (but after rename_thread). "
+            "Call this tool again only for meaningful transitions between tool calls; "
+            "do not call it on every tool step."
         ),
         args_model=SendIntermediateUpdateArgs,
         handler=send_intermediate_update,
