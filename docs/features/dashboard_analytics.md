@@ -67,7 +67,7 @@ Default groups other than `untagged` can have their rules edited, but their name
   - floating page-level right-side invisible timeline rail on desktop, sized to the viewport height without consuming dashboard layout width
   - timeline only lists months and years that have visible expense activity in the dashboard currency
   - wheel-based discrete month/year stepping with centered active-item picker behavior; mobile collapses back to a compact horizontal strip
-  - monthly mode: KPI cards, an `Income vs Expense Trend` bar chart with one income bar plus stacked expense segments by filter group, expense pie by filter group, and projection cards
+  - monthly mode: KPI cards, an `Income vs Expense Trend` bar chart with one income bar plus stacked expense segments by filter group (bottom to top: fixed, transfers, one-time, day-to-day; tooltip shows segment name and amount on hover), expense pie by filter group, and projection cards
   - yearly mode: yearly KPI cards, monthly income vs expense bars for the selected year with stacked filter-group expense segments, yearly filter-group totals, and a dedicated monthly bar chart for each filter group
 - `Spending` tab:
   - monthly mode: average/median spend-day metrics, stacked daily area chart by filter group, and month-over-month comparison cards

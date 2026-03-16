@@ -13,6 +13,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { WorkspaceSection } from "../components/layout/WorkspaceSection";
 import { WorkspaceToolbar } from "../components/layout/WorkspaceToolbar";
 import { Button } from "../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { AgentCostDashboard } from "../features/dashboard/AgentCostDashboard";
 import {
   DashboardBreakdownsPanel,
@@ -22,29 +23,81 @@ import {
 } from "../features/dashboard/DashboardPanels";
 import { DashboardTimelineRail } from "../features/dashboard/DashboardTimelineRail";
 import {
+  CHART_COLORS,
   DASHBOARD_TABS,
   TIMELINE_WHEEL_LOCK_MS,
   type DashboardTab,
   type DashboardViewMode,
+  DashboardChartContainer,
+  axisTick,
   buildDailyChartData,
   buildMonthlyChartData,
   buildTimelineYears,
-  buildYearFilterGroupTotals,
   buildYearLargestExpenses,
   buildYearMonthKeys,
   buildYearlyOverviewData,
+  builtinGroupColor,
   filterGroupNamesByKey,
+  limitTrendDataToMonthsWithData,
   median,
   pickTimelineMonthForYear,
   shiftMonthKey,
+  sortByBuiltinOrder,
+  sortByIncomeTrendOrder,
   sumDashboardKpiForMonths,
-  sumFilterGroupForMonths
+  sumFilterGroupForMonths,
+  tooltipAmount
 } from "../features/dashboard/helpers";
 import { getDashboard, getDashboardTimeline } from "../lib/api";
 import { currentMonth } from "../lib/format";
 import { queryKeys } from "../lib/queryKeys";
 import type { Dashboard } from "../lib/types";
 import { cn } from "../lib/utils";
+import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
+
+type IncomeTrendChartProps = {
+  data: Array<Record<string, unknown>>;
+  trendGroups: Array<{ key: string; name: string }>;
+  currencyCode: string;
+};
+
+function IncomeTrendChart({ data: chartData, trendGroups, currencyCode }: IncomeTrendChartProps) {
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  return (
+    <DashboardChartContainer>
+      {({ width, height }) => (
+        <BarChart width={width} height={height} data={chartData}>
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+          <XAxis dataKey="month" />
+          <YAxis tickFormatter={axisTick} />
+          <Tooltip
+            content={({ payload, label }) => {
+              const active = payload?.find((p) => p.dataKey === hoveredKey) ?? payload?.[0];
+              if (!active) return null;
+              return (
+                <div className="rounded-md border border-border bg-popover px-3 py-2 text-sm shadow-md">
+                  <p className="text-muted-foreground mb-1">{String(label)}</p>
+                  <p className="font-medium">{String(active.name)}: {tooltipAmount(currencyCode, active.value)}</p>
+                </div>
+              );
+            }}
+          />
+          <Bar dataKey="income_total_minor" name="Income" fill={CHART_COLORS.income} onMouseEnter={() => setHoveredKey("income_total_minor")} />
+          {trendGroups.map((group) => (
+            <Bar
+              key={group.key}
+              dataKey={group.key}
+              name={group.name}
+              stackId="expense-trend"
+              fill={builtinGroupColor(group.key)}
+              onMouseEnter={() => setHoveredKey(group.key)}
+            />
+          ))}
+        </BarChart>
+      )}
+    </DashboardChartContainer>
+  );
+}
 
 export function DashboardPage() {
   const [month, setMonth] = useState(currentMonth());
@@ -242,21 +295,21 @@ export function DashboardPage() {
 
   const yearlyQueriesLoading = yearlyQueries.some((query) => query.isLoading);
   const yearlyQueryError = yearlyQueries.find((query) => query.isError)?.error as Error | undefined;
-  const chartGroups = data.filter_groups.filter((group) => group.total_minor > 0);
-  const displayGroups = chartGroups.length > 0 ? chartGroups : data.filter_groups;
   const dailyChartData = buildDailyChartData(data);
   const monthlyChartData = buildMonthlyChartData(data);
   const yearlyOverviewData = buildYearlyOverviewData(selectedYearMonths, yearlyDashboardsByMonth, data.filter_groups);
-  const yearlyFilterGroupTotals = buildYearFilterGroupTotals(data.filter_groups, selectedYearMonths, yearlyDashboardsByMonth);
-  const yearlyDisplayGroups = yearlyFilterGroupTotals.filter((group) => group.total_minor > 0);
-  const monthlyTrendGroups = data.filter_groups.filter((group) =>
+
+  // Trend chart: sorted in builtin group order, filtered to groups with data
+  const sortedFilterGroups = sortByBuiltinOrder(data.filter_groups);
+  const monthlyExpenseTrendGroups = sortedFilterGroups.filter((group) =>
     monthlyChartData.some((point) => Number((point as Record<string, unknown>)[group.key] ?? 0) > 0)
   );
-  const yearlyTrendGroups = data.filter_groups.filter((group) =>
+  const expenseTrendGroups = monthlyExpenseTrendGroups.length > 0 ? monthlyExpenseTrendGroups : sortedFilterGroups;
+  const yearlyExpenseTrendGroupsRaw = sortedFilterGroups.filter((group) =>
     yearlyOverviewData.some((point) => Number((point as Record<string, unknown>)[group.key] ?? 0) > 0)
   );
-  const expenseTrendGroups = monthlyTrendGroups.length > 0 ? monthlyTrendGroups : data.filter_groups;
-  const yearlyExpenseTrendGroups = yearlyTrendGroups.length > 0 ? yearlyTrendGroups : data.filter_groups;
+  const yearlyExpenseTrendGroups = yearlyExpenseTrendGroupsRaw.length > 0 ? yearlyExpenseTrendGroupsRaw : sortedFilterGroups;
+
   const insightsLargestExpenses =
     viewMode === "year" ? buildYearLargestExpenses(selectedYearMonths, yearlyDashboardsByMonth) : data.largest_expenses;
   const groupNamesByKey = filterGroupNamesByKey(data);
@@ -273,10 +326,28 @@ export function DashboardPage() {
     yearlyExpenseMonths.length > 0 ? Math.round(selectedYearExpenseTotalMinor / yearlyExpenseMonths.length) : 0;
   const yearlyMedianExpenseMonthMinor = median(yearlyExpenseMonths);
 
+  const trendChartData =
+    viewMode === "month" ? limitTrendDataToMonthsWithData(monthlyChartData) : yearlyOverviewData;
+  const trendGroups = sortByIncomeTrendOrder(viewMode === "month" ? expenseTrendGroups : yearlyExpenseTrendGroups);
+  const trendTitle = viewMode === "month" ? "Income vs Expense Trend" : `${selectedYear} Income vs Expense Trend`;
+
   return (
     <div className="dashboard-page-layout">
       <div className="stack-lg min-w-0">
         <PageHeader title="Dashboard" description="Month and year ledger trends." />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{trendTitle}</CardTitle>
+          </CardHeader>
+          <CardContent className="h-72 min-w-0">
+            {viewMode === "year" && yearlyQueriesLoading ? (
+              <p className="muted text-sm">Loading yearly trend...</p>
+            ) : (
+              <IncomeTrendChart data={trendChartData} trendGroups={trendGroups} currencyCode={data.currency_code} />
+            )}
+          </CardContent>
+        </Card>
 
         <WorkspaceSection>
           <WorkspaceToolbar className="dashboard-toolbar">
@@ -335,15 +406,9 @@ export function DashboardPage() {
             viewMode={viewMode}
             selectedYear={selectedYear}
             data={data}
-            displayGroups={displayGroups}
-            monthlyChartData={monthlyChartData}
-            expenseTrendGroups={expenseTrendGroups}
             primaryFilterGroup={primaryFilterGroup}
             yearlyQueriesLoading={yearlyQueriesLoading}
             yearlyQueryError={yearlyQueryError}
-            yearlyOverviewData={yearlyOverviewData}
-            yearlyDisplayGroups={yearlyDisplayGroups}
-            yearlyExpenseTrendGroups={yearlyExpenseTrendGroups}
             selectedYearExpenseTotalMinor={selectedYearExpenseTotalMinor}
             selectedYearIncomeTotalMinor={selectedYearIncomeTotalMinor}
             selectedYearNetTotalMinor={selectedYearNetTotalMinor}

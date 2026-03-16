@@ -513,6 +513,8 @@ class DashboardKpisRead(BaseModel):
     average_expense_day_minor: int
     median_expense_day_minor: int
     spending_days: int
+    average_day_to_day_minor: int = 0
+    median_day_to_day_minor: int = 0
 
 
 class DashboardFilterGroupSummary(BaseModel):
@@ -522,6 +524,7 @@ class DashboardFilterGroupSummary(BaseModel):
     color: str | None = None
     total_minor: int
     share: float
+    tag_totals: dict[str, int] = Field(default_factory=dict)
 
 
 class DashboardDailySpendingPoint(BaseModel):

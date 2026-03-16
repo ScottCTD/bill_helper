@@ -16,6 +16,7 @@ This directory stores archived task docs after active work in `/tasks/*.md` is f
 
 ## Recent Archived Tasks
 
+- `2026_03_16-dashboard_plot_improve.md`: dashboard chart and table improvements (Income vs Expense layout, Sankey, day-to-day bar plot, Monthly Spend table).
 - `2026_03_03-agent_workspace.md`: archived task for canonical per-user files, durable attachment storage, and per-user Docker workspace provisioning.
 - `2026_03_12_multi_user_security.md`: archived task for password-backed sessions, user-owned resource scoping, admin impersonation, and web auth flow migration.
 - `2026_03_13-cli_unified_interface.md`: archived task for the `billengine` CLI, workspace terminal execution, and removal of the old model-visible CRUD tool catalog.

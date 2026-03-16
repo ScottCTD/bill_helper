@@ -7,8 +7,6 @@
  */
 
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -16,6 +14,7 @@ import {
   Legend,
   Pie,
   PieChart,
+  ReferenceLine,
   Tooltip,
   XAxis,
   YAxis
@@ -28,6 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { formatMinor } from "../../lib/format";
 import type { Dashboard } from "../../lib/types";
 import { cn } from "../../lib/utils";
+import { DashboardSankeyChart } from "./DashboardSankeyChart";
 import {
   CHART_COLORS,
   DASHBOARD_PIE_ANIMATION_PROPS,
@@ -35,9 +35,12 @@ import {
   type DashboardViewMode,
   axisTick,
   buildYearLargestExpenses,
+  buildYearlyFilterGroupsWithTagTotals,
+  builtinGroupColor,
   dashboardBarColor,
   dashboardPieColor,
   filterGroupTotalForMonth,
+  formatDayFromDate,
   formatDelta,
   formatMonthLong,
   formatMonthShort,
@@ -51,15 +54,9 @@ type DashboardOverviewPanelProps = {
   viewMode: DashboardViewMode;
   selectedYear: number;
   data: Dashboard;
-  displayGroups: Dashboard["filter_groups"];
-  monthlyChartData: Array<Record<string, unknown>>;
-  expenseTrendGroups: Dashboard["filter_groups"];
   primaryFilterGroup: Dashboard["filter_groups"][number] | null;
   yearlyQueriesLoading: boolean;
   yearlyQueryError?: Error;
-  yearlyOverviewData: Array<Record<string, unknown>>;
-  yearlyDisplayGroups: Dashboard["filter_groups"];
-  yearlyExpenseTrendGroups: Dashboard["filter_groups"];
   selectedYearExpenseTotalMinor: number;
   selectedYearIncomeTotalMinor: number;
   selectedYearNetTotalMinor: number;
@@ -72,15 +69,9 @@ export function DashboardOverviewPanel({
   viewMode,
   selectedYear,
   data,
-  displayGroups,
-  monthlyChartData,
-  expenseTrendGroups,
   primaryFilterGroup,
   yearlyQueriesLoading,
   yearlyQueryError,
-  yearlyOverviewData,
-  yearlyDisplayGroups,
-  yearlyExpenseTrendGroups,
   selectedYearExpenseTotalMinor,
   selectedYearIncomeTotalMinor,
   selectedYearNetTotalMinor,
@@ -102,69 +93,18 @@ export function DashboardOverviewPanel({
             />
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-3">
-            <Card className="xl:col-span-2">
-              <CardHeader>
-                <CardTitle>Income vs Expense Trend</CardTitle>
-              </CardHeader>
-              <CardContent className="h-80 min-w-0">
-                <DashboardChartContainer>
-                  {({ width, height }) => (
-                    <BarChart width={width} height={height} data={monthlyChartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                      <XAxis dataKey="month" />
-                      <YAxis tickFormatter={axisTick} />
-                      <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
-                      <Legend />
-                      <Bar dataKey="income_total_minor" name="Income" fill={CHART_COLORS.income} />
-                      {expenseTrendGroups.map((group, index) => (
-                        <Bar
-                          key={group.key}
-                          dataKey={group.key}
-                          name={group.name}
-                          stackId="expense-trend"
-                          fill={dashboardBarColor(index)}
-                        />
-                      ))}
-                    </BarChart>
-                  )}
-                </DashboardChartContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Expense by Filter Group</CardTitle>
-              </CardHeader>
-              <CardContent className="h-80 min-w-0">
-                {displayGroups.length === 0 ? (
-                  <p className="muted">No classified expense activity this month.</p>
-                ) : (
-                  <DashboardChartContainer>
-                    {({ width, height }) => (
-                      <PieChart width={width} height={height}>
-                        <Pie
-                          data={displayGroups}
-                          dataKey="total_minor"
-                          nameKey="name"
-                          innerRadius={56}
-                          outerRadius={90}
-                          paddingAngle={4}
-                          {...DASHBOARD_PIE_ANIMATION_PROPS}
-                        >
-                          {displayGroups.map((group, index) => (
-                            <Cell key={group.key} fill={dashboardPieColor(index)} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
-                        <Legend />
-                      </PieChart>
-                    )}
-                  </DashboardChartContainer>
-                )}
-              </CardContent>
-            </Card>
-          </section>
+          <Card>
+            <CardHeader>
+              <CardTitle>Expense Flow by Filter Group &amp; Tags</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[32rem] min-w-0">
+              {data.kpis.expense_total_minor === 0 ? (
+                <p className="muted">No expense activity this month.</p>
+              ) : (
+                <DashboardSankeyChart filterGroups={data.filter_groups} currencyCode={data.currency_code} />
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -193,7 +133,6 @@ export function DashboardOverviewPanel({
                   </strong>
                 </p>
               </div>
-
               <div className="rounded-lg border border-border/70">
                 <Table>
                   <TableHeader>
@@ -231,73 +170,25 @@ export function DashboardOverviewPanel({
             />
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-3">
-            <Card className="xl:col-span-2">
-              <CardHeader>
-                <CardTitle>{selectedYear} Income vs Expense Trend</CardTitle>
-              </CardHeader>
-              <CardContent className="h-80 min-w-0">
-                {yearlyQueriesLoading ? (
-                  <p className="muted">Loading yearly trend...</p>
-                ) : yearlyQueryError ? (
-                  <p className="error">Failed to load yearly trend: {yearlyQueryError.message}</p>
-                ) : (
-                  <DashboardChartContainer>
-                    {({ width, height }) => (
-                      <BarChart width={width} height={height} data={yearlyOverviewData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                        <XAxis dataKey="month" />
-                        <YAxis tickFormatter={axisTick} />
-                        <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
-                        <Legend />
-                        <Bar dataKey="income_total_minor" name="Income" fill={CHART_COLORS.income} />
-                        {yearlyExpenseTrendGroups.map((group, index) => (
-                          <Bar
-                            key={group.key}
-                            dataKey={group.key}
-                            name={group.name}
-                            stackId="yearly-expense-trend"
-                            fill={dashboardBarColor(index)}
-                          />
-                        ))}
-                      </BarChart>
-                    )}
-                  </DashboardChartContainer>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>{selectedYear} Expense by Filter Group</CardTitle>
-              </CardHeader>
-              <CardContent className="h-80 min-w-0">
-                {yearlyQueriesLoading ? (
-                  <p className="muted">Loading yearly groups...</p>
-                ) : yearlyQueryError ? (
-                  <p className="error">Failed to load yearly groups: {yearlyQueryError.message}</p>
-                ) : yearlyDisplayGroups.length === 0 ? (
-                  <p className="muted">No classified expense activity this year.</p>
-                ) : (
-                  <DashboardChartContainer>
-                    {({ width, height }) => (
-                      <BarChart width={width} height={height} data={yearlyDisplayGroups} layout="vertical" margin={{ left: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                        <XAxis type="number" tickFormatter={axisTick} />
-                        <YAxis dataKey="name" type="category" width={132} />
-                        <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
-                        <Bar dataKey="total_minor" name="Total" radius={[0, 6, 6, 0]}>
-                          {yearlyDisplayGroups.map((group, index) => (
-                            <Cell key={group.key} fill={dashboardBarColor(index)} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    )}
-                  </DashboardChartContainer>
-                )}
-              </CardContent>
-            </Card>
-          </section>
+          <Card>
+            <CardHeader>
+              <CardTitle>{selectedYear} Expense Flow by Filter Group &amp; Tags</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[32rem] min-w-0">
+              {yearlyQueriesLoading ? (
+                <p className="muted">Loading yearly data...</p>
+              ) : yearlyQueryError ? (
+                <p className="error">Failed to load yearly data: {yearlyQueryError.message}</p>
+              ) : selectedYearExpenseTotalMinor === 0 ? (
+                <p className="muted">No expense activity this year.</p>
+              ) : (
+                <DashboardSankeyChart
+                  filterGroups={buildYearlyFilterGroupsWithTagTotals(data.filter_groups, selectedYearMonths, yearlyDashboardsByMonth)}
+                  currencyCode={data.currency_code}
+                />
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -386,82 +277,134 @@ export function DashboardDailyPanel({
   previousYearMonths,
   yearlyDashboardsByMonth
 }: DashboardDailyPanelProps) {
+  const dayToDayColor = builtinGroupColor("day_to_day");
   return (
     <section className="stack-lg" role="tabpanel" id="dashboard-panel-daily" aria-labelledby="dashboard-tab-daily">
       {viewMode === "month" ? (
         <>
           <section className="grid gap-4 md:grid-cols-3">
-            <StatBlock label="Average spend day" value={formatMinor(data.kpis.average_expense_day_minor, data.currency_code)} />
-            <StatBlock label="Median spend day" value={formatMinor(data.kpis.median_expense_day_minor, data.currency_code)} />
+            <StatBlock label="Average Daily Spend (Day-to-Day)" value={formatMinor(data.kpis.average_day_to_day_minor ?? 0, data.currency_code)} />
+            <StatBlock label="Median Daily Spend (Day-to-Day)" value={formatMinor(data.kpis.median_day_to_day_minor ?? 0, data.currency_code)} />
             <StatBlock label="Tracked groups" value={data.filter_groups.length} />
           </section>
 
           <Card>
             <CardHeader>
-              <CardTitle>Daily Spending by Filter Group</CardTitle>
+              <CardTitle>Daily Spending (Day-to-Day)</CardTitle>
             </CardHeader>
-            <CardContent className="h-80 min-w-0">
-              <DashboardChartContainer>
-                {({ width, height }) => (
-                  <AreaChart width={width} height={height} data={dailyChartData}>
+            <CardContent className="min-w-0 overflow-hidden">
+              <div className="flex min-w-0 flex-col">
+                <div className="h-80 min-w-0">
+                  <DashboardChartContainer>
+                    {({ width, height }) => (
+                      <BarChart width={width} height={height} data={dailyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                    <XAxis dataKey="date" />
+                    <XAxis dataKey="date" tickFormatter={(v) => formatDayFromDate(String(v ?? ""))} />
                     <YAxis tickFormatter={axisTick} />
-                    <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
-                    <Legend />
-                    {data.filter_groups.map((group, index) => (
-                      <Area
-                        key={group.key}
-                        type="monotone"
-                        dataKey={group.key}
-                        name={group.name}
-                        stackId="expenses"
-                        stroke={dashboardBarColor(index)}
-                        fill={dashboardBarColor(index)}
-                        fillOpacity={0.18}
-                        strokeWidth={2}
-                      />
-                    ))}
-                  </AreaChart>
+                    <Tooltip formatter={(value) => tooltipAmount(data.currency_code, value)} />
+                    <ReferenceLine
+                      y={data.kpis.average_day_to_day_minor ?? 0}
+                      stroke={dashboardBarColor(1)}
+                      strokeWidth={3}
+                      strokeDasharray="6 4"
+                      label={{
+                        value: "Mean",
+                        position: "right",
+                        fill: dashboardBarColor(1),
+                        fontSize: 13,
+                        fontWeight: 600
+                      }}
+                    />
+                    <ReferenceLine
+                      y={data.kpis.median_day_to_day_minor ?? 0}
+                      stroke={dashboardBarColor(2)}
+                      strokeWidth={3}
+                      strokeDasharray="2 4"
+                      label={{
+                        value: "Median",
+                        position: "right",
+                        fill: dashboardBarColor(2),
+                        fontSize: 13,
+                        fontWeight: 600
+                      }}
+                    />
+                    <Bar dataKey="day_to_day" name="Day-to-Day" fill={dayToDayColor} radius={[4, 4, 0, 0]} />
+                  </BarChart>
                 )}
               </DashboardChartContainer>
+                </div>
+              <div className="mt-3 flex w-full min-w-0 flex-wrap gap-4 overflow-hidden text-sm" role="list" aria-label="Reference line legend">
+                <span className="flex min-w-0 max-w-full shrink items-center gap-2">
+                  <svg width={20} height={4} aria-hidden="true" className="shrink-0">
+                    <line
+                      x1={0}
+                      y1={2}
+                      x2={20}
+                      y2={2}
+                      stroke={dashboardBarColor(1)}
+                      strokeWidth={2}
+                      strokeDasharray="6 4"
+                    />
+                  </svg>
+                  <span className="truncate">Mean</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <svg width={20} height={4} aria-hidden="true" className="shrink-0">
+                    <line
+                      x1={0}
+                      y1={2}
+                      x2={20}
+                      y2={2}
+                      stroke={dashboardBarColor(2)}
+                      strokeWidth={2}
+                      strokeDasharray="2 4"
+                    />
+                  </svg>
+                  <span className="truncate">Median</span>
+                </span>
+              </div>
+              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Month-over-Month Filter Group Comparison</CardTitle>
+              <CardTitle>Monthly Spend by Filter Group</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="muted text-sm">
-                Compare {formatMonthLong(month)} against {formatMonthLong(shiftMonthKey(month, -1))} for each saved group.
-              </p>
-              <div className="dashboard-comparison-grid">
-                {data.filter_groups.map((group, index) => {
-                  const previousTotalMinor = filterGroupTotalForMonth(previousMonthDashboard, group.key);
-                  const deltaMinor = group.total_minor - previousTotalMinor;
-                  return (
-                    <div key={group.key} className="dashboard-comparison-card">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-medium">{group.name}</p>
-                          <p className="muted text-xs">{formatMonthLong(month)}</p>
-                        </div>
-                        <Badge variant="outline" style={{ borderColor: dashboardBarColor(index), color: dashboardBarColor(index) }}>
-                          {formatMinor(group.total_minor, data.currency_code)}
-                        </Badge>
-                      </div>
-                      <div className="grid gap-1 text-sm">
-                        <p className="muted">
-                          Last month: <strong>{formatMinor(previousTotalMinor, data.currency_code)}</strong>
-                        </p>
-                        <p className={cn("dashboard-delta", deltaMinor > 0 ? "dashboard-delta-up" : deltaMinor < 0 ? "dashboard-delta-down" : "dashboard-delta-flat")}>
-                          {deltaMinor === 0 ? "No change" : `${formatDelta(deltaMinor, data.currency_code)} vs last month`}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
+            <CardContent>
+              <div className="rounded-lg border border-border/70">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Filter Group</TableHead>
+                      <TableHead>Monthly Spend</TableHead>
+                      <TableHead>Delta to Last Month</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.filter_groups.map((group) => {
+                      const prev = filterGroupTotalForMonth(previousMonthDashboard, group.key);
+                      const delta = group.total_minor - prev;
+                      const pct = prev > 0 ? ((delta / prev) * 100).toFixed(1) : null;
+                      return (
+                        <TableRow key={group.key}>
+                          <TableCell className="font-medium">{group.name}</TableCell>
+                          <TableCell>{formatMinor(group.total_minor, data.currency_code)}</TableCell>
+                          <TableCell>
+                            {prev === 0 && group.total_minor === 0 ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : (
+                              <span className={cn(delta > 0 ? "text-red-500" : delta < 0 ? "text-green-500" : "text-muted-foreground")}>
+                                {formatDelta(delta, data.currency_code)}
+                                {pct !== null ? ` (${delta > 0 ? "+" : ""}${pct}%)` : ""}
+                              </span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             </CardContent>
           </Card>
@@ -506,43 +449,6 @@ export function DashboardDailyPanel({
                   )}
                 </DashboardChartContainer>
               )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Year-over-Year Filter Group Comparison</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="muted text-sm">Compare the selected year against the prior year for each saved filter group.</p>
-              <div className="dashboard-comparison-grid">
-                {data.filter_groups.map((group, index) => {
-                  const currentTotalMinor = sumFilterGroupForMonths(selectedYearMonths, yearlyDashboardsByMonth, group.key);
-                  const previousTotalMinor = sumFilterGroupForMonths(previousYearMonths, yearlyDashboardsByMonth, group.key);
-                  const deltaMinor = currentTotalMinor - previousTotalMinor;
-                  return (
-                    <div key={group.key} className="dashboard-comparison-card">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-medium">{group.name}</p>
-                          <p className="muted text-xs">{selectedYear}</p>
-                        </div>
-                        <Badge variant="outline" style={{ borderColor: dashboardBarColor(index), color: dashboardBarColor(index) }}>
-                          {formatMinor(currentTotalMinor, data.currency_code)}
-                        </Badge>
-                      </div>
-                      <div className="grid gap-1 text-sm">
-                        <p className="muted">
-                          {selectedYear - 1}: <strong>{formatMinor(previousTotalMinor, data.currency_code)}</strong>
-                        </p>
-                        <p className={cn("dashboard-delta", deltaMinor > 0 ? "dashboard-delta-up" : deltaMinor < 0 ? "dashboard-delta-down" : "dashboard-delta-flat")}>
-                          {deltaMinor === 0 ? "No change" : `${formatDelta(deltaMinor, data.currency_code)} year over year`}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             </CardContent>
           </Card>
         </>

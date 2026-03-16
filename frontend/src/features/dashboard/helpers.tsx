@@ -14,6 +14,39 @@ import type { Dashboard } from "../../lib/types";
 export type DashboardTab = "overview" | "daily" | "breakdowns" | "insights" | "agent";
 export type DashboardViewMode = "month" | "year";
 
+export const BUILTIN_FILTER_GROUP_ORDER = ["day_to_day", "fixed", "one_time", "transfers", "untagged"] as const;
+export type BuiltinFilterGroupKey = (typeof BUILTIN_FILTER_GROUP_ORDER)[number];
+
+/** Income vs Expense Trend stacked bar order from bottom to top. */
+export const INCOME_TREND_SEGMENT_ORDER = ["fixed", "transfers", "one_time", "day_to_day", "untagged"] as const;
+
+export function sortByBuiltinOrder<T extends { key: string }>(groups: T[]): T[] {
+  return [...groups].sort((a, b) => {
+    const ai = BUILTIN_FILTER_GROUP_ORDER.indexOf(a.key as BuiltinFilterGroupKey);
+    const bi = BUILTIN_FILTER_GROUP_ORDER.indexOf(b.key as BuiltinFilterGroupKey);
+    if (ai === -1 && bi === -1) return a.key.localeCompare(b.key);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+}
+
+export function builtinGroupColor(key: string): string {
+  const index = BUILTIN_FILTER_GROUP_ORDER.indexOf(key as BuiltinFilterGroupKey);
+  return dashboardBarColor(index >= 0 ? index : BUILTIN_FILTER_GROUP_ORDER.length);
+}
+
+export function sortByIncomeTrendOrder<T extends { key: string }>(groups: T[]): T[] {
+  return [...groups].sort((a, b) => {
+    const ai = INCOME_TREND_SEGMENT_ORDER.indexOf(a.key as (typeof INCOME_TREND_SEGMENT_ORDER)[number]);
+    const bi = INCOME_TREND_SEGMENT_ORDER.indexOf(b.key as (typeof INCOME_TREND_SEGMENT_ORDER)[number]);
+    if (ai === -1 && bi === -1) return a.key.localeCompare(b.key);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+}
+
 export const DASHBOARD_TABS: Array<{ id: DashboardTab; label: string; description: string }> = [
   { id: "overview", label: "Overview", description: "Month snapshot, projection, and filter-group mix" },
   { id: "daily", label: "Spending", description: "Daily spending and month-over-month filter-group comparisons" },
@@ -139,6 +172,13 @@ export function formatMonthShort(monthKey: string): string {
 
 export function formatMonthLong(monthKey: string): string {
   return monthDate(monthKey).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
+
+/** Extract day-only label from YYYY-MM-DD for daily chart x-axis. */
+export function formatDayFromDate(dateStr: string): string {
+  const parts = String(dateStr ?? "").split("-");
+  const day = parts[2];
+  return day ? String(parseInt(day, 10)) : "";
 }
 
 export function filterGroupTotalForMonth(dashboard: Dashboard | undefined, filterGroupKey: string): number {
@@ -315,6 +355,48 @@ export function buildMonthlyChartData(data: Dashboard) {
   }));
 }
 
+const MAX_TREND_MONTHS = 12;
+
+/** Limit trend chart data to months with income/expense activity, at most MAX_TREND_MONTHS. */
+export function limitTrendDataToMonthsWithData<T extends { income_total_minor?: unknown; expense_total_minor?: unknown }>(
+  points: T[],
+  maxMonths = MAX_TREND_MONTHS
+): T[] {
+  const withData = points.filter(
+    (p) => Number(p.income_total_minor ?? 0) > 0 || Number(p.expense_total_minor ?? 0) > 0
+  );
+  return withData.slice(-maxMonths);
+}
+
 export function filterGroupNamesByKey(data: Dashboard) {
   return new Map(data.filter_groups.map((group) => [group.key, group.name]));
+}
+
+/** Aggregate tag_totals across all year months for a single filter group key. */
+export function buildYearFilterGroupTagTotals(
+  filterGroupKey: string,
+  selectedYearMonths: string[],
+  yearlyDashboardsByMonth: Map<string, Dashboard>
+): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const monthKey of selectedYearMonths) {
+    const group = yearlyDashboardsByMonth.get(monthKey)?.filter_groups.find((g) => g.key === filterGroupKey);
+    if (!group) continue;
+    for (const [tag, amount] of Object.entries(group.tag_totals)) {
+      totals[tag] = (totals[tag] ?? 0) + amount;
+    }
+  }
+  return totals;
+}
+
+/** Build per-group tag_totals for the yearly Sankey (aggregated across all year months). */
+export function buildYearlyFilterGroupsWithTagTotals(
+  filterGroups: Dashboard["filter_groups"],
+  selectedYearMonths: string[],
+  yearlyDashboardsByMonth: Map<string, Dashboard>
+): Dashboard["filter_groups"] {
+  return filterGroups.map((group) => ({
+    ...group,
+    tag_totals: buildYearFilterGroupTagTotals(group.key, selectedYearMonths, yearlyDashboardsByMonth)
+  }));
 }

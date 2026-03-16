@@ -54,6 +54,7 @@ class _ExpenseAnalyticsRollup:
     expense_totals_by_date: dict[date, int]
     filter_group_totals_by_date: dict[date, dict[str, int]]
     filter_group_totals: dict[str, int]
+    spending_by_tag_per_filter_group: dict[str, dict[str, int]]
     spending_by_from: dict[str, int]
     spending_by_to: dict[str, int]
     spending_by_tag: dict[str, int]
@@ -64,7 +65,7 @@ class _ExpenseAnalyticsRollup:
 @dataclass(frozen=True, slots=True)
 class DashboardAnalyticsOptions:
     currency_code: str = DASHBOARD_DEFAULT_CURRENCY_CODE
-    trend_months: int = 6
+    trend_months: int = 12
     today: date | None = None
     entry_filter: DashboardFilter | None = None
     account_filter: DashboardFilter | None = None
@@ -293,6 +294,9 @@ def _rollup_expense_entries(
         lambda: defaultdict(int)
     )
     filter_group_totals: dict[str, int] = defaultdict(int)
+    spending_by_tag_per_filter_group: dict[str, dict[str, int]] = defaultdict(
+        lambda: defaultdict(int)
+    )
     spending_by_from: dict[str, int] = defaultdict(int)
     spending_by_to: dict[str, int] = defaultdict(int)
     spending_by_tag: dict[str, int] = defaultdict(int)
@@ -303,12 +307,12 @@ def _rollup_expense_entries(
         amount_minor = entry.amount_minor
         expense_totals_by_date[entry.occurred_at] += amount_minor
 
-        matching_filter_group_keys = _matching_filter_group_keys(
+        entry_fg_keys = _matching_filter_group_keys(
             entry=entry,
             filter_groups=filter_groups,
             account_entity_ids=account_entity_ids,
         )
-        for key in matching_filter_group_keys:
+        for key in entry_fg_keys:
             filter_group_totals_by_date[entry.occurred_at][key] += amount_minor
             filter_group_totals[key] += amount_minor
 
@@ -316,13 +320,22 @@ def _rollup_expense_entries(
         spending_by_to[_normalize_breakdown_label(entry.to_entity)] += amount_minor
         weekday_totals[entry.occurred_at.weekday()] += amount_minor
 
+        normalized_tags: list[str] = []
         if entry.tags:
             for tag in entry.tags:
                 normalized_tag = tag.name.strip().lower() if tag.name else ""
                 if normalized_tag:
                     spending_by_tag[normalized_tag] += amount_minor
-        else:
+                    normalized_tags.append(normalized_tag)
+        if not normalized_tags:
             spending_by_tag["(untagged)"] += amount_minor
+
+        for fg_key in entry_fg_keys:
+            if normalized_tags:
+                for nt in normalized_tags:
+                    spending_by_tag_per_filter_group[fg_key][nt] += amount_minor
+            else:
+                spending_by_tag_per_filter_group[fg_key]["(untagged)"] += amount_minor
 
         largest_expenses.append(
             DashboardLargestExpenseItem(
@@ -331,7 +344,7 @@ def _rollup_expense_entries(
                 name=entry.name,
                 to_entity=entry.to_entity,
                 amount_minor=amount_minor,
-                matching_filter_group_keys=matching_filter_group_keys,
+                matching_filter_group_keys=entry_fg_keys,
             )
         )
 
@@ -339,6 +352,7 @@ def _rollup_expense_entries(
         expense_totals_by_date=expense_totals_by_date,
         filter_group_totals_by_date=filter_group_totals_by_date,
         filter_group_totals=filter_group_totals,
+        spending_by_tag_per_filter_group=spending_by_tag_per_filter_group,
         spending_by_from=spending_by_from,
         spending_by_to=spending_by_to,
         spending_by_tag=spending_by_tag,
@@ -363,6 +377,20 @@ def _build_dashboard_kpis(
         int(round(median(expense_day_values))) if expense_day_values else 0
     )
 
+    day_to_day_daily_values = [
+        v
+        for d in rollup.expense_totals_by_date
+        if (v := rollup.filter_group_totals_by_date.get(d, {}).get("day_to_day", 0)) > 0
+    ]
+    average_day_to_day_minor = (
+        int(round(sum(day_to_day_daily_values) / len(day_to_day_daily_values)))
+        if day_to_day_daily_values
+        else 0
+    )
+    median_day_to_day_minor = (
+        int(round(median(day_to_day_daily_values))) if day_to_day_daily_values else 0
+    )
+
     return DashboardKpisRead(
         expense_total_minor=expense_total_minor,
         income_total_minor=income_total_minor,
@@ -370,6 +398,8 @@ def _build_dashboard_kpis(
         average_expense_day_minor=average_expense_day_minor,
         median_expense_day_minor=median_expense_day_minor,
         spending_days=len(expense_day_values),
+        average_day_to_day_minor=average_day_to_day_minor,
+        median_day_to_day_minor=median_day_to_day_minor,
     )
 
 
@@ -625,6 +655,12 @@ def build_dashboard_analytics(
                 )
                 if kpis.expense_total_minor > 0
                 else 0.0,
+                tag_totals=dict(
+                    sorted(
+                        rollup.spending_by_tag_per_filter_group.get(filter_group.key, {}).items(),
+                        key=lambda item: -item[1],
+                    )[:12]
+                ),
             )
             for filter_group in active_filter_groups
         ],

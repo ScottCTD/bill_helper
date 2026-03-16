@@ -27,6 +27,8 @@ export interface DashboardKpis {
   average_expense_day_minor: number;
   median_expense_day_minor: number;
   spending_days: number;
+  average_day_to_day_minor: number;
+  median_day_to_day_minor: number;
 }
 
 export interface DashboardFilterGroupSummary {
@@ -36,6 +38,7 @@ export interface DashboardFilterGroupSummary {
   color: string | null;
   total_minor: number;
   share: number;
+  tag_totals: Record<string, number>;
 }
 
 export interface DashboardDailySpendingPoint {
