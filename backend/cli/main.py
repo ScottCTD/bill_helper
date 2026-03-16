@@ -30,6 +30,7 @@ from backend.cli.support import (
     resolve_group_id,
     resolve_payload_proposal_references,
     resolve_proposal_id,
+    resolve_snapshot_id,
     resolve_thread_id,
 )
 
@@ -67,6 +68,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _build_status_parser(subparsers)
     _build_entries_parser(subparsers)
     _build_accounts_parser(subparsers)
+    _build_snapshots_parser(subparsers)
     _build_groups_parser(subparsers)
     _build_entities_parser(subparsers)
     _build_tags_parser(subparsers)
@@ -130,17 +132,6 @@ def _build_accounts_parser(subparsers) -> None:
     _add_format_option(list_parser)
     list_parser.set_defaults(handler=_handle_accounts_list, render_key="accounts_list")
 
-    snapshots_parser = accounts.add_parser("snapshots", help="List account snapshots.")
-    _add_format_option(snapshots_parser)
-    snapshots_parser.add_argument("account_id")
-    snapshots_parser.set_defaults(handler=_handle_accounts_snapshots, render_key="accounts_snapshots")
-
-    recon_parser = accounts.add_parser("reconciliation", help="Get account reconciliation.")
-    _add_format_option(recon_parser)
-    recon_parser.add_argument("account_id")
-    recon_parser.add_argument("--as-of", default=None)
-    recon_parser.set_defaults(handler=_handle_accounts_reconciliation, render_key="accounts_reconciliation")
-
     create_parser = accounts.add_parser("create", help="Create an account proposal in the current thread.")
     _add_format_option(create_parser)
     _add_json_options(create_parser, inline_flag="--payload-json", file_flag="--payload-file", dest="payload")
@@ -156,6 +147,34 @@ def _build_accounts_parser(subparsers) -> None:
     _add_format_option(remove_parser)
     remove_parser.add_argument("account_ref")
     remove_parser.set_defaults(handler=_handle_accounts_remove, render_key="proposals_detail")
+
+
+def _build_snapshots_parser(subparsers) -> None:
+    parser = subparsers.add_parser("snapshots", help="Snapshot reads, reconciliation, and snapshot proposal commands.")
+    parser.set_defaults(help_parser=parser)
+    snapshots = parser.add_subparsers(dest="snapshots_command")
+
+    list_parser = snapshots.add_parser("list", help="List account snapshots.")
+    _add_format_option(list_parser)
+    list_parser.add_argument("account_id")
+    list_parser.set_defaults(handler=_handle_snapshots_list, render_key="snapshots_list")
+
+    recon_parser = snapshots.add_parser("reconciliation", help="Get account reconciliation.")
+    _add_format_option(recon_parser)
+    recon_parser.add_argument("account_id")
+    recon_parser.add_argument("--as-of", default=None)
+    recon_parser.set_defaults(handler=_handle_snapshots_reconciliation, render_key="snapshots_reconciliation")
+
+    create_parser = snapshots.add_parser("create", help="Create a snapshot proposal in the current thread.")
+    _add_format_option(create_parser)
+    _add_json_options(create_parser, inline_flag="--payload-json", file_flag="--payload-file", dest="payload")
+    create_parser.set_defaults(handler=_handle_snapshots_create, render_key="proposals_detail")
+
+    remove_parser = snapshots.add_parser("remove", help="Create a snapshot-delete proposal in the current thread.")
+    _add_format_option(remove_parser)
+    remove_parser.add_argument("account_id")
+    remove_parser.add_argument("snapshot_id")
+    remove_parser.set_defaults(handler=_handle_snapshots_remove, render_key="proposals_detail")
 
 
 def _build_groups_parser(subparsers) -> None:
@@ -252,7 +271,7 @@ def _build_tags_parser(subparsers) -> None:
 
 
 def _build_proposals_parser(subparsers) -> None:
-    parser = subparsers.add_parser("proposals", help="Current-thread proposal inspection.")
+    parser = subparsers.add_parser("proposals", help="Current-thread proposal inspection and mutation.")
     parser.set_defaults(help_parser=parser)
     proposals = parser.add_subparsers(dest="proposals_command")
 
@@ -269,6 +288,17 @@ def _build_proposals_parser(subparsers) -> None:
     _add_format_option(get_parser)
     get_parser.add_argument("proposal_id")
     get_parser.set_defaults(handler=_handle_proposals_get, render_key="proposals_detail")
+
+    update_parser = proposals.add_parser("update", help="Update one pending proposal by id.")
+    _add_format_option(update_parser)
+    update_parser.add_argument("proposal_id")
+    _add_json_options(update_parser, inline_flag="--patch-json", file_flag="--patch-file", dest="patch")
+    update_parser.set_defaults(handler=_handle_proposals_update, render_key="proposals_detail")
+
+    remove_parser = proposals.add_parser("remove", help="Remove one pending proposal by id.")
+    _add_format_option(remove_parser)
+    remove_parser.add_argument("proposal_id")
+    remove_parser.set_defaults(handler=_handle_proposals_remove)
 
 
 def _add_json_options(
@@ -342,13 +372,13 @@ def _handle_accounts_list(_args: argparse.Namespace, context: CliContext) -> Any
     return payload
 
 
-def _handle_accounts_snapshots(args: argparse.Namespace, context: CliContext) -> Any:
+def _handle_snapshots_list(args: argparse.Namespace, context: CliContext) -> Any:
     resolved_id = resolve_account_id(context, account_id=args.account_id)
     _, payload = request_json(context, "GET", f"/accounts/{resolved_id}/snapshots")
     return payload
 
 
-def _handle_accounts_reconciliation(args: argparse.Namespace, context: CliContext) -> Any:
+def _handle_snapshots_reconciliation(args: argparse.Namespace, context: CliContext) -> Any:
     resolved_id = resolve_account_id(context, account_id=args.account_id)
     _, payload = request_json(
         context,
@@ -418,6 +448,28 @@ def _handle_accounts_update(args: argparse.Namespace, context: CliContext) -> An
 def _handle_accounts_remove(args: argparse.Namespace, context: CliContext) -> Any:
     account_name = resolve_account_name(context, account_ref=args.account_ref)
     return _create_thread_proposal(context, change_type="delete_account", payload_json={"name": account_name})
+
+
+def _handle_snapshots_create(args: argparse.Namespace, context: CliContext) -> Any:
+    payload_json = load_json_argument(inline_json=args.payload_json, json_file=args.payload_file)
+    if not isinstance(payload_json, dict):
+        raise CliError("Snapshot create payload must be a JSON object.")
+    raw_account_id = payload_json.get("account_id")
+    if not isinstance(raw_account_id, str) or not raw_account_id.strip():
+        raise CliError("Snapshot create payload requires account_id.")
+    canonical_payload = dict(payload_json)
+    canonical_payload["account_id"] = resolve_account_id(context, account_id=raw_account_id)
+    return _create_thread_proposal(context, change_type="create_snapshot", payload_json=canonical_payload)
+
+
+def _handle_snapshots_remove(args: argparse.Namespace, context: CliContext) -> Any:
+    account_id = resolve_account_id(context, account_id=args.account_id)
+    snapshot_id = resolve_snapshot_id(context, account_id=account_id, snapshot_id=args.snapshot_id)
+    return _create_thread_proposal(
+        context,
+        change_type="delete_snapshot",
+        payload_json={"account_id": account_id, "snapshot_id": snapshot_id},
+    )
 
 
 def _handle_groups_create(args: argparse.Namespace, context: CliContext) -> Any:
@@ -516,6 +568,35 @@ def _handle_proposals_get(args: argparse.Namespace, context: CliContext) -> Any:
         context,
         "GET",
         f"/agent/threads/{thread_id}/proposals/{resolved_proposal_id}",
+        include_run_id=True,
+    )
+    return payload
+
+
+def _handle_proposals_update(args: argparse.Namespace, context: CliContext) -> Any:
+    thread_id = resolve_thread_id(context)
+    proposal_id = resolve_proposal_id(context, thread_id=thread_id, proposal_id=args.proposal_id)
+    patch_map = load_json_argument(inline_json=args.patch_json, json_file=args.patch_file)
+    if not isinstance(patch_map, dict):
+        raise CliError("Proposal patch must be a JSON object.")
+    canonical_patch_map = resolve_payload_proposal_references(context, thread_id=thread_id, payload=patch_map)
+    _, payload = request_json(
+        context,
+        "PATCH",
+        f"/agent/threads/{thread_id}/proposals/{proposal_id}",
+        json_body={"patch_map": canonical_patch_map},
+        include_run_id=True,
+    )
+    return payload
+
+
+def _handle_proposals_remove(args: argparse.Namespace, context: CliContext) -> Any:
+    thread_id = resolve_thread_id(context)
+    proposal_id = resolve_proposal_id(context, thread_id=thread_id, proposal_id=args.proposal_id)
+    _, payload = request_json(
+        context,
+        "DELETE",
+        f"/agent/threads/{thread_id}/proposals/{proposal_id}",
         include_run_id=True,
     )
     return payload

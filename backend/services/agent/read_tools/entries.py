@@ -11,7 +11,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
 from backend.models_finance import Entry
-from backend.services.agent.entry_references import entry_ambiguity_details, entry_to_public_record
+from backend.services.agent.entry_references import entry_to_public_record
 from backend.services.agent.read_tools.common import format_entry_record, string_match_rank, tool_principal_scope
 from backend.services.agent.tool_args.read import ListEntriesArgs
 from backend.services.agent.tool_results import format_lines
@@ -137,4 +137,4 @@ def list_entries(context: ToolContext, args: ListEntriesArgs) -> ToolExecutionRe
     )
 
 
-__all__ = ["entry_ambiguity_details", "list_entries"]
+__all__ = ["list_entries"]

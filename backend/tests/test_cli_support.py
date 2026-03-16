@@ -12,6 +12,7 @@ from backend.cli.support import (
     resolve_entry_id,
     resolve_payload_proposal_references,
     resolve_proposal_id,
+    resolve_snapshot_id,
 )
 from backend.tests.test_entries import create_account, create_entry
 
@@ -228,17 +229,15 @@ def test_top_level_help_omits_removed_commands() -> None:
     assert "threads" not in help_text
     assert "reviews" not in help_text
     assert "\n  workspace" not in help_text
+    assert "snapshots" in help_text
 
 
-def test_proposals_parser_is_read_only(capsys) -> None:
+def test_proposals_parser_includes_update_and_remove(capsys) -> None:
     exit_code = cli_main.main(["proposals"])
     captured = capsys.readouterr()
 
     assert exit_code == 1
-    assert "proposals [-h] {list,get}" in captured.out
-    assert "create" not in captured.out
-    assert "update" not in captured.out
-    assert "remove" not in captured.out
+    assert "proposals [-h] {list,get,update,remove}" in captured.out
 
 
 def test_resolve_entry_id_accepts_short_prefix(client, monkeypatch) -> None:
@@ -294,6 +293,33 @@ def test_resolve_proposal_id_accepts_short_prefix(client, monkeypatch) -> None:
     )
 
     assert resolved == "293272a6-44da-42cc-b2e4-43644a729979"
+
+
+def test_resolve_snapshot_id_accepts_short_prefix(client, monkeypatch) -> None:
+    monkeypatch.setenv("BH_API_BASE_URL", "http://testserver/api/v1")
+    monkeypatch.setenv("BH_AUTH_TOKEN", "token")
+
+    def fake_request_json(context, method, path, **kwargs):
+        assert method == "GET"
+        assert path == "/accounts/account-123/snapshots"
+        return 200, [
+            {
+                "id": "4dcbca9e-44da-42cc-b2e4-43644a729979",
+                "snapshot_at": "2026-03-15",
+                "balance_minor": 12345,
+                "note": "statement",
+            }
+        ]
+
+    monkeypatch.setattr("backend.cli.support.request_json", fake_request_json)
+
+    resolved = resolve_snapshot_id(
+        build_cli_context(output_format="json"),
+        account_id="account-123",
+        snapshot_id="4dcbca9e",
+    )
+
+    assert resolved == "4dcbca9e-44da-42cc-b2e4-43644a729979"
 
 
 def test_resolve_payload_proposal_references_canonicalizes_nested_refs(monkeypatch) -> None:

@@ -182,6 +182,11 @@ class AgentProposalCreateRequest(AgentSchema):
     change_type: AgentChangeType
     payload_json: dict[str, Any]
 
+
+class AgentProposalUpdateRequest(AgentSchema):
+    patch_map: dict[str, Any]
+
+
 class AgentProposalRecordRead(AgentSchema):
     proposal_id: str
     proposal_short_id: str

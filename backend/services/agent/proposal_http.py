@@ -29,6 +29,8 @@ from backend.services.access_scope import load_agent_run_for_principal
 from backend.services.agent.change_contracts.catalog import (
     CreateAccountPayload,
     CreateEntityPayload,
+    SnapshotCreatePayload,
+    SnapshotDeletePayload,
     CreateTagPayload,
     DeleteAccountPayload,
     DeleteEntityPayload,
@@ -44,12 +46,14 @@ from backend.services.agent.change_contracts.entries import (
     DeleteEntryPayload,
     UpdateEntryPayload,
 )
+from backend.services.agent.change_contracts.patches import validate_patch_map_paths
 from backend.services.agent.change_contracts.groups import (
     CreateGroupPayload,
     DeleteGroupPayload,
     UpdateGroupPayload,
 )
 from backend.services.agent.proposal_metadata import proposal_metadata_for_change_type
+from backend.services.agent.proposal_patching import apply_patch_map_to_payload
 from backend.services.agent.proposals.catalog import (
     propose_create_account,
     propose_create_entity,
@@ -164,6 +168,37 @@ def create_thread_proposal(
     return get_thread_proposal(context, proposal_id=proposal_id)
 
 
+def update_thread_proposal(
+    context: ToolContext,
+    *,
+    proposal_id: str,
+    patch_map: dict[str, Any],
+) -> dict[str, Any]:
+    item = _load_mutable_proposal_item(context, proposal_id=proposal_id)
+    try:
+        validate_patch_map_paths(item.change_type, patch_map)
+        updated_payload = apply_patch_map_to_payload(dict(item.payload_json), patch_map)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid proposal patch: {exc}",
+        ) from exc
+    item.payload_json = _validate_payload_model(_stored_payload_model_for_change_type(item.change_type), updated_payload)
+    context.db.add(item)
+    context.db.flush()
+    return get_thread_proposal(context, proposal_id=item.id)
+
+
+def delete_thread_proposal(
+    context: ToolContext,
+    *,
+    proposal_id: str,
+) -> None:
+    item = _load_mutable_proposal_item(context, proposal_id=proposal_id)
+    context.db.delete(item)
+    context.db.flush()
+
+
 def _load_proposal_item(context: ToolContext, *, proposal_id: str) -> AgentChangeItem:
     item = resolve_proposal_by_id(context, proposal_id)
     if item is None:
@@ -183,6 +218,16 @@ def _load_proposal_item(context: ToolContext, *, proposal_id: str) -> AgentChang
             detail="Proposal not found.",
         )
     return loaded_item
+
+
+def _load_mutable_proposal_item(context: ToolContext, *, proposal_id: str) -> AgentChangeItem:
+    item = _load_proposal_item(context, proposal_id=proposal_id)
+    if item.status != AgentChangeStatus.PENDING_REVIEW:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only pending proposals can be updated or removed.",
+        )
+    return item
 
 
 def _public_proposal_record(item: AgentChangeItem) -> dict[str, Any]:
@@ -227,9 +272,9 @@ def _proposal_summary(item: AgentChangeItem) -> str:
             f"tags={payload.get('tags') or []}"
         )
     if change_type == AgentChangeType.UPDATE_ENTRY.value:
-        return f"update entry target={payload.get('entry_id') or payload.get('selector')} patch={payload.get('patch') or {}}"
+        return f"update entry target={payload.get('entry_id')} patch={payload.get('patch') or {}}"
     if change_type == AgentChangeType.DELETE_ENTRY.value:
-        return f"delete entry target={payload.get('entry_id') or payload.get('selector')}"
+        return f"delete entry target={payload.get('entry_id')}"
     if change_type == AgentChangeType.CREATE_GROUP.value:
         return f"create group name={payload.get('name')} group_type={payload.get('group_type')}"
     if change_type == AgentChangeType.UPDATE_GROUP.value:
@@ -299,6 +344,30 @@ def _proposal_handler_for_change_type(change_type: AgentChangeType):
     }.get(change_type) or _raise_unsupported_change_type(change_type)
 
 
+def _stored_payload_model_for_change_type(change_type: AgentChangeType):
+    return {
+        AgentChangeType.CREATE_ENTRY: CreateEntryPayload,
+        AgentChangeType.UPDATE_ENTRY: UpdateEntryPayload,
+        AgentChangeType.DELETE_ENTRY: DeleteEntryPayload,
+        AgentChangeType.CREATE_ACCOUNT: CreateAccountPayload,
+        AgentChangeType.UPDATE_ACCOUNT: UpdateAccountPayload,
+        AgentChangeType.DELETE_ACCOUNT: DeleteAccountPayload,
+        AgentChangeType.CREATE_SNAPSHOT: SnapshotCreatePayload,
+        AgentChangeType.DELETE_SNAPSHOT: SnapshotDeletePayload,
+        AgentChangeType.CREATE_GROUP: CreateGroupPayload,
+        AgentChangeType.UPDATE_GROUP: UpdateGroupPayload,
+        AgentChangeType.DELETE_GROUP: DeleteGroupPayload,
+        AgentChangeType.CREATE_GROUP_MEMBER: ProposeUpdateGroupMembershipArgs,
+        AgentChangeType.DELETE_GROUP_MEMBER: ProposeUpdateGroupMembershipArgs,
+        AgentChangeType.CREATE_TAG: CreateTagPayload,
+        AgentChangeType.UPDATE_TAG: UpdateTagPayload,
+        AgentChangeType.DELETE_TAG: DeleteTagPayload,
+        AgentChangeType.CREATE_ENTITY: CreateEntityPayload,
+        AgentChangeType.UPDATE_ENTITY: UpdateEntityPayload,
+        AgentChangeType.DELETE_ENTITY: DeleteEntityPayload,
+    }.get(change_type) or _raise_unsupported_change_type(change_type)
+
+
 def _raise_unsupported_change_type(change_type: AgentChangeType):
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
@@ -314,3 +383,7 @@ def _validate_arguments(args_model, payload_json: dict[str, Any]):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid proposal payload: {exc}",
         ) from exc
+
+
+def _validate_payload_model(args_model, payload_json: dict[str, Any]) -> dict[str, Any]:
+    return _validate_arguments(args_model, payload_json).model_dump(mode="json")

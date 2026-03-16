@@ -12,7 +12,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from backend.enums_finance import EntryKind
 from backend.services.agent.change_contracts.common import (
-    normalize_object_json_string,
     normalize_optional_proposal_id,
     normalize_optional_reference_id,
 )
@@ -29,31 +28,6 @@ class ChangePayloadModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-def _is_complete_entry_selector_payload(value: Any) -> bool:
-    if not isinstance(value, dict):
-        return False
-    if value.get("date") is None or value.get("amount_minor") is None:
-        return False
-    return all(
-        normalize_optional_reference_id(value.get(field)) is not None
-        for field in ("from_entity", "to_entity", "name")
-    )
-
-
-def normalize_entry_reference_payload(value: Any) -> Any:
-    if not isinstance(value, dict):
-        return value
-    normalized = dict(value)
-    if "entry_id" in normalized:
-        normalized["entry_id"] = normalize_optional_reference_id(normalized.get("entry_id"))
-    selector = normalize_object_json_string(normalized.get("selector"))
-    if normalized.get("entry_id") is not None and not _is_complete_entry_selector_payload(selector):
-        normalized["selector"] = None
-    else:
-        normalized["selector"] = selector
-    return normalized
-
-
 class CreateEntryPayload(ChangePayloadModel):
     kind: EntryKind
     date: DateValue
@@ -64,14 +38,6 @@ class CreateEntryPayload(ChangePayloadModel):
     to_entity: RequiredEntityName = Field(min_length=1, max_length=255)
     tags: NormalizedTagList = Field(default_factory=list)
     markdown_notes: str | None = None
-
-
-class EntrySelectorPayload(ChangePayloadModel):
-    date: DateValue
-    amount_minor: int = Field(gt=0)
-    from_entity: RequiredEntityName = Field(min_length=1, max_length=255)
-    to_entity: RequiredEntityName = Field(min_length=1, max_length=255)
-    name: RequiredEntityName = Field(min_length=1, max_length=255)
 
 
 class UpdateEntryPatchPayload(NonEmptyPatchModel):
@@ -87,52 +53,30 @@ class UpdateEntryPatchPayload(NonEmptyPatchModel):
 
 
 class UpdateEntryPayload(ChangePayloadModel):
-    entry_id: str | None = Field(default=None, min_length=4, max_length=36)
-    selector: EntrySelectorPayload | None = None
+    entry_id: str = Field(min_length=4, max_length=36)
     patch: UpdateEntryPatchPayload
     target: dict[str, Any] | None = None
 
     @field_validator("entry_id")
     @classmethod
-    def normalize_entry_id(cls, value: str | None) -> str | None:
-        return normalize_optional_reference_id(value)
-
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_nested_object_args(cls, value: Any) -> Any:
-        normalized = normalize_entry_reference_payload(value)
-        if not isinstance(normalized, dict):
-            return normalized
-        normalized["patch"] = normalize_object_json_string(normalized.get("patch"))
+    def normalize_entry_id(cls, value: str) -> str:
+        normalized = normalize_optional_reference_id(value)
+        if normalized is None:
+            raise ValueError("entry_id is required")
         return normalized
-
-    @model_validator(mode="after")
-    def ensure_reference_present(self) -> UpdateEntryPayload:
-        if self.entry_id is None and self.selector is None:
-            raise ValueError("either entry_id or selector is required")
-        return self
 
 
 class DeleteEntryPayload(ChangePayloadModel):
-    entry_id: str | None = Field(default=None, min_length=4, max_length=36)
-    selector: EntrySelectorPayload | None = None
+    entry_id: str = Field(min_length=4, max_length=36)
     target: dict[str, Any] | None = None
 
     @field_validator("entry_id")
     @classmethod
-    def normalize_entry_id(cls, value: str | None) -> str | None:
-        return normalize_optional_reference_id(value)
-
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_nested_object_args(cls, value: Any) -> Any:
-        return normalize_entry_reference_payload(value)
-
-    @model_validator(mode="after")
-    def ensure_reference_present(self) -> DeleteEntryPayload:
-        if self.entry_id is None and self.selector is None:
-            raise ValueError("either entry_id or selector is required")
-        return self
+    def normalize_entry_id(cls, value: str) -> str:
+        normalized = normalize_optional_reference_id(value)
+        if normalized is None:
+            raise ValueError("entry_id is required")
+        return normalized
 
 
 class EntryReferencePayload(ChangePayloadModel):

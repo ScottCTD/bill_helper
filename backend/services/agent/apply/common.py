@@ -16,7 +16,7 @@ from backend.enums_agent import AgentChangeType
 from backend.models_agent import AgentChangeItem
 from backend.models_finance import Entry, EntryGroup
 from backend.services.agent.change_contracts import ChangePayloadModel
-from backend.services.agent.change_contracts.entries import EntryReferencePayload, EntrySelectorPayload
+from backend.services.agent.change_contracts.entries import EntryReferencePayload
 from backend.services.agent.change_contracts.groups import (
     ChildGroupMemberTargetPayload,
     EntryGroupMemberTargetPayload,
@@ -25,7 +25,6 @@ from backend.services.agent.change_contracts.groups import (
 from backend.services.agent.entry_references import (
     entry_public_summary,
     find_entries_by_exact_id,
-    find_entries_by_selector,
 )
 from backend.services.agent.group_references import (
     find_groups_by_id,
@@ -42,26 +41,6 @@ class AppliedResource:
 
 
 ChangeApplyHandler = Callable[[Session, ChangePayloadModel, RequestPrincipal], AppliedResource]
-
-
-def find_unique_entry_by_selector(
-    db: Session,
-    selector_payload: EntrySelectorPayload,
-    *,
-    principal: RequestPrincipal,
-) -> Entry:
-    matches = find_entries_by_selector(
-        db,
-        selector_payload,
-        principal_user_id=principal.user_id,
-        is_admin=False,
-    )
-    if not matches:
-        raise ValueError("Entry selector did not match any entry")
-    if len(matches) > 1:
-        candidates = "; ".join(entry_public_summary(entry) for entry in matches)
-        raise ValueError(f"Entry selector is ambiguous ({len(matches)} matches): {candidates}")
-    return matches[0]
 
 
 def find_unique_entry_by_id(

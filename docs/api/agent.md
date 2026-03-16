@@ -226,6 +226,38 @@ Behavior:
 - associates the new `AgentChangeItem` with the active run from `X-Bill-Helper-Agent-Run-Id`
 - supports the full current proposal set: entry, account, snapshot, group, group-member, tag, and entity changes
 
+### `PATCH /agent/threads/{thread_id}/proposals/{proposal_id}`
+
+Update one pending proposal by canonical full id. Response: `AgentProposalRecordRead`
+
+Body:
+
+- `patch_map`
+
+Behavior:
+
+- only `PENDING_REVIEW` proposals are mutable
+- validates patch-map roots by change type before applying the update
+- validates the patched payload against the stored proposal payload contract before saving it
+
+Errors:
+
+- `400` invalid patch or proposal is not pending
+- `404` proposal not found
+
+### `DELETE /agent/threads/{thread_id}/proposals/{proposal_id}`
+
+Remove one pending proposal by canonical full id. Response: `204 No Content`
+
+Behavior:
+
+- only `PENDING_REVIEW` proposals are removable
+
+Errors:
+
+- `400` proposal is not pending
+- `404` proposal not found
+
 ### `POST /agent/change-items/{item_id}/approve`
 
 Approve and apply one proposal item. Response: `AgentChangeItemRead`

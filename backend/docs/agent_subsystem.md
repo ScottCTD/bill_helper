@@ -140,6 +140,8 @@ Endpoints:
 - `GET /api/v1/agent/threads/{thread_id}/proposals`
 - `GET /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
 - `POST /api/v1/agent/threads/{thread_id}/proposals`
+- `PATCH /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
+- `DELETE /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
 - `GET /api/v1/agent/runs/{run_id}`
 - `GET /api/v1/agent/tool-calls/{tool_call_id}`
 - `POST /api/v1/agent/runs/{run_id}/interrupt`

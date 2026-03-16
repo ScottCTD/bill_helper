@@ -12,7 +12,6 @@ from backend.models_finance import Entry
 from backend.services.agent.apply.common import (
     AppliedResource,
     find_unique_entry_by_id,
-    find_unique_entry_by_selector,
 )
 from backend.services.agent.change_contracts.entries import (
     CreateEntryPayload,
@@ -61,12 +60,7 @@ def apply_update_entry(
     payload: UpdateEntryPayload,
     principal: RequestPrincipal,
 ) -> AppliedResource:
-    if payload.entry_id is not None:
-        entry = find_unique_entry_by_id(db, payload.entry_id, principal=principal)
-    elif payload.selector is not None:
-        entry = find_unique_entry_by_selector(db, payload.selector, principal=principal)
-    else:  # pragma: no cover - validated by Pydantic
-        raise ValueError("Entry reference is required")
+    entry = find_unique_entry_by_id(db, payload.entry_id, principal=principal)
 
     if "kind" in payload.patch.model_fields_set and payload.patch.kind is not None:
         entry.kind = payload.patch.kind
@@ -121,12 +115,7 @@ def apply_delete_entry(
     payload: DeleteEntryPayload,
     principal: RequestPrincipal,
 ) -> AppliedResource:
-    if payload.entry_id is not None:
-        entry = find_unique_entry_by_id(db, payload.entry_id, principal=principal)
-    elif payload.selector is not None:
-        entry = find_unique_entry_by_selector(db, payload.selector, principal=principal)
-    else:  # pragma: no cover - validated by Pydantic
-        raise ValueError("Entry reference is required")
+    entry = find_unique_entry_by_id(db, payload.entry_id, principal=principal)
     soft_delete_entry(db, entry)
     db.flush()
     return AppliedResource(resource_type="entry", resource_id=entry.id)

@@ -199,7 +199,7 @@ def _render_accounts_snapshots_compact(payload: list[dict[str, Any]]) -> str:
         ]
         for item in payload
     ]
-    return compact_table(summary=f"returned {len(rows)} snapshot(s)", schema_key="accounts_snapshots", rows=rows)
+    return compact_table(summary=f"returned {len(rows)} snapshot(s)", schema_key="snapshots_list", rows=rows)
 
 
 def _render_accounts_snapshots_text(payload: list[dict[str, Any]]) -> str:
@@ -239,7 +239,7 @@ def _render_accounts_reconciliation_compact(payload: dict[str, Any]) -> str:
         f"account: {escape_compact(payload.get('account_name') or '-')}",
         f"currency: {escape_compact(payload.get('currency_code') or '-')}",
         f"as_of: {escape_compact(payload.get('as_of') or '-')}",
-        f"schema: {compact_schema_for('accounts_reconciliation')}",
+        f"schema: {compact_schema_for('snapshots_reconciliation')}",
     ]
     if interval_rows:
         lines.extend(compact_row(row) for row in interval_rows)
@@ -517,8 +517,8 @@ _COMPACT_RENDERERS = {
     "entries_list": _render_entries_list_compact,
     "entries_detail": _render_entry_detail_compact,
     "accounts_list": _render_accounts_list_compact,
-    "accounts_snapshots": _render_accounts_snapshots_compact,
-    "accounts_reconciliation": _render_accounts_reconciliation_compact,
+    "snapshots_list": _render_accounts_snapshots_compact,
+    "snapshots_reconciliation": _render_accounts_reconciliation_compact,
     "groups_list": _render_groups_list_compact,
     "groups_detail": _render_group_detail_compact,
     "entities_list": _render_entities_list_compact,
@@ -532,8 +532,8 @@ _TEXT_RENDERERS = {
     "entries_list": _render_entries_list_text,
     "entries_detail": _render_entry_detail_text,
     "accounts_list": _render_accounts_list_text,
-    "accounts_snapshots": _render_accounts_snapshots_text,
-    "accounts_reconciliation": _render_accounts_reconciliation_text,
+    "snapshots_list": _render_accounts_snapshots_text,
+    "snapshots_reconciliation": _render_accounts_reconciliation_text,
     "groups_list": _render_groups_list_text,
     "groups_detail": _render_group_detail_text,
     "entities_list": _render_entities_list_text,

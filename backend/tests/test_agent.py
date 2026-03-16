@@ -676,12 +676,12 @@ def test_system_prompt_mentions_snapshot_and_reconciliation_tools():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
-    assert "Treat snapshots as bank balance checkpoints for one account on a specific date." in prompt
-    assert "Reconciliation is interval-based, not lifetime-based:" in prompt
+    assert "Snapshots are bank balance checkpoints on a specific date." in prompt
+    assert "Reconciliation is interval-based:" in prompt
     assert "Entries on a snapshot date belong to the interval ending at that snapshot." in prompt
-    assert "Use snapshot proposals" in prompt
-    assert "inspect the account's existing checkpoints" in prompt
-    assert "Use reconciliation reads" in prompt
+    assert "Use `bh snapshots create`" in prompt
+    assert "inspect the account's existing checkpoints with `bh snapshots list`" in prompt
+    assert "Use `bh snapshots reconciliation`" in prompt
 
 
 def test_system_prompt_requires_canonical_name_normalization_examples():
@@ -717,18 +717,20 @@ def test_system_prompt_requires_entry_updates_before_tag_delete():
     assert prompt.index(reference_phrase) < prompt.index(update_phrase) < prompt.index(delete_phrase)
 
 
-def test_system_prompt_guides_pending_proposal_inspection_without_direct_revision_commands():
+def test_system_prompt_guides_pending_proposal_inspection_with_edit_commands():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
     inspect_phrase = "Use `bh proposals list` to inspect proposal history in the current thread"
-    revise_phrase = "Do not assume pending proposals are directly editable through `bh`."
-    remove_phrase = "If the user wants a different end state, inspect existing proposals first"
+    revise_phrase = "`bh proposals update` updates an existing pending proposal in the current thread."
+    remove_phrase = "`bh proposals remove` removes an existing pending proposal in the current thread."
+    next_phrase = "If the user wants a different end state, inspect existing proposals first"
 
     assert inspect_phrase in prompt
     assert revise_phrase in prompt
     assert remove_phrase in prompt
-    assert prompt.index(inspect_phrase) < prompt.index(revise_phrase) < prompt.index(remove_phrase)
+    assert next_phrase in prompt
+    assert prompt.index(inspect_phrase) < prompt.index(revise_phrase) < prompt.index(remove_phrase) < prompt.index(next_phrase)
 
 
 def test_system_prompt_includes_grouping_workflow_rules():
@@ -792,17 +794,15 @@ def test_system_prompt_prefers_parallel_tool_calls_for_independent_work():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
-    assert "Prefer parallel tool calls when tasks are independent." in prompt
-    assert "batch only when the results do not depend on each other." in prompt
+    assert "Prefer parallel tool calls for independent tasks" in prompt
+    assert "start with one, validate, then parallelize the rest." in prompt
 
 
 def test_system_prompt_stages_first_proposal_before_parallel_batches():
     from backend.services.agent.prompts import system_prompt
 
     prompt = system_prompt()
-    assert "Do not start a proposal workflow with a large parallel batch of `bh entries create`, `bh tags create`, `bh entities create`, `bh accounts create`, or `bh groups create` commands." in prompt
-    assert "Start with one representative proposal command first" in prompt
-    assert "After the first proposal succeeds and the pattern is validated" in prompt
+    assert "for `bh * create` proposals, start with one, validate, then parallelize the rest." in prompt
 
 
 def test_system_prompt_includes_current_date_tag():

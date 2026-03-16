@@ -199,6 +199,19 @@ def resolve_proposal_id(context: CliContext, *, thread_id: str, proposal_id: str
     )
 
 
+def resolve_snapshot_id(context: CliContext, *, account_id: str, snapshot_id: str) -> str:
+    normalized = snapshot_id.strip()
+    if not normalized:
+        raise CliError("Missing snapshot id.")
+    _, payload = request_json(context, "GET", f"/accounts/{account_id}/snapshots")
+    records = payload if isinstance(payload, list) else []
+    return _resolve_id_from_records(
+        records=records,
+        candidate_id=normalized,
+        resource_label="snapshot",
+    )
+
+
 def resolve_payload_proposal_references(context: CliContext, *, thread_id: str, payload: Any) -> Any:
     cache: dict[str, str] = {}
     records_state: dict[str, list[dict[str, Any]] | None] = {"records": None}

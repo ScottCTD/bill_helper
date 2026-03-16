@@ -174,13 +174,14 @@ Compact output is line-oriented and token-efficient:
 ### Canonical `bh` Cheat Sheet
 
 <!-- GENERATED:bh-cheat-sheet:start -->
-Use `bh` for Bill Helper app reads and current-thread proposal creation.
+Use `bh` for Bill Helper app reads and current-thread proposal creation and proposal mutation.
 
 - Agent calls should expect `compact` output by default; use `--format text` or `--format json` only when needed.
 - List output uses 8-character ids when unique in the current result set; collisions fall back to full ids.
 - Compact output is line-oriented: one `schema:` line defines column order, then one escaped `|`-delimited row per record.
 - Read commands work in the human IDE terminal. Any `create`, `update`, `remove`, `add-member`, `remove-member`, or `proposals` command requires the current agent-run env (`BH_THREAD_ID` and `BH_RUN_ID`).
 - Inspect before mutating: read entries/tags/accounts/entities/groups/proposals first, then create resource-scoped proposals.
+- `bh proposals update` and `bh proposals remove` only work for pending proposals in the current thread.
 
 Common commands:
 - `bh status`
@@ -190,11 +191,13 @@ Common commands:
 - `bh entries update <entry_id> (--patch-json JSON | --patch-file PATH)`
 - `bh entries remove <entry_id>`
 - `bh accounts list`
-- `bh accounts snapshots <account_id>`
-- `bh accounts reconciliation <account_id> [--as-of YYYY-MM-DD]`
 - `bh accounts create (--payload-json JSON | --payload-file PATH)`
 - `bh accounts update <account_ref> (--patch-json JSON | --patch-file PATH)`
 - `bh accounts remove <account_ref>`
+- `bh snapshots list <account_id>`
+- `bh snapshots reconciliation <account_id> [--as-of YYYY-MM-DD]`
+- `bh snapshots create (--payload-json JSON | --payload-file PATH)`
+- `bh snapshots remove <account_id> <snapshot_id>`
 - `bh groups list`
 - `bh groups get <group_id>`
 - `bh groups create (--payload-json JSON | --payload-file PATH)`
@@ -212,10 +215,13 @@ Common commands:
 - `bh tags remove <tag_name>`
 - `bh proposals list [--proposal-type TYPE] [--proposal-status STATUS] [--change-action ACTION] [--proposal-id ID] [--limit N]`
 - `bh proposals get <proposal_id>`
+- `bh proposals update <proposal_id> (--patch-json JSON | --patch-file PATH)`
+- `bh proposals remove <proposal_id>`
 
 Compact list schemas:
 - `entries_list` -> `id|date|kind|amount_minor|currency|name|from|to|tags`
 - `accounts_list` -> `id|name|currency|active`
+- `snapshots_list` -> `id|date|balance_minor|note`
 - `groups_list` -> `id|type|name|descendants|first_date|last_date`
 - `entities_list` -> `name|category`
 - `tags_list` -> `name|type|description`
@@ -227,6 +233,9 @@ Common flows:
 - Create a tag proposal: `bh tags create --payload-json '{"name":"grocery","type":"expense"}'`
 - Create an entry-update proposal: `bh entries update 8bf2fa83 --patch-json '{"tags":["grocery","one_time"]}'`
 - Create an account proposal: `bh accounts create --payload-json '{"name":"Wealthsimple Cash","currency_code":"CAD","is_active":true}'`
+- Create a snapshot proposal: `bh snapshots create --payload-json '{"account_id":"1a2b3c4d","snapshot_at":"2026-03-15","balance":"1234.56","note":"statement balance"}'`
+- Update a pending proposal: `bh proposals update a1b2c3d4 --patch-json '{"patch.tags":["grocery"]}'`
+- Remove a pending proposal: `bh proposals remove a1b2c3d4`
 - Create a group-membership add proposal: `bh groups add-member --payload-json '{"action":"add","group_ref":{"group_id":"a971c92e"},"target":{"target_type":"entry","entry_ref":{"entry_id":"8bf2fa83"}}}'`
 <!-- GENERATED:bh-cheat-sheet:end -->
 
@@ -237,8 +246,9 @@ Proposal lifecycle is now thread-scoped through the CLI and review APIs:
 1. the agent runs a resource-scoped `bh ... create|update|remove|add-member|remove-member ...` command
 2. backend stores a pending `AgentChangeItem`
 3. `bh proposals list` and `bh proposals get` inspect thread-local proposal history
-4. the human review UI drives approve, reject, and reopen
-5. approval applies the change through the existing backend apply handlers
+4. `bh proposals update` and `bh proposals remove` can change or drop pending proposals before review
+5. the human review UI drives approve, reject, and reopen
+6. approval applies the change through the existing backend apply handlers
 
 ## API Surface Behind The CLI
 
@@ -247,6 +257,8 @@ Thread-scoped proposal routes:
 - `GET /api/v1/agent/threads/{thread_id}/proposals`
 - `GET /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
 - `POST /api/v1/agent/threads/{thread_id}/proposals`
+- `PATCH /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
+- `DELETE /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
 
 Review routes:
 

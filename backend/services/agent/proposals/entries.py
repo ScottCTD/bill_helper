@@ -14,19 +14,14 @@ from backend.services.agent.change_contracts.entries import (
     CreateEntryPayload as ProposeCreateEntryArgs,
     DeleteEntryPayload as ProposeDeleteEntryArgs,
     EntryReferencePayload,
-    EntrySelectorPayload,
     UpdateEntryPatchPayload as EntryPatchArgs,
     UpdateEntryPayload as ProposeUpdateEntryArgs,
 )
 from backend.services.agent.entry_references import (
-    entry_ambiguity_details,
     entry_id_ambiguity_details,
     entry_public_id,
     entry_to_public_record,
-    entry_selector_from_entry,
-    entry_selector_to_json,
     find_entries_by_public_id_prefix,
-    find_entries_by_selector,
 )
 from backend.services.agent.proposals.common import (
     create_change_item,
@@ -43,94 +38,27 @@ from backend.services.runtime_settings import resolve_runtime_settings
 from backend.validation.finance_names import normalize_entity_name
 
 
-def _reference_details(
-    *,
-    entry_id: str | None,
-    selector: EntrySelectorPayload | None,
-) -> dict[str, Any]:
-    details: dict[str, Any] = {}
-    if entry_id is not None:
-        details["entry_id"] = entry_id
-    if selector is not None:
-        details["selector"] = entry_selector_to_json(selector)
-    return details
-
-
-def _find_entries_for_reference(
-    context: ToolContext,
-    *,
-    entry_id: str | None,
-    selector: EntrySelectorPayload | None,
-) -> list[Entry]:
-    principal = require_tool_principal(context)
-    id_matches = (
-        find_entries_by_public_id_prefix(
-            context.db,
-            entry_id,
-            principal_user_id=principal.user_id,
-            is_admin=False,
-        )
-        if entry_id is not None
-        else None
-    )
-    selector_matches = (
-        find_entries_by_selector(
-            context.db,
-            selector,
-            principal_user_id=principal.user_id,
-            is_admin=False,
-        )
-        if selector is not None
-        else None
-    )
-    if id_matches is None:
-        return selector_matches or []
-    if selector_matches is None:
-        return id_matches
-    if {entry.id for entry in id_matches} != {entry.id for entry in selector_matches}:
-        raise ValueError("entry_id and selector must identify the same entry candidates")
-    return id_matches
-
-
 def match_single_entry_reference_or_error(
     context: ToolContext,
     *,
-    entry_id: str | None,
-    selector: EntrySelectorPayload | None,
+    entry_id: str,
 ) -> Entry | ToolExecutionResult:
-    try:
-        matches = _find_entries_for_reference(
-            context,
-            entry_id=entry_id,
-            selector=selector,
-        )
-    except ValueError as exc:
-        return error_result(
-            "conflicting entry reference",
-            details={
-                **_reference_details(entry_id=entry_id, selector=selector),
-                "reason": str(exc),
-            },
-        )
+    principal = require_tool_principal(context)
+    matches = find_entries_by_public_id_prefix(
+        context.db,
+        entry_id,
+        principal_user_id=principal.user_id,
+        is_admin=False,
+    )
     if not matches:
         return error_result(
             "no entry matched reference",
-            details=_reference_details(entry_id=entry_id, selector=selector),
+            details={"entry_id": entry_id},
         )
     if len(matches) > 1:
-        details = _reference_details(entry_id=entry_id, selector=selector)
-        if entry_id is not None:
-            details.update(entry_id_ambiguity_details(matches, entry_id=entry_id))
-            return error_result(
-                "ambiguous entry_id matched multiple entries; retry with one of the candidate ids",
-                details=details,
-            )
         return error_result(
-            "ambiguous selector matched multiple entries; ask the user to clarify",
-            details={
-                **details,
-                **entry_ambiguity_details(matches),
-            },
+            "ambiguous entry_id matched multiple entries; retry with one of the candidate ids",
+            details=entry_id_ambiguity_details(matches, entry_id=entry_id),
         )
     return matches[0]
 
@@ -144,19 +72,16 @@ def _raise_if_entry_reference_error(result: Entry | ToolExecutionResult) -> Entr
 def normalized_entry_reference_payload(
     context: ToolContext,
     *,
-    entry_id: str | None,
-    selector: EntrySelectorPayload | None,
+    entry_id: str,
 ) -> dict[str, Any]:
     matched_entry = _raise_if_entry_reference_error(
         match_single_entry_reference_or_error(
             context,
             entry_id=entry_id,
-            selector=selector,
         )
     )
     return {
         "entry_id": matched_entry.id,
-        "selector": entry_selector_from_entry(matched_entry),
         "target": entry_to_public_record(matched_entry),
     }
 
@@ -303,7 +228,6 @@ def propose_update_entry(context: ToolContext, args: ProposeUpdateEntryArgs) -> 
     matched_entry = match_single_entry_reference_or_error(
         context,
         entry_id=args.entry_id,
-        selector=args.selector,
     )
     if isinstance(matched_entry, ToolExecutionResult):
         return matched_entry
@@ -319,7 +243,6 @@ def propose_update_entry(context: ToolContext, args: ProposeUpdateEntryArgs) -> 
 
     payload = {
         "entry_id": matched_entry.id,
-        "selector": entry_selector_from_entry(matched_entry),
         "patch": patch,
         "target": entry_to_public_record(matched_entry),
     }
@@ -331,7 +254,6 @@ def propose_update_entry(context: ToolContext, args: ProposeUpdateEntryArgs) -> 
     )
     preview = {
         "entry_id": entry_public_id(matched_entry.id),
-        "selector": payload["selector"],
         "patch": patch,
     }
     return proposal_result("proposed entry update", preview=preview, item=item)
@@ -341,13 +263,11 @@ def propose_delete_entry(context: ToolContext, args: ProposeDeleteEntryArgs) -> 
     matched_entry = match_single_entry_reference_or_error(
         context,
         entry_id=args.entry_id,
-        selector=args.selector,
     )
     if isinstance(matched_entry, ToolExecutionResult):
         return matched_entry
     payload = {
         "entry_id": matched_entry.id,
-        "selector": entry_selector_from_entry(matched_entry),
         "target": entry_to_public_record(matched_entry),
     }
     item = create_change_item(
@@ -358,7 +278,6 @@ def propose_delete_entry(context: ToolContext, args: ProposeDeleteEntryArgs) -> 
     )
     preview = {
         "entry_id": entry_public_id(matched_entry.id),
-        "selector": payload["selector"],
         "target": payload["target"],
     }
     return proposal_result("proposed entry deletion", preview=preview, item=item)

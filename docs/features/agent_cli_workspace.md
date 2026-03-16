@@ -60,11 +60,12 @@ Current command groups:
 
 - `status`
 - `entries list|get|create|update|remove`
-- `accounts list|snapshots|reconciliation|create|update|remove`
+- `accounts list|create|update|remove`
+- `snapshots list|reconciliation|create|remove`
 - `groups list|get|create|update|remove|add-member|remove-member`
 - `entities list|create|update|remove`
 - `tags list|create|update|remove`
-- `proposals list|get`
+- `proposals list|get|update|remove`
 
 ## Proposal And Review Flow
 
@@ -72,8 +73,9 @@ Proposal lifecycle is now thread-scoped in the CLI:
 
 1. the agent runs a resource-scoped `bh ... create|update|remove|add-member|remove-member ...` command
 2. backend stores a pending `AgentChangeItem`
-3. the review UI approves, rejects, or reopens it
-4. approval applies the change through existing backend apply handlers
+3. pending proposals can be inspected, updated, or removed with `bh proposals ...`
+4. the review UI approves, rejects, or reopens the remaining proposals
+5. approval applies the change through existing backend apply handlers
 
 Thread-scoped proposal commands depend on:
 
@@ -89,6 +91,8 @@ Key proposal routes:
 - `GET /api/v1/agent/threads/{thread_id}/proposals`
 - `GET /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
 - `POST /api/v1/agent/threads/{thread_id}/proposals`
+- `PATCH /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
+- `DELETE /api/v1/agent/threads/{thread_id}/proposals/{proposal_id}`
 
 Review routes remain frontend-driven human review endpoints:
 
