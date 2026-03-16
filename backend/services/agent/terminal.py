@@ -1,7 +1,7 @@
-"""Workspace terminal execution for agent runs.
+"""Terminal execution for agent runs.
 
 CALLING SPEC:
-    run_workspace_command(context, args) -> ToolExecutionResult
+    run_terminal(context, args) -> ToolExecutionResult
 
 Inputs:
     - current tool context with run/principal scope
@@ -27,7 +27,7 @@ from backend.database import open_session
 from backend.models_agent import AgentRun
 from backend.models_finance import User
 from backend.services import docker_cli
-from backend.services.agent.tool_args.workspace_command import RunWorkspaceCommandArgs
+from backend.services.agent.tool_args.terminal import RunTerminalArgs
 from backend.services.agent.tool_results import format_lines
 from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, ToolExecutionStatus
 from backend.services.agent_workspace import start_user_workspace
@@ -39,9 +39,9 @@ _MAX_OUTPUT_CHARS = 12000
 logger = logging.getLogger(__name__)
 
 
-def run_workspace_command(context: ToolContext, args: RunWorkspaceCommandArgs) -> ToolExecutionResult:
+def run_terminal(context: ToolContext, args: RunTerminalArgs) -> ToolExecutionResult:
     try:
-        execution = _execute_workspace_command(context, args=args)
+        execution = _execute_terminal(context, args=args)
     except (docker_cli.DockerCliError, ValueError) as exc:
         return ToolExecutionResult(
             output_text=format_lines(
@@ -59,7 +59,7 @@ def run_workspace_command(context: ToolContext, args: RunWorkspaceCommandArgs) -
         )
     except Exception as exc:  # pragma: no cover - guarded runtime fallback
         logger.exception(
-            "Workspace command failed unexpectedly: scope=agent_workspace_command run_id=%s user_id=%s cwd=%s command=%s error_type=%s",
+            "Terminal tool failed unexpectedly: scope=agent_terminal run_id=%s user_id=%s cwd=%s command=%s error_type=%s",
             context.run_id,
             context.principal_user_id,
             args.cwd or _DEFAULT_WORKSPACE_ROOT,
@@ -87,10 +87,10 @@ def run_workspace_command(context: ToolContext, args: RunWorkspaceCommandArgs) -
     )
 
 
-def _execute_workspace_command(context: ToolContext, *, args: RunWorkspaceCommandArgs) -> dict[str, Any]:
+def _execute_terminal(context: ToolContext, *, args: RunTerminalArgs) -> dict[str, Any]:
     principal_user_id = (context.principal_user_id or "").strip()
     if not principal_user_id:
-        raise ValueError("Workspace command requires a principal user.")
+        raise ValueError("Terminal tool requires a principal user.")
     thread_id = _thread_id_for_run(context)
     settings = get_settings()
     spec = start_user_workspace(user_id=principal_user_id, settings=settings)
@@ -142,7 +142,7 @@ def _execute_workspace_command(context: ToolContext, *, args: RunWorkspaceComman
 def _thread_id_for_run(context: ToolContext) -> str:
     thread_id = context.db.scalar(select(AgentRun.thread_id).where(AgentRun.id == context.run_id))
     if not isinstance(thread_id, str) or not thread_id:
-        raise ValueError("Workspace command requires a valid run/thread context.")
+        raise ValueError("Terminal tool requires a valid run/thread context.")
     return thread_id
 
 
@@ -151,7 +151,7 @@ def _create_temporary_session(*, user_id: str) -> tuple[str, str]:
     try:
         user = db.get(User, user_id)
         if user is None:
-            raise ValueError("Workspace command user not found.")
+            raise ValueError("Terminal tool user not found.")
         expires_at = utc_now() + timedelta(minutes=10)
         token, session_row = create_session(
             db,

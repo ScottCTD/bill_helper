@@ -308,7 +308,7 @@ Backend agent modules:
 - `backend/services/agent/tool_args/`
 - `backend/services/agent/proposals/`
 - `backend/services/agent/read_tools/`
-- `backend/services/agent/workspace_command.py`
+- `backend/services/agent/terminal.py`
 - `backend/services/agent/proposal_patching.py`
 - `backend/services/agent/tool_runtime.py`
 - `backend/services/agent/tool_runtime_support/`

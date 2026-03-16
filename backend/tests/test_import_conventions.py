@@ -270,7 +270,7 @@ def test_agent_tool_runtime_uses_grouped_support_modules() -> None:
     for name in (
         "catalog.py",
         "catalog_session.py",
-        "catalog_workspace.py",
+        "catalog_terminal.py",
         "definitions.py",
         "execution.py",
         "schema.py",

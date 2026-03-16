@@ -152,8 +152,8 @@ When this surface changes, useful checks include:
 
 - [backend/cli/support.py](../../backend/cli/support.py)
 - [backend/cli/main.py](../../backend/cli/main.py)
-- [backend/services/agent/workspace_command.py](../../backend/services/agent/workspace_command.py)
+- [backend/services/agent/terminal.py](../../backend/services/agent/terminal.py)
 - [backend/services/agent/tool_runtime_support/catalog.py](../../backend/services/agent/tool_runtime_support/catalog.py)
-- [backend/services/agent/tool_runtime_support/catalog_workspace.py](../../backend/services/agent/tool_runtime_support/catalog_workspace.py)
+- [backend/services/agent/tool_runtime_support/catalog_terminal.py](../../backend/services/agent/tool_runtime_support/catalog_terminal.py)
 - [backend/routers/agent_proposals.py](../../backend/routers/agent_proposals.py)
 - [backend/services/agent/proposal_http.py](../../backend/services/agent/proposal_http.py)

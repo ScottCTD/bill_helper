@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from threading import Event
 
+from backend.database import open_session
 from backend.tests.agent_test_utils import (
     build_pdf_bytes,
     collect_sse_events,
@@ -15,7 +16,7 @@ from backend.tests.agent_test_utils import (
 )
 
 
-def _patch_workspace_command_success(monkeypatch, *, stdout: str = "schema: name|type\ngroceries|expense") -> None:
+def _patch_terminal_success(monkeypatch, *, stdout: str = "schema: name|type\ngroceries|expense") -> None:
     from backend.services.agent.tool_types import ToolExecutionResult, ToolExecutionStatus
 
     def fake_execute_tool(name, arguments, context):
@@ -250,7 +251,7 @@ def test_thread_detail_prefers_running_run_context_tokens(client, monkeypatch):
                 "content": "",
                 "tool_calls": [
                     {
-                        "id": "call_workspace_command",
+                        "id": "call_terminal",
                         "type": "function",
                         "function": {
                             "name": "terminal",
@@ -889,6 +890,27 @@ def test_tool_catalog_exposes_only_terminal_and_retained_session_tools():
     ]
 
 
+def test_execute_tool_returns_json_safe_validation_errors_for_rename_thread() -> None:
+    from backend.services.agent.tool_runtime_support.execution import execute_tool
+    from backend.services.agent.tool_types import ToolContext
+
+    with open_session() as db:
+        result = execute_tool(
+            "rename_thread",
+            {"title": "one two three four"},
+            ToolContext(db=db, run_id="run-1"),
+        )
+
+    assert result.status == "error"
+    assert result.output_json["summary"] == "invalid tool arguments"
+    details = result.output_json["details"]
+    assert isinstance(details, list)
+    assert details
+    assert details[0]["type"] == "value_error"
+    assert details[0]["loc"] == ("title",)
+    assert "ctx" not in details[0]
+
+
 def test_add_user_memory_tool_persists_runtime_settings_memory(client, monkeypatch):
     def fake_model(messages):
         if messages[-1]["role"] == "tool":
@@ -1102,14 +1124,14 @@ def test_agent_feature_doc_embeds_generated_runtime_tool_and_bh_sections():
 
 
 def test_run_persists_tool_calls(client, monkeypatch):
-    _patch_workspace_command_success(monkeypatch)
+    _patch_terminal_success(monkeypatch)
     calls = [
         {
             "role": "assistant",
             "content": "",
             "tool_calls": [
                 {
-                    "id": "call_workspace_command",
+                    "id": "call_terminal",
                     "type": "function",
                     "function": {
                         "name": "terminal",
@@ -1149,7 +1171,7 @@ def test_run_records_tool_argument_decode_failures(client, monkeypatch):
             "content": "",
             "tool_calls": [
                 {
-                    "id": "call_workspace_command",
+                    "id": "call_terminal",
                     "type": "function",
                     "function": {"name": "terminal", "arguments": "{"},
                 }
@@ -1177,14 +1199,14 @@ def test_run_records_tool_argument_decode_failures(client, monkeypatch):
 
 
 def test_thread_detail_compacts_tool_call_payloads(client, monkeypatch):
-    _patch_workspace_command_success(monkeypatch)
+    _patch_terminal_success(monkeypatch)
     calls = [
         {
             "role": "assistant",
             "content": "",
             "tool_calls": [
                 {
-                    "id": "call_workspace_command",
+                    "id": "call_terminal",
                     "type": "function",
                     "function": {
                         "name": "terminal",
@@ -1218,14 +1240,14 @@ def test_thread_detail_compacts_tool_call_payloads(client, monkeypatch):
 
 
 def test_tool_call_detail_endpoint_returns_full_payload(client, monkeypatch):
-    _patch_workspace_command_success(monkeypatch)
+    _patch_terminal_success(monkeypatch)
     calls = [
         {
             "role": "assistant",
             "content": "",
             "tool_calls": [
                 {
-                    "id": "call_workspace_command",
+                    "id": "call_terminal",
                     "type": "function",
                     "function": {
                         "name": "terminal",
@@ -1257,14 +1279,14 @@ def test_tool_call_detail_endpoint_returns_full_payload(client, monkeypatch):
     assert isinstance(payload["output_text"], str)
 
 def test_run_persists_assistant_tool_step_text_as_intermediate_update(client, monkeypatch):
-    _patch_workspace_command_success(monkeypatch)
+    _patch_terminal_success(monkeypatch)
     calls = [
         {
             "role": "assistant",
             "content": "I am checking current tags before making any changes.",
             "tool_calls": [
                 {
-                    "id": "call_workspace_command",
+                    "id": "call_terminal",
                     "type": "function",
                     "function": {
                         "name": "terminal",
@@ -1665,7 +1687,7 @@ def test_stream_message_endpoint_emits_reasoning_update_events(client, monkeypat
 def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasoning_update(client, monkeypatch):
     from backend.services.agent import runtime
 
-    _patch_workspace_command_success(monkeypatch)
+    _patch_terminal_success(monkeypatch)
     stream_responses = [
         [
             {
@@ -1679,7 +1701,7 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
                     "content": "I am checking current tags before making any changes.",
                     "tool_calls": [
                         {
-                            "id": "call_workspace_command",
+                            "id": "call_terminal",
                             "type": "function",
                             "function": {
                                 "name": "terminal",
@@ -1861,14 +1883,14 @@ def test_interrupted_previous_run_context_is_injected_into_followup_turn(client,
 
 
 def test_run_accumulates_usage_tokens_across_steps(client, monkeypatch):
-    _patch_workspace_command_success(monkeypatch)
+    _patch_terminal_success(monkeypatch)
     calls = [
         {
             "role": "assistant",
             "content": "",
             "tool_calls": [
                 {
-                    "id": "call_workspace_command",
+                    "id": "call_terminal",
                     "type": "function",
                     "function": {
                         "name": "terminal",

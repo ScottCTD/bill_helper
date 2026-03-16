@@ -1,7 +1,7 @@
 # CALLING SPEC:
-# - Purpose: define argument contracts for the workspace terminal tool.
-# - Inputs: callers that import `workspace_command.py` and pass CLI-style terminal fields.
-# - Outputs: validated Pydantic models for workspace command execution.
+# - Purpose: define argument contracts for the terminal tool.
+# - Inputs: callers that import `terminal.py` and pass CLI-style terminal fields.
+# - Outputs: validated Pydantic models for terminal execution.
 # - Side effects: module-local validation only.
 from __future__ import annotations
 
@@ -14,13 +14,12 @@ class ToolArgsModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class RunWorkspaceCommandArgs(ToolArgsModel):
+class RunTerminalArgs(ToolArgsModel):
     command: str = Field(
         min_length=1,
         description=(
-            "Shell command to execute verbatim via `bash -lc` inside the current user's workspace container. "
-            "May include newlines, pipes, redirects, command substitution, or heredocs. "
-            "Use `bh` for Bill Helper app operations and standard shell commands for local file work."
+            "Shell command to execute verbatim via `bash -lc`. "
+            "May include newlines, pipes, redirects, command substitution, or heredocs."
         ),
     )
     cwd: str | None = Field(

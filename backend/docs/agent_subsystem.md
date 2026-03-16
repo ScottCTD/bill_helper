@@ -31,7 +31,7 @@
 - `backend/services/agent/tool_runtime.py`
   - thin public seam for tool contracts plus runtime execution entrypoints
 - `backend/services/agent/tool_runtime_support/`
-  - grouped tool-runtime internals: `definitions.py` for tool metadata, `schema.py` for OpenAI schema inlining, `catalog_session.py` and `catalog_workspace.py` for the live runtime tool registry, `catalog.py` for merged runtime lookup, and `execution.py` for retry/error policy
+  - grouped tool-runtime internals: `definitions.py` for tool metadata, `schema.py` for OpenAI schema inlining, `catalog_session.py` and `catalog_terminal.py` for the live runtime tool registry, `catalog.py` for merged runtime lookup, and `execution.py` for retry/error policy
 - `backend/services/agent/pricing.py`
   - LiteLLM-backed pricing helper
 - `backend/services/agent/tool_args/`
@@ -40,7 +40,7 @@
   - internal lookup helper package: `entries.py` for entry lookup ranking, `catalog.py` for tag/entity/account lookup helpers, `groups.py` for group lookup/detail formatting helpers, `accounts.py` for snapshot/reconciliation helpers, and `common.py` for shared ranking/principal-scope formatting helpers
 - `backend/services/agent/session_tools/`
   - session-tool package: `progress.py` for `send_intermediate_update`, `memory.py` for add-only persistent memory appends, and `threads.py` for short thread-topic updates
-- `backend/services/agent/workspace_command.py`
+- `backend/services/agent/terminal.py`
   - workspace terminal execution helper that injects per-command auth/thread/run context and executes shell commands inside the per-user workspace container
 - `backend/services/agent/proposals/`
   - proposal-family package: `common.py` for shared proposal/thread helpers, `catalog.py` for tag/entity/account proposals, `entries.py` for entry proposal handlers, `groups.py` for group CRUD proposal flows, `group_memberships/` for membership canonicalization, validation, and handlers, family-owned normalization modules plus a small `normalization.py` registry for proposal payload canonicalization

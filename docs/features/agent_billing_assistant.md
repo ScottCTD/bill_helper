@@ -34,8 +34,8 @@ The old read/proposal/review modules still exist internally, but no longer as di
 | Model client | `backend/services/agent/model_client.py`, `backend/services/agent/model_client_support/` | LiteLLM integration, retry behavior, streaming delta normalization, and usage accounting |
 | Prompt assembly | `backend/services/agent/system_prompt.j2`, `backend/services/agent/prompts.py` | Behavior rules, current-user context, `bh` cheat sheet insertion, and memory injection |
 | Message history | `backend/services/agent/message_history.py`, `backend/services/agent/message_history_content.py`, `backend/services/agent/attachment_content.py` | Thread history shaping, attachment extraction, PDF/image handling, and review/interruption prefixing |
-| Runtime-visible tool catalog | `backend/services/agent/tool_runtime_support/catalog.py`, `backend/services/agent/tool_runtime_support/catalog_session.py`, `backend/services/agent/tool_runtime_support/catalog_workspace.py` | Exact tool schemas exposed to the model |
-| Workspace execution | `backend/services/agent/workspace_command.py`, `backend/services/docker_cli.py`, `backend/services/agent_workspace.py` | Workspace startup, short-lived session injection, shell execution, output truncation, and secret scrubbing |
+| Runtime-visible tool catalog | `backend/services/agent/tool_runtime_support/catalog.py`, `backend/services/agent/tool_runtime_support/catalog_session.py`, `backend/services/agent/tool_runtime_support/catalog_terminal.py` | Exact tool schemas exposed to the model |
+| Workspace execution | `backend/services/agent/terminal.py`, `backend/services/docker_cli.py`, `backend/services/agent_workspace.py` | Workspace startup, short-lived session injection, shell execution, output truncation, and secret scrubbing |
 | CLI | `backend/cli/main.py`, `backend/cli/support.py`, `backend/cli/rendering.py`, `backend/cli/reference.py` | Thin HTTP client, compact/text rendering, and prompt/doc reference metadata |
 | Internal domain helpers | `backend/services/agent/read_tools/`, `backend/services/agent/proposals/`, `backend/services/agent/proposal_http.py`, `backend/services/agent/proposal_patching.py` | Lookup helpers plus proposal normalization, metadata, and patching reused behind APIs and review/apply |
 | Review/apply | `backend/services/agent/reviews/`, `backend/services/agent/apply/`, `backend/routers/agent.py`, `backend/routers/agent_proposals.py` | Proposal inspection, approve/reject/reopen transitions, reviewer overrides, and canonical mutations |
@@ -127,12 +127,12 @@ Arguments:
 
 Description:
 
-Run a shell command inside the current user's workspace container. The command is executed verbatim via `bash -lc`, so multiline scripts, heredocs, pipes, redirects, and normal shell composition are allowed. Use this for local filesystem work under /workspace, read-only inspection under /data, and Bill Helper app operations through the installed `bh` executable. Prefer `bh` over raw curl or ad hoc Python when the task is about Bill Helper state. The backend injects the current run/thread/auth context automatically, and the default working directory is /workspace/workspace.
+Use this tool for shell work inside the current user's workspace container. Use `bh` for Bill Helper app operations, standard shell commands for local work under /workspace, and read-only inspection under /data. Prefer `bh` over raw curl or ad hoc Python when the task is about Bill Helper state. The backend injects the current run/thread/auth context automatically, and the default working directory is /workspace/workspace.
 
 Arguments:
 
 - `command: string` required
-  description: Shell command to execute verbatim via `bash -lc` inside the current user's workspace container. May include newlines, pipes, redirects, command substitution, or heredocs. Use `bh` for Bill Helper app operations and standard shell commands for local file work.
+  description: Shell command to execute verbatim via `bash -lc`. May include newlines, pipes, redirects, command substitution, or heredocs.
   constraints: minLength=1
 - `cwd: string | null`
   description: Optional working directory inside the workspace container. Defaults to the workspace root `/workspace/workspace`.
@@ -288,7 +288,7 @@ Read routes used by `bh` include:
 ## Workspace And Configuration Notes
 
 - `BILL_HELPER_WORKSPACE_BACKEND_BASE_URL` controls container-to-backend reachability
-- workspace command execution injects `BH_API_BASE_URL`, `BH_AUTH_TOKEN`, `BH_THREAD_ID`, `BH_RUN_ID`, `BH_WORKSPACE_ROOT`, and `BH_DATA_ROOT`
+- terminal execution injects `BH_API_BASE_URL`, `BH_AUTH_TOKEN`, `BH_THREAD_ID`, `BH_RUN_ID`, `BH_WORKSPACE_ROOT`, and `BH_DATA_ROOT`
 - the auth token is a short-lived session created for the thread owner and revoked after the command finishes
 - the configured workspace image must include the Bill Helper package, the `bh` entrypoint, and normal shell/file utilities
 - `terminal` scrubs the temporary auth token from captured stdout/stderr
@@ -311,9 +311,9 @@ When this surface changes, useful checks include:
 - [backend/cli/rendering.py](../../backend/cli/rendering.py)
 - [backend/cli/reference.py](../../backend/cli/reference.py)
 - [backend/services/agent/tool_runtime_support/catalog.py](../../backend/services/agent/tool_runtime_support/catalog.py)
-- [backend/services/agent/tool_runtime_support/catalog_workspace.py](../../backend/services/agent/tool_runtime_support/catalog_workspace.py)
+- [backend/services/agent/tool_runtime_support/catalog_terminal.py](../../backend/services/agent/tool_runtime_support/catalog_terminal.py)
 - [backend/services/agent/system_prompt.j2](../../backend/services/agent/system_prompt.j2)
 - [backend/services/agent/prompts.py](../../backend/services/agent/prompts.py)
-- [backend/services/agent/workspace_command.py](../../backend/services/agent/workspace_command.py)
+- [backend/services/agent/terminal.py](../../backend/services/agent/terminal.py)
 - [backend/services/workspace_cli_env.py](../../backend/services/workspace_cli_env.py)
 - [backend/routers/agent_proposals.py](../../backend/routers/agent_proposals.py)

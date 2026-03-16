@@ -5,9 +5,9 @@ from types import SimpleNamespace
 
 from backend.database import get_session_maker
 from backend.models_agent import AgentRun, AgentThread
-from backend.services.agent.tool_args.workspace_command import RunWorkspaceCommandArgs
+from backend.services.agent.tool_args.terminal import RunTerminalArgs
 from backend.services.agent.tool_types import ToolContext
-from backend.services.agent.workspace_command import run_workspace_command
+from backend.services.agent.terminal import run_terminal
 from backend.tests.agent_test_utils import create_thread, patch_model, send_message
 
 
@@ -17,11 +17,11 @@ class _FakeWorkspaceSpec:
     container_name: str = "bill-helper-sandbox-user-1"
 
 
-def test_run_workspace_command_injects_cli_context_and_scrubs_token(client, monkeypatch) -> None:
+def test_run_terminal_injects_cli_context_and_scrubs_token(client, monkeypatch) -> None:
     patch_model(monkeypatch, lambda _messages: {"role": "assistant", "content": "ok"})
 
     thread = create_thread(client)
-    run = send_message(client, thread["id"], "Create a run for workspace command context.")
+    run = send_message(client, thread["id"], "Create a run for terminal tool context.")
     db = get_session_maker()()
     captured: dict[str, object] = {}
     try:
@@ -31,7 +31,7 @@ def test_run_workspace_command_injects_cli_context_and_scrubs_token(client, monk
         assert thread_row is not None
 
         monkeypatch.setattr(
-            "backend.services.agent.workspace_command.start_user_workspace",
+            "backend.services.agent.terminal.start_user_workspace",
             lambda **_kwargs: _FakeWorkspaceSpec(),
         )
 
@@ -45,11 +45,11 @@ def test_run_workspace_command_injects_cli_context_and_scrubs_token(client, monk
             )
 
         monkeypatch.setattr(
-            "backend.services.agent.workspace_command.docker_cli.exec_in_container",
+            "backend.services.agent.terminal.docker_cli.exec_in_container",
             fake_exec_in_container,
         )
 
-        result = run_workspace_command(
+        result = run_terminal(
             ToolContext(
                 db=db,
                 run_id=run["id"],
@@ -57,7 +57,7 @@ def test_run_workspace_command_injects_cli_context_and_scrubs_token(client, monk
                 principal_user_id=thread_row.owner_user_id,
                 principal_is_admin=False,
             ),
-            RunWorkspaceCommandArgs(command="bh status"),
+            RunTerminalArgs(command="bh status"),
         )
     finally:
         db.close()
@@ -73,7 +73,7 @@ def test_run_workspace_command_injects_cli_context_and_scrubs_token(client, monk
     assert result.output_json["summary"] == "terminal command completed"
 
 
-def test_run_workspace_command_preserves_multiline_command_verbatim(client, monkeypatch) -> None:
+def test_run_terminal_preserves_multiline_command_verbatim(client, monkeypatch) -> None:
     patch_model(monkeypatch, lambda _messages: {"role": "assistant", "content": "ok"})
 
     thread = create_thread(client)
@@ -88,7 +88,7 @@ def test_run_workspace_command_preserves_multiline_command_verbatim(client, monk
         assert thread_row is not None
 
         monkeypatch.setattr(
-            "backend.services.agent.workspace_command.start_user_workspace",
+            "backend.services.agent.terminal.start_user_workspace",
             lambda **_kwargs: _FakeWorkspaceSpec(),
         )
 
@@ -101,11 +101,11 @@ def test_run_workspace_command_preserves_multiline_command_verbatim(client, monk
             )
 
         monkeypatch.setattr(
-            "backend.services.agent.workspace_command.docker_cli.exec_in_container",
+            "backend.services.agent.terminal.docker_cli.exec_in_container",
             fake_exec_in_container,
         )
 
-        result = run_workspace_command(
+        result = run_terminal(
             ToolContext(
                 db=db,
                 run_id=run["id"],
@@ -113,7 +113,7 @@ def test_run_workspace_command_preserves_multiline_command_verbatim(client, monk
                 principal_user_id=thread_row.owner_user_id,
                 principal_is_admin=False,
             ),
-            RunWorkspaceCommandArgs(command=command),
+            RunTerminalArgs(command=command),
         )
     finally:
         db.close()

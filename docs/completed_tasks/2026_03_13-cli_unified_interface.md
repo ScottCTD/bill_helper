@@ -17,7 +17,7 @@ The agent now performs Bill Helper reads, proposal lifecycle operations, and rev
 
 - Added the `billengine` console entry point in [backend/cli/main.py](../../backend/cli/main.py) and supporting helpers in [backend/cli/support.py](../../backend/cli/support.py).
 - Added thread-scoped proposal HTTP routes in [backend/routers/agent_proposals.py](../../backend/routers/agent_proposals.py) backed by [backend/services/agent/proposal_http.py](../../backend/services/agent/proposal_http.py).
-- Added the workspace terminal tool in [backend/services/agent/workspace_command.py](../../backend/services/agent/workspace_command.py) plus its catalog/arg wiring.
+- Added the workspace terminal tool in [backend/services/agent/terminal.py](../../backend/services/agent/terminal.py) plus its catalog/arg wiring.
 - Reduced the model-visible tool catalog in [backend/services/agent/tool_runtime_support/catalog.py](../../backend/services/agent/tool_runtime_support/catalog.py).
 - Updated Docker workspace execution support in [backend/services/docker_cli.py](../../backend/services/docker_cli.py) and [docker/agent-workspace.dockerfile](../../docker/agent-workspace.dockerfile) so the image includes the package and `billengine`.
 - Fixed workspace session expiry comparison in [backend/services/sessions.py](../../backend/services/sessions.py) so workspace-minted temporary bearer tokens work reliably against SQLite datetime values.
@@ -42,7 +42,7 @@ The implemented CLI covers:
 ## Verification
 
 - `uv run python -m py_compile` on touched Python modules
-- `OPENROUTER_API_KEY=test uv run pytest backend/tests/test_auth_sessions.py backend/tests/test_agent_cli_proposals.py backend/tests/test_workspace_command.py -q`
+- `OPENROUTER_API_KEY=test uv run pytest backend/tests/test_auth_sessions.py backend/tests/test_agent_cli_proposals.py backend/tests/test_terminal.py -q`
 - `uv run python scripts/check_llm_design.py`
 - `uv run python scripts/check_docs_sync.py`
 - direct `billengine` execution inside the workspace container against a disposable backend

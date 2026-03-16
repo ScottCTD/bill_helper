@@ -104,7 +104,7 @@ Current behavior:
 - backend shutdown now runs a best-effort sweep that stops all running user workspace containers so app termination does not leave sandboxes running
 - the backend assumes `agent_workspace_image` already exists and returns a provisioning error if it does not
 - the image can be built locally with `docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .`
-- container creation adds `host.docker.internal -> host-gateway` so local workspace commands can reach the configured backend base URL on Linux as well as Docker Desktop setups
+- container creation adds `host.docker.internal -> host-gateway` so local terminal sessions can reach the configured backend base URL on Linux as well as Docker Desktop setups
 - workspace terminal execution injects `BH_API_BASE_URL`, `BH_AUTH_TOKEN`, `BH_THREAD_ID`, and `BH_RUN_ID` per command; the short-lived bearer token is created and revoked by the backend around each terminal invocation
 - if the backend itself runs inside Docker, it still needs host-daemon access via `/var/run/docker.sock` or `DOCKER_HOST` to manage sibling user workspaces
 
