@@ -127,7 +127,7 @@ Arguments:
 
 Description:
 
-Use this tool for shell work inside the current user's workspace container. Use `bh` for Bill Helper app operations, standard shell commands for local work under /workspace, and read-only inspection under /data. Prefer `bh` over raw curl or ad hoc Python when the task is about Bill Helper state. The backend injects the current run/thread/auth context automatically, and the default working directory is /workspace/workspace.
+Use this tool for shell work inside the current user's workspace container. Use `bh` for Bill Helper app operations, standard shell commands for local work under /workspace, and read-only inspection under /data. Use `bh` when the task is about the Bill Helper app. 
 
 Arguments:
 

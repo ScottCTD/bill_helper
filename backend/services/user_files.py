@@ -62,7 +62,9 @@ def ensure_user_file_roots(
     user_id: str,
     data_dir: Path | None = None,
 ) -> tuple[Path, Path]:
-    from backend.services.user_file_workspace_view import ensure_user_file_workspace_view_root
+    from backend.services.user_file_workspace_view import (
+        ensure_user_file_workspace_view_root,
+    )
 
     upload_root = user_upload_root(user_id=user_id, data_dir=data_dir)
     artifact_root = user_artifact_root(user_id=user_id, data_dir=data_dir)
@@ -77,9 +79,13 @@ def delete_user_file_root(
     user_id: str,
     data_dir: Path | None = None,
 ) -> None:
-    from backend.services.user_file_workspace_view import delete_user_file_workspace_view_root
+    from backend.services.user_file_workspace_view import (
+        delete_user_file_workspace_view_root,
+    )
 
-    shutil.rmtree(user_file_owner_root(user_id=user_id, data_dir=data_dir), ignore_errors=True)
+    shutil.rmtree(
+        user_file_owner_root(user_id=user_id, data_dir=data_dir), ignore_errors=True
+    )
     delete_user_file_workspace_view_root(user_id=user_id, data_dir=data_dir)
 
 
@@ -88,10 +94,13 @@ def resolve_user_file_path(
     *,
     data_dir: Path | None = None,
 ) -> Path:
-    return user_file_owner_root(
-        user_id=user_file.owner_user_id,
-        data_dir=data_dir,
-    ) / user_file.stored_relative_path
+    return (
+        user_file_owner_root(
+            user_id=user_file.owner_user_id,
+            data_dir=data_dir,
+        )
+        / user_file.stored_relative_path
+    )
 
 
 def display_name_for_file(
@@ -134,7 +143,9 @@ def _relative_path_for_storage_area(
         return str(Path(UPLOADS_DIRNAME) / stored_filename)
     if storage_area == STORAGE_AREA_ARTIFACT:
         return str(Path(ARTIFACTS_DIRNAME) / stored_filename)
-    raise PolicyViolation.bad_request(f"Unsupported user file storage area: {storage_area}")
+    raise PolicyViolation.bad_request(
+        f"Unsupported user file storage area: {storage_area}"
+    )
 
 
 def _target_root_for_storage_area(
@@ -147,7 +158,9 @@ def _target_root_for_storage_area(
         return user_upload_root(user_id=user_id, data_dir=data_dir)
     if storage_area == STORAGE_AREA_ARTIFACT:
         return user_artifact_root(user_id=user_id, data_dir=data_dir)
-    raise PolicyViolation.bad_request(f"Unsupported user file storage area: {storage_area}")
+    raise PolicyViolation.bad_request(
+        f"Unsupported user file storage area: {storage_area}"
+    )
 
 
 def _preferred_stored_filename(
@@ -220,6 +233,24 @@ def create_user_file_row(
     return user_file
 
 
+def find_user_file_by_sha256(
+    db: Session,
+    *,
+    user_id: str,
+    sha256: str,
+    storage_area: str = STORAGE_AREA_UPLOAD,
+) -> UserFile | None:
+    return (
+        db.query(UserFile)
+        .filter(
+            UserFile.owner_user_id == user_id,
+            UserFile.sha256 == sha256,
+            UserFile.storage_area == storage_area,
+        )
+        .first()
+    )
+
+
 def store_user_file_bytes(
     db: Session,
     *,
@@ -233,6 +264,16 @@ def store_user_file_bytes(
     stored_filename: str | None = None,
     data_dir: Path | None = None,
 ) -> UserFile:
+    content_hash = _hash_bytes(file_bytes)
+    existing = find_user_file_by_sha256(
+        db,
+        user_id=owner_user_id,
+        sha256=content_hash,
+        storage_area=storage_area,
+    )
+    if existing is not None:
+        return existing
+
     target_root = _target_root_for_storage_area(
         user_id=owner_user_id,
         storage_area=storage_area,
@@ -264,7 +305,7 @@ def store_user_file_bytes(
         ),
         mime_type=mime_type,
         size_bytes=len(file_bytes),
-        sha256=_hash_bytes(file_bytes),
+        sha256=content_hash,
     )
     from backend.services.user_file_workspace_view import sync_user_file_workspace_view
 

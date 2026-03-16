@@ -16,12 +16,16 @@ from backend.services.user_files import (
     SOURCE_TYPE_AGENT_ATTACHMENT,
     STORAGE_AREA_ARTIFACT,
     STORAGE_AREA_UPLOAD,
+    find_user_file_by_sha256,
     promote_workspace_file_to_artifact,
     resolve_user_file_path,
     store_user_file_bytes,
     user_file_owner_root,
 )
-from backend.services.user_file_workspace_view import sync_user_file_workspace_view, user_file_workspace_view_root
+from backend.services.user_file_workspace_view import (
+    sync_user_file_workspace_view,
+    user_file_workspace_view_root,
+)
 from backend.services.users import create_user_with_unique_name
 
 
@@ -65,7 +69,9 @@ def test_store_user_file_bytes_writes_canonical_upload_and_hash(tmp_path, monkey
         get_settings.cache_clear()
 
 
-def test_promote_workspace_file_to_artifact_copies_workspace_file(tmp_path, monkeypatch):
+def test_promote_workspace_file_to_artifact_copies_workspace_file(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("BILL_HELPER_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("BILL_HELPER_AGENT_WORKSPACE_ENABLED", "0")
     get_settings.cache_clear()
@@ -100,7 +106,9 @@ def test_promote_workspace_file_to_artifact_copies_workspace_file(tmp_path, monk
         get_settings.cache_clear()
 
 
-def test_workspace_view_uses_display_names_and_disambiguates_duplicates(tmp_path, monkeypatch):
+def test_workspace_view_uses_display_names_and_disambiguates_duplicates(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("BILL_HELPER_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("BILL_HELPER_AGENT_WORKSPACE_ENABLED", "0")
     get_settings.cache_clear()
@@ -136,16 +144,24 @@ def test_workspace_view_uses_display_names_and_disambiguates_duplicates(tmp_path
 
         view_root = sync_user_file_workspace_view(db, user_id=user.id)
         upload_names = sorted(path.name for path in (view_root / "uploads").iterdir())
-        assert view_root == user_file_owner_root(user_id=user.id, data_dir=tmp_path / "data") / "user_data"
+        assert (
+            view_root
+            == user_file_owner_root(user_id=user.id, data_dir=tmp_path / "data")
+            / "user_data"
+        )
         assert upload_names == ["statement (2).pdf", "statement.pdf"]
         assert (view_root / "uploads" / "statement.pdf").is_symlink()
-        assert (view_root / "uploads" / "statement.pdf").readlink().as_posix() == "../../uploads/a.pdf"
+        assert (
+            view_root / "uploads" / "statement.pdf"
+        ).readlink().as_posix() == "../../uploads/a.pdf"
     finally:
         db.close()
         get_settings.cache_clear()
 
 
-def test_workspace_view_sync_is_safe_to_repeat_for_existing_links(tmp_path, monkeypatch):
+def test_workspace_view_sync_is_safe_to_repeat_for_existing_links(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("BILL_HELPER_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("BILL_HELPER_AGENT_WORKSPACE_ENABLED", "0")
     get_settings.cache_clear()
@@ -173,8 +189,60 @@ def test_workspace_view_sync_is_safe_to_repeat_for_existing_links(tmp_path, monk
         second_root = sync_user_file_workspace_view(db, user_id=user.id)
 
         assert first_root == second_root
-        assert sorted(path.name for path in (second_root / "uploads").iterdir()) == ["statement.pdf"]
+        assert sorted(path.name for path in (second_root / "uploads").iterdir()) == [
+            "statement.pdf"
+        ]
         assert (second_root / "uploads" / "statement.pdf").is_symlink()
+    finally:
+        db.close()
+        get_settings.cache_clear()
+
+
+def test_store_user_file_bytes_deduplicates_by_sha256(tmp_path, monkeypatch):
+    monkeypatch.setenv("BILL_HELPER_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("BILL_HELPER_AGENT_WORKSPACE_ENABLED", "0")
+    get_settings.cache_clear()
+
+    db = _session_for_tmp_db(tmp_path)
+    try:
+        user = create_user_with_unique_name(
+            db,
+            raw_name="alice",
+            password="alice-password",
+        )
+        content = b"\x89PNG\r\n\x1a\nduplicate-content"
+        first = store_user_file_bytes(
+            db,
+            owner_user_id=user.id,
+            storage_area=STORAGE_AREA_UPLOAD,
+            source_type=SOURCE_TYPE_AGENT_ATTACHMENT,
+            mime_type="image/png",
+            file_bytes=content,
+            original_filename="first.png",
+        )
+        db.commit()
+
+        second = store_user_file_bytes(
+            db,
+            owner_user_id=user.id,
+            storage_area=STORAGE_AREA_UPLOAD,
+            source_type=SOURCE_TYPE_AGENT_ATTACHMENT,
+            mime_type="image/png",
+            file_bytes=content,
+            original_filename="second.png",
+        )
+        db.commit()
+
+        assert first.id == second.id
+        assert first.sha256 == second.sha256
+        assert first.original_filename == "first.png"
+
+        upload_root = (
+            user_file_owner_root(user_id=user.id, data_dir=tmp_path / "data")
+            / "uploads"
+        )
+        files_on_disk = list(upload_root.iterdir())
+        assert len(files_on_disk) == 1
     finally:
         db.close()
         get_settings.cache_clear()

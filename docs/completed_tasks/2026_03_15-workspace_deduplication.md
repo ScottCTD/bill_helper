@@ -1,0 +1,1 @@
+prevent duplicate files in workspace by checking SHA256 before storing
