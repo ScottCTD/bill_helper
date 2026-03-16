@@ -9,6 +9,7 @@ from backend.database import get_session_maker
 from backend.enums_finance import EntryKind, GroupType
 from backend.models_finance import Account, Entity, EntryGroup, User
 from backend.services.crud_policy import PolicyViolation
+from backend.services.accounts import create_account_root
 from backend.services.entries import (
     EntityRef,
     UserRefPatch,
@@ -18,6 +19,7 @@ from backend.services.entries import (
     create_entry_from_command,
     update_entry_from_command,
 )
+from backend.services.entities import read_entity_category
 from backend.services.passwords import hash_password
 
 
@@ -136,5 +138,27 @@ def test_update_entry_from_command_uses_policy_violation_for_cross_principal_own
 
         assert exc_info.value.status_code == 403
         assert exc_info.value.detail == "Cannot assign resources to a different user."
+    finally:
+        db.close()
+
+
+def test_create_account_root_marks_linked_entity_category_as_account() -> None:
+    make_session = get_session_maker()
+    db = make_session()
+    try:
+        admin = _create_user(db, "admin")
+
+        account = create_account_root(
+            db,
+            name="Checking",
+            owner_user_id=admin.id,
+            markdown_body=None,
+            currency_code="USD",
+            is_active=True,
+        )
+        db.commit()
+
+        assert account.entity is not None
+        assert read_entity_category(db, account.entity) == "account"
     finally:
         db.close()

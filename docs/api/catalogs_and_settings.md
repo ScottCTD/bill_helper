@@ -167,7 +167,8 @@ Behavior:
 
 - non-admin principals see only their own entities
 - admin principals see all entities across users
-- each row includes `is_account`
+- excludes account-backed entity roots; use `/accounts` for account records
+- `is_account` remains in the response shape for schema stability and is `false` for rows returned by this route
 - usage counters (`from_count`, `to_count`, `account_count`, `entry_count`) follow the same principal scope as `/entries` and `/accounts`
 - `net_amount_minor` and `net_amount_currency_code` are populated only when the visible referenced entries all share one currency
 - `net_amount_mixed_currencies=true` means the entity has visible entries across multiple currencies, so no single aggregate amount is returned

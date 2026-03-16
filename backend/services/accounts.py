@@ -21,6 +21,7 @@ from backend.services.entities import (
     detach_entity_references_preserve_labels,
     find_entity_by_name,
     rename_entity_and_sync_entry_labels,
+    set_entity_category,
 )
 from backend.services.finance_contracts import AccountCreateCommand, AccountPatch
 from backend.validation.finance_names import normalize_entity_name
@@ -100,6 +101,7 @@ def create_account_root(
     entity = Entity(owner_user_id=validated_owner_user_id, name=normalized_name, category=None)
     db.add(entity)
     db.flush()
+    set_entity_category(db, entity, "account")
 
     account = Account(
         id=entity.id,
