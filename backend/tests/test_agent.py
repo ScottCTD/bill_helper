@@ -19,11 +19,11 @@ def _patch_workspace_command_success(monkeypatch, *, stdout: str = "schema: name
     from backend.services.agent.tool_types import ToolExecutionResult, ToolExecutionStatus
 
     def fake_execute_tool(name, arguments, context):
-        assert name == "run_workspace_command"
+        assert name == "terminal"
         return ToolExecutionResult(
             output_text=(
                 "OK\n"
-                "summary: workspace command completed\n"
+                "summary: terminal command completed\n"
                 "exit_code: 0\n"
                 "cwd: /workspace/workspace\n"
                 "duration_ms: 1\n"
@@ -33,7 +33,7 @@ def _patch_workspace_command_success(monkeypatch, *, stdout: str = "schema: name
                 "stderr: \n"
             ),
             output_json={
-                "summary": "workspace command completed",
+                "summary": "terminal command completed",
                 "command": arguments["command"],
                 "cwd": "/workspace/workspace",
                 "exit_code": 0,
@@ -258,7 +258,7 @@ def test_thread_detail_prefers_running_run_context_tokens(client, monkeypatch):
                         "id": "call_workspace_command",
                         "type": "function",
                         "function": {
-                            "name": "run_workspace_command",
+                            "name": "terminal",
                             "arguments": json.dumps({"command": "bh tags list"}),
                         },
                     }
@@ -1051,12 +1051,12 @@ def test_tool_catalog_exposes_only_terminal_and_retained_session_tools():
     assert "add_user_memory" in names
     assert "rename_thread" in names
     assert "send_intermediate_update" in names
-    assert "run_workspace_command" in names
+    assert "terminal" in names
     assert names == [
         "add_user_memory",
         "rename_thread",
         "send_intermediate_update",
-        "run_workspace_command",
+        "terminal",
     ]
 
 
@@ -1266,34 +1266,35 @@ def test_thread_title_stays_untitled_without_rename_tool(client, monkeypatch):
     assert detail_response.json()["thread"]["title"] is None
 
 
-def test_run_workspace_command_tool_description_mentions_bh_and_workspace():
+def test_terminal_tool_description_mentions_bh_and_workspace():
     from backend.services.agent.tools import build_openai_tool_schemas
 
     tool_by_name = {
         tool["function"]["name"]: tool["function"]
         for tool in build_openai_tool_schemas()
     }
-    description = str(tool_by_name["run_workspace_command"]["description"])
+    description = str(tool_by_name["terminal"]["description"])
     assert "workspace container" in description
     assert "`bh`" in description
     assert "Prefer `bh` over raw curl or ad hoc Python" in description
 
 
-def test_run_workspace_command_tool_schema_includes_exact_argument_descriptions():
+def test_terminal_tool_schema_includes_exact_argument_descriptions():
     from backend.services.agent.tools import build_openai_tool_schemas
 
     tool_by_name = {
         tool["function"]["name"]: tool["function"]
         for tool in build_openai_tool_schemas()
     }
-    properties = tool_by_name["run_workspace_command"]["parameters"]["properties"]
+    properties = tool_by_name["terminal"]["parameters"]["properties"]
 
     assert properties["command"]["description"] == (
-        "Shell command to run inside the current user's workspace container. "
+        "Shell command to execute verbatim via `bash -lc` inside the current user's workspace container. "
+        "May include newlines, pipes, redirects, command substitution, or heredocs. "
         "Use `bh` for Bill Helper app operations and standard shell commands for local file work."
     )
     assert properties["cwd"]["description"] == (
-        "Optional working directory inside the workspace container. Defaults to /workspace/workspace."
+        "Optional working directory inside the workspace container. Defaults to the workspace root `/workspace/workspace`."
     )
     assert properties["timeout_seconds"]["description"] == (
         "Command timeout in seconds. Defaults to 120. Allowed range: 1 to 600."
@@ -1342,7 +1343,7 @@ def test_run_persists_tool_calls(client, monkeypatch):
                     "id": "call_workspace_command",
                     "type": "function",
                     "function": {
-                        "name": "run_workspace_command",
+                        "name": "terminal",
                         "arguments": json.dumps({"command": "bh tags list"}),
                     },
                 }
@@ -1360,7 +1361,7 @@ def test_run_persists_tool_calls(client, monkeypatch):
 
     assert run["status"] == "completed"
     assert len(run["tool_calls"]) == 1
-    assert run["tool_calls"][0]["tool_name"] == "run_workspace_command"
+    assert run["tool_calls"][0]["tool_name"] == "terminal"
     assert run["tool_calls"][0]["status"] == "ok"
     assert isinstance(run["tool_calls"][0]["output_text"], str)
     assert run["tool_calls"][0]["output_text"].startswith("OK")
@@ -1381,7 +1382,7 @@ def test_run_records_tool_argument_decode_failures(client, monkeypatch):
                 {
                     "id": "call_workspace_command",
                     "type": "function",
-                    "function": {"name": "run_workspace_command", "arguments": "{"},
+                    "function": {"name": "terminal", "arguments": "{"},
                 }
             ],
         },
@@ -1398,7 +1399,7 @@ def test_run_records_tool_argument_decode_failures(client, monkeypatch):
     assert run["status"] == "completed"
     assert len(run["tool_calls"]) == 1
     tool_call = run["tool_calls"][0]
-    assert tool_call["tool_name"] == "run_workspace_command"
+    assert tool_call["tool_name"] == "terminal"
     assert tool_call["status"] == "error"
     assert tool_call["input_json"] == {}
     assert tool_call["output_json"]["summary"] == "tool argument decode failed"
@@ -1417,7 +1418,7 @@ def test_thread_detail_compacts_tool_call_payloads(client, monkeypatch):
                     "id": "call_workspace_command",
                     "type": "function",
                     "function": {
-                        "name": "run_workspace_command",
+                        "name": "terminal",
                         "arguments": json.dumps({"command": "bh tags list"}),
                     },
                 }
@@ -1440,7 +1441,7 @@ def test_thread_detail_compacts_tool_call_payloads(client, monkeypatch):
     assert len(detail["runs"]) == 1
     compact_tool_call = detail["runs"][0]["tool_calls"][0]
     assert compact_tool_call["id"] == run["tool_calls"][0]["id"]
-    assert compact_tool_call["tool_name"] == "run_workspace_command"
+    assert compact_tool_call["tool_name"] == "terminal"
     assert compact_tool_call["has_full_payload"] is False
     assert compact_tool_call["input_json"] is None
     assert compact_tool_call["output_json"] is None
@@ -1458,7 +1459,7 @@ def test_tool_call_detail_endpoint_returns_full_payload(client, monkeypatch):
                     "id": "call_workspace_command",
                     "type": "function",
                     "function": {
-                        "name": "run_workspace_command",
+                        "name": "terminal",
                         "arguments": json.dumps({"command": "bh tags list"}),
                     },
                 }
@@ -1480,7 +1481,7 @@ def test_tool_call_detail_endpoint_returns_full_payload(client, monkeypatch):
     payload = response.json()
 
     assert payload["id"] == tool_call_id
-    assert payload["tool_name"] == "run_workspace_command"
+    assert payload["tool_name"] == "terminal"
     assert payload["has_full_payload"] is True
     assert isinstance(payload["input_json"], dict)
     assert isinstance(payload["output_json"], dict)
@@ -1497,7 +1498,7 @@ def test_run_persists_assistant_tool_step_text_as_intermediate_update(client, mo
                     "id": "call_workspace_command",
                     "type": "function",
                     "function": {
-                        "name": "run_workspace_command",
+                        "name": "terminal",
                         "arguments": json.dumps({"command": "bh tags list"}),
                     },
                 }
@@ -1515,7 +1516,7 @@ def test_run_persists_assistant_tool_step_text_as_intermediate_update(client, mo
 
     assert run["status"] == "completed"
     assert len(run["tool_calls"]) == 1
-    assert run["tool_calls"][0]["tool_name"] == "run_workspace_command"
+    assert run["tool_calls"][0]["tool_name"] == "terminal"
     reasoning_events = [event for event in run["events"] if event["event_type"] == "reasoning_update"]
     assert len(reasoning_events) == 1
     assert reasoning_events[0]["message"] == "I am checking current tags before making any changes."
@@ -1529,7 +1530,7 @@ def test_final_message_strips_empty_pending_review_footer(client, monkeypatch):
             "role": "assistant",
             "content": (
                 "Here is your dashboard summary.\n\n"
-                "Tools used (high level): run_workspace_command (checked bh entries list) "
+                "Tools used (high level): terminal (checked bh entries list) "
                 "Pending review item ids: []"
             ),
         },
@@ -1912,7 +1913,7 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
                             "id": "call_workspace_command",
                             "type": "function",
                             "function": {
-                                "name": "run_workspace_command",
+                                "name": "terminal",
                                 "arguments": json.dumps({"command": "bh tags list"}),
                             },
                         }
@@ -1964,9 +1965,9 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
         "tool_call_completed",
     ]
     assert [event["tool_call"]["tool_name"] for event in tool_call_events] == [
-        "run_workspace_command",
-        "run_workspace_command",
-        "run_workspace_command",
+        "terminal",
+        "terminal",
+        "terminal",
     ]
     assert [event["tool_call"]["has_full_payload"] for event in tool_call_events] == [False, False, False]
     assert [event["tool_call"]["status"] for event in tool_call_events] == ["queued", "running", "ok"]
@@ -1980,7 +1981,7 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
     assert len(detail["runs"]) == 1
     run = detail["runs"][0]
     assert len(run["tool_calls"]) == 1
-    assert run["tool_calls"][0]["tool_name"] == "run_workspace_command"
+    assert run["tool_calls"][0]["tool_name"] == "terminal"
     reasoning_run_events = [event for event in run["events"] if event["event_type"] == "reasoning_update"]
     assert len(reasoning_run_events) == 1
     assert reasoning_run_events[0]["message"] == "I am checking current tags before making any changes."
@@ -2101,7 +2102,7 @@ def test_run_accumulates_usage_tokens_across_steps(client, monkeypatch):
                     "id": "call_workspace_command",
                     "type": "function",
                     "function": {
-                        "name": "run_workspace_command",
+                        "name": "terminal",
                         "arguments": json.dumps({"command": "bh tags list"}),
                     },
                 }
@@ -2259,7 +2260,7 @@ def test_runtime_tool_registry_only_contains_current_tools():
     assert set(TOOLS) == {
         "add_user_memory",
         "rename_thread",
-        "run_workspace_command",
+        "terminal",
         "send_intermediate_update",
     }
 

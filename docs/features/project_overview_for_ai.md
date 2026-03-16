@@ -37,7 +37,7 @@
 
 **Model-visible tools:**
 
-- `run_workspace_command` – executes `bash -lc` inside the per-user workspace container with injected backend/auth/thread/run env.
+- `terminal` – executes `bash -lc` inside the per-user workspace container with injected backend/auth/thread/run env.
 - `send_intermediate_update` – short user-visible progress note.
 - `rename_thread` – rename current thread.
 - `add_user_memory` – append persistent memory items (add-only).

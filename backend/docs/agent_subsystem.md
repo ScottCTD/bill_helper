@@ -91,7 +91,7 @@
 - prompt rendering carries a run surface hint so Telegram-directed turns can request plain-text-friendly final answers
 - `Current User Context` includes timezone/date bullets plus `Entity Category Reference` and `Account Context`
 - `Agent Memory` is rendered as a markdown unordered list built from persisted runtime-setting memory items
-- the model-visible tool catalog is intentionally small: `rename_thread`, `send_intermediate_update`, `add_user_memory`, and `run_workspace_command`
+- the model-visible tool catalog is intentionally small: `rename_thread`, `send_intermediate_update`, `add_user_memory`, and `terminal`
 - app-state reads and proposal lifecycle work now flow through the workspace terminal and the installed `bh` CLI rather than the older large direct read/proposal tool list
 - duplicate-entry checks should happen before new entry proposals
 - tag/entity naming should stay canonical and generalized
@@ -100,7 +100,7 @@
 - `add_user_memory` is an add-only tool for explicit remember-this requests; mutate/remove requests must be declined
 - `rename_thread` should run right after the first user message in a new thread, then only when the user explicitly asks or the topic materially changes
 - untitled threads are runtime-gated to expose only the `rename_thread` tool on the first model step; most models also receive an explicit required `tool_choice`, but `openrouter/qwen/qwen3.5-27b` falls back to tool-list restriction only because OpenRouter rejects explicit `tool_choice` for that model in thinking mode
-- `run_workspace_command` injects backend URL, a short-lived bearer session, current thread id, and current run id on every execution; the agent does not supply those manually
+- `terminal` injects backend URL, a short-lived bearer session, current thread id, and current run id on every execution; the agent does not supply those manually
 - the prompt has a dedicated `Grouping` section that combines fixed `BUNDLE` / `SPLIT` / `RECURRING` semantics, examples, and workflow guidance
 - after proposing a new entry, the prompt instructs the agent to check whether an existing recurring, split, or bundle group should absorb it and to propose the membership change when needed
 - group membership proposals may reference pending `create_group` and `create_entry` proposal ids in the same thread; approval is blocked until those dependencies are applied
@@ -177,7 +177,7 @@ Endpoints:
 - reviewed proposal context now includes reviewer override values when `payload_override` changed the approved payload, so later turns can see concrete edited values instead of only changed field names
 - run snapshots expose persisted `surface`, explicit `reply_surface`, and `terminal_assistant_reply`, so read-time formatting overrides do not masquerade as the stored run surface
 - deleting a thread removes attachment linkage rows but intentionally leaves canonical uploaded payload files in place
-- the active agent runtime now exposes full workspace terminal execution through `run_workspace_command`; app-state operations are expected to go through the installed `bh` CLI inside that terminal
+- the active agent runtime now exposes full workspace terminal execution through `terminal`; app-state operations are expected to go through the installed `bh` CLI inside that terminal
 - proposal HTTP routes are thread-scoped and require `X-Bill-Helper-Agent-Run-Id` so `bh` can keep new proposals attached to the invoking run
 
 ## Review And Apply Behavior

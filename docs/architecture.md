@@ -66,14 +66,14 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 
 Model-visible tools:
 
-- `run_workspace_command`
+- `terminal`
 - `send_intermediate_update`
 - `rename_thread`
 - `add_user_memory`
 
 Execution model:
 
-- `run_workspace_command` executes inside the per-user workspace container
+- `terminal` executes inside the per-user workspace container
 - the workspace receives injected backend/auth/thread/run env per invocation
 - Bill Helper app-state reads and proposal/review actions go through the installed `bh` CLI
 - local file and shell work stays in the workspace terminal rather than adding more specialized model-facing tools
@@ -154,7 +154,7 @@ Cross-page consistency:
 - agent threads are user-owned instead of admin-global; admins can still access everything or impersonate a user
 - review apply uses the approving reviewer principal for scoped entry resolution and owner attribution, not mutable runtime settings identity
 - only image and PDF attachments are accepted in agent messages
-- active agent runs have workspace terminal execution through `run_workspace_command`; Bill Helper app operations are expected to flow through `bh`
+- active agent runs have workspace terminal execution through `terminal`; Bill Helper app operations are expected to flow through `bh`
 - provisioned workspaces mount only the owning user's canonical file root at `/data` as read-only and do not expose `bill_helper.db`
 
 ## Out of Scope (Current)

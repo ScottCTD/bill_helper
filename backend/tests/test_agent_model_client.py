@@ -133,7 +133,7 @@ def test_complete_stream_merges_cumulative_tool_call_deltas_without_corrupting_a
                                             "id": "call_1",
                                             "type": "function",
                                             "function": {
-                                                "name": "run_workspace",
+                                                "name": "ter",
                                                 "arguments": '{"command":"bh',
                                             },
                                         }
@@ -150,7 +150,7 @@ def test_complete_stream_merges_cumulative_tool_call_deltas_without_corrupting_a
                                         {
                                             "index": 0,
                                             "function": {
-                                                "name": "run_workspace_command",
+                                                "name": "terminal",
                                                 "arguments": '{"command":"bh tags list"}',
                                             },
                                         }
@@ -172,7 +172,7 @@ def test_complete_stream_merges_cumulative_tool_call_deltas_without_corrupting_a
             "id": "call_1",
             "type": "function",
                 "function": {
-                    "name": "run_workspace_command",
+                    "name": "terminal",
                     "arguments": '{"command":"bh tags list"}',
                 },
             }
@@ -216,7 +216,7 @@ def test_complete_omits_tool_fields_when_explicit_tools_override_is_empty(monkey
             {
                 "type": "function",
                 "function": {
-                    "name": "run_workspace_command",
+                    "name": "terminal",
                     "description": "List entries",
                     "parameters": {"type": "object", "properties": {}},
                 },

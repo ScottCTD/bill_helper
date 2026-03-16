@@ -47,12 +47,12 @@ def run_workspace_command(context: ToolContext, args: RunWorkspaceCommandArgs) -
             output_text=format_lines(
                 [
                     "ERROR",
-                    "summary: workspace command failed",
+                    "summary: terminal command failed",
                     f"details: {exc}",
                 ]
             ),
             output_json={
-                "summary": "workspace command failed",
+                "summary": "terminal command failed",
                 "details": str(exc),
             },
             status=ToolExecutionStatus.ERROR,
@@ -70,12 +70,12 @@ def run_workspace_command(context: ToolContext, args: RunWorkspaceCommandArgs) -
             output_text=format_lines(
                 [
                     "ERROR",
-                    "summary: workspace command failed",
+                    "summary: terminal command failed",
                     f"details: {exc}",
                 ]
             ),
             output_json={
-                "summary": "workspace command failed",
+                "summary": "terminal command failed",
                 "details": str(exc),
             },
             status=ToolExecutionStatus.ERROR,
@@ -127,7 +127,7 @@ def _execute_workspace_command(context: ToolContext, *, args: RunWorkspaceComman
     stdout, stdout_truncated = _truncate_and_scrub(raw_stdout, secret=session_token)
     stderr, stderr_truncated = _truncate_and_scrub(raw_stderr, secret=session_token)
     return {
-        "summary": "workspace command completed" if exit_code == 0 else "workspace command exited non-zero",
+        "summary": "terminal command completed" if exit_code == 0 else "terminal command exited non-zero",
         "command": args.command,
         "cwd": command_cwd,
         "exit_code": exit_code,

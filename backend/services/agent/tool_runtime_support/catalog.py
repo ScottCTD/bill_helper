@@ -21,7 +21,7 @@ EXPOSED_RUNTIME_TOOL_NAMES: tuple[str, ...] = (
     "rename_thread",
     "send_intermediate_update",
     "add_user_memory",
-    "run_workspace_command",
+    "terminal",
 )
 
 

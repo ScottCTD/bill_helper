@@ -6,7 +6,7 @@ Bill Helper now uses the `billengine` CLI as the primary app-operation interface
 
 At the model-visible runtime boundary, the old direct CRUD/read tool catalog was replaced with:
 
-- `run_workspace_command`
+- `terminal`
 - `send_intermediate_update`
 - `rename_thread`
 - `add_user_memory`

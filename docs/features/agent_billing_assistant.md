@@ -19,9 +19,9 @@ This feature doc describes the current billing assistant architecture, prompt sh
 
 The current assistant is a review-gated tool-calling runtime with a deliberately small model-visible surface:
 
-- the model sees only `rename_thread`, `send_intermediate_update`, `add_user_memory`, and `run_workspace_command`
+- the model sees only `rename_thread`, `send_intermediate_update`, `add_user_memory`, and `terminal`
 - Bill Helper app reads, proposal creation/updates/removal, and review actions now happen through the installed `bh` CLI inside the workspace container
-- `run_workspace_command` is the bridge for both local workspace file work and backend-backed Bill Helper operations
+- `terminal` is the bridge for both local workspace file work and backend-backed Bill Helper operations
 - proposals still create `AgentChangeItem` rows first; direct ledger mutation still happens only in review apply handlers
 
 The old read/proposal/review modules still exist internally, but no longer as direct model-facing tools. They are now backend building blocks reused by proposal HTTP routes, normalization, patching, and apply logic.
@@ -49,8 +49,8 @@ The old read/proposal/review modules still exist internally, but no longer as di
 4. If the thread is untitled, the runtime exposes only `rename_thread`.
 5. After the thread has a valid title, the runtime exposes the four-tool catalog.
 6. The model uses `send_intermediate_update` before meaningful tool-call batches.
-7. For Bill Helper app work, the model calls `run_workspace_command` and executes `bh ...` inside the workspace container.
-8. `run_workspace_command` ensures the workspace is running, mints a short-lived backend session, injects `BH_*` env, executes `bash -lc`, truncates output when needed, and revokes the temporary session afterward.
+7. For Bill Helper app work, the model calls `terminal` and executes `bh ...` inside the workspace container.
+8. `terminal` ensures the workspace is running, mints a short-lived backend session, injects `BH_*` env, executes `bash -lc`, truncates output when needed, and revokes the temporary session afterward.
 9. `bh` calls backend routes for reads and current-thread proposal lifecycle actions.
 10. Proposal creation stores pending `AgentChangeItem` rows scoped to the current thread and run.
 11. Human review approves, rejects, or reopens proposals.
@@ -72,7 +72,7 @@ The system prompt is a markdown document with:
 
 Important current behavior:
 
-- prompt guidance explicitly routes Bill Helper app work through `run_workspace_command` plus `bh`
+- prompt guidance explicitly routes Bill Helper app work through `terminal` plus `bh`
 - the prompt embeds a concise `bh` cheat sheet, not full tool schema docs
 - raw `curl` and ad hoc Python are discouraged when a `bh` command exists
 - duplicate checks, entity/tag/account grounding, group workflow rules, and review-continuation rules still live in the prompt
@@ -118,19 +118,19 @@ Arguments:
   description: A short, user-visible progress note. Use plain text or inline markdown (e.g. **bold**, `code`, *italic*) for emphasis when helpful.
   constraints: minLength=1, maxLength=400
 
-### `run_workspace_command`
+### `terminal`
 
 Description:
 
-Run a shell command inside the current user's workspace container. Use this for local filesystem work under /workspace, read-only inspection under /data, and Bill Helper app operations through the installed `bh` executable. Prefer `bh` over raw curl or ad hoc Python when the task is about Bill Helper state. The backend injects the current run/thread/auth context automatically.
+Run a shell command inside the current user's workspace container. The command is executed verbatim via `bash -lc`, so multiline scripts, heredocs, pipes, redirects, and normal shell composition are allowed. Use this for local filesystem work under /workspace, read-only inspection under /data, and Bill Helper app operations through the installed `bh` executable. Prefer `bh` over raw curl or ad hoc Python when the task is about Bill Helper state. The backend injects the current run/thread/auth context automatically, and the default working directory is /workspace/workspace.
 
 Arguments:
 
 - `command: string` required
-  description: Shell command to run inside the current user's workspace container. Use `bh` for Bill Helper app operations and standard shell commands for local file work.
+  description: Shell command to execute verbatim via `bash -lc` inside the current user's workspace container. May include newlines, pipes, redirects, command substitution, or heredocs. Use `bh` for Bill Helper app operations and standard shell commands for local file work.
   constraints: minLength=1
 - `cwd: string | null`
-  description: Optional working directory inside the workspace container. Defaults to /workspace/workspace.
+  description: Optional working directory inside the workspace container. Defaults to the workspace root `/workspace/workspace`.
   constraints: default=None
 - `timeout_seconds: integer`
   description: Command timeout in seconds. Defaults to 120. Allowed range: 1 to 600.
@@ -274,7 +274,7 @@ Read routes used by `bh` include:
 - workspace command execution injects `BH_API_BASE_URL`, `BH_AUTH_TOKEN`, `BH_THREAD_ID`, `BH_RUN_ID`, `BH_WORKSPACE_ROOT`, and `BH_DATA_ROOT`
 - the auth token is a short-lived session created for the thread owner and revoked after the command finishes
 - the configured workspace image must include the Bill Helper package, the `bh` entrypoint, and normal shell/file utilities
-- `run_workspace_command` scrubs the temporary auth token from captured stdout/stderr
+- `terminal` scrubs the temporary auth token from captured stdout/stderr
 
 ## Verification Expectations
 

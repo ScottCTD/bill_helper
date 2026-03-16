@@ -15,7 +15,7 @@ The current design reduces the model-visible surface to one general workspace te
 
 The runtime catalog exposed to the model now contains only:
 
-- `run_workspace_command`
+- `terminal`
 - `send_intermediate_update`
 - `rename_thread`
 - `add_user_memory`
@@ -24,13 +24,14 @@ This means the old direct CRUD/read tool surface is fully replaced at the model 
 
 The old read/proposal/review handler modules still exist in backend code, but they are now internal building blocks behind backend APIs and `bh`.
 
-## Workspace Command Contract
+## Terminal Contract
 
-`run_workspace_command` executes `bash -lc` inside the current user's Docker workspace container.
+`terminal` executes the provided command verbatim via `bash -lc` inside the current user's Docker workspace container.
 
 Default behavior:
 
 - cwd defaults to `/workspace/workspace`
+- multiline shell snippets, heredocs, pipes, redirects, and standard shell composition are supported
 - output is truncated safely when needed
 - stdout and stderr are returned separately
 - duration and exit code are reported
@@ -116,7 +117,7 @@ At the runtime boundary, yes: the old direct CRUD tools are replaced.
 That means:
 
 - the model no longer receives `list_*`, `propose_*`, `update_pending_proposal`, or `remove_pending_proposal` as direct tools
-- the model should use `run_workspace_command` plus `bh`
+- the model should use `terminal` plus `bh`
 
 What is still retained internally:
 

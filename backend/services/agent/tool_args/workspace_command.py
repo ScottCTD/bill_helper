@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.services.agent.payload_normalization import normalize_loose_text, normalize_required_text
+from backend.services.agent.payload_normalization import normalize_loose_text
 
 
 class ToolArgsModel(BaseModel):
@@ -18,13 +18,14 @@ class RunWorkspaceCommandArgs(ToolArgsModel):
     command: str = Field(
         min_length=1,
         description=(
-            "Shell command to run inside the current user's workspace container. "
+            "Shell command to execute verbatim via `bash -lc` inside the current user's workspace container. "
+            "May include newlines, pipes, redirects, command substitution, or heredocs. "
             "Use `bh` for Bill Helper app operations and standard shell commands for local file work."
         ),
     )
     cwd: str | None = Field(
         default=None,
-        description="Optional working directory inside the workspace container. Defaults to /workspace/workspace.",
+        description="Optional working directory inside the workspace container. Defaults to the workspace root `/workspace/workspace`.",
     )
     timeout_seconds: int = Field(
         default=120,
@@ -36,7 +37,9 @@ class RunWorkspaceCommandArgs(ToolArgsModel):
     @field_validator("command")
     @classmethod
     def normalize_command(cls, value: str) -> str:
-        return normalize_required_text(value)
+        if not value.strip():
+            raise ValueError("value cannot be empty")
+        return value
 
     @field_validator("cwd")
     @classmethod
