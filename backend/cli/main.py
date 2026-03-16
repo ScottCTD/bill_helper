@@ -28,6 +28,7 @@ from backend.cli.support import (
     resolve_account_name,
     resolve_entry_id,
     resolve_group_id,
+    resolve_payload_proposal_references,
     resolve_proposal_id,
     resolve_thread_id,
 )
@@ -522,11 +523,12 @@ def _handle_proposals_get(args: argparse.Namespace, context: CliContext) -> Any:
 
 def _create_thread_proposal(context: CliContext, *, change_type: str, payload_json: Any) -> Any:
     thread_id = resolve_thread_id(context)
+    canonical_payload = resolve_payload_proposal_references(context, thread_id=thread_id, payload=payload_json)
     _, payload = request_json(
         context,
         "POST",
         f"/agent/threads/{thread_id}/proposals",
-        json_body={"change_type": change_type, "payload_json": payload_json},
+        json_body={"change_type": change_type, "payload_json": canonical_payload},
         include_run_id=True,
     )
     return payload

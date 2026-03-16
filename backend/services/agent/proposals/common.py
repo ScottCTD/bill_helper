@@ -140,37 +140,20 @@ def has_pending_create_entity_root_proposal(
     )
 
 
-def resolve_pending_proposal_by_id(context: ToolContext, proposal_id: str) -> AgentChangeItem | None:
-    return resolve_proposal_by_id(
-        context,
-        proposal_id,
-        items=pending_proposals_for_thread(context),
-        detail_label="pending proposals",
-    )
-
-
 def resolve_proposal_by_id(
     context: ToolContext,
     proposal_id: str,
     *,
     items: list[AgentChangeItem] | None = None,
-    detail_label: str = "thread proposals",
 ) -> AgentChangeItem | None:
     proposal_items = proposals_for_thread(context) if items is None else items
     if not proposal_items:
         return None
 
-    exact = next((item for item in proposal_items if item.id.lower() == proposal_id.lower()), None)
-    if exact is not None:
-        return exact
-
-    matches = [item for item in proposal_items if item.id.lower().startswith(proposal_id.lower())]
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        example_ids = [item.id[:8] for item in matches[:5]]
-        raise ValueError(f"proposal_id '{proposal_id}' is ambiguous across {detail_label}: {example_ids}")
-    return None
+    normalized = proposal_id.strip().lower()
+    if not normalized:
+        return None
+    return next((item for item in proposal_items if item.id.lower() == normalized), None)
 
 
 def require_tool_principal(context: ToolContext) -> RequestPrincipal:

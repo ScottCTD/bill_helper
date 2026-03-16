@@ -31,11 +31,18 @@ def test_thread_proposal_routes_create_get_and_list(client, monkeypatch) -> None
     assert created["payload"]["name"] == "food"
 
     get_response = client.get(
-        f"/api/v1/agent/threads/{thread['id']}/proposals/{created['proposal_short_id']}",
+        f"/api/v1/agent/threads/{thread['id']}/proposals/{created['proposal_id']}",
         headers=_run_headers(run["id"]),
     )
     get_response.raise_for_status()
     assert get_response.json()["proposal_id"] == created["proposal_id"]
+
+    short_id_response = client.get(
+        f"/api/v1/agent/threads/{thread['id']}/proposals/{created['proposal_short_id']}",
+        headers=_run_headers(run["id"]),
+    )
+    assert short_id_response.status_code == 404
+    assert short_id_response.json()["detail"] == "Proposal not found."
 
     list_response = client.get(
         f"/api/v1/agent/threads/{thread['id']}/proposals",

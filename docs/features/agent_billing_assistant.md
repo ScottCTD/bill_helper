@@ -150,7 +150,7 @@ Current behavior:
 - `json` is explicit opt-in only
 - compact output never uses ANSI color
 - compact list outputs use 8-character ids when unique in the current result set, and fall back to full ids on collisions
-- displayed short ids are reusable across follow-up `bh` reads, including proposal inspection commands, because the CLI resolves them to canonical ids before the final API call
+- displayed short ids are reusable across follow-up `bh` reads, including proposal inspection commands and nested proposal references inside proposal payloads, because `bh` resolves them to canonical ids before the final API call
 - proposal commands use `BH_THREAD_ID` and `BH_RUN_ID` from the active agent run
 
 Interactive IDE launch refreshes:

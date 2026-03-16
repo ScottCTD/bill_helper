@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from backend.enums_finance import GroupMemberRole
 from backend.services.agent.change_contracts.groups import (
@@ -17,43 +17,8 @@ from backend.services.agent.change_contracts.groups import (
     GroupReferencePayload,
     normalize_group_member_payload,
 )
-from backend.services.agent.payload_normalization import normalize_required_text
-
-
 class ToolArgsModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
-
-class UpdatePendingProposalArgs(ToolArgsModel):
-    proposal_id: str = Field(min_length=4, max_length=36)
-    patch_map: dict[str, object]
-
-    @field_validator("proposal_id")
-    @classmethod
-    def normalize_proposal_id(cls, value: str) -> str:
-        normalized = normalize_required_text(value)
-        return normalized.lower()
-
-    @field_validator("patch_map")
-    @classmethod
-    def normalize_patch_map(cls, value: dict[str, object]) -> dict[str, object]:
-        normalized: dict[str, object] = {}
-        for raw_key, raw_value in value.items():
-            key = normalize_required_text(str(raw_key))
-            normalized[key] = raw_value
-        if not normalized:
-            raise ValueError("patch_map must include at least one field")
-        return normalized
-
-
-class RemovePendingProposalArgs(ToolArgsModel):
-    proposal_id: str = Field(min_length=4, max_length=36)
-
-    @field_validator("proposal_id")
-    @classmethod
-    def normalize_proposal_id(cls, value: str) -> str:
-        normalized = normalize_required_text(value)
-        return normalized.lower()
 
 
 class ProposeUpdateGroupMembershipArgs(ToolArgsModel):

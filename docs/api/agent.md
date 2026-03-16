@@ -200,16 +200,15 @@ Query params:
 Behavior:
 
 - uses the same thread-scoped proposal history model as the prior internal proposal-history tooling
-- supports full proposal ids and unique short-id prefixes
+- accepts canonical proposal ids only; `bh` resolves displayed short ids before the final API call
 - returns proposal summaries, payloads, review metadata, and timestamps
 
 ### `GET /agent/threads/{thread_id}/proposals/{proposal_id}`
 
-Fetch one proposal by full id or unique short-id prefix. Response: `AgentProposalRecordRead`
+Fetch one proposal by canonical full id. Response: `AgentProposalRecordRead`
 
 Errors:
 
-- `400` ambiguous short id
 - `404` proposal not found
 
 ### `POST /agent/threads/{thread_id}/proposals`

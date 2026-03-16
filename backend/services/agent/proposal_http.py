@@ -130,10 +130,7 @@ def list_thread_proposals(
     if proposal_status is not None:
         filtered_items = [item for item in filtered_items if item.status == proposal_status]
     if proposal_id is not None:
-        try:
-            resolved = resolve_proposal_by_id(context, proposal_id, items=filtered_items)
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        resolved = resolve_proposal_by_id(context, proposal_id, items=filtered_items)
         filtered_items = [] if resolved is None else [resolved]
 
     records = [_public_proposal_record(item) for item in filtered_items[:limit]]
@@ -168,10 +165,7 @@ def create_thread_proposal(
 
 
 def _load_proposal_item(context: ToolContext, *, proposal_id: str) -> AgentChangeItem:
-    try:
-        item = resolve_proposal_by_id(context, proposal_id, detail_label="thread proposals")
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    item = resolve_proposal_by_id(context, proposal_id)
     if item is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -199,6 +199,18 @@ def resolve_proposal_id(context: CliContext, *, thread_id: str, proposal_id: str
     )
 
 
+def resolve_payload_proposal_references(context: CliContext, *, thread_id: str, payload: Any) -> Any:
+    cache: dict[str, str] = {}
+    records_state: dict[str, list[dict[str, Any]] | None] = {"records": None}
+    return _resolve_payload_proposal_references(
+        context,
+        thread_id=thread_id,
+        payload=payload,
+        cache=cache,
+        records_state=records_state,
+    )
+
+
 def load_json_argument(*, inline_json: str | None, json_file: str | None) -> Any:
     if bool(inline_json) == bool(json_file):
         raise CliError("Provide exactly one of the inline JSON or file JSON options.")
@@ -334,3 +346,63 @@ def _resolve_id_from_records(
         candidates = ", ".join(str(record.get(id_field)) for record in matches[:5])
         raise CliError(f"Ambiguous {resource_label} id '{candidate_id}'. Use one of: {candidates}")
     raise CliError(f"Unable to resolve {resource_label} id '{candidate_id}'.")
+
+
+def _resolve_payload_proposal_references(
+    context: CliContext,
+    *,
+    thread_id: str,
+    payload: Any,
+    cache: dict[str, str],
+    records_state: dict[str, list[dict[str, Any]] | None],
+) -> Any:
+    if isinstance(payload, dict):
+        resolved: dict[str, Any] = {}
+        for key, value in payload.items():
+            if key in {"create_entry_proposal_id", "create_group_proposal_id"} and isinstance(value, str):
+                normalized = value.strip()
+                proposal_records = records_state["records"]
+                if proposal_records is None:
+                    proposal_records = _list_proposals_for_resolution(context, thread_id=thread_id)
+                    records_state["records"] = proposal_records
+                if normalized not in cache:
+                    cache[normalized] = _resolve_id_from_records(
+                        records=proposal_records,
+                        candidate_id=normalized,
+                        resource_label="proposal",
+                        id_field="proposal_id",
+                    )
+                resolved[key] = cache[normalized]
+                continue
+            resolved[key] = _resolve_payload_proposal_references(
+                context,
+                thread_id=thread_id,
+                payload=value,
+                cache=cache,
+                records_state=records_state,
+            )
+        return resolved
+    if isinstance(payload, list):
+        return [
+            _resolve_payload_proposal_references(
+                context,
+                thread_id=thread_id,
+                payload=item,
+                cache=cache,
+                records_state=records_state,
+            )
+            for item in payload
+        ]
+    return payload
+
+
+def _list_proposals_for_resolution(context: CliContext, *, thread_id: str) -> list[dict[str, Any]]:
+    _, payload = request_json(
+        context,
+        "GET",
+        f"/agent/threads/{thread_id}/proposals",
+        params={"limit": 5000},
+        include_run_id=True,
+    )
+    records = payload.get("proposals") if isinstance(payload, dict) else []
+    return records if isinstance(records, list) else []

@@ -220,7 +220,6 @@ def test_agent_proposals_are_grouped_in_a_package() -> None:
         "normalization_common.py",
         "normalization_entries.py",
         "normalization_groups.py",
-        "pending.py",
     ):
         assert (AGENT_PROPOSALS_PACKAGE / name).exists(), f"missing proposal module: {name}"
     group_memberships_package = AGENT_PROPOSALS_PACKAGE / "group_memberships"

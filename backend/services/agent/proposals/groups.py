@@ -42,10 +42,7 @@ def resolve_group_proposal_reference_or_error(
     proposal_id: str,
     expected_statuses: set[AgentChangeStatus] | None = None,
 ) -> AgentChangeItem | ToolExecutionResult:
-    try:
-        item = resolve_proposal_by_id(context, proposal_id, detail_label="thread proposals")
-    except ValueError as exc:
-        return error_result("invalid proposal id", details=str(exc))
+    item = resolve_proposal_by_id(context, proposal_id)
     if item is None:
         return error_result("proposal not found", details={"proposal_id": proposal_id})
     if item.change_type != AgentChangeType.CREATE_GROUP:

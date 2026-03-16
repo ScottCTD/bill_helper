@@ -6,7 +6,13 @@ import pytest
 
 from backend.cli import main as cli_main
 from backend.cli.rendering import render_output
-from backend.cli.support import CliError, build_cli_context, resolve_entry_id, resolve_proposal_id
+from backend.cli.support import (
+    CliError,
+    build_cli_context,
+    resolve_entry_id,
+    resolve_payload_proposal_references,
+    resolve_proposal_id,
+)
 from backend.tests.test_entries import create_account, create_entry
 
 
@@ -262,6 +268,58 @@ def test_resolve_proposal_id_accepts_short_prefix(client, monkeypatch) -> None:
     )
 
     assert resolved == "293272a6-44da-42cc-b2e4-43644a729979"
+
+
+def test_resolve_payload_proposal_references_canonicalizes_nested_refs(monkeypatch) -> None:
+    monkeypatch.setenv("BH_API_BASE_URL", "http://testserver/api/v1")
+    monkeypatch.setenv("BH_AUTH_TOKEN", "token")
+    monkeypatch.setenv("BH_RUN_ID", "run-123")
+
+    request_count = 0
+
+    def fake_request_json(context, method, path, **kwargs):
+        nonlocal request_count
+        request_count += 1
+        assert method == "GET"
+        assert path == "/agent/threads/thread-123/proposals"
+        assert kwargs.get("include_run_id") is True
+        return 200, {
+            "returned_count": 2,
+            "total_available": 2,
+            "proposals": [
+                {
+                    "proposal_id": "293272a6-44da-42cc-b2e4-43644a729979",
+                    "proposal_short_id": "293272a6",
+                },
+                {
+                    "proposal_id": "70dcb3a0-c965-44b3-a041-6d5a8a3d2c8c",
+                    "proposal_short_id": "70dcb3a0",
+                },
+            ],
+        }
+
+    monkeypatch.setattr("backend.cli.support.request_json", fake_request_json)
+
+    resolved = resolve_payload_proposal_references(
+        build_cli_context(output_format="json"),
+        thread_id="thread-123",
+        payload={
+            "group_ref": {"create_group_proposal_id": "293272a6"},
+            "target": {
+                "target_type": "entry",
+                "entry_ref": {"create_entry_proposal_id": "70dcb3a0"},
+            },
+        },
+    )
+
+    assert resolved == {
+        "group_ref": {"create_group_proposal_id": "293272a6-44da-42cc-b2e4-43644a729979"},
+        "target": {
+            "target_type": "entry",
+            "entry_ref": {"create_entry_proposal_id": "70dcb3a0-c965-44b3-a041-6d5a8a3d2c8c"},
+        },
+    }
+    assert request_count == 1
 
 
 def test_group_and_account_lists_render_short_ids() -> None:
