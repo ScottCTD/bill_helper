@@ -185,6 +185,32 @@ def test_render_output_uses_renderer_for_accounts_list_payloads() -> None:
     assert "'id':" not in rendered
 
 
+def test_render_output_includes_tag_description_in_compact_and_text() -> None:
+    payload = [
+        {
+            "name": "grocery",
+            "type": "expense",
+            "description": "Food bought from stores.",
+        }
+    ]
+
+    compact_rendered = render_output(
+        payload,
+        output_format="compact",
+        render_key="tags_list",
+    )
+    text_rendered = render_output(
+        payload,
+        output_format="text",
+        render_key="tags_list",
+    )
+
+    assert "schema: name|type|description" in compact_rendered
+    assert "grocery|expense|Food bought from stores." in compact_rendered
+    assert "Description" in text_rendered
+    assert "Food bought from stores." in text_rendered
+
+
 def test_entries_parser_without_subcommand_prints_entries_help(capsys) -> None:
     exit_code = cli_main.main(["entries"])
     captured = capsys.readouterr()

@@ -408,13 +408,13 @@ def _render_entities_list_text(payload: list[dict[str, Any]]) -> str:
 
 
 def _render_tags_list_compact(payload: list[dict[str, Any]]) -> str:
-    rows = [[item.get("name") or "-", item.get("type") or "-"] for item in payload]
+    rows = [[item.get("name") or "-", item.get("type") or "-", item.get("description") or "-"] for item in payload]
     return compact_table(summary=f"returned {len(rows)} tag(s)", schema_key="tags_list", rows=rows)
 
 
 def _render_tags_list_text(payload: list[dict[str, Any]]) -> str:
-    rows = [[item.get("name") or "-", item.get("type") or "-"] for item in payload]
-    return text_table(title="Tags", headers=["Name", "Type"], rows=rows, empty_text="(none)")
+    rows = [[item.get("name") or "-", item.get("type") or "-", item.get("description") or "-"] for item in payload]
+    return text_table(title="Tags", headers=["Name", "Type", "Description"], rows=rows, empty_text="(none)")
 
 
 def _render_proposals_list_compact(payload: dict[str, Any]) -> str:

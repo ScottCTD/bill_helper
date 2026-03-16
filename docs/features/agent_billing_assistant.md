@@ -218,7 +218,7 @@ Compact list schemas:
 - `accounts_list` -> `id|name|currency|active`
 - `groups_list` -> `id|type|name|descendants|first_date|last_date`
 - `entities_list` -> `name|category`
-- `tags_list` -> `name|type`
+- `tags_list` -> `name|type|description`
 - `proposals_list` -> `id|status|change_type|summary`
 
 Common flows:

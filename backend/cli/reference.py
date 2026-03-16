@@ -36,7 +36,7 @@ _COMPACT_SCHEMAS: tuple[CompactSchema, ...] = (
     CompactSchema("groups_nodes", "node_id|node_type|name|member_role|date|kind|amount_minor|group_type|descendants"),
     CompactSchema("groups_edges", "source|target|relation"),
     CompactSchema("entities_list", "name|category"),
-    CompactSchema("tags_list", "name|type"),
+    CompactSchema("tags_list", "name|type|description"),
     CompactSchema("proposals_list", "id|status|change_type|summary"),
     CompactSchema("proposals_detail", "id|status|proposal_type|change_action|change_type|summary|applied_resource"),
 )
