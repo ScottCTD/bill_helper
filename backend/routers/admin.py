@@ -22,10 +22,9 @@ from backend.schemas_auth import (
 from backend.schemas_finance import UserRead
 from backend.services.agent_workspace import (
     queue_best_effort_user_workspace_start,
-    queue_best_effort_user_workspace_stop,
+    stop_user_workspace_best_effort,
 )
 from backend.services.sessions import (
-    count_active_sessions_for_user,
     create_session,
     list_active_sessions,
     load_session_by_id,
@@ -173,6 +172,5 @@ def delete_admin_session(
     deleted = revoke_session_by_id(db, session_id=session_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-    if count_active_sessions_for_user(db, user_id=session_row.user_id) == 0:
-        queue_best_effort_user_workspace_stop(user_id=session_row.user_id)
     db.commit()
+    stop_user_workspace_best_effort(user_id=session_row.user_id)

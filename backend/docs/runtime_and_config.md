@@ -100,7 +100,8 @@ Current behavior:
 - when the configured workspace image is missing, `GET /api/v1/workspace` returns a snapshot with `status="image_missing"` so the UI can still explain the missing image instead of returning `503`
 - `POST /api/v1/workspace/start` and `POST /api/v1/workspace/stop` remain explicit lifecycle controls, but login and auth bootstrap now trigger best-effort background start attempts so the IDE is usually ready before the user opens `/workspace`
 - `POST /api/v1/workspace/ide/session` mints a narrow `HttpOnly` workspace cookie for `/api/v1/workspace/ide/` and launches the same-origin IDE proxy without inventing a second auth model
-- logging out only stops the workspace after the user's last active app session disappears
+- logging out or admin session deletion stops that user's workspace after the session revoke is committed, regardless of any other remaining sessions
+- backend shutdown now runs a best-effort sweep that stops all running user workspace containers so app termination does not leave sandboxes running
 - the backend assumes `agent_workspace_image` already exists and returns a provisioning error if it does not
 - the image can be built locally with `docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .`
 - container creation adds `host.docker.internal -> host-gateway` so local workspace commands can reach the configured backend base URL on Linux as well as Docker Desktop setups

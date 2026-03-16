@@ -46,7 +46,8 @@ Behavior notes:
 
 - canonical files under `/data` remain untouched
 - the named Docker volume stays intact, so `/workspace` contents persist across later restarts
-- logout stops the container only after the user's last active app session is revoked
+- logout and admin session revocation stop that user's container after the session revoke is committed, even if other app sessions for that user still exist
+- backend shutdown also runs a best-effort sweep that stops all running workspace containers
 
 ## `POST /workspace/ide/session`
 
@@ -76,5 +77,6 @@ Behavior notes:
 - authenticates only from the narrow workspace cookie issued by `POST /workspace/ide/session`
 - strips the `/workspace/ide` prefix before forwarding to the user's localhost-bound `code-server` port
 - forwards both normal HTTP traffic and websocket upgrades
+- reserved websocket close codes from upstream disconnects are normalized before closing the browser-facing socket, so logout/teardown disconnects do not raise invalid close-code proxy errors
 - `code-server` auth is disabled in the container because the backend session already gates access
 - built-in `code-server` app/port proxying remains disabled in v1

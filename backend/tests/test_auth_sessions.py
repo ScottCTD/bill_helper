@@ -95,11 +95,11 @@ def test_admin_can_revoke_another_users_session(client, anonymous_client):
     assert revoked_response.json()["detail"] == "Invalid or expired session."
 
 
-def test_logout_stops_workspace_only_when_last_session_is_revoked(anonymous_client, monkeypatch):
+def test_logout_stops_workspace_even_when_other_sessions_exist(anonymous_client, monkeypatch):
     stopped_user_ids: list[str] = []
     monkeypatch.setattr(
         auth_router,
-        "queue_best_effort_user_workspace_stop",
+        "stop_user_workspace_best_effort",
         lambda *, user_id: stopped_user_ids.append(user_id),
     )
 
@@ -121,11 +121,14 @@ def test_logout_stops_workspace_only_when_last_session_is_revoked(anonymous_clie
 
     first_logout = anonymous_client.post("/api/v1/auth/logout", headers=first_headers)
     assert first_logout.status_code == 204
-    assert stopped_user_ids == []
+    assert stopped_user_ids == [first_login.json()["user"]["id"]]
 
     second_logout = anonymous_client.post("/api/v1/auth/logout", headers=second_headers)
     assert second_logout.status_code == 204
-    assert stopped_user_ids == [second_login.json()["user"]["id"]]
+    assert stopped_user_ids == [
+        first_login.json()["user"]["id"],
+        second_login.json()["user"]["id"],
+    ]
 
 
 def test_admin_login_as_returns_impersonation_session_with_target_scope(
@@ -300,11 +303,11 @@ def test_logout_removes_current_session_from_admin_session_listing(
     assert session_id not in session_ids
 
 
-def test_admin_session_revoke_stops_workspace_when_last_session_disappears(client, anonymous_client, monkeypatch):
+def test_admin_session_revoke_stops_workspace_immediately(client, anonymous_client, monkeypatch):
     stopped_user_ids: list[str] = []
     monkeypatch.setattr(
         admin_router,
-        "queue_best_effort_user_workspace_stop",
+        "stop_user_workspace_best_effort",
         lambda *, user_id: stopped_user_ids.append(user_id),
     )
 

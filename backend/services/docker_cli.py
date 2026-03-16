@@ -57,7 +57,7 @@ def _run_docker(
 
 def image_exists(*, docker_binary: str, image: str) -> bool:
     try:
-        _run_docker(docker_binary=docker_binary, args=["image", "inspect", image])
+        _run_docker(docker_binary=docker_binary, args=["inspect", image])
         return True
     except DockerCliError:
         return False
@@ -159,6 +159,22 @@ def stop_container(*, docker_binary: str, container_name: str) -> None:
     except DockerCliError as error:
         if "is not running" not in error.stderr and "No such container" not in error.stderr:
             raise
+
+
+def list_container_names(
+    *,
+    docker_binary: str,
+    all_containers: bool = False,
+    filters: list[str] | None = None,
+) -> list[str]:
+    args = ["ps"]
+    if all_containers:
+        args.append("--all")
+    for item in filters or []:
+        args.extend(["--filter", item])
+    args.extend(["--format", "{{.Names}}"])
+    result = _run_docker(docker_binary=docker_binary, args=args)
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
 def exec_in_container(

@@ -15,10 +15,10 @@ from backend.schemas_auth import AuthLoginRequest, AuthLoginResponse, AuthSessio
 from backend.routers.workspace import clear_workspace_cookie_on_logout
 from backend.services.agent_workspace import (
     queue_best_effort_user_workspace_start,
-    queue_best_effort_user_workspace_stop,
+    stop_user_workspace_best_effort,
 )
 from backend.services.crud_policy import PolicyViolation
-from backend.services.sessions import count_active_sessions_for_user, create_session, revoke_current_session
+from backend.services.sessions import create_session, revoke_current_session
 from backend.services.users import authenticate_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -73,12 +73,11 @@ def logout(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current session is missing a session id.",
-        )
+    )
     revoke_current_session(db, session_id=principal.session_id)
-    if count_active_sessions_for_user(db, user_id=principal.user_id) == 0:
-        queue_best_effort_user_workspace_stop(user_id=principal.user_id)
     db.commit()
     clear_workspace_cookie_on_logout(response)
+    stop_user_workspace_best_effort(user_id=principal.user_id)
 
 
 @router.get("/me", response_model=AuthSessionRead)

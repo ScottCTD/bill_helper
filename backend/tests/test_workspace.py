@@ -3,10 +3,14 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+from fastapi.testclient import TestClient
+
 from backend.config import get_settings
 from backend.database import get_session_maker
+from backend.main import create_app
 from backend.routers import workspace as workspace_router
 from backend.schemas_workspace import WorkspaceSnapshotRead
+from backend.services import docker_cli
 from backend.services.workspace_ide import (
     WORKSPACE_IDE_SESSION_COOKIE_NAME,
     WorkspaceIdeLaunchView,
@@ -91,12 +95,67 @@ def test_safe_websocket_close_ignores_closed_socket_runtime_error() -> None:
     )
 
 
+def test_safe_websocket_close_normalizes_reserved_close_code() -> None:
+    captured: dict[str, object] = {}
+
+    class CapturingWebSocket:
+        async def close(self, *, code: int = 1000, reason: str | None = None) -> None:
+            captured["code"] = code
+            captured["reason"] = reason
+
+    asyncio.run(
+        workspace_router._safe_websocket_close(  # noqa: SLF001
+            CapturingWebSocket(),
+            code=1006,
+            reason="abnormal closure",
+        )
+    )
+
+    assert captured == {
+        "code": 1000,
+        "reason": "abnormal closure",
+    }
+
+
 def test_upstream_close_code_normalizes_reserved_disconnect_codes() -> None:
     assert workspace_router._upstream_close_code(1005) == 1000  # noqa: SLF001
     assert workspace_router._upstream_close_code(1006) == 1000  # noqa: SLF001
     assert workspace_router._upstream_close_code(1015) == 1000  # noqa: SLF001
     assert workspace_router._upstream_close_code(1001) == 1001  # noqa: SLF001
     assert workspace_router._upstream_close_code("1001") == 1000  # noqa: SLF001
+
+
+def test_app_shutdown_runs_workspace_stop_sweep(monkeypatch) -> None:
+    stop_calls: list[str] = []
+    monkeypatch.setattr(
+        "backend.main.stop_all_user_workspaces_best_effort",
+        lambda: stop_calls.append("stopped"),
+    )
+
+    with TestClient(create_app()):
+        pass
+
+    assert stop_calls == ["stopped"]
+
+
+def test_image_exists_uses_generic_inspect(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_docker(*, docker_binary: str, args: list[str], **_kwargs):
+        captured["docker_binary"] = docker_binary
+        captured["args"] = args
+        return None
+
+    monkeypatch.setattr(docker_cli, "_run_docker", fake_run_docker)
+
+    assert docker_cli.image_exists(
+        docker_binary="docker",
+        image="bill-helper-agent-workspace:latest",
+    )
+    assert captured == {
+        "docker_binary": "docker",
+        "args": ["inspect", "bill-helper-agent-workspace:latest"],
+    }
 
 
 def test_workspace_ide_session_sets_workspace_cookie(client, monkeypatch) -> None:
