@@ -61,10 +61,18 @@ The old read/proposal/review modules still exist internally, but no longer as di
 The system prompt is a markdown document with:
 
 - `## Identity`
-- `## Rules`
-- `### Tool Discipline`
-- `### bh Cheat Sheet`
-- domain-specific workflow rules for entries, tags, entities, accounts, groups, and pending proposals
+- `## Operating Rules`
+- `### Tool Use`
+- `### Progress Updates`
+- `### Memory`
+- `## bh Reference`
+- `## Proposal Workflow`
+- `### General`
+- `### Pending Proposals`
+- `## Domain Rules`
+- domain-specific rules for entries, tags, entities, accounts, snapshots, and groups
+- `## Error Recovery`
+- `## Final Response`
 - `## Current User Context`
 - `### Entity Category Reference`
 - `### Account Context`

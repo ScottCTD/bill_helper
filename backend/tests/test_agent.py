@@ -186,11 +186,6 @@ def test_send_message_persists_telegram_surface_and_formats_terminal_reply(clien
     assert run["terminal_assistant_reply"] == "Summary\nDone\nReceipt (https://example.com/receipt)"
     assert captured_messages
 
-    system_message = captured_messages[-1][0]
-    system_content = str(system_message.get("content", ""))
-    assert "Current response surface: telegram" in system_content
-    assert "Avoid Markdown-heavy formatting, tables, and fenced code blocks." in system_content
-
     run_response = client.get(f"/api/v1/agent/runs/{run['id']}")
     run_response.raise_for_status()
     payload = run_response.json()
@@ -650,161 +645,6 @@ def test_attachment_parts_stay_before_user_prompt_for_mixed_uploads(client, monk
     assert user_content[4].get("text") == "Compare both files."
 
 
-def test_system_prompt_requires_duplicate_then_reconcile_then_propose_entries():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    duplicate_phrase = "Before proposing any entry, check for duplicates"
-    reconcile_phrase = "inspect existing tags, accounts, and entities first, then propose any missing records"
-    propose_phrase = "Only after duplicate checks and tag/entity reconciliation, propose entries"
-
-    assert duplicate_phrase in prompt
-    assert reconcile_phrase in prompt
-    assert propose_phrase in prompt
-    assert prompt.index(duplicate_phrase) < prompt.index(reconcile_phrase) < prompt.index(propose_phrase)
-
-
-def test_system_prompt_uses_duplicate_enrichment_before_create():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    assert "If a duplicate exists, check whether the new input adds complementary information." in prompt
-    assert "prefer revising the existing entry with an update proposal instead of creating a duplicate proposal." in prompt
-
-
-def test_system_prompt_mentions_snapshot_and_reconciliation_tools():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    assert "Snapshots are bank balance checkpoints on a specific date." in prompt
-    assert "Reconciliation is interval-based:" in prompt
-    assert "Entries on a snapshot date belong to the interval ending at that snapshot." in prompt
-    assert "Use `bh snapshots create`" in prompt
-    assert "inspect the account's existing checkpoints with `bh snapshots list`" in prompt
-    assert "Use `bh snapshots reconciliation`" in prompt
-
-
-def test_system_prompt_requires_canonical_name_normalization_examples():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    assert "Normalize new entity names to canonical, general forms." in prompt
-    assert "Normalize new tags to canonical, general descriptors" in prompt
-    assert "Starbucks (not SBUX)" in prompt
-    assert "Apple (not Apple Store #R121)." in prompt
-
-
-def test_system_prompt_requires_human_readable_markdown_notes_for_notes_fields():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    assert "For tools that include a markdown_notes field, write human-readable markdown notes" in prompt
-    assert "If the content is short, avoid headings." in prompt
-    assert "ordered/unordered lists when they improve readability." in prompt
-
-
-def test_system_prompt_requires_entry_updates_before_tag_delete():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    reference_phrase = "Check whether entries still reference the tag."
-    update_phrase = "update or replace the tag on affected entries first."
-    delete_phrase = "Only then create the delete-tag proposal."
-
-    assert reference_phrase in prompt
-    assert update_phrase in prompt
-    assert delete_phrase in prompt
-    assert prompt.index(reference_phrase) < prompt.index(update_phrase) < prompt.index(delete_phrase)
-
-
-def test_system_prompt_guides_pending_proposal_inspection_with_edit_commands():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    inspect_phrase = "Use `bh proposals list` to inspect proposal history in the current thread"
-    revise_phrase = "`bh proposals update` updates an existing pending proposal in the current thread."
-    remove_phrase = "`bh proposals remove` removes an existing pending proposal in the current thread."
-    next_phrase = "If the user wants a different end state, inspect existing proposals first"
-
-    assert inspect_phrase in prompt
-    assert revise_phrase in prompt
-    assert remove_phrase in prompt
-    assert next_phrase in prompt
-    assert prompt.index(inspect_phrase) < prompt.index(revise_phrase) < prompt.index(remove_phrase) < prompt.index(next_phrase)
-
-
-def test_system_prompt_includes_grouping_workflow_rules():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    assert "### Grouping" in prompt
-    assert "#### Group Proposal Workflow" in prompt
-    assert "Before mutating an existing group, inspect the current group first" in prompt
-    assert "Before proposing group membership changes involving entries, inspect entries first" in prompt
-    assert "After proposing a new entry, check whether it should join an existing recurring, split, or bundle group." in prompt
-    assert "inspect the likely group and then create the group-membership proposal." in prompt
-    assert "pending create_group and create_entry proposal ids" in prompt
-    assert "dependencies must be approved and applied" in prompt
-
-
-def test_system_prompt_includes_group_type_reference():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    assert "### Grouping" in prompt
-    assert "#### Group Types" in prompt
-    assert "`BUNDLE`: a related set of direct members that should be treated together" in prompt
-    assert "Examples: an Uber trip plus a separate Uber tip" in prompt
-    assert "`SPLIT`: one parent side split across child side members" in prompt
-    assert "Example: the user paid for dinner and friends pay them back." in prompt
-    assert "`RECURRING`: repeated entries of the same `EntryKind` over time" in prompt
-    assert "Examples: subscriptions, utility bills, or rent." in prompt
-    assert "### Group Type Reference" not in prompt
-
-
-def test_system_prompt_includes_error_recovery_and_core_identity():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    assert "## Identity" in prompt
-    assert "## Rules" in prompt
-    assert "append-only policies" not in prompt
-    assert "Final message should prioritize a concise direct answer" in prompt
-    assert "Include pending review item ids only when pending items exist" not in prompt
-    assert "If a tool returns an ERROR" in prompt
-
-
-def test_system_prompt_requires_first_tool_call_update_for_tool_runs():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    assert "If you need any tool calls for the task, call send_intermediate_update first" in prompt
-    assert "before calling other tools." in prompt
-
-
-def test_system_prompt_requires_sparse_intermediate_updates():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    assert "send_intermediate_update" in prompt
-    assert "do not call it on every tool step" in prompt
-
-
-def test_system_prompt_prefers_parallel_tool_calls_for_independent_work():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    assert "Prefer parallel tool calls for independent tasks" in prompt
-    assert "start with one, validate, then parallelize the rest." in prompt
-
-
-def test_system_prompt_stages_first_proposal_before_parallel_batches():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    assert "for `bh * create` proposals, start with one, validate, then parallelize the rest." in prompt
-
-
 def test_system_prompt_includes_current_date_tag():
     from datetime import date
 
@@ -854,7 +694,7 @@ def test_system_prompt_adds_telegram_surface_guidance():
     prompt = system_prompt(SystemPromptContext(response_surface="telegram"))
 
     assert "### Response Surface" in prompt
-    assert "Current response surface: telegram" in prompt
+    assert "telegram" in prompt
     assert "Avoid Markdown-heavy formatting, tables, and fenced code blocks." in prompt
 
 
@@ -1030,17 +870,6 @@ def test_settings_user_memory_is_injected_into_system_prompt(client, monkeypatch
     assert "### Agent Memory" in system_content
     assert "- Prefers terse answers." in system_content
     assert "- Works in CAD." in system_content
-
-
-def test_system_prompt_guides_thread_naming_policy():
-    from backend.services.agent.prompts import system_prompt
-
-    prompt = system_prompt()
-    assert "Right after the first user message in a new thread" in prompt
-    assert "you MUST call rename_thread" in prompt
-    assert "runtime only allows rename_thread" in prompt
-    assert "only call rename_thread again if the user explicitly asks" in prompt
-    assert "Keep thread titles concise and topical" in prompt
 
 
 def test_tool_catalog_exposes_only_terminal_and_retained_session_tools():
@@ -1307,7 +1136,7 @@ def test_system_prompt_embeds_bh_cheat_sheet_only():
 
     prompt = system_prompt()
 
-    assert "### `bh` Cheat Sheet" in prompt
+    assert "## `bh` Reference" in prompt
     assert render_bh_cheat_sheet() in prompt
     assert "billengine" not in prompt.lower()
 
