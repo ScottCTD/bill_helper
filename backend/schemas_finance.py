@@ -538,6 +538,7 @@ class DashboardMonthlyTrendPoint(BaseModel):
     expense_total_minor: int
     income_total_minor: int
     filter_group_totals: dict[str, int] = Field(default_factory=dict)
+    income_filter_group_totals: dict[str, int] = Field(default_factory=dict)
 
 
 class DashboardBreakdownItem(BaseModel):

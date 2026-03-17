@@ -29,6 +29,12 @@ Built-in groups are lazily provisioned per user on first dashboard or `/filter-g
 - `fixed`
 - `transfers`
 - `untagged`
+- `salary` (income with tag `salary_wages`)
+- `other_income` (income not matching salary; catch-all)
+- `salary` (income with tag `salary_wages`)
+- `other_income` (income not matching salary)
+- `salary` (income with tag `salary_wages`)
+- `other_income` (income not matching salary; e.g. bonus, interest)
 
 Current rule engine supports:
 
@@ -67,8 +73,8 @@ Default groups other than `untagged` can have their rules edited, but their name
   - floating page-level right-side invisible timeline rail on desktop, sized to the viewport height without consuming dashboard layout width
   - timeline only lists months and years that have visible expense activity in the dashboard currency
   - wheel-based discrete month/year stepping with centered active-item picker behavior; mobile collapses back to a compact horizontal strip
-  - monthly mode: KPI cards, an `Income vs Expense Trend` bar chart with one income bar plus stacked expense segments by filter group (bottom to top: fixed, transfers, one-time, day-to-day; tooltip shows segment name and amount on hover), expense pie by filter group, and projection cards
-  - yearly mode: yearly KPI cards, monthly income vs expense bars for the selected year with stacked filter-group expense segments, yearly filter-group totals, and a dedicated monthly bar chart for each filter group
+  - monthly mode: KPI cards, an `Income vs Expense Trend` bar chart with stacked income segments (salary, other income) plus stacked expense segments by filter group (bottom to top: fixed, transfers, one-time, day-to-day; tooltip shows segment name and amount on hover), expense pie by filter group, and projection cards
+  - yearly mode: yearly KPI cards, monthly income vs expense bars for the selected year with stacked income segments (salary, other income) and stacked filter-group expense segments, yearly filter-group totals, and a dedicated monthly bar chart for each filter group
 - `Spending` tab:
   - monthly mode: average/median spend-day metrics, stacked daily area chart by filter group, and month-over-month comparison cards
   - yearly mode: average/median expense-month metrics, stacked monthly filter-group bars for the selected year, and year-over-year comparison cards for each saved filter group

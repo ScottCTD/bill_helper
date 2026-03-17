@@ -38,8 +38,12 @@ DEFAULT_FILTER_GROUP_COLORS = {
     "fixed": "#1d4ed8",
     "transfers": "#6d28d9",
     "untagged": "#6b7280",
+    "salary": "#047857",
+    "other_income": "#059669",
 }
 UNTAGGED_FILTER_GROUP_KEY = "untagged"
+OTHER_INCOME_FILTER_GROUP_KEY = "other_income"
+INCOME_FILTER_GROUP_KEYS = frozenset({"salary", "other_income"})
 UNTAGGED_FILTER_GROUP_DESCRIPTION = (
     "Expense entries with no tags, or tagged expense entries that do not match "
     "any other saved filter group. This group is computed automatically and "
@@ -48,6 +52,13 @@ UNTAGGED_FILTER_GROUP_DESCRIPTION = (
 UNTAGGED_FILTER_GROUP_RULE_SUMMARY = (
     "kind is expense and is not an internal transfer and "
     "(has no tags or matches no other saved filter group)"
+)
+OTHER_INCOME_FILTER_GROUP_DESCRIPTION = (
+    "Income entries that do not match any other income filter group, e.g. bonus, "
+    "interest, or other income without the salary_wages tag."
+)
+OTHER_INCOME_FILTER_GROUP_RULE_SUMMARY = (
+    "kind is income and is not an internal transfer and matches no other income filter group"
 )
 
 
@@ -219,6 +230,41 @@ DEFAULT_FILTER_GROUP_SPECS: tuple[_DefaultFilterGroupSpec, ...] = (
             include=_group(
                 "AND",
                 _condition(field="entry_kind", operator="is", value="EXPENSE"),
+            ),
+            exclude=_group(
+                "AND",
+                _condition(field="is_internal_transfer", operator="is", value=True),
+            ),
+        ),
+    ),
+    _DefaultFilterGroupSpec(
+        key="salary",
+        name="salary",
+        description="Regular salary, wages, and payroll income identified by the salary_wages tag.",
+        color=DEFAULT_FILTER_GROUP_COLORS["salary"],
+        position=5,
+        rule=FilterGroupRule(
+            include=_group(
+                "AND",
+                _condition(field="entry_kind", operator="is", value="INCOME"),
+                _condition(field="tags", operator="has_any", value=["salary_wages"]),
+            ),
+            exclude=_group(
+                "AND",
+                _condition(field="is_internal_transfer", operator="is", value=True),
+            ),
+        ),
+    ),
+    _DefaultFilterGroupSpec(
+        key=OTHER_INCOME_FILTER_GROUP_KEY,
+        name="other income",
+        description=OTHER_INCOME_FILTER_GROUP_DESCRIPTION,
+        color=DEFAULT_FILTER_GROUP_COLORS["other_income"],
+        position=6,
+        rule=FilterGroupRule(
+            include=_group(
+                "AND",
+                _condition(field="entry_kind", operator="is", value="INCOME"),
             ),
             exclude=_group(
                 "AND",
@@ -465,16 +511,26 @@ def matching_filter_group_keys(
     context: FilterEntryContext,
     filter_groups: list[FilterGroupDefinition],
 ) -> list[str]:
+    catch_all_keys = {UNTAGGED_FILTER_GROUP_KEY, OTHER_INCOME_FILTER_GROUP_KEY}
     regular_matches = {
         filter_group.key
         for filter_group in filter_groups
-        if filter_group.key != UNTAGGED_FILTER_GROUP_KEY and evaluate_filter_group_rule(filter_group.rule, context)
+        if filter_group.key not in catch_all_keys
+        and evaluate_filter_group_rule(filter_group.rule, context)
     }
     include_untagged = _context_matches_untagged(context, has_other_matches=bool(regular_matches))
+    income_matches = regular_matches & INCOME_FILTER_GROUP_KEYS
+    include_other_income = _context_matches_other_income(
+        context, has_other_income_matches=bool(income_matches)
+    )
     matching_keys: list[str] = []
     for filter_group in filter_groups:
         if filter_group.key == UNTAGGED_FILTER_GROUP_KEY:
             if include_untagged:
+                matching_keys.append(filter_group.key)
+            continue
+        if filter_group.key == OTHER_INCOME_FILTER_GROUP_KEY:
+            if include_other_income:
                 matching_keys.append(filter_group.key)
             continue
         if filter_group.key in regular_matches:
@@ -532,6 +588,16 @@ def _context_matches_untagged(
     return not context.tag_names or not has_other_matches
 
 
+def _context_matches_other_income(
+    context: FilterEntryContext,
+    *,
+    has_other_income_matches: bool,
+) -> bool:
+    if context.kind != EntryKind.INCOME or context.is_internal_transfer:
+        return False
+    return not has_other_income_matches
+
+
 def _filter_group_description(definition: FilterGroupDefinition) -> str | None:
     if definition.key == UNTAGGED_FILTER_GROUP_KEY:
         return UNTAGGED_FILTER_GROUP_DESCRIPTION
@@ -541,4 +607,6 @@ def _filter_group_description(definition: FilterGroupDefinition) -> str | None:
 def _filter_group_rule_summary(definition: FilterGroupDefinition) -> str:
     if definition.key == UNTAGGED_FILTER_GROUP_KEY:
         return UNTAGGED_FILTER_GROUP_RULE_SUMMARY
+    if definition.key == OTHER_INCOME_FILTER_GROUP_KEY:
+        return OTHER_INCOME_FILTER_GROUP_RULE_SUMMARY
     return summarize_filter_group_rule(definition.rule)

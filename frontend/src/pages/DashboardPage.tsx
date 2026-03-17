@@ -37,12 +37,15 @@ import {
   buildYearMonthKeys,
   buildYearlyOverviewData,
   builtinGroupColor,
+  builtinIncomeGroupColor,
   filterGroupNamesByKey,
+  isIncomeFilterGroupKey,
   limitTrendDataToMonthsWithData,
   median,
   pickTimelineMonthForYear,
   shiftMonthKey,
   sortByBuiltinOrder,
+  sortByIncomeBarOrder,
   sortByIncomeTrendOrder,
   sumDashboardKpiForMonths,
   sumFilterGroupForMonths,
@@ -58,15 +61,16 @@ import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
 type IncomeTrendChartProps = {
   data: Array<Record<string, unknown>>;
   trendGroups: Array<{ key: string; name: string }>;
+  incomeTrendGroups: Array<{ key: string; name: string }>;
   currencyCode: string;
 };
 
-function IncomeTrendChart({ data: chartData, trendGroups, currencyCode }: IncomeTrendChartProps) {
+function IncomeTrendChart({ data: chartData, trendGroups, incomeTrendGroups, currencyCode }: IncomeTrendChartProps) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   return (
     <DashboardChartContainer>
       {({ width, height }) => (
-        <BarChart width={width} height={height} data={chartData}>
+        <BarChart width={width} height={height} data={chartData} barCategoryGap="20%" barGap={4}>
           <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
           <XAxis dataKey="month" />
           <YAxis tickFormatter={axisTick} />
@@ -82,7 +86,16 @@ function IncomeTrendChart({ data: chartData, trendGroups, currencyCode }: Income
               );
             }}
           />
-          <Bar dataKey="income_total_minor" name="Income" fill={CHART_COLORS.income} onMouseEnter={() => setHoveredKey("income_total_minor")} />
+          {incomeTrendGroups.map((group) => (
+            <Bar
+              key={group.key}
+              dataKey={group.key}
+              name={group.name}
+              stackId="income"
+              fill={builtinIncomeGroupColor(group.key)}
+              onMouseEnter={() => setHoveredKey(group.key)}
+            />
+          ))}
           {trendGroups.map((group) => (
             <Bar
               key={group.key}
@@ -299,16 +312,24 @@ export function DashboardPage() {
   const monthlyChartData = buildMonthlyChartData(data);
   const yearlyOverviewData = buildYearlyOverviewData(selectedYearMonths, yearlyDashboardsByMonth, data.filter_groups);
 
-  // Trend chart: sorted in builtin group order, filtered to groups with data
+  // Trend chart: expense groups (exclude income groups) and income groups
   const sortedFilterGroups = sortByBuiltinOrder(data.filter_groups);
-  const monthlyExpenseTrendGroups = sortedFilterGroups.filter((group) =>
+  const expenseGroups = sortedFilterGroups.filter((g) => !isIncomeFilterGroupKey(g.key));
+  const incomeGroups = sortedFilterGroups.filter((g) => isIncomeFilterGroupKey(g.key));
+  const monthlyExpenseTrendGroups = expenseGroups.filter((group) =>
     monthlyChartData.some((point) => Number((point as Record<string, unknown>)[group.key] ?? 0) > 0)
   );
-  const expenseTrendGroups = monthlyExpenseTrendGroups.length > 0 ? monthlyExpenseTrendGroups : sortedFilterGroups;
-  const yearlyExpenseTrendGroupsRaw = sortedFilterGroups.filter((group) =>
+  const expenseTrendGroups = monthlyExpenseTrendGroups.length > 0 ? monthlyExpenseTrendGroups : expenseGroups;
+  const yearlyExpenseTrendGroupsRaw = expenseGroups.filter((group) =>
     yearlyOverviewData.some((point) => Number((point as Record<string, unknown>)[group.key] ?? 0) > 0)
   );
-  const yearlyExpenseTrendGroups = yearlyExpenseTrendGroupsRaw.length > 0 ? yearlyExpenseTrendGroupsRaw : sortedFilterGroups;
+  const yearlyExpenseTrendGroups = yearlyExpenseTrendGroupsRaw.length > 0 ? yearlyExpenseTrendGroupsRaw : expenseGroups;
+  const monthlyIncomeTrendGroups = incomeGroups.filter((group) =>
+    monthlyChartData.some((point) => Number((point as Record<string, unknown>)[group.key] ?? 0) > 0)
+  );
+  const incomeTrendGroups = sortByIncomeBarOrder(
+    monthlyIncomeTrendGroups.length > 0 ? monthlyIncomeTrendGroups : incomeGroups
+  );
 
   const insightsLargestExpenses =
     viewMode === "year" ? buildYearLargestExpenses(selectedYearMonths, yearlyDashboardsByMonth) : data.largest_expenses;
@@ -328,7 +349,16 @@ export function DashboardPage() {
 
   const trendChartData =
     viewMode === "month" ? limitTrendDataToMonthsWithData(monthlyChartData) : yearlyOverviewData;
-  const trendGroups = sortByIncomeTrendOrder(viewMode === "month" ? expenseTrendGroups : yearlyExpenseTrendGroups);
+  const expenseOnlyGroups = sortedFilterGroups.filter((g) => !isIncomeFilterGroupKey(g.key));
+  const expenseTrendGroupsFiltered =
+    viewMode === "month"
+      ? (monthlyExpenseTrendGroups.length > 0 ? monthlyExpenseTrendGroups : expenseOnlyGroups).filter(
+          (g) => !isIncomeFilterGroupKey(g.key)
+        )
+      : (yearlyExpenseTrendGroupsRaw.length > 0 ? yearlyExpenseTrendGroupsRaw : expenseOnlyGroups).filter(
+          (g) => !isIncomeFilterGroupKey(g.key)
+        );
+  const trendGroups = sortByIncomeTrendOrder(viewMode === "month" ? expenseTrendGroupsFiltered : expenseTrendGroupsFiltered);
   const trendTitle = viewMode === "month" ? "Income vs Expense Trend" : `${selectedYear} Income vs Expense Trend`;
 
   return (
@@ -344,7 +374,12 @@ export function DashboardPage() {
             {viewMode === "year" && yearlyQueriesLoading ? (
               <p className="muted text-sm">Loading yearly trend...</p>
             ) : (
-              <IncomeTrendChart data={trendChartData} trendGroups={trendGroups} currencyCode={data.currency_code} />
+              <IncomeTrendChart
+                data={trendChartData}
+                trendGroups={trendGroups}
+                incomeTrendGroups={incomeTrendGroups}
+                currencyCode={data.currency_code}
+              />
             )}
           </CardContent>
         </Card>

@@ -123,7 +123,8 @@ When the user requests a feature from `tasks/*.md`, ask whether to move that tas
 
 ## Commit Messages
 
-- First line: overall change in imperative mood.
+- Use conventional commit format: `type(scope): subject`. Type is lowercase: `feat`, `fix`, `docs`, `test`, `chore`, `refactor`, etc. Scope is optional (e.g. `feat(dashboard):`, `fix:`).
+- Subject: overall change in imperative mood.
 - Following lines: bullet points summarizing concrete changes in the diff.
 - Do not invent details.
 

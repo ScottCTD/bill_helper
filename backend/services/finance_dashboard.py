@@ -33,6 +33,7 @@ from backend.schemas_finance import (
 from backend.services.access_scope import account_owner_filter, entry_owner_filter
 from backend.services.filter_groups import (
     FilterGroupDefinition,
+    INCOME_FILTER_GROUP_KEYS,
     build_filter_entry_context,
     list_filter_group_definitions,
     matching_filter_group_keys,
@@ -453,11 +454,17 @@ def _build_monthly_trend(
         _shift_month(start, -offset).strftime("%Y-%m")
         for offset in range(normalized_trend_months - 1, -1, -1)
     ]
+    income_filter_groups = [
+        fg for fg in filter_groups if fg.key in INCOME_FILTER_GROUP_KEYS
+    ]
     monthly_rollup = {
         month_key: {
             "expense_total_minor": 0,
             "income_total_minor": 0,
             "filter_group_totals": {filter_group.key: 0 for filter_group in filter_groups},
+            "income_filter_group_totals": {
+                fg.key: 0 for fg in income_filter_groups
+            },
         }
         for month_key in trend_month_keys
     }
@@ -468,6 +475,13 @@ def _build_monthly_trend(
             continue
         if entry.kind == EntryKind.INCOME:
             bucket["income_total_minor"] += entry.amount_minor
+            for key in _matching_filter_group_keys(
+                entry=entry,
+                filter_groups=filter_groups,
+                account_entity_ids=account_entity_ids,
+            ):
+                if key in bucket["income_filter_group_totals"]:
+                    bucket["income_filter_group_totals"][key] += entry.amount_minor
             continue
         if entry.kind != EntryKind.EXPENSE:
             continue
@@ -607,7 +621,17 @@ def build_dashboard_analytics(
         account_entity_ids=account_entity_ids,
     )
 
-    income_total_minor = sum(entry.amount_minor for entry in month_entries if entry.kind == EntryKind.INCOME)
+    income_entries = [entry for entry in month_entries if entry.kind == EntryKind.INCOME]
+    income_total_minor = sum(entry.amount_minor for entry in income_entries)
+    income_filter_group_totals: dict[str, int] = defaultdict(int)
+    for entry in income_entries:
+        for key in _matching_filter_group_keys(
+            entry=entry,
+            filter_groups=active_filter_groups,
+            account_entity_ids=account_entity_ids,
+        ):
+            if key in INCOME_FILTER_GROUP_KEYS:
+                income_filter_group_totals[key] += entry.amount_minor
     kpis = _build_dashboard_kpis(
         rollup=rollup,
         income_total_minor=income_total_minor,
@@ -640,6 +664,16 @@ def build_dashboard_analytics(
     )
     ranked_expenses = _rank_expenses(rollup.largest_expenses)
 
+    def _total_and_share(fg: FilterGroupDefinition) -> tuple[int, float]:
+        if fg.key in INCOME_FILTER_GROUP_KEYS:
+            total = income_filter_group_totals.get(fg.key, 0)
+            denom = income_total_minor
+        else:
+            total = rollup.filter_group_totals.get(fg.key, 0)
+            denom = kpis.expense_total_minor
+        share = round(total / denom, 4) if denom > 0 else 0.0
+        return total, share
+
     return {
         "kpis": kpis,
         "filter_groups": [
@@ -648,13 +682,8 @@ def build_dashboard_analytics(
                 key=filter_group.key,
                 name=filter_group.name,
                 color=filter_group.color,
-                total_minor=rollup.filter_group_totals.get(filter_group.key, 0),
-                share=round(
-                    rollup.filter_group_totals.get(filter_group.key, 0) / kpis.expense_total_minor,
-                    4,
-                )
-                if kpis.expense_total_minor > 0
-                else 0.0,
+                total_minor=_total_and_share(filter_group)[0],
+                share=_total_and_share(filter_group)[1],
                 tag_totals=dict(
                     sorted(
                         rollup.spending_by_tag_per_filter_group.get(filter_group.key, {}).items(),

@@ -52,6 +52,7 @@ export interface DashboardMonthlyTrendPoint {
   expense_total_minor: number;
   income_total_minor: number;
   filter_group_totals: Record<string, number>;
+  income_filter_group_totals?: Record<string, number>;
 }
 
 export interface DashboardBreakdownItem {
