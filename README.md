@@ -52,6 +52,7 @@ docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.doc
 ```
 
 The workspace image now installs the `bh` CLI so agent runs and human IDE terminals can operate on Bill Helper state from the workspace terminal without direct DB access.
+It is not live-synced with your checkout. After changing anything installed into that image, rebuild it and recreate any running `bill-helper-sandbox-*` containers before re-testing workspace behavior.
 
 ### Create or reset an admin login
 
@@ -85,6 +86,9 @@ Open the web app, sign in at `/login`, and use the password-backed session for a
 - frontend tests: `cd frontend && npm run test`
 - browser e2e tests: `cd frontend && npm run test:e2e`
 - docs sync: `uv run python scripts/check_docs_sync.py`
+- workspace image refresh after `bh` or other installed workspace-code changes:
+  `docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .`
+  then recreate any running `bill-helper-sandbox-*` containers so new workspaces use the rebuilt image
 
 ## Notes
 

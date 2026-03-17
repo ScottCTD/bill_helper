@@ -100,6 +100,22 @@ Behavior notes:
 - set `BILL_HELPER_AGENT_WORKSPACE_ENABLED=0` in environments where you intentionally do not want Docker-backed provisioning
 - if the backend itself runs inside Docker, it still needs host-daemon access through `/var/run/docker.sock` or `DOCKER_HOST` to manage sibling user workspaces
 
+Workspace refresh notes:
+
+- The workspace image is built from the checked-out repo and installs `bill-helper` during `docker build`; running sandbox containers do not see later source edits automatically.
+- Rebuild the image after changes to files copied into `docker/agent-workspace.dockerfile`, especially `backend/`, `telegram/`, `pyproject.toml`, `README.md`, `docker/agent-workspace.dockerfile`, or `docker/agent-workspace-entrypoint.sh`.
+- Recreate any running `bill-helper-sandbox-*` containers after that rebuild so the backend launches new workspaces from the new image. This refresh keeps the named workspace volume unless you remove it separately.
+- When the changed behavior affects installed workspace tools such as `bh`, verify the result from inside a fresh sandbox container instead of only running the command from the host checkout.
+
+Refresh workflow:
+
+```bash
+docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .
+for name in $(docker ps --format '{{.Names}}' | grep '^bill-helper-sandbox-'); do
+  docker rm -f "$name"
+done
+```
+
 ## Provider Credentials
 
 LiteLLM resolves provider credentials from environment variables based on the selected model.
@@ -267,10 +283,13 @@ cd ..
 uv run python scripts/check_docs_sync.py
 ```
 
-When the agent workspace image changes, also rebuild it locally:
+When the agent workspace image changes, rebuild it locally and recreate any running sandbox containers:
 
 ```bash
 docker build -t bill-helper-agent-workspace:latest -f docker/agent-workspace.dockerfile .
+for name in $(docker ps --format '{{.Names}}' | grep '^bill-helper-sandbox-'); do
+  docker rm -f "$name"
+done
 ```
 
 ## Migration Workflow

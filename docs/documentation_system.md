@@ -56,7 +56,7 @@ If documents conflict, update the primary source first and trim stale secondary 
 - Schema or migration change: update `docs/data_model.md`, the relevant `backend/docs/*.md` files, and `docs/repository_structure.md` if file maps or migration lists changed.
 - Backend behavior change: update the relevant `backend/docs/*.md` files and the relevant feature doc.
 - Frontend behavior or UX change: update the relevant `frontend/docs/*.md` files and the relevant feature doc.
-- Workflow, setup, or tooling change: update `README.md`, `docs/development.md`, and this file. Include any cache-reset, conditional service startup, log-prefixing, wrapper-to-Python launcher changes, isolated browser-test harnesses, or restart behavior added to local scripts so the dev loop stays reproducible.
+- Workflow, setup, or tooling change: update `README.md`, `docs/development.md`, and this file. Include any cache-reset, conditional service startup, log-prefixing, wrapper-to-Python launcher changes, isolated browser-test harnesses, workspace-image rebuild requirements, sandbox-container refresh steps, or restart behavior added to local scripts so the dev loop stays reproducible.
 - LLM-oriented architecture policy or enforcement change: update `AGENTS.md`, `docs/llm_oriented_design.md`, this file, and the relevant ADR.
 - For Python tooling, keep local-only developer packages in `dependency-groups.dev` and document the normal workflow with `uv sync` / `uv run ...`, not a published `dev` extra.
 - Major design decision: add or update an ADR in `docs/adr/`.

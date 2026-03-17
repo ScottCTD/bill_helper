@@ -64,6 +64,13 @@ These rules apply to any coding agent working in this repository.
 - `uv run python scripts/check_llm_design.py`
 - `uv run python scripts/check_docs_sync.py`
 
+### Workspace Image Refresh
+
+- The agent workspace image is a build artifact, not a live view of the checkout.
+- If a change affects files copied into `docker/agent-workspace.dockerfile` or behavior installed into the workspace image, rebuild `bill-helper-agent-workspace:latest`, recreate any running `bill-helper-sandbox-*` containers, and then re-verify from inside a fresh workspace.
+- Treat changes to `backend/`, `telegram/`, `pyproject.toml`, `README.md`, `docker/agent-workspace.dockerfile`, and `docker/agent-workspace-entrypoint.sh` as workspace-image changes unless the diff proves otherwise.
+- When refreshing a sandbox container, keep the named workspace volume unless you are intentionally wiping `/workspace` state.
+
 ## Documentation
 
 ### System

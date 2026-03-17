@@ -17,6 +17,18 @@ import argparse
 from collections.abc import Callable
 from typing import Any
 
+from backend.cli.create_commands import (
+    ACCOUNT_CREATE_SPEC,
+    ENTITY_CREATE_SPEC,
+    ENTRY_CREATE_SPEC,
+    GROUP_CREATE_SPEC,
+    SNAPSHOT_CREATE_SPEC,
+    TAG_CREATE_SPEC,
+    CreateCommandSpec,
+    add_create_command_arguments,
+    build_validated_create_payload,
+    format_create_request_error,
+)
 from backend.cli.support import (
     CliContext,
     CliError,
@@ -106,10 +118,10 @@ def _build_entries_parser(subparsers) -> None:
     get_parser.add_argument("entry_id")
     get_parser.set_defaults(handler=_handle_entries_get, render_key="entries_detail")
 
-    create_parser = entries.add_parser("create", help="Create an entry proposal in the current thread.")
+    create_parser = entries.add_parser("create", help=ENTRY_CREATE_SPEC.help_text)
     _add_format_option(create_parser)
-    _add_json_options(create_parser, inline_flag="--payload-json", file_flag="--payload-file", dest="payload")
-    create_parser.set_defaults(handler=_handle_entries_create, render_key="proposals_detail")
+    add_create_command_arguments(create_parser, ENTRY_CREATE_SPEC)
+    create_parser.set_defaults(handler=_handle_create_command, render_key="proposals_detail")
 
     update_parser = entries.add_parser("update", help="Create an entry-update proposal in the current thread.")
     _add_format_option(update_parser)
@@ -132,10 +144,10 @@ def _build_accounts_parser(subparsers) -> None:
     _add_format_option(list_parser)
     list_parser.set_defaults(handler=_handle_accounts_list, render_key="accounts_list")
 
-    create_parser = accounts.add_parser("create", help="Create an account proposal in the current thread.")
+    create_parser = accounts.add_parser("create", help=ACCOUNT_CREATE_SPEC.help_text)
     _add_format_option(create_parser)
-    _add_json_options(create_parser, inline_flag="--payload-json", file_flag="--payload-file", dest="payload")
-    create_parser.set_defaults(handler=_handle_accounts_create, render_key="proposals_detail")
+    add_create_command_arguments(create_parser, ACCOUNT_CREATE_SPEC)
+    create_parser.set_defaults(handler=_handle_create_command, render_key="proposals_detail")
 
     update_parser = accounts.add_parser("update", help="Create an account-update proposal in the current thread.")
     _add_format_option(update_parser)
@@ -165,10 +177,10 @@ def _build_snapshots_parser(subparsers) -> None:
     recon_parser.add_argument("--as-of", default=None)
     recon_parser.set_defaults(handler=_handle_snapshots_reconciliation, render_key="snapshots_reconciliation")
 
-    create_parser = snapshots.add_parser("create", help="Create a snapshot proposal in the current thread.")
+    create_parser = snapshots.add_parser("create", help=SNAPSHOT_CREATE_SPEC.help_text)
     _add_format_option(create_parser)
-    _add_json_options(create_parser, inline_flag="--payload-json", file_flag="--payload-file", dest="payload")
-    create_parser.set_defaults(handler=_handle_snapshots_create, render_key="proposals_detail")
+    add_create_command_arguments(create_parser, SNAPSHOT_CREATE_SPEC)
+    create_parser.set_defaults(handler=_handle_create_command, render_key="proposals_detail")
 
     remove_parser = snapshots.add_parser("remove", help="Create a snapshot-delete proposal in the current thread.")
     _add_format_option(remove_parser)
@@ -191,10 +203,10 @@ def _build_groups_parser(subparsers) -> None:
     get_parser.add_argument("group_id")
     get_parser.set_defaults(handler=_handle_groups_get, render_key="groups_detail")
 
-    create_parser = groups.add_parser("create", help="Create a group proposal in the current thread.")
+    create_parser = groups.add_parser("create", help=GROUP_CREATE_SPEC.help_text)
     _add_format_option(create_parser)
-    _add_json_options(create_parser, inline_flag="--payload-json", file_flag="--payload-file", dest="payload")
-    create_parser.set_defaults(handler=_handle_groups_create, render_key="proposals_detail")
+    add_create_command_arguments(create_parser, GROUP_CREATE_SPEC)
+    create_parser.set_defaults(handler=_handle_create_command, render_key="proposals_detail")
 
     update_parser = groups.add_parser("update", help="Create a group-update proposal in the current thread.")
     _add_format_option(update_parser)
@@ -227,10 +239,10 @@ def _build_entities_parser(subparsers) -> None:
     _add_format_option(list_parser)
     list_parser.set_defaults(handler=_handle_entities_list, render_key="entities_list")
 
-    create_parser = entities.add_parser("create", help="Create an entity proposal in the current thread.")
+    create_parser = entities.add_parser("create", help=ENTITY_CREATE_SPEC.help_text)
     _add_format_option(create_parser)
-    _add_json_options(create_parser, inline_flag="--payload-json", file_flag="--payload-file", dest="payload")
-    create_parser.set_defaults(handler=_handle_entities_create, render_key="proposals_detail")
+    add_create_command_arguments(create_parser, ENTITY_CREATE_SPEC)
+    create_parser.set_defaults(handler=_handle_create_command, render_key="proposals_detail")
 
     update_parser = entities.add_parser("update", help="Create an entity-update proposal in the current thread.")
     _add_format_option(update_parser)
@@ -253,10 +265,10 @@ def _build_tags_parser(subparsers) -> None:
     _add_format_option(list_parser)
     list_parser.set_defaults(handler=_handle_tags_list, render_key="tags_list")
 
-    create_parser = tags.add_parser("create", help="Create a tag proposal in the current thread.")
+    create_parser = tags.add_parser("create", help=TAG_CREATE_SPEC.help_text)
     _add_format_option(create_parser)
-    _add_json_options(create_parser, inline_flag="--payload-json", file_flag="--payload-file", dest="payload")
-    create_parser.set_defaults(handler=_handle_tags_create, render_key="proposals_detail")
+    add_create_command_arguments(create_parser, TAG_CREATE_SPEC)
+    create_parser.set_defaults(handler=_handle_create_command, render_key="proposals_detail")
 
     update_parser = tags.add_parser("update", help="Create a tag-update proposal in the current thread.")
     _add_format_option(update_parser)
@@ -410,9 +422,19 @@ def _handle_tags_list(_args: argparse.Namespace, context: CliContext) -> Any:
     return payload
 
 
-def _handle_entries_create(args: argparse.Namespace, context: CliContext) -> Any:
-    payload_json = load_json_argument(inline_json=args.payload_json, json_file=args.payload_file)
-    return _create_thread_proposal(context, change_type="create_entry", payload_json=payload_json)
+def _handle_create_command(args: argparse.Namespace, context: CliContext) -> Any:
+    spec = _require_create_command_spec(args)
+    payload_json = build_validated_create_payload(spec, args=args, context=context)
+    return _create_thread_proposal(
+        context,
+        change_type=spec.change_type,
+        payload_json=payload_json,
+        error_formatter=lambda status_code, detail: format_create_request_error(
+            spec.resource_label,
+            status_code,
+            detail,
+        ),
+    )
 
 
 def _handle_entries_update(args: argparse.Namespace, context: CliContext) -> Any:
@@ -430,11 +452,6 @@ def _handle_entries_remove(args: argparse.Namespace, context: CliContext) -> Any
     return _create_thread_proposal(context, change_type="delete_entry", payload_json={"entry_id": entry_id})
 
 
-def _handle_accounts_create(args: argparse.Namespace, context: CliContext) -> Any:
-    payload_json = load_json_argument(inline_json=args.payload_json, json_file=args.payload_file)
-    return _create_thread_proposal(context, change_type="create_account", payload_json=payload_json)
-
-
 def _handle_accounts_update(args: argparse.Namespace, context: CliContext) -> Any:
     patch_map = load_json_argument(inline_json=args.patch_json, json_file=args.patch_file)
     account_name = resolve_account_name(context, account_ref=args.account_ref)
@@ -450,18 +467,6 @@ def _handle_accounts_remove(args: argparse.Namespace, context: CliContext) -> An
     return _create_thread_proposal(context, change_type="delete_account", payload_json={"name": account_name})
 
 
-def _handle_snapshots_create(args: argparse.Namespace, context: CliContext) -> Any:
-    payload_json = load_json_argument(inline_json=args.payload_json, json_file=args.payload_file)
-    if not isinstance(payload_json, dict):
-        raise CliError("Snapshot create payload must be a JSON object.")
-    raw_account_id = payload_json.get("account_id")
-    if not isinstance(raw_account_id, str) or not raw_account_id.strip():
-        raise CliError("Snapshot create payload requires account_id.")
-    canonical_payload = dict(payload_json)
-    canonical_payload["account_id"] = resolve_account_id(context, account_id=raw_account_id)
-    return _create_thread_proposal(context, change_type="create_snapshot", payload_json=canonical_payload)
-
-
 def _handle_snapshots_remove(args: argparse.Namespace, context: CliContext) -> Any:
     account_id = resolve_account_id(context, account_id=args.account_id)
     snapshot_id = resolve_snapshot_id(context, account_id=account_id, snapshot_id=args.snapshot_id)
@@ -470,11 +475,6 @@ def _handle_snapshots_remove(args: argparse.Namespace, context: CliContext) -> A
         change_type="delete_snapshot",
         payload_json={"account_id": account_id, "snapshot_id": snapshot_id},
     )
-
-
-def _handle_groups_create(args: argparse.Namespace, context: CliContext) -> Any:
-    payload_json = load_json_argument(inline_json=args.payload_json, json_file=args.payload_file)
-    return _create_thread_proposal(context, change_type="create_group", payload_json=payload_json)
 
 
 def _handle_groups_update(args: argparse.Namespace, context: CliContext) -> Any:
@@ -502,11 +502,6 @@ def _handle_groups_remove_member(args: argparse.Namespace, context: CliContext) 
     return _create_thread_proposal(context, change_type="delete_group_member", payload_json=payload_json)
 
 
-def _handle_entities_create(args: argparse.Namespace, context: CliContext) -> Any:
-    payload_json = load_json_argument(inline_json=args.payload_json, json_file=args.payload_file)
-    return _create_thread_proposal(context, change_type="create_entity", payload_json=payload_json)
-
-
 def _handle_entities_update(args: argparse.Namespace, context: CliContext) -> Any:
     patch_map = load_json_argument(inline_json=args.patch_json, json_file=args.patch_file)
     return _create_thread_proposal(
@@ -518,11 +513,6 @@ def _handle_entities_update(args: argparse.Namespace, context: CliContext) -> An
 
 def _handle_entities_remove(args: argparse.Namespace, context: CliContext) -> Any:
     return _create_thread_proposal(context, change_type="delete_entity", payload_json={"name": args.entity_name})
-
-
-def _handle_tags_create(args: argparse.Namespace, context: CliContext) -> Any:
-    payload_json = load_json_argument(inline_json=args.payload_json, json_file=args.payload_file)
-    return _create_thread_proposal(context, change_type="create_tag", payload_json=payload_json)
 
 
 def _handle_tags_update(args: argparse.Namespace, context: CliContext) -> Any:
@@ -602,7 +592,20 @@ def _handle_proposals_remove(args: argparse.Namespace, context: CliContext) -> A
     return payload
 
 
-def _create_thread_proposal(context: CliContext, *, change_type: str, payload_json: Any) -> Any:
+def _require_create_command_spec(args: argparse.Namespace) -> CreateCommandSpec:
+    create_command_spec = getattr(args, "create_command_spec", None)
+    if not isinstance(create_command_spec, CreateCommandSpec):
+        raise CliError("Missing create command specification.")
+    return create_command_spec
+
+
+def _create_thread_proposal(
+    context: CliContext,
+    *,
+    change_type: str,
+    payload_json: Any,
+    error_formatter: Callable[[int, Any], str] | None = None,
+) -> Any:
     thread_id = resolve_thread_id(context)
     canonical_payload = resolve_payload_proposal_references(context, thread_id=thread_id, payload=payload_json)
     _, payload = request_json(
@@ -611,6 +614,7 @@ def _create_thread_proposal(context: CliContext, *, change_type: str, payload_js
         f"/agent/threads/{thread_id}/proposals",
         json_body={"change_type": change_type, "payload_json": canonical_payload},
         include_run_id=True,
+        error_formatter=error_formatter,
     )
     return payload
 

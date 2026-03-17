@@ -22,6 +22,7 @@ import os
 from pathlib import Path
 import sys
 from typing import Any
+from collections.abc import Callable
 
 import httpx
 
@@ -85,6 +86,7 @@ def request_json(
     params: dict[str, Any] | None = None,
     json_body: dict[str, Any] | None = None,
     include_run_id: bool = False,
+    error_formatter: Callable[[int, Any], str] | None = None,
 ) -> tuple[int, Any]:
     headers = {"Authorization": f"Bearer {context.auth_token}"}
     if include_run_id:
@@ -106,15 +108,10 @@ def request_json(
         except ValueError:
             payload = {"detail": response.text or response.reason_phrase}
         detail = payload.get("detail", payload)
+        if error_formatter is not None:
+            raise CliError(error_formatter(response.status_code, detail))
         raise CliError(
-            json.dumps(
-                {
-                    "status": "ERROR",
-                    "status_code": response.status_code,
-                    "detail": detail,
-                },
-                indent=2,
-            )
+            _default_error_message(status_code=response.status_code, detail=detail)
         )
     if response.status_code == 204 or not response.content:
         return response.status_code, {"status": "OK"}
@@ -294,6 +291,17 @@ def _clean_mapping(values: dict[str, Any] | None) -> dict[str, Any] | None:
     if values is None:
         return None
     return {key: value for key, value in values.items() if value is not None}
+
+
+def _default_error_message(*, status_code: int, detail: Any) -> str:
+    return json.dumps(
+        {
+            "status": "ERROR",
+            "status_code": status_code,
+            "detail": detail,
+        },
+        indent=2,
+    )
 
 
 def _list_accounts(context: CliContext) -> list[dict[str, Any]]:

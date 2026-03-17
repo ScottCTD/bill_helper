@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import argparse
 import json
 
 import pytest
+from argparse import _SubParsersAction
+from typing import Any
 
 from backend.cli import main as cli_main
 from backend.cli.rendering import render_output
@@ -15,6 +18,27 @@ from backend.cli.support import (
     resolve_snapshot_id,
 )
 from backend.tests.test_entries import create_account, create_entry
+
+
+def _setup_cli_env(monkeypatch) -> None:
+    monkeypatch.setenv("BH_API_BASE_URL", "http://testserver/api/v1")
+    monkeypatch.setenv("BH_AUTH_TOKEN", "token")
+    monkeypatch.setenv("BH_THREAD_ID", "thread-123")
+    monkeypatch.setenv("BH_RUN_ID", "run-123")
+
+
+def _get_subparser(parser: argparse.ArgumentParser, *names: str) -> argparse.ArgumentParser:
+    action = next(
+        action for action in parser._actions if isinstance(action, _SubParsersAction)
+    )
+    current = parser
+    for name in names:
+        current = action._name_parser_map[name]
+        sub_actions = [
+            next_action for next_action in current._actions if isinstance(next_action, _SubParsersAction)
+        ]
+        action = sub_actions[0] if sub_actions else None
+    return current
 
 
 def test_build_cli_context_reads_workspace_cli_config_when_env_missing(monkeypatch, tmp_path) -> None:
@@ -404,3 +428,183 @@ def test_group_and_account_lists_render_short_ids() -> None:
 
     assert "abcdef12|Main Checking|USD|true" in accounts_rendered
     assert "fedcba98|BUNDLE|Bills|3|2026-01-01|2026-03-01" in groups_rendered
+
+
+def test_entries_create_help_mentions_required_and_optional_fields() -> None:
+    parser = cli_main._build_parser()
+    create_parser = _get_subparser(parser, "entries", "create")
+    help_text = create_parser.format_help()
+
+    assert "Required fields:" in help_text
+    assert "--amount-minor" in help_text
+    assert "Optional fields:" in help_text
+
+
+def test_accounts_create_help_mentions_required_and_optional_fields() -> None:
+    parser = cli_main._build_parser()
+    create_parser = _get_subparser(parser, "accounts", "create")
+    help_text = create_parser.format_help()
+
+    assert "Required fields:" in help_text
+    assert "--currency-code" in help_text
+    assert "--inactive" in help_text
+
+
+def test_snapshots_create_help_mentions_required_and_optional_fields() -> None:
+    parser = cli_main._build_parser()
+    create_parser = _get_subparser(parser, "snapshots", "create")
+    help_text = create_parser.format_help()
+
+    assert "Required fields:" in help_text
+    assert "--snapshot-at" in help_text
+    assert "--note" in help_text
+
+
+def test_entries_create_parses_tags_and_amount(monkeypatch) -> None:
+    _setup_cli_env(monkeypatch)
+
+    captured_payload: dict[str, Any] = {}
+
+    def fake_create_thread_proposal(context, *, change_type=None, payload_json=None, **kwargs):
+        captured_payload.update(payload_json or {})
+        return {"status": "OK", "proposal_id": "proposal-1"}
+
+    monkeypatch.setattr("backend.cli.main._create_thread_proposal", fake_create_thread_proposal)
+
+    exit_code = cli_main.main(
+        [
+            "entries",
+            "create",
+            "--kind",
+            "EXPENSE",
+            "--date",
+            "2026-03-16",
+            "--name",
+            "Farm Boy",
+            "--amount-minor",
+            "1234",
+            "--from-entity",
+            "Checking",
+            "--to-entity",
+            "Farm Boy",
+            "--currency-code",
+            "cad",
+            "--tag",
+            "groceries",
+            "--tag",
+            "one_time",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_payload["tags"] == ["groceries", "one_time"]
+    assert captured_payload["currency_code"] == "CAD"
+
+
+def test_accounts_create_respects_active_inactive_flags(monkeypatch) -> None:
+    _setup_cli_env(monkeypatch)
+
+    captured_payload: dict[str, Any] = {}
+
+    def fake_create_thread_proposal(context, *, change_type=None, payload_json=None, **kwargs):
+        captured_payload.update(payload_json or {})
+        return {"status": "OK", "proposal_id": "proposal-2"}
+
+    monkeypatch.setattr("backend.cli.main._create_thread_proposal", fake_create_thread_proposal)
+
+    exit_code = cli_main.main(
+        [
+            "accounts",
+            "create",
+            "--name",
+            "Checking",
+            "--currency-code",
+            "USD",
+            "--inactive",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_payload["is_active"] is False
+
+    captured_payload.clear()
+
+    exit_code = cli_main.main(
+        [
+            "accounts",
+            "create",
+            "--name",
+            "Savings",
+            "--currency-code",
+            "USD",
+            "--is-active",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_payload["is_active"] is True
+
+
+def test_snapshots_create_normalizes_account_id_and_balance(monkeypatch) -> None:
+    _setup_cli_env(monkeypatch)
+
+    captured_payload: dict[str, Any] = {}
+
+    def fake_create_thread_proposal(context, *, change_type=None, payload_json=None, **kwargs):
+        captured_payload.update(payload_json or {})
+        return {"status": "OK", "proposal_id": "proposal-3"}
+
+    monkeypatch.setattr("backend.cli.main._create_thread_proposal", fake_create_thread_proposal)
+    monkeypatch.setattr(
+        "backend.cli.create_commands.resolve_account_id",
+        lambda context, account_id: "account-12345678",
+    )
+
+    exit_code = cli_main.main(
+        [
+            "snapshots",
+            "create",
+            "--account-id",
+            "12345678",
+            "--snapshot-at",
+            "2026-03-16",
+            "--balance",
+            "1234.56",
+            "--note",
+            "statement balance",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_payload["account_id"] == "account-12345678"
+    assert captured_payload["balance"] == "1234.56"
+    assert captured_payload["note"] == "statement balance"
+
+
+def test_entries_create_validation_error_is_friendly(monkeypatch, capsys) -> None:
+    _setup_cli_env(monkeypatch)
+
+    exit_code = cli_main.main(
+        [
+            "entries",
+            "create",
+            "--kind",
+            "EXPENSE",
+            "--date",
+            "invalid-date",
+            "--name",
+            "Farm Boy",
+            "--amount-minor",
+            "1234",
+            "--from-entity",
+            "Checking",
+            "--to-entity",
+            "Farm Boy",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "Invalid entry create arguments." in captured.err
+    assert "https://errors.pydantic" not in captured.err
