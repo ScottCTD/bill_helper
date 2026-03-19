@@ -31,6 +31,7 @@ from backend.schemas_agent import (
     AgentThreadSummaryRead,
     AgentToolCallRead,
 )
+from backend.services.agent.attachment_content_assembly import attachment_display_name
 from backend.services.agent.pricing import calculate_usage_costs
 
 
@@ -67,6 +68,7 @@ def attachment_to_schema(attachment: AgentMessageAttachment, *, api_prefix: str)
     return AgentMessageAttachmentRead(
         id=attachment.id,
         message_id=attachment.message_id,
+        display_name=attachment_display_name(attachment),
         mime_type=attachment.mime_type,
         file_path=attachment.file_path,
         attachment_url=f"{api_prefix}/agent/attachments/{attachment.id}",

@@ -44,7 +44,6 @@ interface UseAgentComposerActionsArgs {
   setIsBulkLaunching: (value: boolean) => void;
   setPendingAssistantMessage: (threadId: string, message: PendingAssistantMessage | null) => void;
   setPendingUserMessage: (threadId: string, message: PendingUserMessage | null) => void;
-  setPreviewAttachmentId: (id: string | null) => void;
   setThreadStreamHealthy: (threadId: string, isHealthy: boolean) => void;
   snapToBottom: () => void;
   threadDetail: AgentThreadDetail | undefined;
@@ -73,7 +72,6 @@ export function useAgentComposerActions({
   setIsBulkLaunching,
   setPendingAssistantMessage,
   setPendingUserMessage,
-  setPreviewAttachmentId,
   setThreadStreamHealthy,
   snapToBottom,
   threadDetail,
@@ -153,7 +151,6 @@ export function useAgentComposerActions({
       const failedAttachmentIdSet = new Set(failedResults.map((result) => result.attachmentId));
       const uniqueErrorMessages = [...new Set(failedResults.map((result) => result.errorMessage).filter(Boolean))];
       setDraftFiles((current) => current.filter((attachment) => failedAttachmentIdSet.has(attachment.id)));
-      setPreviewAttachmentId(null);
       if (failedAttachmentIdSet.size === 0) {
         setDraftMessage("");
       }
@@ -227,7 +224,6 @@ export function useAgentComposerActions({
       });
       setDraftMessage("");
       setDraftFiles([]);
-      setPreviewAttachmentId(null);
       snapToBottom();
 
       await streamAgentMessage({

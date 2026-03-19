@@ -8,11 +8,14 @@
 import { Fragment, memo, type Ref } from "react";
 import { ArrowDown, FileText } from "lucide-react";
 
-import { withApiBase } from "../../../lib/api";
 import type { AgentMessage, AgentRun, AgentRunEvent, AgentToolCall } from "../../../lib/types";
 import { cn } from "../../../lib/utils";
 import { AgentRunBlock, PendingAssistantActivityBlock } from "../AgentRunBlock";
 import { MarkdownRenderer } from "../../../components/ui/MarkdownRenderer";
+import { AgentAttachmentImageCard } from "./AgentAttachmentImageCard";
+import { AgentAttachmentPdfCard } from "./AgentAttachmentPdfCard";
+import { AgentMessageAttachmentImage } from "./AgentMessageAttachmentImage";
+import { AgentMessageAttachmentPdf } from "./AgentMessageAttachmentPdf";
 import { prettyDateTime } from "./format";
 import type { PendingAssistantMessage, PendingUserMessage } from "./types";
 
@@ -71,6 +74,10 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
 
   function isImageMimeType(mimeType: string): boolean {
     return mimeType.toLowerCase().startsWith("image/");
+  }
+
+  function isPdfMimeType(mimeType: string): boolean {
+    return mimeType.toLowerCase() === "application/pdf";
   }
 
   function hasRenderableRunCard(run: AgentRun, optimisticEvents: AgentRunEvent[] = []): boolean {
@@ -138,24 +145,25 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
                     <div className="agent-message-attachments">
                       {message.attachments.map((attachment) => (
                         isImageMimeType(attachment.mime_type) ? (
-                          <img
+                          <AgentMessageAttachmentImage
                             key={attachment.id}
-                            className="agent-message-attachment-image"
-                            src={withApiBase(attachment.attachment_url)}
-                            alt="User upload"
-                            loading="lazy"
+                            attachmentUrl={attachment.attachment_url}
+                            alt={attachment.display_name}
+                          />
+                        ) : isPdfMimeType(attachment.mime_type) ? (
+                          <AgentMessageAttachmentPdf
+                            key={attachment.id}
+                            attachmentUrl={attachment.attachment_url}
+                            title={attachment.display_name}
                           />
                         ) : (
-                          <a
+                          <div
                             key={attachment.id}
                             className="agent-message-attachment-file"
-                            href={withApiBase(attachment.attachment_url)}
-                            target="_blank"
-                            rel="noreferrer"
                           >
                             <FileText className="h-4 w-4" />
-                            <span>{attachment.mime_type === "application/pdf" ? "Open PDF attachment" : "Open attachment"}</span>
-                          </a>
+                            <span>{attachment.display_name}</span>
+                          </div>
                         )
                       ))}
                     </div>
@@ -228,12 +236,14 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
                 <div className="agent-message-attachments">
                   {pendingUserMessage.attachments.map((attachment) => (
                     attachment.kind === "image" ? (
-                      <img key={attachment.id} className="agent-message-attachment-image" src={attachment.url} alt={attachment.name} loading="lazy" />
+                      <AgentAttachmentImageCard key={attachment.id} previewUrl={attachment.url} alt={attachment.name} />
+                    ) : attachment.kind === "pdf" ? (
+                      <AgentAttachmentPdfCard key={attachment.id} previewUrl={attachment.url} title={attachment.name} />
                     ) : (
-                      <a key={attachment.id} className="agent-message-attachment-file" href={attachment.url} target="_blank" rel="noreferrer">
+                      <div key={attachment.id} className="agent-message-attachment-file">
                         <FileText className="h-4 w-4" />
                         <span>{attachment.name}</span>
-                      </a>
+                      </div>
                     )
                   ))}
                 </div>

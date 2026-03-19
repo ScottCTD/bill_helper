@@ -5,7 +5,7 @@
 - `frontend/src/features/agent/AgentPanel.tsx`
 - used as the primary AI page via `frontend/src/pages/HomePage.tsx`
 - the home route now adds the shared `PageHeader` plus the shared outer workspace card shell above the agent panel so the AI workspace sits inside the same route-level shell contract as the ledger pages
-- acts as a render shell that wires the header, timeline, composer, thread rail, review modal, and preview dialog together
+- acts as a render shell that wires the header, timeline, composer, thread rail, review modal, and delete confirmation together
 - stateful coordination now lives in `frontend/src/features/agent/panel/useAgentPanelController.ts`, which composes `useAgentPanelQueries.ts` for thread/runtime queries, `useAgentThreadActions.ts` for thread/review mutations plus cache helpers, and `useAgentComposerRuntime.ts` for composer/panel coordination; stream hydration/state lives in `useAgentComposerStreamState.ts`, send-stop orchestration lives in `useAgentComposerActions.ts`, and pure panel helpers live in `frontend/src/features/agent/panel/helpers.ts`
 - page header uses the static title `Bill Assistant`; model selection stays in the composer dropdown instead of the title row
 - visual styling now follows the same compact neutral workspace system as the rest of the app: the agent panel is no longer a full-screen bespoke surface with separate page chrome
@@ -28,8 +28,8 @@ Supporting modules include:
 - `frontend/src/features/agent/panel/AgentTimeline.tsx`
 - `frontend/src/features/agent/panel/AgentComposer.tsx`
 - `frontend/src/features/agent/panel/AgentThreadUsageBar.tsx`
-- `frontend/src/features/agent/panel/AgentAttachmentPreviewDialog.tsx`
 - `frontend/src/features/agent/panel/useAgentDraftAttachments.ts`
+- `frontend/src/features/agent/panel/AgentMessageAttachmentImage.tsx`
 - `frontend/src/features/agent/panel/useStickToBottom.ts`
 - `frontend/src/hooks/useResizablePanel.ts`
 - `frontend/src/features/agent/review/AgentThreadReviewModal.tsx`
@@ -66,6 +66,8 @@ Supporting modules include:
 - compact tool-call snapshots are hydrated on demand from `GET /agent/tool-calls/{tool_call_id}`
 - assistant activity and transient SSE text render in the same assistant/update bubble
 - optimistic user and assistant placeholders reconcile against persisted timeline messages
+- persisted image attachments render through authenticated blob fetches so previews survive thread reloads even though the API uses bearer-token auth instead of cookie-backed file URLs
+- inline attachment cards stay bounded: images preserve their aspect ratio up to a larger capped size and open in a browser-native tab when clicked, while PDFs use a small scrollable browser preview plus filename label and an explicit `Open` action
 - `useAgentComposerStreamState.ts` owns stream-event accumulation, tool-call hydration, rename-thread reconciliation, and the optimistic run timeline cache
 
 ## Thread Review Surface
@@ -91,10 +93,11 @@ Supporting modules include:
 
 ## Composer
 
-- pinned composer surface with attachment chips and preview dialog
+- pinned composer surface with inline attachment chips
 - composer now stays docked against the bottom edge of the agent workspace instead of leaving dead space below the input row
 - textarea and control row share one card surface instead of reading as separate color bands
 - supports picker, paste, and drag-drop for images and PDFs
+- attachment chips stay inline-only for now, while message attachments use browser-native large-view behavior instead of an app modal: images open in a native tab on click and PDFs expose an `Open` action beside the inline preview
 - includes a `Bulk mode` toggle beside `Add Attachments`
 - shows an `Agent model` dropdown immediately left of the primary composer action and sources options from runtime settings `available_agent_models` in the same order
 - initializes the picker from the latest run model when a thread has history, otherwise falls back through the thread's configured model and runtime default `agent_model`

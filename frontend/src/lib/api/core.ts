@@ -74,6 +74,25 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+export async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const headers = buildApiHeaders(init);
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers,
+    ...init
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    const message = extractErrorMessage(body, response.status);
+    if (response.status === 401) {
+      clearStoredAuthToken();
+    }
+    throw new ApiError(message, response.status);
+  }
+
+  return await response.blob();
+}
+
 export function withApiBase(path: string): string {
   return `${API_BASE_URL}${path}`;
 }

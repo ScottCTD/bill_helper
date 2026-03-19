@@ -1,15 +1,16 @@
 import { createRef, useRef, useState } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentMessage } from "../../../lib/types";
 import { buildRun, buildRunEvent, buildToolCall } from "../../../test/factories/agent";
 import { AgentTimeline, type AgentTimelineProps } from "./AgentTimeline";
 import type { PendingAssistantMessage } from "./types";
 
-const { markdownRenderSpy } = vi.hoisted(() => ({
-  markdownRenderSpy: vi.fn()
+const { markdownRenderSpy, requestBlobSpy } = vi.hoisted(() => ({
+  markdownRenderSpy: vi.fn(),
+  requestBlobSpy: vi.fn()
 }));
 
 vi.mock("../../../components/ui/MarkdownRenderer", () => ({
@@ -18,6 +19,14 @@ vi.mock("../../../components/ui/MarkdownRenderer", () => ({
     return <div>{markdown}</div>;
   }
 }));
+
+vi.mock("../../../lib/api/core", async () => {
+  const actual = await vi.importActual<typeof import("../../../lib/api/core")>("../../../lib/api/core");
+  return {
+    ...actual,
+    requestBlob: requestBlobSpy
+  };
+});
 
 function buildMessage(overrides: Partial<AgentMessage> = {}): AgentMessage {
   return {
@@ -78,8 +87,16 @@ function renderTimeline(
 }
 
 describe("AgentTimeline", () => {
+  let openSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     markdownRenderSpy.mockClear();
+    requestBlobSpy.mockReset();
+    openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+  });
+
+  afterEach(() => {
+    openSpy.mockRestore();
   });
 
   it("does not rerender stable historical markdown for unrelated draft typing", async () => {
@@ -238,6 +255,116 @@ describe("AgentTimeline", () => {
     expect(screen.getByText("Show the old run.")).toBeInTheDocument();
     expect(screen.queryAllByText("Assistant")).toHaveLength(0);
     expect(screen.queryByText("1 tool call")).not.toBeInTheDocument();
+  });
+
+  it("loads persisted image attachments through the authenticated preview fetch path", async () => {
+    requestBlobSpy.mockResolvedValue(new Blob(["image-bytes"], { type: "image/png" }));
+
+    renderTimeline({
+      messages: [
+        buildMessage({
+          attachments: [
+            {
+              id: "attachment-image-1",
+              message_id: "message-1",
+              display_name: "receipt.png",
+              mime_type: "image/png",
+              file_path: "/tmp/receipt.png",
+              attachment_url: "/api/v1/agent/attachments/attachment-image-1",
+              created_at: "2026-02-15T10:00:00Z"
+            }
+          ]
+        })
+      ]
+    });
+
+    await waitFor(() => expect(screen.getByAltText("receipt.png")).toHaveAttribute("src", expect.stringContaining("blob:")));
+    expect(requestBlobSpy).toHaveBeenCalledWith(
+      "/api/v1/agent/attachments/attachment-image-1",
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
+  });
+
+  it("opens image attachments in a browser-native tab", async () => {
+    requestBlobSpy.mockResolvedValue(new Blob(["image-bytes"], { type: "image/png" }));
+
+    renderTimeline({
+      messages: [
+        buildMessage({
+          attachments: [
+            {
+              id: "attachment-image-1",
+              message_id: "message-1",
+              display_name: "receipt.png",
+              mime_type: "image/png",
+              file_path: "/tmp/receipt.png",
+              attachment_url: "/api/v1/agent/attachments/attachment-image-1",
+              created_at: "2026-02-15T10:00:00Z"
+            }
+          ]
+        })
+      ]
+    });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Open receipt.png" }));
+
+    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining("blob:"), "_blank", "noopener,noreferrer");
+  });
+
+  it("renders persisted pdf attachments as inline browser previews", async () => {
+    requestBlobSpy.mockResolvedValue(new Blob(["pdf-bytes"], { type: "application/pdf" }));
+
+    renderTimeline({
+      messages: [
+        buildMessage({
+          attachments: [
+            {
+              id: "attachment-pdf-1",
+              message_id: "message-1",
+              display_name: "statement.pdf",
+              mime_type: "application/pdf",
+              file_path: "/tmp/statement.pdf",
+              attachment_url: "/api/v1/agent/attachments/attachment-pdf-1",
+              created_at: "2026-02-15T10:00:00Z"
+            }
+          ]
+        })
+      ]
+    });
+
+    await waitFor(() => expect(screen.getByTitle("statement.pdf")).toHaveAttribute("src", expect.stringContaining("blob:")));
+    expect(screen.getByText("statement.pdf")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "statement.pdf" })).not.toBeInTheDocument();
+    expect(requestBlobSpy).toHaveBeenCalledWith(
+      "/api/v1/agent/attachments/attachment-pdf-1",
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
+  });
+
+  it("opens pdf attachments in a browser-native tab", async () => {
+    requestBlobSpy.mockResolvedValue(new Blob(["pdf-bytes"], { type: "application/pdf" }));
+
+    renderTimeline({
+      messages: [
+        buildMessage({
+          attachments: [
+            {
+              id: "attachment-pdf-1",
+              message_id: "message-1",
+              display_name: "statement.pdf",
+              mime_type: "application/pdf",
+              file_path: "/tmp/statement.pdf",
+              attachment_url: "/api/v1/agent/attachments/attachment-pdf-1",
+              created_at: "2026-02-15T10:00:00Z"
+            }
+          ]
+        })
+      ]
+    });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Open" }));
+
+    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining("blob:"), "_blank", "noopener,noreferrer");
   });
 
   it("renders attached optimistic tool progress with hydrated tool details and no duplicate run card", async () => {

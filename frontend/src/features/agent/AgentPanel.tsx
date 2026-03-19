@@ -10,7 +10,6 @@ import { PanelRight, PanelRightClose } from "lucide-react";
 import { DeleteConfirmDialog } from "../../components/DeleteConfirmDialog";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
-import { AgentAttachmentPreviewDialog } from "./panel/AgentAttachmentPreviewDialog";
 import { AgentComposer } from "./panel/AgentComposer";
 import { AgentThreadPanel } from "./panel/AgentThreadPanel";
 import { AgentThreadUsageBar } from "./panel/AgentThreadUsageBar";
@@ -139,8 +138,6 @@ export function AgentPanel({ isOpen, embedded = false }: AgentPanelProps) {
           errorMessage={controller.deleteDialog.errorMessage}
         />
       </aside>
-
-      <AgentAttachmentPreviewDialog {...controller.previewDialog} />
     </>
   );
 }

@@ -29,7 +29,6 @@ interface UseAgentDraftAttachmentsArgs {
 export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
   const { setActionError } = args;
   const [draftFiles, setDraftFiles] = useState<DraftAttachment[]>([]);
-  const [previewAttachmentId, setPreviewAttachmentId] = useState<string | null>(null);
   const [isComposerDragActive, setIsComposerDragActive] = useState(false);
 
   const draftFileIdCounterRef = useRef(0);
@@ -54,21 +53,6 @@ export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
       });
     };
   }, [draftAttachmentPreviews]);
-
-  const selectedDraftAttachmentPreview = useMemo(
-    () => draftAttachmentPreviews.find((preview) => preview.id === previewAttachmentId) ?? null,
-    [draftAttachmentPreviews, previewAttachmentId]
-  );
-
-  useEffect(() => {
-    if (!previewAttachmentId) {
-      return;
-    }
-    if (selectedDraftAttachmentPreview) {
-      return;
-    }
-    setPreviewAttachmentId(null);
-  }, [previewAttachmentId, selectedDraftAttachmentPreview]);
 
   function nextDraftAttachmentId(): string {
     draftFileIdCounterRef.current += 1;
@@ -178,18 +162,12 @@ export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
 
   function removeDraftAttachment(attachmentId: string) {
     setDraftFiles((current) => current.filter((item) => item.id !== attachmentId));
-    if (previewAttachmentId === attachmentId) {
-      setPreviewAttachmentId(null);
-    }
   }
 
   return {
     draftFiles,
     setDraftFiles,
     draftAttachmentPreviews,
-    selectedDraftAttachmentPreview,
-    previewAttachmentId,
-    setPreviewAttachmentId,
     isComposerDragActive,
     fileInputRef,
     handlers: {

@@ -63,6 +63,7 @@ Includes:
 
 - `thread`
 - `messages`
+- per-message attachments with `display_name`, `mime_type`, and `attachment_url`
 - `runs`
 - per-run `change_items`
 - `configured_model_name`

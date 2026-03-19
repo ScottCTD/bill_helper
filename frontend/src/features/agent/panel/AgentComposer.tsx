@@ -18,8 +18,6 @@ import type { DraftAttachmentPreview } from "./types";
 interface AgentComposerProps {
   isComposerDragActive: boolean;
   draftAttachmentPreviews: DraftAttachmentPreview[];
-  previewAttachmentId: string | null;
-  setPreviewAttachmentId: (id: string | null) => void;
   onRemoveAttachment: (attachmentId: string) => void;
   composerTextareaRef: RefObject<HTMLTextAreaElement | null>;
   fileInputRef: RefObject<HTMLInputElement | null>;
@@ -53,8 +51,6 @@ export function AgentComposer(props: AgentComposerProps) {
   const {
     isComposerDragActive,
     draftAttachmentPreviews,
-    previewAttachmentId,
-    setPreviewAttachmentId,
     onRemoveAttachment,
     composerTextareaRef,
     fileInputRef,
@@ -107,26 +103,14 @@ export function AgentComposer(props: AgentComposerProps) {
               className={cn("agent-draft-attachment-chip", preview.kind === "pdf" && "agent-draft-attachment-chip-file")}
             >
               {preview.kind === "image" ? (
-                <button
-                  type="button"
-                  className="agent-draft-attachment-preview"
-                  onClick={() => setPreviewAttachmentId(preview.id)}
-                  title={preview.file.name}
-                  aria-pressed={previewAttachmentId === preview.id}
-                >
+                <div className="agent-draft-attachment-preview" title={preview.file.name}>
                   <img src={preview.url} alt={preview.file.name} loading="lazy" />
-                </button>
+                </div>
               ) : (
-                <button
-                  type="button"
-                  className="agent-draft-attachment-file"
-                  onClick={() => setPreviewAttachmentId(preview.id)}
-                  title={preview.file.name}
-                  aria-pressed={previewAttachmentId === preview.id}
-                >
+                <div className="agent-draft-attachment-file" title={preview.file.name}>
                   <FileText className="h-4 w-4" />
                   <span className="agent-draft-attachment-file-name">{preview.file.name}</span>
-                </button>
+                </div>
               )}
               <Button
                 type="button"

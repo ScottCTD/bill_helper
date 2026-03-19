@@ -81,9 +81,6 @@ export function useAgentComposerRuntime({
     draftFiles,
     setDraftFiles,
     draftAttachmentPreviews,
-    selectedDraftAttachmentPreview,
-    previewAttachmentId,
-    setPreviewAttachmentId,
     isComposerDragActive,
     fileInputRef,
     handlers: {
@@ -209,7 +206,6 @@ export function useAgentComposerRuntime({
     setIsBulkLaunching,
     setPendingAssistantMessage,
     setPendingUserMessage,
-    setPreviewAttachmentId,
     setThreadStreamHealthy,
     snapToBottom,
     threadDetail,
@@ -378,15 +374,7 @@ export function useAgentComposerRuntime({
         void actions.handleStopRun();
       },
       onSubmit: actions.handleSubmitMessage,
-      previewAttachmentId,
-      selectedModel: selectedComposerModel,
-      setPreviewAttachmentId
-    },
-    previewDialog: {
-      onClose() {
-        setPreviewAttachmentId(null);
-      },
-      preview: selectedDraftAttachmentPreview
+      selectedModel: selectedComposerModel
     },
     timeline: {
       activeOptimisticEvents,

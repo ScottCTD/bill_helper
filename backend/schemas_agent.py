@@ -63,6 +63,7 @@ class AgentThreadSummaryRead(AgentThreadRead):
 class AgentMessageAttachmentRead(AgentOrmReadSchema):
     id: str
     message_id: str
+    display_name: str
     mime_type: str
     file_path: str
     attachment_url: str

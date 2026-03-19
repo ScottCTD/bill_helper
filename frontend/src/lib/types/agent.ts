@@ -61,6 +61,7 @@ export interface AgentThreadSummary extends AgentThread {
 export interface AgentMessageAttachment {
   id: string;
   message_id: string;
+  display_name: string;
   mime_type: string;
   file_path: string;
   attachment_url: string;

@@ -221,7 +221,6 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
       onOpenChange: handleDeleteDialogOpenChange,
       open: pendingDeleteThread !== null,
       title: pendingDeleteThread ? `Delete ${pendingDeleteThread.name}?` : "Delete thread?"
-    },
-    previewDialog: runtime.previewDialog
+    }
   };
 }
