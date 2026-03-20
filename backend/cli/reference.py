@@ -234,12 +234,11 @@ _COMMAND_SPECS: tuple[CommandSpec, ...] = (
             "exactly one of `--payload-json JSON` or `--payload-file PATH`.",
         ),
         notes=(
-            "This command remains JSON-only in this batch because the payload is nested and discriminated.",
-            "Top-level JSON format: `{\"action\":\"add\",\"group_ref\":{...},\"target\":{...},\"member_role\":\"PARENT|CHILD\"}`. `member_role` is optional.",
-            "Parent group reference format: exactly one of `{\"group_id\":\"<group_id>\"}` or `{\"create_group_proposal_id\":\"<proposal_id>\"}`.",
-            "Entry-target format: `{\"target_type\":\"entry\",\"entry_ref\":{\"entry_id\":\"<entry_id>\"}}` or `{\"target_type\":\"entry\",\"entry_ref\":{\"create_entry_proposal_id\":\"<proposal_id>\"}}`.",
-            "Child-group target format: `{\"target_type\":\"child_group\",\"group_ref\":{\"group_id\":\"<group_id>\"}}` or `{\"target_type\":\"child_group\",\"group_ref\":{\"create_group_proposal_id\":\"<proposal_id>\"}}`.",
-            "Example payload: `{\"action\":\"add\",\"group_ref\":{\"group_id\":\"a971c92e\"},\"target\":{\"target_type\":\"entry\",\"entry_ref\":{\"entry_id\":\"8bf2fa83\"}}}`.",
+            "Payload is nested; discriminated by `target.target_type` (`entry` vs `child_group`).",
+            "Top-level JSON: `{\"action\":\"add\",\"group_ref\":{...},\"target\":{...},\"member_role\":\"PARENT|CHILD\"}`. `member_role` is optional unless SPLIT rules require it.",
+            "Parent `group_ref`: exactly one of `{\"group_id\":\"<id>\"}` or `{\"create_group_proposal_id\":\"<id>\"}`.",
+            "Entry target: `{\"target_type\":\"entry\",\"entry_ref\":{\"entry_id\":\"<id>\"}}` or `entry_ref` with `create_entry_proposal_id`.",
+            "Child-group target: `{\"target_type\":\"child_group\",\"group_ref\":{...}}` with `group_id` or `create_group_proposal_id`.",
         ),
     ),
     CommandSpec(
@@ -249,12 +248,8 @@ _COMMAND_SPECS: tuple[CommandSpec, ...] = (
             "exactly one of `--payload-json JSON` or `--payload-file PATH`.",
         ),
         notes=(
-            "This command remains JSON-only in this batch because the payload is nested and discriminated.",
-            "Top-level JSON format: `{\"action\":\"remove\",\"group_ref\":{\"group_id\":\"<group_id>\"},\"target\":{...}}`.",
-            "Entry-target remove format: `{\"target_type\":\"entry\",\"entry_ref\":{\"entry_id\":\"<entry_id>\"}}`.",
-            "Child-group target remove format: `{\"target_type\":\"child_group\",\"group_ref\":{\"group_id\":\"<group_id>\"}}`.",
-            "Remove only supports existing ids. Proposal-id references are not allowed for the parent group or the target.",
-            "Example payload: `{\"action\":\"remove\",\"group_ref\":{\"group_id\":\"a971c92e\"},\"target\":{\"target_type\":\"entry\",\"entry_ref\":{\"entry_id\":\"8bf2fa83\"}}}`.",
+            "Remove supports **existing ids only**; proposal-id references are rejected for parent group and targets.",
+            "Top-level JSON: `{\"action\":\"remove\",\"group_ref\":{\"group_id\":\"<id>\"},\"target\":{...}}` with discriminated `target` (`entry` vs `child_group`).",
         ),
     ),
     CommandSpec(

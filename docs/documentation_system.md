@@ -77,6 +77,12 @@ Run:
 uv run python scripts/check_docs_sync.py
 ```
 
+After changing `backend/services/agent/system_prompt.j2` or `backend/cli/reference.py`, regenerate the committed prompt snapshot (so docs stay aligned with the live prompt):
+
+```bash
+uv run python scripts/render_agent_system_prompt_snapshot.py
+```
+
 Current checks enforce:
 
 - required doc and pointer files exist
@@ -86,3 +92,4 @@ Current checks enforce:
 - subsystem index docs point to their focused topic maps
 - stale removed terms are absent from live reference docs
 - key docs reference the latest Alembic migration
+- `docs/features/system_prompt_example.md` is the render-script output (includes the do-not-edit regeneration banner)

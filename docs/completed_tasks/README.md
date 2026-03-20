@@ -16,6 +16,7 @@ This directory stores archived task docs after active work in `/tasks/*.md` is f
 
 ## Recent Archived Tasks
 
+- `2026_03_16-groups_member_cli_followup.md`: archived task; decision to keep `bh groups add-member` / `remove-member` JSON-only (no flag/subcommand UX for nested membership payloads).
 - `2026_03_16-brittle_cli_create.md`: archived task for replacing brittle JSON-based `bh * create` commands with exact flag-based CLI interfaces and better create-command errors.
 - `2026_03_16-dashboard_plot_improve.md`: dashboard chart and table improvements (Income vs Expense layout, Sankey, day-to-day bar plot, Monthly Spend table).
 - `2026_03_03-agent_workspace.md`: archived task for canonical per-user files, durable attachment storage, and per-user Docker workspace provisioning.
