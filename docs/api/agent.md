@@ -303,6 +303,8 @@ Apply behavior covers:
 Notes:
 
 - lookup is owner-scoped through the parent thread
+- approving `create_entry` / `update_entry` returns `422` when the payload references **from/to entities** or **tags** that are not yet persisted and are only covered by other **pending** `create_entity` / `create_account` / `create_tag` proposals in the same thread; resolve those proposals first
+- the same approve path returns `422` when a referenced entity or tag is still missing from the database but a **rejected** or **apply-failed** `create_entity`, `create_account`, or `create_tag` proposal for that name exists in the thread, so approving the entry cannot bypass an explicit rejection by recreating the resource on apply
 - reviewer edits are sent through `payload_override`
 - invalid `payload_override` payloads return `422` and leave the item unchanged
 - apply uses the approving principal for scoped resolution and owner attribution

@@ -16,7 +16,43 @@ export interface ThreadReviewItem {
 
 export type ProposalDomain = "entry" | "account" | "snapshot" | "entity" | "tag" | "group";
 
+/** Sidebar / TOC bucket: group shell vs membership proposals (both share `proposalDomain` "group"). */
+export type ProposalTocGroupKey =
+  | "account"
+  | "snapshot"
+  | "entity"
+  | "tag"
+  | "group"
+  | "entry"
+  | "group_member";
+
 type JsonRecord = Record<string, unknown>;
+
+/**
+ * Lower sorts earlier: accounts/snapshots, then entities/tags, group shell, entries, group members.
+ * Tie-break within a band is `created_at` then id in `buildThreadReviewItems`.
+ */
+const CHANGE_TYPE_REVIEW_ORDER: Record<AgentChangeType, number> = {
+  create_account: 100,
+  update_account: 101,
+  delete_account: 102,
+  create_snapshot: 200,
+  delete_snapshot: 201,
+  create_entity: 300,
+  update_entity: 301,
+  delete_entity: 302,
+  create_tag: 400,
+  update_tag: 401,
+  delete_tag: 402,
+  create_group: 500,
+  update_group: 501,
+  delete_group: 502,
+  create_entry: 600,
+  update_entry: 601,
+  delete_entry: 602,
+  create_group_member: 700,
+  delete_group_member: 701
+};
 
 const CHANGE_TYPE_LABEL: Record<AgentChangeType, string> = {
   create_entry: "Create Entry",
@@ -150,6 +186,20 @@ function itemSummaryFromPayload(changeType: AgentChangeType, payload: JsonRecord
   }
 }
 
+export function proposalReviewOrdinal(changeType: AgentChangeType): number {
+  return CHANGE_TYPE_REVIEW_ORDER[changeType];
+}
+
+export function proposalTocGroupKey(changeType: AgentChangeType): ProposalTocGroupKey {
+  if (changeType === "create_group_member" || changeType === "delete_group_member") {
+    return "group_member";
+  }
+  if (changeType === "create_group" || changeType === "update_group" || changeType === "delete_group") {
+    return "group";
+  }
+  return proposalDomain(changeType);
+}
+
 export function buildThreadReviewItems(runs: AgentRun[]): ThreadReviewItem[] {
   const orderedRuns = [...runs].sort((left, right) => compareIsoDateStrings(left.created_at, right.created_at));
 
@@ -163,6 +213,11 @@ export function buildThreadReviewItems(runs: AgentRun[]): ThreadReviewItem[] {
       }))
     )
     .sort((left, right) => {
+      const ordinalComparison =
+        proposalReviewOrdinal(left.item.change_type) - proposalReviewOrdinal(right.item.change_type);
+      if (ordinalComparison !== 0) {
+        return ordinalComparison;
+      }
       const createdAtComparison = compareIsoDateStrings(left.item.created_at, right.item.created_at);
       if (createdAtComparison !== 0) {
         return createdAtComparison;

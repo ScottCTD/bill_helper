@@ -7,8 +7,8 @@
  */
 import { AlertTriangle, Check, CheckCheck, type LucideIcon, X } from "lucide-react";
 
-import type { AgentChangeItem, AgentChangeStatus, AgentChangeType, Currency } from "../../../lib/types";
-import { isPendingReviewStatus, proposalDomain, shortId, type ThreadReviewItem } from "./model";
+import type { AgentChangeItem, AgentChangeStatus, Currency } from "../../../lib/types";
+import { isPendingReviewStatus, proposalTocGroupKey, shortId, type ProposalTocGroupKey, type ThreadReviewItem } from "./model";
 
 export interface TocStatusIndicator {
   className: string;
@@ -16,10 +16,8 @@ export interface TocStatusIndicator {
   label: string;
 }
 
-type TocProposalGroupKey = "entry" | "account" | "snapshot" | "entity" | "tag" | "group";
-
 interface TocProposalGroup {
-  key: TocProposalGroupKey;
+  key: ProposalTocGroupKey;
   label: string;
   items: ThreadReviewItem[];
 }
@@ -92,29 +90,27 @@ export function reviewModeClass(changeType: ThreadReviewItem["item"]["change_typ
   return "is-snapshot";
 }
 
-function proposalGroupKey(changeType: AgentChangeType): TocProposalGroupKey {
-  return proposalDomain(changeType);
-}
-
 export function groupReviewItems(items: ThreadReviewItem[]): TocProposalGroup[] {
-  const grouped: Record<TocProposalGroupKey, ThreadReviewItem[]> = {
+  const grouped: Record<ProposalTocGroupKey, ThreadReviewItem[]> = {
     entry: [],
     account: [],
     snapshot: [],
     entity: [],
     tag: [],
-    group: []
+    group: [],
+    group_member: []
   };
   for (const reviewItem of items) {
-    grouped[proposalGroupKey(reviewItem.item.change_type)].push(reviewItem);
+    grouped[proposalTocGroupKey(reviewItem.item.change_type)].push(reviewItem);
   }
   const groups: TocProposalGroup[] = [
-    { key: "entry", label: "Entries", items: grouped.entry },
     { key: "account", label: "Accounts", items: grouped.account },
     { key: "snapshot", label: "Snapshots", items: grouped.snapshot },
-    { key: "group", label: "Groups", items: grouped.group },
     { key: "entity", label: "Entities", items: grouped.entity },
-    { key: "tag", label: "Tags", items: grouped.tag }
+    { key: "tag", label: "Tags", items: grouped.tag },
+    { key: "group", label: "Groups", items: grouped.group },
+    { key: "entry", label: "Entries", items: grouped.entry },
+    { key: "group_member", label: "Group members", items: grouped.group_member }
   ];
   return groups.filter((group) => group.items.length > 0);
 }

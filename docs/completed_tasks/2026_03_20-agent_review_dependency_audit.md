@@ -1,14 +1,21 @@
 # Agent review system: dependency and consistency audit
 
-Status: not started — planning doc for a full pass over proposal/review/apply behavior.
+Status: **completed** — tag/entity approval gates and review UI ordering shipped; a full per-`AgentChangeType` policy matrix remains an optional follow-up.
+
+## Shipped (2026-03-20)
+
+- **Backend:** `validate_entry_dependencies_ready_for_approval` extended so `create_entry` / `update_entry` cannot be approved while matching tag names have a pending `create_tag`, or while rejected/apply_failed `create_tag` / `create_entity` / `create_account` proposals would still collide with implicit ensure-by-name behavior.
+- **Frontend:** Stable per-change-type ordering for thread review items and TOC; group members grouped after entry-related sections.
+- **Tests:** `backend/tests/test_agent_review_entry_tag_dependencies.py`; `frontend/src/features/agent/review/model.test.ts` and related modal tests.
+- **Docs:** `docs/api/agent.md`, `backend/docs/agent_subsystem.md`, `frontend/docs/agent_workspace.md`.
 
 ## Motivation
 
 Some resource relationships are enforced at **approval** time (e.g. entries vs missing entities vs pending `create_entity` proposals), while others are **not** modeled the same way or are satisfied at **apply** time by creating rows implicitly (e.g. tags on `create_entry` via `ensure_tags`). That asymmetry is easy to miss in UX, docs, and agent prompts, and can feel like bugs (e.g. approving an entry “before” a related `create_tag` proposal).
 
-The `bh groups add-member` / `remove-member` CLI **stays JSON-only** by product decision (see [docs/completed_tasks/2026_03_16-groups_member_cli_followup.md](../docs/completed_tasks/2026_03_16-groups_member_cli_followup.md)); any future CLI sugar should follow an explicit design pass tied to this audit.
+The `bh groups add-member` / `remove-member` CLI **stays JSON-only** by product decision (see [2026_03_16-groups_member_cli_followup.md](./2026_03_16-groups_member_cli_followup.md)); any future CLI sugar should follow an explicit design pass tied to this audit.
 
-## Audit goals
+## Audit goals (original scope; partial)
 
 1. **Inventory** every `AgentChangeType` (and any non-agent proposal path) with: payload shape, what it references, and whether references may use **persisted ids** vs **pending proposal ids**.
 2. **Map approval gates**: for each change type, document what `backend/services/agent/reviews/dependencies.py` (and related review code) blocks or allows, and what errors users see.

@@ -156,13 +156,13 @@ describe("AgentThreadReviewModal", () => {
     expect(sidebar).not.toBeNull();
     expect(within(sidebar as HTMLElement).queryByRole("button", { name: "Approve All" })).not.toBeInTheDocument();
     const pendingSection = within(sidebar as HTMLElement).getByLabelText("Pending");
-    expect(within(pendingSection).getByText("Entries")).toBeInTheDocument();
     expect(within(pendingSection).getByText("Accounts")).toBeInTheDocument();
     expect(within(pendingSection).getByText("Tags")).toBeInTheDocument();
+    expect(within(pendingSection).getByText("Entries")).toBeInTheDocument();
     expect(within(sidebar as HTMLElement).queryByText("REJECTED")).not.toBeInTheDocument();
     expect(within(sidebar as HTMLElement).getByLabelText("Rejected")).toBeInTheDocument();
     expect(dialog.querySelector(".agent-review-sidebar-scroll")).not.toBeNull();
-    expect(screen.getByRole("heading", { name: "Create Entry: Lunch on 2026-03-05" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create Account: Savings Vault" })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Hide list" }));
     expect(screen.getByRole("button", { name: "Show list" })).toHaveAttribute("aria-expanded", "false");
@@ -205,10 +205,10 @@ describe("AgentThreadReviewModal", () => {
     const onApproveItem = vi
       .fn()
       .mockResolvedValueOnce({
-        ...firstRun.change_items[0],
+        ...firstRun.change_items[1],
         status: "APPLIED",
-        applied_resource_type: "tag",
-        applied_resource_id: "1"
+        applied_resource_type: "entity",
+        applied_resource_id: "entity-1"
       });
 
     renderWithQueryClient(
@@ -222,13 +222,13 @@ describe("AgentThreadReviewModal", () => {
       />
     );
 
-    expect(await screen.findByRole("heading", { name: "Create Tag: subscriptions" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Create Entity: Molly Tea" })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Approve" }));
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Create Entity: Molly Tea" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Create Tag: subscriptions" })).toBeInTheDocument());
     expect(onApproveItem).toHaveBeenCalledWith({
-      itemId: "change-1",
+      itemId: "change-2",
       payloadOverride: undefined
     });
   });

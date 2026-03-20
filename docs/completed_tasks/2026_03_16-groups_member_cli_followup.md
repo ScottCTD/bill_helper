@@ -11,7 +11,7 @@ An experiment with `entry` subcommands and proposal-id flags was **reverted** fo
 ## Outcome
 
 - Canonical payload documentation: [backend/cli/reference.py](../../backend/cli/reference.py) (`CommandSpec` for `bh groups add-member` / `bh groups remove-member`).
-- Broader review of proposal/review/apply consistency (e.g. tags vs entities) is tracked in [tasks/2026_03_20-agent_review_dependency_audit.md](../../tasks/2026_03_20-agent_review_dependency_audit.md).
+- Broader review of proposal/review/apply consistency (e.g. tags vs entities) is archived in [2026_03_20-agent_review_dependency_audit.md](./2026_03_20-agent_review_dependency_audit.md).
 
 ## Note on `git reset`
 
