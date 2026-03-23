@@ -80,7 +80,7 @@ Key ownership boundaries:
 - `base.css`: Tailwind layers, reset styles, global typography, scrollbars, and element defaults
 - `shell.css`: app shell, sidebar, content frame, page headers, top-level layout helpers, and the main route scroll container behavior that keeps page widths stable when some routes need vertical scrollbars and others do not while auto-hiding the route scrollbar thumb until active scrolling begins
 - `workspaces.css`: shared workspace sections, table/form patterns, settings, entries, properties, and groups
-- `dashboard.css`: dashboard controls, timeline rail, comparison cards, and dashboard-only layout
+- `dashboard.css`: dashboard controls, horizontal period strip, comparison cards, and dashboard-only layout
 - `overlays.css`: entry editor, select/tag controls, tooltip, and notification surfaces
 - BlockNote-based markdown editor shells inherit the app card surface, so the full editor frame stays on one white panel instead of exposing the muted page canvas below the editable content
 - custom select/tag menus render in a floating portal anchored by `hooks/useFloatingMenuPosition.ts`, so short cards, empty states, and other clipped containers do not truncate the menu body

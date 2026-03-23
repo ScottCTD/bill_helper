@@ -70,11 +70,10 @@ Default groups other than `untagged` can have their rules edited, but their name
 
 - `Overview` tab:
   - explicit `Month` / `Year` mode toggle
-  - floating page-level right-side invisible timeline rail on desktop, sized to the viewport height without consuming dashboard layout width
+  - period strip sits in the dashboard workspace toolbar row between the Month/Year toggle and Currency (middle column grows with available width); scroll left for older months or years, newest toward the right; vertical wheel on the strip scrolls horizontally; click to select; keyboard arrows step selection when the strip is focused
   - timeline only lists months and years that have visible expense activity in the dashboard currency
-  - wheel-based discrete month/year stepping with centered active-item picker behavior; mobile collapses back to a compact horizontal strip
-  - monthly mode: KPI cards, an `Income vs Expense Trend` bar chart with stacked income segments (salary, other income) plus stacked expense segments by filter group (bottom to top: fixed, transfers, one-time, day-to-day; tooltip shows segment name and amount on hover), expense pie by filter group, and projection cards
-  - yearly mode: yearly KPI cards, monthly income vs expense bars for the selected year with stacked income segments (salary, other income) and stacked filter-group expense segments, yearly filter-group totals, and a dedicated monthly bar chart for each filter group
+  - monthly mode: KPI cards, an `Income vs Expense Trend` bar chart that always uses the last six calendar months ending at the **real** current month (`YYYY-MM` from the client clock), independent of the timeline selection; stacked income segments (salary, other income) plus stacked expense segments by filter group (bottom to top: fixed, transfers, one-time, day-to-day, untagged as applicable; tooltip shows segment name and amount on hover); a two-part legend lists income segments then expense segments in the same stack order as the bars; expense pie by filter group, and projection cards
+  - yearly mode: yearly KPI cards, monthly income vs expense bars for the selected year with stacked income segments (salary, other income) and stacked filter-group expense segments, the same income/expense legend under the chart, yearly filter-group totals, and a dedicated monthly bar chart for each filter group
 - `Spending` tab:
   - monthly mode: average/median spend-day metrics, stacked daily area chart by filter group, and month-over-month comparison cards
   - yearly mode: average/median expense-month metrics, stacked monthly filter-group bars for the selected year, and year-over-year comparison cards for each saved filter group
@@ -114,4 +113,4 @@ Interactive charting is powered by Recharts.
 - Shares in `dashboard.filter_groups[*].share` are calculated against total monthly expense; overlapping custom groups can make the summed shares exceed `1.0`.
 - The yearly dashboard view is assembled on the frontend from repeated month-scoped `GET /api/v1/dashboard` reads for the selected year and its previous year; no separate yearly endpoint exists yet.
 - `GET /api/v1/dashboard/timeline` returns the discrete month list that drives the floating picker rail; the frontend derives the visible year list from that month feed.
-- Agent usage analytics are range-based rather than month/year-based; the `Agent` tab keeps its own filters and does not reuse the finance timeline rail state for queries.
+- Agent usage analytics are range-based rather than month/year-based; the `Agent` tab keeps its own filters and does not reuse the finance dashboard period selection state for queries.

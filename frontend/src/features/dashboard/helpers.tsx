@@ -75,12 +75,12 @@ export function sortByIncomeTrendOrder<T extends { key: string }>(groups: T[]): 
   });
 }
 
-export const DASHBOARD_TABS: Array<{ id: DashboardTab; label: string; description: string }> = [
-  { id: "overview", label: "Overview", description: "Month snapshot, projection, and filter-group mix" },
-  { id: "daily", label: "Spending", description: "Daily spending and month-over-month filter-group comparisons" },
-  { id: "breakdowns", label: "Breakdowns", description: "From / to / tag analysis" },
-  { id: "insights", label: "Insights", description: "Weekdays, yearly views, outliers, and reconciliation" },
-  { id: "agent", label: "Agent", description: "Usage cost, token mix, surface comparison, and expensive runs" }
+export const DASHBOARD_TABS: Array<{ id: DashboardTab; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "daily", label: "Spending" },
+  { id: "breakdowns", label: "Breakdowns" },
+  { id: "insights", label: "Insights" },
+  { id: "agent", label: "Agent" }
 ];
 
 export const CHART_COLORS = {
@@ -119,8 +119,6 @@ export const DASHBOARD_PIE_ANIMATION_PROPS = {
   animationDuration: 420,
   animationEasing: "ease-out" as const
 };
-
-export const TIMELINE_WHEEL_LOCK_MS = 180;
 
 export function axisTick(value: number | string) {
   const numericValue = typeof value === "number" ? value : Number(value);
@@ -179,7 +177,7 @@ export function buildYearMonthKeys(year: number): string[] {
 }
 
 export function buildTimelineYears(monthKeys: string[]): string[] {
-  return Array.from(new Set(monthKeys.map((monthKey) => monthKey.slice(0, 4))));
+  return Array.from(new Set(monthKeys.map((monthKey) => monthKey.slice(0, 4)))).sort();
 }
 
 export function pickTimelineMonthForYear(monthKeys: string[], yearKey: string, preferredMonthKey: string): string | null {
@@ -406,17 +404,15 @@ export function buildMonthlyChartData(data: Dashboard) {
   }));
 }
 
-const MAX_TREND_MONTHS = 12;
+/** Visible month buckets for the dashboard Income vs Expense trend (month view). */
+export const TREND_CHART_MONTH_COUNT = 6;
 
-/** Limit trend chart data to months with income/expense activity, at most MAX_TREND_MONTHS. */
-export function limitTrendDataToMonthsWithData<T extends { income_total_minor?: unknown; expense_total_minor?: unknown }>(
-  points: T[],
-  maxMonths = MAX_TREND_MONTHS
-): T[] {
-  const withData = points.filter(
-    (p) => Number(p.income_total_minor ?? 0) > 0 || Number(p.expense_total_minor ?? 0) > 0
-  );
-  return withData.slice(-maxMonths);
+/** Take the last `count` chronologically ordered trend points (ending at the API window's last month). */
+export function takeLastTrendMonthPoints<T>(points: T[], count = TREND_CHART_MONTH_COUNT): T[] {
+  if (count <= 0) {
+    return [];
+  }
+  return points.slice(-count);
 }
 
 export function filterGroupNamesByKey(data: Dashboard) {

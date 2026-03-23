@@ -16,83 +16,79 @@
   }
 
   .dashboard-toolbar {
-    @apply items-end;
+    @apply items-stretch;
+  }
+
+  /* Shared label + control rhythm; control row is exactly h-10 everywhere. */
+  .dashboard-toolbar > .field {
+    @apply grid gap-1.5;
+  }
+
+  .dashboard-toolbar > .field > span {
+    @apply leading-none;
+  }
+
+  /* Fixed-width columns: Month/Year toggle and Currency match; Period takes the space between. */
+  .dashboard-toolbar > .field.dashboard-toolbar-view,
+  .dashboard-toolbar > .field.dashboard-toolbar-currency {
+    @apply w-full shrink-0 flex-none sm:w-[13rem];
+  }
+
+  .dashboard-toolbar > .field.dashboard-toolbar-period {
+    @apply min-w-[6rem] flex-1 basis-0;
   }
 
   .dashboard-view-toggle {
-    @apply inline-flex w-full rounded-lg border border-border bg-secondary p-1;
+    @apply box-border flex h-10 w-full items-stretch gap-0.5 rounded-md border border-input bg-secondary p-0.5;
   }
 
   .dashboard-view-toggle-button {
-    @apply inline-flex flex-1 items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors;
+    @apply inline-flex min-h-0 flex-1 items-center justify-center rounded-sm px-2 py-0 text-sm font-medium text-muted-foreground transition-colors;
   }
 
   .dashboard-view-toggle-button-active {
-    @apply bg-card text-foreground;
+    @apply bg-card text-foreground shadow-sm;
   }
 
-  .dashboard-page-rail {
-    @apply xl:pointer-events-none xl:fixed xl:right-3 xl:top-0 xl:z-20 xl:h-screen xl:w-24;
+  .dashboard-timeline-strip-field {
+    @apply grid min-w-0 max-w-full gap-1.5;
   }
 
-  .dashboard-timeline-panel {
-    @apply h-full py-5;
-    pointer-events: auto;
-  }
-
-  .dashboard-timeline-viewport {
-    @apply h-full min-h-0 overflow-hidden;
-    mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
-  }
-
-  .dashboard-month-timeline {
-    @apply flex min-w-0 gap-3 overflow-x-auto pb-1;
+  .dashboard-timeline-strip {
+    @apply box-border flex h-10 min-h-10 max-w-full items-center gap-1.5 overflow-x-auto overscroll-x-contain rounded-md border border-input bg-muted/30 px-1;
     scrollbar-width: thin;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 0.25rem;
   }
 
-  .dashboard-month-timeline-vertical {
-    @apply h-full flex-col overflow-x-hidden overflow-y-auto;
-    padding-top: calc(50vh - 1.9rem);
-    padding-bottom: calc(50vh - 1.9rem);
-    overscroll-behavior-y: contain;
-    scroll-behavior: smooth;
-    scrollbar-width: none;
-    scroll-padding-block: 50%;
-    scroll-snap-type: y mandatory;
+  .dashboard-timeline-strip:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 
-  .dashboard-month-timeline-vertical::-webkit-scrollbar {
-    display: none;
+  .dashboard-month-chip-toolbar {
+    @apply shrink-0 snap-end rounded-md border border-border/70 bg-background px-2.5 py-0 text-left shadow-sm transition-[border-color,background-color,color,box-shadow] duration-150 hover:border-primary/30 hover:bg-accent/60;
+    min-width: 3.25rem;
+    height: 2rem;
   }
 
-  .dashboard-month-chip {
-    @apply shrink-0 rounded-xl border border-border/60 bg-background/90 px-3 py-2 text-left shadow-sm transition-[border-color,background-color,color,box-shadow] duration-150 hover:border-primary/25 hover:bg-accent/70;
-    min-width: 4.75rem;
-    scroll-snap-align: center;
+  .dashboard-month-chip-toolbar-active {
+    @apply border-primary/40 bg-accent shadow-sm;
   }
 
-  .dashboard-month-timeline-vertical .dashboard-month-chip {
-    @apply w-full min-w-0;
+  .dashboard-month-chip-toolbar-label {
+    @apply block whitespace-nowrap text-sm font-medium leading-none text-foreground;
   }
 
-  .dashboard-month-timeline-vertical:focus-visible {
-    @apply rounded-xl outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
-  }
-
-  .dashboard-month-chip-active {
-    @apply border-primary/35 bg-accent shadow-md;
-  }
-
-  .dashboard-month-chip-label {
-    @apply block text-sm font-medium text-foreground;
-  }
-
-  .dashboard-month-chip-year {
-    @apply block text-[11px] text-muted-foreground;
+  .dashboard-month-chip-toolbar-sub {
+    @apply font-normal text-muted-foreground;
   }
 
   .dashboard-timeline-empty {
     @apply flex min-h-24 items-center justify-center rounded-xl border border-dashed border-border/75 bg-background/60 px-4 text-center text-sm text-muted-foreground;
+  }
+
+  .dashboard-timeline-empty-inline {
+    @apply flex h-full min-h-0 w-full items-center justify-center px-2 text-center text-xs text-muted-foreground;
   }
 
   .dashboard-comparison-grid {
@@ -121,31 +117,5 @@
 
   .dashboard-delta-flat {
     @apply text-muted-foreground;
-  }
-
-  @media (max-width: 1280px) {
-    .dashboard-page-rail {
-      @apply order-first;
-    }
-
-    .dashboard-timeline-panel {
-      @apply h-auto py-0;
-    }
-
-    .dashboard-timeline-viewport {
-      @apply h-auto;
-      mask-image: none;
-    }
-
-    .dashboard-month-timeline-vertical {
-      @apply max-h-none h-auto flex-row overflow-x-auto overflow-y-hidden pb-1;
-      padding-top: 0;
-      padding-bottom: 0;
-      scroll-snap-type: x mandatory;
-    }
-
-    .dashboard-month-timeline-vertical .dashboard-month-chip {
-      @apply w-auto min-w-[5.5rem];
-    }
   }
 }

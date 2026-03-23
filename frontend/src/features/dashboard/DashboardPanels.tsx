@@ -1,8 +1,8 @@
 /**
  * CALLING SPEC:
- * - Purpose: render dashboard tab panels and the timeline rail for the dashboard route.
- * - Inputs: derived dashboard route state, chart datasets, timeline controls, and typed dashboard read models.
- * - Outputs: tab panel React elements and the dashboard timeline rail.
+ * - Purpose: render dashboard tab panel content for the dashboard route.
+ * - Inputs: derived dashboard route state, chart datasets, and typed dashboard read models.
+ * - Outputs: tab panel React elements.
  * - Side effects: React rendering only.
  */
 

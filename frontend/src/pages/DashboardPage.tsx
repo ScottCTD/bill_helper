@@ -6,7 +6,7 @@
  * - Side effects: dashboard data fetching and UI event wiring.
  */
 
-import { useEffect, useRef, useState, type KeyboardEvent, type WheelEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { PageHeader } from "../components/layout/PageHeader";
@@ -21,11 +21,10 @@ import {
   DashboardInsightsPanel,
   DashboardOverviewPanel
 } from "../features/dashboard/DashboardPanels";
-import { DashboardTimelineRail } from "../features/dashboard/DashboardTimelineRail";
+import { DashboardTimelineStrip } from "../features/dashboard/DashboardTimelineStrip";
 import {
   CHART_COLORS,
   DASHBOARD_TABS,
-  TIMELINE_WHEEL_LOCK_MS,
   type DashboardTab,
   type DashboardViewMode,
   DashboardChartContainer,
@@ -40,8 +39,8 @@ import {
   builtinIncomeGroupColor,
   filterGroupNamesByKey,
   isIncomeFilterGroupKey,
-  limitTrendDataToMonthsWithData,
   median,
+  takeLastTrendMonthPoints,
   pickTimelineMonthForYear,
   shiftMonthKey,
   sortByBuiltinOrder,
@@ -68,47 +67,86 @@ type IncomeTrendChartProps = {
 function IncomeTrendChart({ data: chartData, trendGroups, incomeTrendGroups, currencyCode }: IncomeTrendChartProps) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   return (
-    <DashboardChartContainer>
-      {({ width, height }) => (
-        <BarChart width={width} height={height} data={chartData} barCategoryGap="20%" barGap={4}>
-          <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-          <XAxis dataKey="month" />
-          <YAxis tickFormatter={axisTick} />
-          <Tooltip
-            content={({ payload, label }) => {
-              const active = payload?.find((p) => p.dataKey === hoveredKey) ?? payload?.[0];
-              if (!active) return null;
-              return (
-                <div className="rounded-md border border-border bg-popover px-3 py-2 text-sm shadow-md">
-                  <p className="text-muted-foreground mb-1">{String(label)}</p>
-                  <p className="font-medium">{String(active.name)}: {tooltipAmount(currencyCode, active.value)}</p>
-                </div>
-              );
-            }}
-          />
-          {incomeTrendGroups.map((group) => (
-            <Bar
-              key={group.key}
-              dataKey={group.key}
-              name={group.name}
-              stackId="income"
-              fill={builtinIncomeGroupColor(group.key)}
-              onMouseEnter={() => setHoveredKey(group.key)}
-            />
-          ))}
-          {trendGroups.map((group) => (
-            <Bar
-              key={group.key}
-              dataKey={group.key}
-              name={group.name}
-              stackId="expense-trend"
-              fill={builtinGroupColor(group.key)}
-              onMouseEnter={() => setHoveredKey(group.key)}
-            />
-          ))}
-        </BarChart>
-      )}
-    </DashboardChartContainer>
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <div className="min-h-0 flex-1">
+        <DashboardChartContainer>
+          {({ width, height }) => (
+            <BarChart width={width} height={height} data={chartData} barCategoryGap="20%" barGap={4}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
+              <XAxis dataKey="month" />
+              <YAxis tickFormatter={axisTick} />
+              <Tooltip
+                content={({ payload, label }) => {
+                  const active = payload?.find((p) => p.dataKey === hoveredKey) ?? payload?.[0];
+                  if (!active) return null;
+                  return (
+                    <div className="rounded-md border border-border bg-popover px-3 py-2 text-sm shadow-md">
+                      <p className="text-muted-foreground mb-1">{String(label)}</p>
+                      <p className="font-medium">{String(active.name)}: {tooltipAmount(currencyCode, active.value)}</p>
+                    </div>
+                  );
+                }}
+              />
+              {incomeTrendGroups.map((group) => (
+                <Bar
+                  key={group.key}
+                  dataKey={group.key}
+                  name={group.name}
+                  stackId="income"
+                  fill={builtinIncomeGroupColor(group.key)}
+                  onMouseEnter={() => setHoveredKey(group.key)}
+                />
+              ))}
+              {trendGroups.map((group) => (
+                <Bar
+                  key={group.key}
+                  dataKey={group.key}
+                  name={group.name}
+                  stackId="expense-trend"
+                  fill={builtinGroupColor(group.key)}
+                  onMouseEnter={() => setHoveredKey(group.key)}
+                />
+              ))}
+            </BarChart>
+          )}
+        </DashboardChartContainer>
+      </div>
+      <div
+        className="flex shrink-0 flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground"
+        aria-label="Income and expense segment legend"
+      >
+        <div className="space-y-1">
+          <p className="text-[0.7rem] font-medium uppercase tracking-wide text-foreground">Income</p>
+          <ul className="flex flex-wrap gap-x-3 gap-y-1">
+            {incomeTrendGroups.map((group) => (
+              <li key={group.key} className="flex items-center gap-1.5">
+                <span
+                  className="inline-block size-2.5 shrink-0 rounded-sm"
+                  style={{ backgroundColor: builtinIncomeGroupColor(group.key) }}
+                  aria-hidden
+                />
+                <span>{group.name}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="space-y-1">
+          <p className="text-[0.7rem] font-medium uppercase tracking-wide text-foreground">Expense</p>
+          <ul className="flex flex-wrap gap-x-3 gap-y-1">
+            {trendGroups.map((group) => (
+              <li key={group.key} className="flex items-center gap-1.5">
+                <span
+                  className="inline-block size-2.5 shrink-0 rounded-sm"
+                  style={{ backgroundColor: builtinGroupColor(group.key) }}
+                  aria-hidden
+                />
+                <span>{group.name}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -118,7 +156,6 @@ export function DashboardPage() {
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
   const timelineItemRefs = useRef(new Map<string, HTMLButtonElement>());
   const timelineScrollRef = useRef<HTMLDivElement>(null);
-  const timelineWheelLockRef = useRef<number | null>(null);
   const timelineScrollBehaviorRef = useRef<ScrollBehavior>("auto");
 
   const timelineQuery = useQuery({
@@ -129,6 +166,15 @@ export function DashboardPage() {
   const dashboardQuery = useQuery({
     queryKey: queryKeys.dashboard.month(month),
     queryFn: () => getDashboard(month)
+  });
+
+  const anchorMonthForTrend = currentMonth();
+  const needsTrendAnchorQuery = viewMode === "month" && month !== anchorMonthForTrend;
+  const trendAnchorDashboardQuery = useQuery({
+    queryKey: queryKeys.dashboard.month(anchorMonthForTrend),
+    queryFn: () => getDashboard(anchorMonthForTrend),
+    staleTime: 60_000,
+    enabled: needsTrendAnchorQuery
   });
 
   const timelineMonths = timelineQuery.data?.months ?? [];
@@ -158,24 +204,23 @@ export function DashboardPage() {
     setMonth(nextMonth);
   }
 
-  function centerTimelineItem(selectedItem: HTMLButtonElement, behavior: ScrollBehavior = "auto") {
-    const timelineScroller = timelineScrollRef.current;
-    if (!timelineScroller) {
+  /** Align the selected chip’s trailing edge with the strip’s trailing edge (newest months live on the right). */
+  function alignTimelineChipToTrailingEdge(selectedItem: HTMLButtonElement, behavior: ScrollBehavior = "auto") {
+    const scroller = timelineScrollRef.current;
+    if (!scroller) {
       return;
     }
-
-    const verticalScrollable = timelineScroller.scrollHeight > timelineScroller.clientHeight;
-    const scrollerRect = timelineScroller.getBoundingClientRect();
-    const itemRect = selectedItem.getBoundingClientRect();
-
-    if (verticalScrollable) {
-      const delta = itemRect.top + itemRect.height / 2 - (scrollerRect.top + scrollerRect.height / 2);
-      timelineScroller.scrollTo({ top: timelineScroller.scrollTop + delta, behavior });
+    const maxScroll = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    if (maxScroll <= 0) {
       return;
     }
-
-    const delta = itemRect.left + itemRect.width / 2 - (scrollerRect.left + scrollerRect.width / 2);
-    timelineScroller.scrollTo({ left: timelineScroller.scrollLeft + delta, behavior });
+    const itemTrailing = selectedItem.offsetLeft + selectedItem.offsetWidth;
+    let nextLeft = itemTrailing - scroller.clientWidth;
+    if (selectedItem.offsetWidth > scroller.clientWidth) {
+      nextLeft = selectedItem.offsetLeft;
+    }
+    nextLeft = Math.max(0, Math.min(maxScroll, nextLeft));
+    scroller.scrollTo({ left: nextLeft, behavior });
   }
 
   function registerTimelineItem(key: string, node: HTMLButtonElement | null) {
@@ -207,22 +252,6 @@ export function DashboardPage() {
     const nextMonth = pickTimelineMonthForYear(timelineMonths, nextYear, month);
     if (nextMonth && nextMonth !== month) {
       setTimelineMonth(nextMonth);
-    }
-  }
-
-  function handleTimelineWheel(event: WheelEvent<HTMLDivElement>) {
-    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || Math.abs(event.deltaY) < 4) {
-      return;
-    }
-    event.preventDefault();
-    if (timelineWheelLockRef.current !== null) {
-      return;
-    }
-    shiftSelection(event.deltaY > 0 ? 1 : -1);
-    if (typeof window !== "undefined") {
-      timelineWheelLockRef.current = window.setTimeout(() => {
-        timelineWheelLockRef.current = null;
-      }, TIMELINE_WHEEL_LOCK_MS);
     }
   }
 
@@ -269,22 +298,13 @@ export function DashboardPage() {
     timelineScrollBehaviorRef.current = "auto";
 
     const frame = requestAnimationFrame(() => {
-      centerTimelineItem(selectedItem, behavior);
+      alignTimelineChipToTrailingEdge(selectedItem, behavior);
     });
 
     return () => {
       cancelAnimationFrame(frame);
     };
   }, [timelineSelectionKey, viewMode]);
-
-  useEffect(
-    () => () => {
-      if (typeof window !== "undefined" && timelineWheelLockRef.current !== null) {
-        window.clearTimeout(timelineWheelLockRef.current);
-      }
-    },
-    []
-  );
 
   if (timelineQuery.isLoading || dashboardQuery.isLoading) {
     return <p>Loading dashboard...</p>;
@@ -312,12 +332,26 @@ export function DashboardPage() {
   const monthlyChartData = buildMonthlyChartData(data);
   const yearlyOverviewData = buildYearlyOverviewData(selectedYearMonths, yearlyDashboardsByMonth, data.filter_groups);
 
+  const monthViewTrendSourceDashboard =
+    viewMode === "month"
+      ? month === anchorMonthForTrend
+        ? data
+        : trendAnchorDashboardQuery.data
+      : undefined;
+  const monthViewTrendChartData =
+    viewMode === "month"
+      ? monthViewTrendSourceDashboard
+        ? buildMonthlyChartData(monthViewTrendSourceDashboard)
+        : []
+      : monthlyChartData;
+  const trendGroupSourcePoints = viewMode === "month" ? monthViewTrendChartData : monthlyChartData;
+
   // Trend chart: expense groups (exclude income groups) and income groups
   const sortedFilterGroups = sortByBuiltinOrder(data.filter_groups);
   const expenseGroups = sortedFilterGroups.filter((g) => !isIncomeFilterGroupKey(g.key));
   const incomeGroups = sortedFilterGroups.filter((g) => isIncomeFilterGroupKey(g.key));
   const monthlyExpenseTrendGroups = expenseGroups.filter((group) =>
-    monthlyChartData.some((point) => Number((point as Record<string, unknown>)[group.key] ?? 0) > 0)
+    trendGroupSourcePoints.some((point) => Number((point as Record<string, unknown>)[group.key] ?? 0) > 0)
   );
   const expenseTrendGroups = monthlyExpenseTrendGroups.length > 0 ? monthlyExpenseTrendGroups : expenseGroups;
   const yearlyExpenseTrendGroupsRaw = expenseGroups.filter((group) =>
@@ -325,7 +359,7 @@ export function DashboardPage() {
   );
   const yearlyExpenseTrendGroups = yearlyExpenseTrendGroupsRaw.length > 0 ? yearlyExpenseTrendGroupsRaw : expenseGroups;
   const monthlyIncomeTrendGroups = incomeGroups.filter((group) =>
-    monthlyChartData.some((point) => Number((point as Record<string, unknown>)[group.key] ?? 0) > 0)
+    trendGroupSourcePoints.some((point) => Number((point as Record<string, unknown>)[group.key] ?? 0) > 0)
   );
   const incomeTrendGroups = sortByIncomeBarOrder(
     monthlyIncomeTrendGroups.length > 0 ? monthlyIncomeTrendGroups : incomeGroups
@@ -348,7 +382,7 @@ export function DashboardPage() {
   const yearlyMedianExpenseMonthMinor = median(yearlyExpenseMonths);
 
   const trendChartData =
-    viewMode === "month" ? limitTrendDataToMonthsWithData(monthlyChartData) : yearlyOverviewData;
+    viewMode === "month" ? takeLastTrendMonthPoints(monthViewTrendChartData) : yearlyOverviewData;
   const expenseOnlyGroups = sortedFilterGroups.filter((g) => !isIncomeFilterGroupKey(g.key));
   const expenseTrendGroupsFiltered =
     viewMode === "month"
@@ -360,7 +394,6 @@ export function DashboardPage() {
         );
   const trendGroups = sortByIncomeTrendOrder(viewMode === "month" ? expenseTrendGroupsFiltered : expenseTrendGroupsFiltered);
   const trendTitle = viewMode === "month" ? "Income vs Expense Trend" : `${selectedYear} Income vs Expense Trend`;
-
   return (
     <div className="dashboard-page-layout">
       <div className="stack-lg min-w-0">
@@ -373,6 +406,10 @@ export function DashboardPage() {
           <CardContent className="h-72 min-w-0">
             {viewMode === "year" && yearlyQueriesLoading ? (
               <p className="muted text-sm">Loading yearly trend...</p>
+            ) : viewMode === "month" && needsTrendAnchorQuery && trendAnchorDashboardQuery.isLoading ? (
+              <p className="muted text-sm">Loading trend...</p>
+            ) : viewMode === "month" && needsTrendAnchorQuery && trendAnchorDashboardQuery.isError ? (
+              <p className="error">Failed to load trend: {(trendAnchorDashboardQuery.error as Error).message}</p>
             ) : (
               <IncomeTrendChart
                 data={trendChartData}
@@ -386,7 +423,7 @@ export function DashboardPage() {
 
         <WorkspaceSection>
           <WorkspaceToolbar className="dashboard-toolbar">
-            <div className="field min-w-[220px]">
+            <div className="field dashboard-toolbar-view">
               <span>View</span>
               <div className="dashboard-view-toggle" role="tablist" aria-label="Dashboard period view">
                 <button
@@ -409,9 +446,22 @@ export function DashboardPage() {
                 </button>
               </div>
             </div>
-            <div className="field min-w-[180px]">
+            <DashboardTimelineStrip
+              viewMode={viewMode}
+              month={month}
+              selectedYear={selectedYear}
+              timelineMonths={timelineMonths}
+              timelineYears={timelineYears}
+              timelineScrollRef={timelineScrollRef}
+              registerTimelineItem={registerTimelineItem}
+              setTimelineMonth={setTimelineMonth}
+              onKeyDown={handleTimelineKeyDown}
+            />
+            <div className="field dashboard-toolbar-currency">
               <span>Currency</span>
-              <p className="rounded-md border border-input bg-muted/30 px-3 py-2 text-sm font-medium">{data.currency_code}</p>
+              <p className="box-border flex h-10 min-h-10 w-full items-center rounded-md border border-input bg-muted/30 px-3 text-sm font-medium leading-none">
+                {data.currency_code}
+              </p>
             </div>
           </WorkspaceToolbar>
 
@@ -432,8 +482,6 @@ export function DashboardPage() {
               </Button>
             ))}
           </div>
-
-          <p className="muted">{DASHBOARD_TABS.find((tab) => tab.id === activeTab)?.description}</p>
         </WorkspaceSection>
 
         {activeTab === "overview" ? (
@@ -487,19 +535,6 @@ export function DashboardPage() {
 
         {activeTab === "agent" ? <AgentCostDashboard /> : null}
       </div>
-
-      <DashboardTimelineRail
-        viewMode={viewMode}
-        month={month}
-        selectedYear={selectedYear}
-        timelineMonths={timelineMonths}
-        timelineYears={timelineYears}
-        timelineScrollRef={timelineScrollRef}
-        registerTimelineItem={registerTimelineItem}
-        setTimelineMonth={setTimelineMonth}
-        handleTimelineWheel={handleTimelineWheel}
-        handleTimelineKeyDown={handleTimelineKeyDown}
-      />
     </div>
   );
 }

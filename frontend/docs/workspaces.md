@@ -127,17 +127,16 @@
 
 ### `frontend/src/pages/DashboardPage.tsx`
 
-- tabbed analytics surface with `Overview`, `Spending`, `Breakdowns`, and `Insights`
+- tabbed analytics surface with `Overview`, `Spending`, `Breakdowns`, `Insights`, and `Agent`; tab buttons have no secondary description line under the row
 - route shell now uses the shared page header, a shared control surface, and `StatBlock` summaries instead of bespoke metric cards for the top-line KPIs
 - includes an explicit `Month` / `Year` mode toggle
-- uses a dedicated right-side timeline rail on wide screens for month/year selection, with centered snap-scrolling so the active month or year stays visually anchored
-- desktop wheel interaction is discrete: one wheel gesture advances one visible month or year with a smooth centered transition, and only expense-bearing months/years appear in the rail
-- on small screens the timeline falls back to a compact horizontal strip above the dashboard content
+- month and year scope use a horizontal strip in the same row as View and Currency: **View** (Month/Year toggle), **Period** (flexible middle column, only as wide as the gap between the side fields), **Currency**; on small screens those stack full-width; chips are oldest-to-newest left-to-right with the newest toward the trailing edge, overflow scrolls horizontally inside the Period column so only the visible viewport is “in frame” at once; vertical wheel on the strip maps to horizontal scrolling; click to select; arrow keys step selection when the strip is focused
+- only expense-bearing months/years appear in the timeline feed from the API
 - yearly mode moves annual trend charts into the active dashboard view instead of hiding them only inside `Insights`
 - uses Recharts with measured containers so charts render only after non-zero dimensions are available
 - dashboard totals and charts exclude internal transfers when both endpoints resolve to account-backed entity roots
 - monthly classification is driven by saved filter groups, including yearly views that fan out to month-scoped dashboard reads for the selected and previous years
-- the monthly and yearly `Income vs Expense Trend` charts render income as a standalone bar and expense as stacked filter-group segments using a restrained dashboard-specific palette rather than raw saved filter-group colors
+- the monthly and yearly `Income vs Expense Trend` charts stack income segments and expense filter-group segments (two stacks per month) using a restrained dashboard-specific palette; month view fixes the trend window to the last six months ending at the client’s current calendar month (not the timeline-selected month), and both modes show a grouped legend (Income, then Expense) with swatches in stack order
 - `Insights` is intentionally reduced to the largest-expenses table only; month mode shows the current month while year mode aggregates the selected year's largest expenses
 
 ## Filters
