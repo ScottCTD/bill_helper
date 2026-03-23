@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+import shutil
 from typing import Callable
 
 from fastapi import UploadFile
@@ -16,7 +17,9 @@ from starlette import status
 
 from backend.database import open_session
 from backend.enums_agent import AgentMessageRole, AgentRunStatus
-from backend.models_agent import AgentMessage, AgentMessageAttachment, AgentRun, AgentThread
+from backend.models_agent import AgentMessage, AgentRun, AgentThread
+from backend.config import get_settings
+from backend.services.agent.agent_attachment_bundle import ingest_agent_attachment_with_docling
 from backend.services.agent.attachments import create_message_attachment
 from backend.services.agent.context_tokens import count_context_tokens
 from backend.services.agent.message_history import build_llm_messages
@@ -26,8 +29,9 @@ from backend.services.agent.runtime import (
     start_agent_run,
 )
 from backend.services.agent.tool_runtime import build_openai_tool_schemas
-from backend.services.user_files import SOURCE_TYPE_AGENT_ATTACHMENT, STORAGE_AREA_UPLOAD, store_user_file_bytes
+from backend.services.crud_policy import PolicyViolation
 from backend.services.runtime_settings import resolve_runtime_settings
+from backend.services.user_files import resolve_user_file_path
 from backend.validation.runtime_settings import normalize_text_or_none
 
 
@@ -128,33 +132,51 @@ async def create_user_message_and_start_run(
     db.add(user_message)
     db.flush()
 
-    for upload in files:
-        mime_type = (upload.content_type or "").lower()
-        if not (mime_type.startswith("image/") or mime_type == "application/pdf"):
-            raise AgentExecutionPolicyError(
-                detail="Only image and PDF attachments are supported.",
-                status_code=status.HTTP_400_BAD_REQUEST,
+    bundle_dirs_to_cleanup: list[Path] = []
+    try:
+        for upload in files:
+            mime_type = (upload.content_type or "").lower()
+            if not (mime_type.startswith("image/") or mime_type == "application/pdf"):
+                raise AgentExecutionPolicyError(
+                    detail="Only image and PDF attachments are supported.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            file_bytes = await upload.read()
+            if len(file_bytes) > settings.agent_max_image_size_bytes:
+                raise AgentExecutionPolicyError(
+                    detail=f"Attachment too large. Max bytes allowed is {settings.agent_max_image_size_bytes}.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                user_file = ingest_agent_attachment_with_docling(
+                    db,
+                    owner_user_id=thread.owner_user_id,
+                    file_bytes=file_bytes,
+                    mime_type=mime_type,
+                    original_filename=upload.filename,
+                    timezone_name=get_settings().current_user_timezone,
+                )
+            except PolicyViolation as exc:
+                raise AgentExecutionPolicyError(
+                    detail=exc.detail,
+                    status_code=exc.status_code,
+                ) from exc
+            except RuntimeError as exc:
+                raise AgentExecutionPolicyError(
+                    detail="Attachment could not be parsed. Try a different file or format.",
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                ) from exc
+            bundle_dirs_to_cleanup.append(resolve_user_file_path(user_file).parent)
+            create_message_attachment(
+                db,
+                message_id=user_message.id,
+                user_file=user_file,
             )
-        file_bytes = await upload.read()
-        if len(file_bytes) > settings.agent_max_image_size_bytes:
-            raise AgentExecutionPolicyError(
-                detail=f"Attachment too large. Max bytes allowed is {settings.agent_max_image_size_bytes}.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-        user_file = store_user_file_bytes(
-            db,
-            owner_user_id=thread.owner_user_id,
-            storage_area=STORAGE_AREA_UPLOAD,
-            source_type=SOURCE_TYPE_AGENT_ATTACHMENT,
-            mime_type=mime_type,
-            file_bytes=file_bytes,
-            original_filename=upload.filename,
-        )
-        create_message_attachment(
-            db,
-            message_id=user_message.id,
-            user_file=user_file,
-        )
+    except AgentExecutionPolicyError:
+        for bundle_dir in bundle_dirs_to_cleanup:
+            shutil.rmtree(bundle_dir, ignore_errors=True)
+        db.rollback()
+        raise
 
     thread.updated_at = utc_now()
     db.add(thread)

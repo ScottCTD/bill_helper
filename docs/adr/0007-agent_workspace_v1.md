@@ -20,7 +20,7 @@ Adopt a canonical per-user file layer plus eager per-user workspace provisioning
 
 ### Canonical user files
 
-- Store durable user-visible files under `{data_dir}/user_files/{user_id}/{uploads,artifacts}`.
+- Store durable user-visible uploads under `{data_dir}/user_files/{user_id}/uploads`.
 - Add `user_files` as the source-of-truth registry for those files.
 - Rewire `agent_message_attachments` to reference `user_files.id` instead of storing attachment file metadata directly.
 - Keep the attachment API surface stable by deriving `mime_type`, `original_filename`, and absolute `file_path` from the linked canonical file row at serialization time.
@@ -31,11 +31,11 @@ Adopt a canonical per-user file layer plus eager per-user workspace provisioning
 - Provision one deterministic workspace definition per user:
   - container: `bill-helper-sandbox-{user_id}`
   - volume: `bill-helper-workspace-{user_id}`
-  - read-only bind mount: `{data_dir}/user_files/{user_id}` -> `/data`
+  - read-only bind mount: `{data_dir}/user_files/{user_id}/uploads` -> `/workspace/uploads`
   - writable volume mount: `{workspace volume}` -> `/workspace`
 - Create host directories, the named volume, and the named container definition eagerly during admin bootstrap and user creation.
 - Run `code-server` as the container's main process, publish its IDE port to localhost only, and persist IDE settings/extensions inside the same named workspace volume.
-- Structure the writable workspace volume so `/workspace` contains `workspace/` for user-created files and `user_data/` as a symlink to the friendly-name mirror stored under `/data/user_data`, while persisted IDE state lives in a hidden internal directory with startup migration for older layouts.
+- Structure the writable workspace volume so `/workspace` contains `scratch/` for user-created files, `uploads/` as the direct read-only bind mount, and persisted IDE state in a hidden internal directory.
 - Force built-in VS Code AI features off in the persisted `code-server` user settings so the per-user workspace IDE does not expose agent mode or related chat UI.
 - Keep the container stopped by default between uses, but authenticated browser sessions now best-effort auto-start it so the IDE is usually ready before the user opens `/workspace`.
 - Reuse the existing bearer-backed app session model by minting one narrow `HttpOnly` cookie for `/api/v1/workspace/ide/` instead of creating a second IDE-specific auth system.
@@ -50,7 +50,7 @@ Adopt a canonical per-user file layer plus eager per-user workspace provisioning
 
 ### Positive
 
-- Durable files now have one ownership model and one migration path for later artifact features.
+- Durable uploads now have one ownership model and one readable migration path for agent attachment bundles.
 - Agent uploads survive thread deletion, so future file catalog and workspace flows can reuse the same canonical records.
 - Per-user sandbox resources are deterministic, isolated by user, and now provide a first-class browser IDE without introducing a heavier SDK dependency.
 
@@ -64,4 +64,4 @@ Adopt a canonical per-user file layer plus eager per-user workspace provisioning
 
 - Active agent runs still do not expose arbitrary code execution.
 - No file catalog UI is introduced by this decision; the registry exists first so later UI and execution work can build on it.
-- Built-in `code-server` app/port proxying stays disabled in v1; the IDE only edits `/workspace` and reads `/data`.
+- Built-in `code-server` app/port proxying stays disabled in v1; the IDE edits `/workspace/scratch` and reads `/workspace/uploads`.

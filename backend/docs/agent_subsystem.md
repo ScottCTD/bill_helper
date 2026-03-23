@@ -31,7 +31,7 @@
 - `backend/services/agent/tool_runtime.py`
   - thin public seam for tool contracts plus runtime execution entrypoints
 - `backend/services/agent/tool_runtime_support/`
-  - grouped tool-runtime internals: `definitions.py` for tool metadata, `schema.py` for OpenAI schema inlining, `catalog_session.py` and `catalog_terminal.py` for the live runtime tool registry, `catalog.py` for merged runtime lookup, and `execution.py` for retry/error policy
+  - grouped tool-runtime internals: `definitions.py` for tool metadata, `schema.py` for OpenAI schema inlining, `catalog_session.py`, `catalog_terminal.py`, and `catalog_image.py` for the live runtime tool registry, `catalog.py` for merged runtime lookup, and `execution.py` for retry/error policy
 - `backend/services/agent/pricing.py`
   - LiteLLM-backed pricing helper
 - `backend/services/agent_dashboard.py`
@@ -44,6 +44,8 @@
   - session-tool package: `progress.py` for `send_intermediate_update`, `memory.py` for add-only persistent memory appends, and `threads.py` for short thread-topic updates
 - `backend/services/agent/terminal.py`
   - workspace terminal execution helper that injects per-command auth/thread/run context and executes shell commands inside the per-user workspace container
+- `backend/services/agent/read_image.py`
+  - on-demand workspace image reader that appends selected `/workspace/...` images back into the model conversation for vision-capable runs
 - `backend/services/agent/proposals/`
   - proposal-family package: `common.py` for shared proposal/thread helpers, `catalog.py` for tag/entity/account proposals, `entries.py` for entry proposal handlers, `groups.py` for group CRUD proposal flows, `group_memberships/` for membership canonicalization, validation, and handlers, family-owned normalization modules plus a small `normalization.py` registry for proposal payload canonicalization
 - `backend/services/agent/entry_references.py`
@@ -63,17 +65,21 @@
 - `backend/services/agent/attachments.py`
   - message-to-canonical-file linkage helpers
 - `backend/services/user_files.py`
-  - canonical per-user file storage, hashing, path management, and artifact promotion helpers
+  - canonical per-user upload storage, hashing, and path management helpers
 - `backend/services/agent_workspace.py`
   - per-user workspace spec building plus Docker-backed workspace provisioning/start-stop helpers
 - `backend/services/docker_cli.py`
   - thin Docker CLI adapter for image, volume, container, and exec lifecycle commands
 - `backend/services/agent/attachment_content.py`
-  - public attachment-content seam for message-history callers and tests
-- `backend/services/agent/attachment_content_pdf.py`
-  - PDF text extraction, OCR fallback, page rendering, and recoverable parse logging
+  - public attachment-content seam for message-history callers and tests (vision detection plus assembly exports)
+- `backend/services/agent/attachment_text_normalize.py`
+  - small text normalizer shared by tests and future extractors
+- `backend/services/agent/docling_convert.py`
+  - Docling standard pipeline (EasyOCR) plus readable `parsed.md`/image rewrite for bundle directories
+- `backend/services/agent/agent_attachment_bundle.py`
+  - dated `uploads/YYYY-MM-DD/<bundle>/raw.<ext>` paths, readable bundle naming, ingest + Docling before DB registration, bundle path predicates
 - `backend/services/agent/attachment_content_assembly.py`
-  - attachment display-name, data-url, and model-content part assembly helpers
+  - attachment display-name plus Docling bundle text/hint assembly helpers for initial model turns
 - `backend/services/agent/user_context.py`
   - current-user and account-context normalization
 - `backend/services/agent/runtime_state.py`
@@ -93,7 +99,7 @@
 - prompt rendering carries a run surface hint so Telegram-directed turns can request plain-text-friendly final answers
 - `Current User Context` includes timezone/date bullets plus `Entity Category Reference` and `Account Context`
 - `Agent Memory` is rendered as a markdown unordered list built from persisted runtime-setting memory items
-- the model-visible tool catalog is intentionally small: `rename_thread`, `send_intermediate_update`, `add_user_memory`, and `terminal`
+- the model-visible tool catalog is intentionally small: `rename_thread`, `send_intermediate_update`, `add_user_memory`, `terminal`, and `read_image`
 - app-state reads and proposal lifecycle work now flow through the workspace terminal and the installed `bh` CLI rather than the older large direct read/proposal tool list
 - duplicate-entry checks should happen before new entry proposals
 - tag/entity naming should stay canonical and generalized
@@ -178,9 +184,9 @@ Endpoints:
 - clients may hydrate a streamed `rename_thread` tool call immediately and update the visible thread title before the final assistant message arrives
 - `send_intermediate_update` is persisted as a `reasoning_update` event, not as a fake tool call
 - malformed tool-call JSON now persists an explicit tool-call error with raw argument text and decode metadata instead of being silently rewritten to an empty argument object
-- attachment-bearing user turns reach the model as ordered content parts: attachment text, then attachment images, then the typed user prompt
+- attachment-bearing user turns reach the model as ordered content parts: attachment text, then the typed user prompt
 - new agent uploads are written into the canonical per-user store under `{data_dir}/user_files/{owner_user_id}/uploads/...`, and `agent_message_attachments` link to those canonical rows instead of owning file metadata directly
-- PDFs use PyMuPDF first and then local Tesseract OCR only when native text extraction fails
+- PDF and image attachments are written into per-upload bundle directories, converted with Docling (standard pipeline + EasyOCR) on the API host, rewritten to `raw.<ext>` plus readable sibling image names, and exposed to the model as inline `parsed.md` text plus workspace image-path hints; the model can later call `read_image` to load selected bundle images on demand, and rows outside the dated bundle layout only receive a short re-upload hint at inference time
 - interruption marks runs as `failed` and injects interruption context into the next turn
 - pending proposals remain inspectable in later turns while still `PENDING_REVIEW`
 - reviewed proposal context now includes reviewer override values when `payload_override` changed the approved payload, so later turns can see concrete edited values instead of only changed field names

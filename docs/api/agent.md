@@ -41,7 +41,7 @@ Validation:
 
 ### `DELETE /agent/threads/{thread_id}`
 
-Delete one thread and its persisted timeline artifacts. Response: `204`
+Delete one thread and its persisted timeline records. Response: `204`
 
 Behavior:
 
@@ -91,10 +91,10 @@ Behavior:
 
 - thread lookup is owner-scoped
 - validates attachment count and size limits
-- persists the message and stores uploaded attachments under `{data_dir}/user_files/{owner_user_id}/uploads/...`
+- persists the message and stores uploaded attachments under `{data_dir}/user_files/{owner_user_id}/uploads/...` using dated readable bundle directories (`uploads/YYYY-MM-DD/<original-stem>/`, with `(N)` suffixes for collisions) and a fixed primary filename (`raw.<ext>`); Docling output (`parsed.md` plus readable referenced images) is written beside the primary file before the message is committed, and existing bundles can be migrated with `scripts/migrate_agent_upload_bundle_paths.py`
 - creates an `agent_runs` row with initial `status=running`
 - starts bounded tool-calling execution in background
-- PDFs are parsed with PyMuPDF first; vision-capable models also receive rendered page images
+- PDFs and images are converted with Docling (standard pipeline + EasyOCR on the API host); the initial model turn receives inline `parsed.md` plus absolute `/workspace/uploads/...` image-path hints, and later tool turns can load selected images on demand through `read_image`
 - provider routing resolves through LiteLLM using the requested `model_name` when supplied, otherwise the configured default model
 - proposal tool outputs include `proposal_id` and `proposal_short_id`
 
@@ -105,6 +105,7 @@ Errors:
 - `400` invalid payload
 - `400` selected `model_name` is not enabled in runtime settings
 - `404` thread not found
+- `422` attachment could not be parsed (Docling failure); no user message is persisted
 - `503` provider credentials unavailable
 
 ### `POST /agent/threads/{thread_id}/messages/stream`

@@ -16,7 +16,7 @@ TERMINAL_TOOLS: dict[str, AgentToolDefinition] = {
         description=(
             "Use this tool for shell work inside the current user's workspace container. "
             "Use `bh` for Bill Helper app operations, standard shell commands for local work under /workspace, "
-            "and read-only inspection under /data. "
+            "and read-only inspection under /workspace/uploads. "
             "Use `bh` when the task is about the Bill Helper app. "
         ),
         args_model=RunTerminalArgs,

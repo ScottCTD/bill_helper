@@ -56,7 +56,6 @@ def build_user_content(
     *,
     review_results_prefix: str | None = None,
     interruption_prefix: str | None = None,
-    include_pdf_page_images: bool = True,
 ) -> str | list[dict[str, Any]]:
     content_text = _compose_user_feedback_text(
         message,
@@ -68,11 +67,6 @@ def build_user_content(
 
     parts = attachment_content.assemble_attachment_parts(
         message.attachments,
-        options=attachment_content.AttachmentAssemblyOptions(
-            include_pdf_page_images=include_pdf_page_images,
-            pdf_text_extractor=attachment_content.extract_pdf_text_for_model,
-            pdf_page_image_renderer=attachment_content.pdf_page_image_data_urls,
-        ),
     )
 
     if content_text.strip():

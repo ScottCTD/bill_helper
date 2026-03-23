@@ -9,7 +9,7 @@ Bill Helper is a local-first personal finance ledger with AI-assisted, review-ga
 - Frontend SPA: React + TypeScript + Vite (`http://localhost:5173`)
 - Backend API: FastAPI (`http://localhost:8000`)
 - Database: SQLite (`{data_dir}/bill_helper.db`, default `~/.local/share/bill_helper/`)
-- Canonical user file storage: local filesystem under `{data_dir}/user_files/{user_id}/{uploads,artifacts}`
+- Canonical user file storage: local filesystem under `{data_dir}/user_files/{user_id}/uploads`
 - Per-user agent workspace resources: one named Docker volume plus one stopped-by-default named container definition per user
 
 ## High-Level Components
@@ -93,9 +93,9 @@ Contract notes:
 - `message_history.py`: public thread-to-model message assembly facade
 - `message_history_content.py`: attachment-backed user-content shaping and entity-category prompt context
 - `message_history_prefixes.py`: review-window queries and interruption-prefix composition
-- `attachment_content.py`: public attachment-content seam plus vision capability checks
-- `attachment_content_pdf.py`: PDF text extraction, OCR fallback, and page rendering
-- `attachment_content_assembly.py`: attachment part assembly and display/data-url helpers
+- `attachment_content.py`: public attachment-content seam plus vision capability checks used by attachment helpers and `read_image`
+- `docling_convert.py` / `agent_attachment_bundle.py`: Docling-based agent attachment parsing and bundle layout
+- `attachment_content_assembly.py`: attachment part assembly and workspace image-path hint helpers
 - `user_context.py`: current-user/account context normalization and truncation for prompt assembly
 - `model_client.py`: thin public seam for the LiteLLM client contract
 - `model_client_support/`: grouped environment, streaming, usage-normalization, and retrying client internals behind the public model-client seam
@@ -155,7 +155,7 @@ Cross-page consistency:
 - review apply uses the approving reviewer principal for scoped entry resolution and owner attribution, not mutable runtime settings identity
 - only image and PDF attachments are accepted in agent messages
 - active agent runs have workspace terminal execution through `terminal`; Bill Helper app operations are expected to flow through `bh`
-- provisioned workspaces mount only the owning user's canonical file root at `/data` as read-only and do not expose `bill_helper.db`
+- provisioned workspaces mount only the owning user's canonical upload root at `/workspace/uploads` as read-only and do not expose `bill_helper.db`
 
 ## Out of Scope (Current)
 

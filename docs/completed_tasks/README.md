@@ -16,6 +16,7 @@ This directory stores archived task docs after active work in `/tasks/*.md` is f
 
 ## Recent Archived Tasks
 
+- `2026_03_14-marker_pdf_parse.md`: archived task for replacing the PDF/image parsing pipeline with Docling standard mode, readable upload bundles, and on-demand attachment image reads through `read_image`.
 - `2026_03_20-agent_review_dependency_audit.md`: agent review dependency gates (pending/rejected tag and entity symmetry vs entries) and review modal change-type ordering; full policy matrix left as optional follow-up.
 - `2026_03_16-groups_member_cli_followup.md`: archived task; decision to keep `bh groups add-member` / `remove-member` JSON-only (no flag/subcommand UX for nested membership payloads).
 - `2026_03_16-brittle_cli_create.md`: archived task for replacing brittle JSON-based `bh * create` commands with exact flag-based CLI interfaces and better create-command errors.

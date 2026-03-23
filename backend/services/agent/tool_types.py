@@ -22,6 +22,7 @@ class ToolExecutionResult:
     output_text: str
     output_json: dict[str, Any]
     status: ToolExecutionStatus
+    llm_content: str | list[dict[str, Any]] | None = None
 
     def __post_init__(self) -> None:
         self.status = ToolExecutionStatus(self.status)

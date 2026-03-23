@@ -18,7 +18,7 @@ This file is the backend index. Use it to find the focused backend docs under `.
 - `backend/routers/auth.py` and `backend/routers/admin.py` own session-auth and admin management HTTP routes.
 - Services own domain policy, principal-scoped queries, and orchestration.
 - The agent subsystem lives under `backend/services/agent/*` with `backend/routers/agent.py` as a thin transport aggregator over the split `agent_threads.py`, `agent_runs.py`, `agent_reviews.py`, and `agent_attachments.py` modules.
-- Shared persistence and runtime configuration are centralized in `backend/database.py`, `backend/services/runtime_settings.py`, `backend/services/user_files.py`, `backend/services/user_file_workspace_view.py`, and `backend/services/agent_workspace.py`.
+- Shared persistence and runtime configuration are centralized in `backend/database.py`, `backend/services/runtime_settings.py`, `backend/services/user_files.py`, and `backend/services/agent_workspace.py`.
 - current-user workspace snapshot reads and file-tree shaping live in `backend/services/workspace_browser.py` with `backend/routers/workspace.py` as the HTTP boundary.
 
 ## Current Migration Head

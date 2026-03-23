@@ -5,7 +5,7 @@
 - `uv` for Python environment, scripts, and tests
 - `node` + `npm` for the frontend
 - `docker` for the default agent-workspace provisioning flow and Docker-backed workspace tests
-- `tesseract` if you want OCR fallback for image-only or redacted PDF uploads
+- Docling + EasyOCR run on the API host for agent PDF/image uploads (first Docling use may download models); ensure typical PyTorch/OpenCV system libraries are available in your environment if conversion fails at import or runtime
 
 ## First-Time Setup
 
@@ -35,7 +35,7 @@ Shared secrets and shared data therefore work across Git worktrees by default.
 Application data defaults to `~/.local/share/bill_helper/`.
 
 - default SQLite path: `~/.local/share/bill_helper/bill_helper.db`
-- canonical user-visible files: `~/.local/share/bill_helper/user_files/{user_id}/{uploads,artifacts}`
+- canonical user-visible files: `~/.local/share/bill_helper/user_files/{user_id}/uploads`
 - override with `BILL_HELPER_DATABASE_URL`
 - or override the root directory with `BILL_HELPER_DATA_DIR`
 
@@ -82,10 +82,10 @@ BILL_HELPER_DATA_DIR=./.data
 
 The backend now provisions one deterministic workspace definition per user:
 
-- host files: `{data_dir}/user_files/{user_id}/{uploads,artifacts}`
+- host files: `{data_dir}/user_files/{user_id}/uploads`
 - named volume: `bill-helper-workspace-{user_id}`
 - named container: `bill-helper-sandbox-{user_id}`
-- mounts: `/data` read-only from the user's canonical files and `/workspace` from the named volume
+- mounts: `/workspace/uploads` read-only from the user's canonical uploads and `/workspace` from the named volume
 
 Build the local image before running admin bootstrap or creating users through the admin API:
 

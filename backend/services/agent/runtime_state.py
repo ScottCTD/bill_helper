@@ -287,11 +287,12 @@ def extract_reasoning_from_tool_result(
 def tool_result_llm_message(
     prepared_tool_call: PreparedToolCall, result: ToolExecutionResult
 ) -> dict[str, Any]:
+    content = result.llm_content if result.llm_content is not None else result.output_text
     return {
         "role": "tool",
         "tool_call_id": prepared_tool_call.tool_call.get("id"),
         "name": prepared_tool_call.tool_name,
-        "content": result.output_text,
+        "content": content,
     }
 
 

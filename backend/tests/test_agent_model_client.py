@@ -460,6 +460,45 @@ def test_complete_injects_boundary_at_prev_tool_result_in_continued_loop(monkeyp
     ]
 
 
+def test_complete_preserves_multimodal_tool_message_content(monkeypatch):
+    captured_request: dict[str, object] = {}
+    client = _build_model_client()
+
+    def fake_completion(**kwargs):
+        captured_request.update(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="Done", tool_calls=[])
+                )
+            ],
+            usage={"input_tokens": 4, "output_tokens": 1},
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    client.complete(
+        [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Inspect the uploaded figure."},
+            {
+                "role": "tool",
+                "tool_call_id": "call_1",
+                "name": "read_image",
+                "content": [
+                    {"type": "text", "text": "Loaded one image."},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                ],
+            },
+        ]
+    )
+
+    messages = captured_request["messages"]
+    assert isinstance(messages, list)
+    assert isinstance(messages[-1]["content"], list)
+    assert messages[-1]["content"][0]["type"] == "text"
+    assert messages[-1]["content"][1]["type"] == "image_url"
+
+
 def test_complete_injects_second_to_last_user_for_multi_turn(monkeypatch):
     """New turn with history: second-to-last user message enables cross-turn cache reuse."""
     captured_request: dict[str, object] = {}

@@ -44,7 +44,7 @@ Stops the current user's workspace container and returns the same snapshot shape
 
 Behavior notes:
 
-- canonical files under `/data` remain untouched
+- canonical uploads under `/workspace/uploads` remain untouched
 - the named Docker volume stays intact, so `/workspace` contents persist across later restarts
 - logout and admin session revocation stop that user's container after the session revoke is committed, even if other app sessions for that user still exist
 - backend shutdown also runs a best-effort sweep that stops all running workspace containers
@@ -56,15 +56,15 @@ Bearer-authenticated launch helper for the current principal.
 Response shape:
 
 - `launch_url`: relative same-origin IDE URL, typically `/api/v1/workspace/ide/?folder=/workspace`
-- when the IDE opens `/workspace`, the writable volume root exposes `workspace/` for writable user files and `user_data/` as a symlink into the canonical read-only file tree (`/data/user_data/{uploads,artifacts}`), with friendly names derived from `display_name` / original filename while editor state is kept in a hidden internal directory
-- the shipped workspace image also preinstalls the `chocolatedesue.modern-pdf-preview` extension and seeds minimal `code-server` user defaults so first launch skips the welcome page, keeps the opened folder trusted, and renders PDF entries in `user_data/` directly inside the IDE
+- when the IDE opens `/workspace`, the root exposes `scratch/` for writable work and `uploads/` as the direct read-only canonical upload tree, while editor state is kept in a hidden internal directory
+- the shipped workspace image also preinstalls the `chocolatedesue.modern-pdf-preview` extension and seeds minimal `code-server` user defaults so first launch skips the welcome page, keeps the opened folder trusted, and renders PDF entries in `uploads/` directly inside the IDE
 - `snapshot`: the same workspace snapshot shape returned by `GET /workspace`
 
 Behavior notes:
 
 - ensures the user's workspace container is running
 - waits for the `code-server` HTTP endpoint to become reachable
-- the container startup expects the current volume layout only and does not migrate older `.code-server`, flat `/workspace`, or legacy `user_data` directory shapes
+- the container startup expects the current volume layout only and does not migrate older nested-workspace or legacy mirror directory shapes
 - sets a path-scoped `HttpOnly` workspace cookie for `/api/v1/workspace/ide/`
 - reuses the current bearer session token inside that cookie rather than creating a second workspace-auth model
 

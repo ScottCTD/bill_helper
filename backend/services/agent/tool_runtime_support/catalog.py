@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Collection
 from typing import Any
 
+from backend.services.agent.tool_runtime_support.catalog_image import IMAGE_TOOLS
 from backend.services.agent.tool_runtime_support.catalog_session import SESSION_TOOLS
 from backend.services.agent.tool_runtime_support.catalog_terminal import TERMINAL_TOOLS
 from backend.services.agent.tool_runtime_support.definitions import AgentToolDefinition
@@ -16,12 +17,14 @@ from backend.services.agent.tool_runtime_support.definitions import AgentToolDef
 TOOLS: dict[str, AgentToolDefinition] = {
     **SESSION_TOOLS,
     **TERMINAL_TOOLS,
+    **IMAGE_TOOLS,
 }
 EXPOSED_RUNTIME_TOOL_NAMES: tuple[str, ...] = (
     "rename_thread",
     "send_intermediate_update",
     "add_user_memory",
     "terminal",
+    "read_image",
 )
 
 

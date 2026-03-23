@@ -8,8 +8,8 @@
 - Alembic
 - SQLite
 - LiteLLM for model-provider routing
-- PyMuPDF for PDF extraction and rendering
-- local `tesseract` as OCR fallback
+- Docling (standard pipeline + EasyOCR) for agent PDF/image attachment parsing on the API host
+- PyMuPDF retained as a dev/test helper for synthetic PDF bytes in tests only
 - Docker CLI for per-user workspace provisioning
 
 ## Entry Points
@@ -88,13 +88,13 @@ Relevant modules:
 
 Current behavior:
 
-- user creation and admin bootstrap eagerly create `{data_dir}/user_files/{user_id}/{uploads,artifacts}`
+- user creation and admin bootstrap eagerly create `{data_dir}/user_files/{user_id}/uploads`
 - when `agent_workspace_enabled=true`, those same flows also ensure the named Docker volume `bill-helper-workspace-{user_id}` and the named `code-server` container definition `bill-helper-sandbox-{user_id}`
-- the provisioned container mounts the user's canonical file root at `/data` as read-only and a named volume at `/workspace`; the IDE-visible `user_data/` tree is no longer a separate bind mount
-- the workspace image runs `code-server` as its main process, publishes its IDE port to localhost only, and uses a structured volume root where editable files live under `/workspace/workspace` and `/workspace/user_data` is a symlink to `/data/user_data/{uploads,artifacts}`, exposing friendly-name symlinks instead of raw storage UUIDs
-- the workspace image also installs the Python package entrypoint `bh`, which the agent uses from the workspace terminal for backend-backed app operations
+- the provisioned container mounts the user's canonical upload root at `/workspace/uploads` as read-only and a named volume at `/workspace` for writable scratch files plus IDE state
+- the workspace image runs `code-server` as its main process, publishes its IDE port to localhost only, and uses a direct volume root where editable files live under `/workspace/scratch`, read-only uploads live under `/workspace/uploads`, and persisted IDE state lives in `/workspace/.ide`
+- the workspace image installs `bh` via `pip install --no-deps` on the local package after an explicit `docker/agent-workspace-requirements.txt` pass (V1 scientific stack plus `httpx`/`pydantic` for the CLI)—it does **not** install the full API dependency graph from `pyproject.toml`; rebuild `bill-helper-agent-workspace:latest` and recreate running `bill-helper-sandbox-*` containers after changing the workspace Dockerfile or requirements file
 - the workspace image preinstalls the OpenVSX web-compatible PDF viewer extension `chocolatedesue.modern-pdf-preview`, syncs it into each workspace, and seeds minimal `code-server` user defaults so first launch skips the welcome page, keeps folders trusted, and opens mounted PDFs in single-page mode without manual setup
-- the workspace entrypoint expects the current layout only: `/workspace/workspace`, `/workspace/.ide`, and `/workspace/user_data -> /data/user_data`; if `user_data` is not a symlink, startup fails instead of migrating old layouts
+- the workspace entrypoint expects the current layout only: `/workspace/scratch`, `/workspace/uploads`, and `/workspace/.ide`; it does not migrate older nested-workspace or legacy mirror layouts
 - `ensure_user_workspace_provisioned()` enforces the current image/label/port/mount contract and recreates mismatched containers onto the current revision without compatibility shims for older mount layouts
 - `GET /api/v1/workspace` reports current container state, IDE readiness, and degraded launch reason for the authenticated user
 - when the configured workspace image is missing, `GET /api/v1/workspace` returns a snapshot with `status="image_missing"` so the UI can still explain the missing image instead of returning `503`

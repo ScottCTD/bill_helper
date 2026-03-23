@@ -12,8 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.config import get_settings
 from backend.enums_agent import AgentMessageRole
-from backend.models_agent import AgentMessage
-from backend.services.agent import attachment_content
+from backend.models_agent import AgentMessage, AgentMessageAttachment
 from backend.services.agent.message_history_content import (
     build_entity_category_context as _build_entity_category_context,
 )
@@ -42,15 +41,16 @@ def build_llm_messages(
 ) -> list[dict[str, Any]]:
     settings = resolve_runtime_settings(db)
     owner_user = load_thread_owner_user(db, thread_id=thread_id)
-    include_pdf_page_images = attachment_content.model_supports_vision(
-        model_name or settings.agent_model
-    )
 
     history = list(
         db.scalars(
             select(AgentMessage)
             .where(AgentMessage.thread_id == thread_id)
-            .options(selectinload(AgentMessage.attachments))
+            .options(
+                selectinload(AgentMessage.attachments).selectinload(
+                    AgentMessageAttachment.user_file
+                )
+            )
             .order_by(AgentMessage.created_at.asc())
         )
     )
@@ -103,7 +103,6 @@ def build_llm_messages(
                         message,
                         review_results_prefix=message_review_prefix,
                         interruption_prefix=message_interruption_prefix,
-                        include_pdf_page_images=include_pdf_page_images,
                     ),
                 }
             )

@@ -58,7 +58,7 @@ Useful commands:
 
 - session auth stores only SHA-256 token digests in `sessions`
 - deleting a user cascades through owned finance resources, agent threads, and sessions
-- canonical user-visible files persist under `{data_dir}/user_files/{user_id}/{uploads,artifacts}`
+- canonical user-visible files persist under `{data_dir}/user_files/{user_id}/uploads`
 - agent message attachments are durable `user_files` rows linked from `agent_message_attachments`
 - deleting a thread removes thread-scoped DB rows only; it no longer deletes uploaded payload files from disk
 - admin bootstrap and user-create flows eagerly provision user file roots plus named Docker workspace resources when workspace provisioning is enabled

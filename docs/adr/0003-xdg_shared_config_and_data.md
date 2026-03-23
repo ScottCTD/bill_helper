@@ -4,7 +4,7 @@
 - Date: 2026-03-04
 - Deciders: scottcui
 
-Update 2026-03-14: ADR 0007 supersedes the original agent-file sublayout. Shared data still lives under `~/.local/share/bill_helper/`, but durable user-visible files now live under `user_files/{user_id}/{uploads,artifacts}` instead of `agent_uploads/`.
+Update 2026-03-22: ADR 0007 supersedes the original agent-file sublayout. Shared data still lives under `~/.local/share/bill_helper/`, but durable user-visible files now live under `user_files/{user_id}/uploads` instead of `agent_uploads/`.
 
 ## Context
 
@@ -85,7 +85,6 @@ class Settings(BaseSettings):
 └── user_files/                   # Canonical per-user durable files
     └── {user_id}/
         ├── uploads/
-        └── artifacts/
 ```
 
 ### Environment-Specific Behavior

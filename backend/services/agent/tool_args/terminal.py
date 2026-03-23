@@ -24,7 +24,7 @@ class RunTerminalArgs(ToolArgsModel):
     )
     cwd: str | None = Field(
         default=None,
-        description="Optional working directory inside the workspace container. Defaults to the workspace root `/workspace/workspace`.",
+        description="Optional working directory inside the workspace container. Defaults to the writable scratch root `/workspace/scratch`.",
     )
     timeout_seconds: int = Field(
         default=120,

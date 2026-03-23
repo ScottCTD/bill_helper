@@ -46,7 +46,7 @@ Primary tables:
 - `entry_group_members`: direct membership rows connecting a group to either an entry or a child group.
 - `accounts`, `account_snapshots`: account metadata and reconciliation checkpoints.
 - `users`: normalized owners used by entries/accounts/groups/filter groups.
-- `user_files`: canonical per-user registry for durable uploads and future workspace artifacts.
+- `user_files`: canonical per-user registry for durable uploads.
 - `entities`: normalized names for `from`/`to` and account-linked entities.
 - `tags`, `entry_tags`: tag catalog and many-to-many entry mapping.
 - `filter_groups`: per-user saved analytics filters with recursive rule definitions.

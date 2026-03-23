@@ -63,6 +63,18 @@ def image_exists(*, docker_binary: str, image: str) -> bool:
         return False
 
 
+def image_id(*, docker_binary: str, image: str) -> str | None:
+    try:
+        result = _run_docker(
+            docker_binary=docker_binary,
+            args=["image", "inspect", image, "--format", "{{.Id}}"],
+        )
+    except DockerCliError:
+        return None
+    image_identifier = result.stdout.strip()
+    return image_identifier or None
+
+
 def ensure_volume(*, docker_binary: str, volume_name: str) -> None:
     try:
         _run_docker(docker_binary=docker_binary, args=["volume", "inspect", volume_name])
@@ -121,7 +133,7 @@ def create_container(
     container_name: str,
     image: str,
     workspace_volume_name: str,
-    data_bind_source: str,
+    uploads_bind_source: str,
     published_tcp_ports: list[int] | None = None,
     labels: dict[str, str] | None = None,
 ) -> None:
@@ -134,7 +146,7 @@ def create_container(
         "--mount",
         f"type=volume,src={workspace_volume_name},dst=/workspace",
         "--mount",
-        f"type=bind,src={data_bind_source},dst=/data,readonly",
+        f"type=bind,src={uploads_bind_source},dst=/workspace/uploads,readonly",
     ]
     for tcp_port in published_tcp_ports or []:
         args.extend(["--publish", f"127.0.0.1::{tcp_port}/tcp"])

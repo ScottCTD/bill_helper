@@ -142,6 +142,13 @@ def test_create_empty_snapshot_writes_metadata_and_invokes_stamp(tmp_path, monke
     assert stamped_paths == [snap_dir / "db.sqlite3"]
 
 
+def test_migrate_agent_upload_bundle_paths_script_imports():
+    import importlib
+
+    mod = importlib.import_module("scripts.migrate_agent_upload_bundle_paths")
+    assert callable(mod.main)
+
+
 def test_check_docs_sync_reports_latest_migration_file():
     from scripts import check_docs_sync
 

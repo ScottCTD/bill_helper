@@ -1,29 +1,22 @@
 # CALLING SPEC:
-# - Purpose: implement focused service logic for `attachment_content_assembly`.
-# - Inputs: callers that import `backend/services/agent/attachment_content_assembly.py` and pass module-defined arguments or framework events.
-# - Outputs: service functions, contracts, or helpers exported by `attachment_content_assembly`.
-# - Side effects: module-defined persistence, validation, or orchestration behavior.
+# - Purpose: build multimodal LLM parts for agent attachments (Docling bundle layout).
+# - Inputs: persisted ``AgentMessageAttachment`` rows and assembly options.
+# - Outputs: OpenAI-style content part dicts.
+# - Side effects: reads canonical files from disk.
 from __future__ import annotations
 
-import base64
-from collections.abc import Callable
-from dataclasses import dataclass
+import re
 from pathlib import Path
 from typing import Any
 
 from backend.models_agent import AgentMessageAttachment
-from backend.services.agent.attachment_content_pdf import (
-    extract_pdf_text_for_model,
-    pdf_page_image_data_urls,
+from backend.services.agent.agent_attachment_bundle import (
+    is_docling_bundle_primary_stored_path,
+    workspace_uploads_prefix_for_primary_stored_path,
 )
 
-
-def attachment_to_data_url(file_path: str, mime_type: str) -> str | None:
-    path = Path(file_path)
-    if not path.exists():
-        return None
-    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-    return f"data:{mime_type};base64,{encoded}"
+_MARKDOWN_IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
 def is_pdf_attachment(attachment: AgentMessageAttachment) -> bool:
@@ -41,42 +34,111 @@ def attachment_display_name(attachment: AgentMessageAttachment) -> str:
     return fallback_name or "attachment"
 
 
-@dataclass(slots=True)
-class AttachmentAssemblyOptions:
-    include_pdf_page_images: bool = True
-    pdf_text_extractor: Callable[[str], tuple[str | None, str | None]] | None = None
-    pdf_page_image_renderer: Callable[[str], list[str]] | None = None
+def _vision_image_paths_for_bundle(
+    bundle_dir: Path,
+    md_text: str,
+    *,
+    primary_path: Path,
+) -> list[Path]:
+    seen: set[str] = set()
+    ordered: list[Path] = []
+    for _alt, raw in _MARKDOWN_IMAGE.findall(md_text):
+        base = Path(raw.strip().replace("\\", "/")).name
+        candidate = bundle_dir / base
+        if (
+            candidate.is_file()
+            and candidate.resolve() != primary_path.resolve()
+            and base not in seen
+        ):
+            seen.add(base)
+            ordered.append(candidate)
+    for entry in sorted(bundle_dir.iterdir(), key=lambda item: item.name):
+        if not entry.is_file() or entry.name == "parsed.md":
+            continue
+        if entry.resolve() == primary_path.resolve():
+            continue
+        if entry.suffix.lower() not in _IMAGE_SUFFIXES:
+            continue
+        if entry.name in seen:
+            continue
+        seen.add(entry.name)
+        ordered.append(entry)
+    return ordered
+
+
+def _assemble_docling_bundle_parts(
+    attachment: AgentMessageAttachment,
+    *,
+    attachment_name: str,
+) -> list[dict[str, Any]]:
+    primary = Path(attachment.file_path)
+    bundle_dir = primary.parent
+    parsed_path = bundle_dir / "parsed.md"
+    if not parsed_path.is_file():
+        return [
+            {
+                "type": "text",
+                "text": (
+                    f"Attachment {attachment_name} is missing Docling output (parsed.md). "
+                    "Re-upload the file to regenerate the bundle."
+                ),
+            }
+        ]
+    md_text = parsed_path.read_text(encoding="utf-8", errors="replace")
+    stored = attachment.user_file.stored_relative_path
+    prefix = workspace_uploads_prefix_for_primary_stored_path(stored)
+    path_lines = ""
+    image_paths = _vision_image_paths_for_bundle(bundle_dir, md_text, primary_path=primary)
+    has_visual_paths = bool(image_paths) or (
+        not is_pdf_attachment(attachment) and primary.suffix.lower() in _IMAGE_SUFFIXES
+    )
+    if prefix:
+        path_lines = (
+            "Workspace paths:\n"
+            f"- {prefix}/{primary.name}\n"
+            f"- {prefix}/parsed.md\n"
+        )
+        for img in image_paths:
+            path_lines += f"- {prefix}/{img.name}\n"
+    image_note = ""
+    if has_visual_paths:
+        image_note = (
+            "\nRelated images are available in the workspace. "
+            "Use `read_image` with the listed `/workspace/...` paths only if visual inspection is needed."
+        )
+    header = (
+        f"Attachment {attachment_name} (Docling markdown + related workspace images).\n"
+        f"{path_lines}\n"
+        f"{image_note}\n"
+        f"--- parsed.md ---\n{md_text}"
+    )
+    return [{"type": "text", "text": header}]
+
+
+def _non_bundle_reupload_parts(attachment_name: str, *, is_pdf: bool) -> list[dict[str, Any]]:
+    kind = "PDF" if is_pdf else "image"
+    return [
+        {
+            "type": "text",
+            "text": (
+                f"Attachment {attachment_name} is not stored as a dated Docling bundle; "
+                f"re-upload the {kind} so it can be parsed."
+            ),
+        }
+    ]
 
 
 def assemble_pdf_attachment_parts(
     attachment: AgentMessageAttachment,
     *,
     attachment_name: str,
-    options: AttachmentAssemblyOptions,
 ) -> list[dict[str, Any]]:
-    pdf_text_extractor = options.pdf_text_extractor or extract_pdf_text_for_model
-    pdf_text, pdf_source = pdf_text_extractor(attachment.file_path)
-    if pdf_text:
-        parts: list[dict[str, Any]] = [
-            {
-                "type": "text",
-                "text": f"PDF file {attachment_name} ({pdf_source}):\n{pdf_text}",
-            }
-        ]
-    else:
-        parts = [
-            {
-                "type": "text",
-                "text": f"PDF file {attachment_name} was provided, but parsing returned no content.",
-            }
-        ]
-    if options.include_pdf_page_images:
-        pdf_page_image_renderer = options.pdf_page_image_renderer or pdf_page_image_data_urls
-        parts.extend(
-            {"type": "image_url", "image_url": {"url": data_url}}
-            for data_url in pdf_page_image_renderer(attachment.file_path)
+    if is_docling_bundle_primary_stored_path(attachment.user_file.stored_relative_path):
+        return _assemble_docling_bundle_parts(
+            attachment,
+            attachment_name=attachment_name,
         )
-    return parts
+    return _non_bundle_reupload_parts(attachment_name, is_pdf=True)
 
 
 def assemble_image_attachment_parts(
@@ -84,24 +146,16 @@ def assemble_image_attachment_parts(
     *,
     attachment_name: str,
 ) -> list[dict[str, Any]]:
-    data_url = attachment_to_data_url(attachment.file_path, attachment.mime_type)
-    if data_url is None:
-        return [
-            {
-                "type": "text",
-                "text": f"Image file {attachment_name} was provided, but the file could not be loaded.",
-            }
-        ]
-    return [
-        {"type": "text", "text": f"Image file {attachment_name}:"},
-        {"type": "image_url", "image_url": {"url": data_url}},
-    ]
+    if is_docling_bundle_primary_stored_path(attachment.user_file.stored_relative_path):
+        return _assemble_docling_bundle_parts(
+            attachment,
+            attachment_name=attachment_name,
+        )
+    return _non_bundle_reupload_parts(attachment_name, is_pdf=False)
 
 
 def assemble_attachment_parts(
     attachments: list[AgentMessageAttachment],
-    *,
-    options: AttachmentAssemblyOptions,
 ) -> list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
     for attachment in attachments:
@@ -111,7 +165,6 @@ def assemble_attachment_parts(
                 assemble_pdf_attachment_parts(
                     attachment,
                     attachment_name=attachment_name,
-                    options=options,
                 )
             )
             continue

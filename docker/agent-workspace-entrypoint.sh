@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mkdir -p /workspace/workspace
+mkdir -p /workspace/scratch
 mkdir -p /workspace/.ide/code-server/User
 mkdir -p /workspace/.ide/extensions
 
@@ -10,18 +10,34 @@ PREINSTALLED_PDF_EXTENSION_VSIX=/opt/code-server-preinstalled-vsix/chocolatedesu
 python - <<'PY'
 import json
 from pathlib import Path
+import shutil
 
 workspace_root = Path("/workspace")
-visible_user_data_root = workspace_root / "user_data"
-mounted_user_data_root = Path("/data/user_data")
 ide_root = workspace_root / ".ide"
 code_server_user_data_root = ide_root / "code-server"
 settings_path = code_server_user_data_root / "User" / "settings.json"
-if visible_user_data_root.exists() and not visible_user_data_root.is_symlink():
-    raise SystemExit("/workspace/user_data must be a symlink to /data/user_data")
+scratch_root = workspace_root / "scratch"
+legacy_workspace_root = workspace_root / "workspace"
+legacy_user_data_root = workspace_root / "user_data"
 
-if not visible_user_data_root.exists():
-    visible_user_data_root.symlink_to(mounted_user_data_root)
+scratch_root.mkdir(parents=True, exist_ok=True)
+(workspace_root / "uploads").mkdir(parents=True, exist_ok=True)
+
+if legacy_user_data_root.is_symlink() or legacy_user_data_root.is_file():
+    legacy_user_data_root.unlink(missing_ok=True)
+elif legacy_user_data_root.is_dir():
+    shutil.rmtree(legacy_user_data_root, ignore_errors=True)
+
+if legacy_workspace_root.is_dir():
+    for entry in sorted(legacy_workspace_root.iterdir(), key=lambda item: item.name):
+        target = scratch_root / entry.name
+        if target.exists():
+            continue
+        shutil.move(str(entry), str(target))
+    try:
+        legacy_workspace_root.rmdir()
+    except OSError:
+        pass
 
 settings_data: dict[str, object] = {}
 

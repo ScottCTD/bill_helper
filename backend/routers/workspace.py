@@ -10,7 +10,6 @@ import logging
 from fastapi import APIRouter, Depends, Request, Response, WebSocket
 from fastapi.responses import Response as FastAPIResponse
 import httpx
-from sqlalchemy.orm import Session
 import websockets
 
 from backend.auth.contracts import AuthenticatedSessionContext, RequestPrincipal
@@ -19,10 +18,8 @@ from backend.auth.dependencies import (
     get_current_principal,
     get_current_principal_from_cookie,
 )
-from backend.database import get_db
 from backend.schemas_workspace import WorkspaceIdeSessionRead, WorkspaceSnapshotRead
 from backend.services.agent_workspace import start_user_workspace, stop_user_workspace
-from backend.services.user_file_workspace_view import sync_user_file_workspace_view
 from backend.services.workspace_browser import build_user_workspace_snapshot
 from backend.services.workspace_ide import (
     WORKSPACE_IDE_SESSION_COOKIE_NAME,
@@ -42,29 +39,23 @@ logger = logging.getLogger(__name__)
 
 @router.get("", response_model=WorkspaceSnapshotRead)
 def get_workspace_snapshot(
-    db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_current_principal),
 ) -> WorkspaceSnapshotRead:
-    sync_user_file_workspace_view(db, user_id=principal.user_id)
     return _workspace_snapshot_response(user_id=principal.user_id)
 
 
 @router.post("/start", response_model=WorkspaceSnapshotRead)
 def start_workspace(
-    db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_current_principal),
 ) -> WorkspaceSnapshotRead:
-    sync_user_file_workspace_view(db, user_id=principal.user_id)
     start_user_workspace(user_id=principal.user_id)
     return _workspace_snapshot_response(user_id=principal.user_id)
 
 
 @router.post("/stop", response_model=WorkspaceSnapshotRead)
 def stop_workspace(
-    db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_current_principal),
 ) -> WorkspaceSnapshotRead:
-    sync_user_file_workspace_view(db, user_id=principal.user_id)
     stop_user_workspace(user_id=principal.user_id)
     return _workspace_snapshot_response(user_id=principal.user_id)
 
@@ -73,10 +64,8 @@ def stop_workspace(
 def create_workspace_ide_session(
     request: Request,
     response: Response,
-    db: Session = Depends(get_db),
     auth_context: AuthenticatedSessionContext = Depends(get_current_auth_context),
 ) -> WorkspaceIdeSessionRead:
-    sync_user_file_workspace_view(db, user_id=auth_context.principal.user_id)
     launch = launch_user_workspace_ide(
         user_id=auth_context.principal.user_id,
         request=request,

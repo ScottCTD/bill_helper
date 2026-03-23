@@ -33,8 +33,8 @@ from backend.services.agent.tool_types import ToolContext, ToolExecutionResult, 
 from backend.services.agent_workspace import start_user_workspace
 from backend.services.sessions import create_session, revoke_session_by_id, utc_now
 
-_DEFAULT_WORKSPACE_ROOT = "/workspace/workspace"
-_DEFAULT_DATA_ROOT = "/workspace/user_data"
+_DEFAULT_WORKSPACE_ROOT = "/workspace/scratch"
+_DEFAULT_DATA_ROOT = "/workspace/uploads"
 _MAX_OUTPUT_CHARS = 12000
 logger = logging.getLogger(__name__)
 

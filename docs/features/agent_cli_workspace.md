@@ -9,13 +9,14 @@ The old model-visible tool catalog kept growing across reads, proposals, and rev
 - it consumed model context with many overlapping tool descriptions
 - it made extension work expensive because every new domain capability wanted a new model-facing tool
 
-The current design reduces the model-visible surface to one general workspace terminal tool plus a few tiny session tools, then moves Bill Helper app operations behind the installed `bh` CLI.
+The current design reduces the model-visible surface to one general workspace terminal tool, one focused on-demand image reader, and a few tiny session tools, then moves Bill Helper app operations behind the installed `bh` CLI.
 
 ## Current Model-Visible Tool Surface
 
 The runtime catalog exposed to the model now contains only:
 
 - `terminal`
+- `read_image`
 - `send_intermediate_update`
 - `rename_thread`
 - `add_user_memory`
@@ -24,13 +25,15 @@ This means the old direct CRUD/read tool surface is fully replaced at the model 
 
 The old read/proposal/review handler modules still exist in backend code, but they are now internal building blocks behind backend APIs and `bh`.
 
+`read_image` is intentionally narrow: it loads existing `/workspace/...` image files into a later tool turn when attachment hints or workspace inspection show that visual evidence is needed. It does not replace `terminal` or `bh` for app operations.
+
 ## Terminal Contract
 
 `terminal` executes the provided command verbatim via `bash -lc` inside the current user's Docker workspace container.
 
 Default behavior:
 
-- cwd defaults to `/workspace/workspace`
+- cwd defaults to `/workspace/scratch`
 - multiline shell snippets, heredocs, pipes, redirects, and standard shell composition are supported
 - output is truncated safely when needed
 - stdout and stderr are returned separately

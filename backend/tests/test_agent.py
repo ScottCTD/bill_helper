@@ -5,6 +5,8 @@ import time
 from pathlib import Path
 from threading import Event
 
+import pytest
+
 from backend.database import open_session
 from backend.tests.agent_test_utils import (
     build_pdf_bytes,
@@ -14,6 +16,47 @@ from backend.tests.agent_test_utils import (
     send_message,
     wait_for_run_completion,
 )
+
+_MINI_PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+    b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+def _stub_convert_upload_bundle_source(source_path: Path, *, is_pdf: bool) -> Path:
+    bundle_dir = source_path.parent
+    name_lower = bundle_dir.name.lower()
+    if not is_pdf:
+        (bundle_dir / "parsed.md").write_text(
+            "# Docling (test stub)\n\nImage upload converted.\n",
+            encoding="utf-8",
+        )
+        return bundle_dir / "parsed.md"
+    lines = ["# Docling (test stub)", "", f"file: {source_path.name}", ""]
+    if "statement" in name_lower:
+        lines.append("Invoice total CAD 123.45")
+        lines.append("Page one invoice line item")
+        (bundle_dir / "statement-fig.png").write_bytes(_MINI_PNG)
+        lines.append("")
+        lines.append("![](statement-fig.png)")
+    if "invoice" in name_lower:
+        lines.extend(["Page one invoice line item", "Page two invoice line item"])
+        for fname in ("p1.png", "p2.png"):
+            (bundle_dir / fname).write_bytes(_MINI_PNG)
+            lines.append(f"![]({fname})")
+    if "scan" in name_lower:
+        lines.append("OCR recovered statement total CAD 123.45")
+    md = bundle_dir / "parsed.md"
+    md.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return md
+
+
+@pytest.fixture(autouse=True)
+def _stub_agent_docling_convert(monkeypatch):
+    monkeypatch.setattr(
+        "backend.services.agent.agent_attachment_bundle.convert_upload_bundle_source",
+        _stub_convert_upload_bundle_source,
+    )
 
 
 def _patch_terminal_success(monkeypatch, *, stdout: str = "schema: name|type\ngroceries|expense") -> None:
@@ -26,7 +69,7 @@ def _patch_terminal_success(monkeypatch, *, stdout: str = "schema: name|type\ngr
                 "OK\n"
                 "summary: terminal command completed\n"
                 "exit_code: 0\n"
-                "cwd: /workspace/workspace\n"
+                "cwd: /workspace/scratch\n"
                 "duration_ms: 1\n"
                 "stdout_truncated: False\n"
                 "stderr_truncated: False\n"
@@ -36,7 +79,7 @@ def _patch_terminal_success(monkeypatch, *, stdout: str = "schema: name|type\ngr
             output_json={
                 "summary": "terminal command completed",
                 "command": arguments["command"],
-                "cwd": "/workspace/workspace",
+                "cwd": "/workspace/scratch",
                 "exit_code": 0,
                 "stdout": stdout,
                 "stderr": "",
@@ -448,12 +491,12 @@ def test_default_agent_model_matches_config_default():
 
 
 def test_model_supports_vision_has_manual_override_for_openrouter_qwen_qwen3_5_27b(monkeypatch):
-    from backend.services.agent import message_history
+    from backend.services.agent import attachment_content
 
-    monkeypatch.setattr(message_history.attachment_content.litellm, "supports_vision", lambda _model: False)
+    monkeypatch.setattr(attachment_content.litellm, "supports_vision", lambda _model: False)
 
-    assert message_history.attachment_content.model_supports_vision("openrouter/qwen/qwen3.5-27b") is True
-    assert message_history.attachment_content.model_supports_vision("qwen/qwen3.5-27b") is True
+    assert attachment_content.model_supports_vision("openrouter/qwen/qwen3.5-27b") is True
+    assert attachment_content.model_supports_vision("qwen/qwen3.5-27b") is True
 
 
 def test_pdf_line_normalization_collapses_internal_whitespace_and_trims_edges():
@@ -474,12 +517,8 @@ def test_send_message_rejects_unsupported_attachment_type(client):
     assert response.json()["detail"] == "Only image and PDF attachments are supported."
 
 
-def test_pdf_attachment_includes_pymupdf_text_without_pdf_page_images_when_vision_is_disabled(client, monkeypatch):
-    from backend.services.agent import message_history
-
+def test_pdf_attachment_includes_docling_markdown_without_eager_images(client, monkeypatch):
     captured_messages: list[list[dict]] = []
-
-    monkeypatch.setattr(message_history.attachment_content, "model_supports_vision", lambda *_args, **_kwargs: False)
 
     def capture_model(messages):
         captured_messages.append(messages)
@@ -504,8 +543,10 @@ def test_pdf_attachment_includes_pymupdf_text_without_pdf_page_images_when_visio
     user_content = user_messages[-1].get("content")
     assert isinstance(user_content, list)
     assert [part.get("type") for part in user_content] == ["text", "text"]
-    assert user_content[0].get("text", "").startswith("PDF file statement.pdf (parsed with PyMuPDF text extraction):")
-    assert "Invoice total CAD" in user_content[0].get("text", "")
+    first_text = user_content[0].get("text", "")
+    assert "statement.pdf" in first_text
+    assert "Docling" in first_text or "parsed.md" in first_text
+    assert "Invoice total CAD" in first_text
     assert user_content[1].get("text") == "Please summarize this attachment."
 
     detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
@@ -516,12 +557,8 @@ def test_pdf_attachment_includes_pymupdf_text_without_pdf_page_images_when_visio
     assert first_user["attachments"][0]["mime_type"] == "application/pdf"
 
 
-def test_pdf_attachment_adds_page_images_when_vision_is_enabled(client, monkeypatch):
-    from backend.services.agent import message_history
-
+def test_pdf_attachment_lists_docling_figure_images_without_eager_image_parts(client, monkeypatch):
     captured_messages: list[list[dict]] = []
-
-    monkeypatch.setattr(message_history.attachment_content, "model_supports_vision", lambda *_args, **_kwargs: True)
 
     def capture_model(messages):
         captured_messages.append(messages)
@@ -550,68 +587,19 @@ def test_pdf_attachment_adds_page_images_when_vision_is_enabled(client, monkeypa
     assert user_messages
     user_content = user_messages[-1].get("content")
     assert isinstance(user_content, list)
-    assert [part.get("type") for part in user_content] == ["text", "image_url", "image_url", "text"]
-    assert user_content[0].get("text", "").startswith("PDF file invoice.pdf (parsed with PyMuPDF text extraction):")
-    assert "Page one invoice line item" in user_content[0].get("text", "")
-    assert "Page two invoice line item" in user_content[0].get("text", "")
-    image_parts = user_content[1:3]
-    assert len(image_parts) == 2
-    assert all(
-        str(part.get("image_url", {}).get("url", "")).startswith("data:image/png;base64,")
-        for part in image_parts
-    )
+    assert [part.get("type") for part in user_content] == ["text", "text"]
+    head = user_content[0].get("text", "")
+    assert "invoice.pdf" in head
+    assert "Page one invoice line item" in head
+    assert "Page two invoice line item" in head
+    assert "Use `read_image`" in head
+    assert "/workspace/uploads/" in head
+    assert ".png" in head
     assert user_content[-1].get("text") == "Read every page."
 
 
-def test_pdf_attachment_uses_tesseract_ocr_when_pymupdf_text_is_empty(client, monkeypatch):
-    from backend.services.agent import message_history
-
-    captured_messages: list[list[dict]] = []
-
-    monkeypatch.setattr(message_history.attachment_content, "model_supports_vision", lambda *_args, **_kwargs: False)
-    monkeypatch.setattr(
-        message_history.attachment_content,
-        "extract_pdf_text_for_model",
-        lambda _file_path: (
-            "OCR recovered statement total CAD 123.45",
-            "parsed with Tesseract OCR; expect imperfect text",
-        ),
-    )
-
-    def capture_model(messages):
-        captured_messages.append(messages)
-        return {"role": "assistant", "content": "Processed OCR PDF text."}
-
-    patch_model(monkeypatch, capture_model)
-
-    thread = create_thread(client)
-    pdf_bytes = build_pdf_bytes(["Source content is ignored because OCR is mocked."])
-    run = send_message(
-        client,
-        thread["id"],
-        "Please summarize this scan.",
-        files=[("scan.pdf", pdf_bytes, "application/pdf")],
-    )
-
-    assert run["status"] == "completed"
-    assert captured_messages
-
-    user_messages = [message for message in captured_messages[-1] if message.get("role") == "user"]
-    assert user_messages
-    user_content = user_messages[-1].get("content")
-    assert isinstance(user_content, list)
-    assert [part.get("type") for part in user_content] == ["text", "text"]
-    assert user_content[0].get("text", "").startswith("PDF file scan.pdf (parsed with Tesseract OCR; expect imperfect text):")
-    assert "OCR recovered statement total CAD 123.45" in user_content[0].get("text", "")
-    assert user_content[1].get("text") == "Please summarize this scan."
-
-
 def test_attachment_parts_stay_before_user_prompt_for_mixed_uploads(client, monkeypatch):
-    from backend.services.agent import message_history
-
     captured_messages: list[list[dict]] = []
-
-    monkeypatch.setattr(message_history.attachment_content, "model_supports_vision", lambda *_args, **_kwargs: True)
 
     def capture_model(messages):
         captured_messages.append(messages)
@@ -638,12 +626,13 @@ def test_attachment_parts_stay_before_user_prompt_for_mixed_uploads(client, monk
     assert user_messages
     user_content = user_messages[-1].get("content")
     assert isinstance(user_content, list)
-    assert [part.get("type") for part in user_content] == ["text", "image_url", "text", "image_url", "text"]
-    assert user_content[0].get("text", "").startswith("PDF file statement.pdf (parsed with PyMuPDF text extraction):")
-    assert user_content[2].get("text") == "Image file receipt.png:"
-    assert str(user_content[1].get("image_url", {}).get("url", "")).startswith("data:image/png;base64,")
-    assert str(user_content[3].get("image_url", {}).get("url", "")).startswith("data:image/png;base64,")
-    assert user_content[4].get("text") == "Compare both files."
+    assert [part.get("type") for part in user_content] == ["text", "text", "text"]
+    assert "statement.pdf" in user_content[0].get("text", "")
+    assert "Use `read_image`" in user_content[0].get("text", "")
+    assert "receipt.png" in user_content[1].get("text", "")
+    assert "parsed.md" in user_content[1].get("text", "")
+    assert "Use `read_image`" in user_content[1].get("text", "")
+    assert user_content[2].get("text") == "Compare both files."
 
 
 def test_system_prompt_includes_current_date_tag():
@@ -882,11 +871,13 @@ def test_tool_catalog_exposes_only_terminal_and_retained_session_tools():
     assert "rename_thread" in names
     assert "send_intermediate_update" in names
     assert "terminal" in names
+    assert "read_image" in names
     assert names == [
         "add_user_memory",
         "rename_thread",
         "send_intermediate_update",
         "terminal",
+        "read_image",
     ]
 
 
@@ -2053,6 +2044,7 @@ def test_runtime_tool_registry_only_contains_current_tools():
         "rename_thread",
         "terminal",
         "send_intermediate_update",
+        "read_image",
     }
 
 

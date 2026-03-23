@@ -60,7 +60,7 @@
 
 ### 2.4 Agent Features
 
-- **Attachments:** Image and PDF; vision models get page images. PDFs: text extraction first; OCR fallback when extraction returns empty (e.g. redacted PDFs).
+- **Attachments:** Image and PDF; uploads are parsed with Docling into inline `parsed.md` plus workspace image-path hints, and the agent can call `read_image` later when visual inspection is needed.
 - **Surface context:** Telegram gets adapted prompts/replies.
 - **Model selection:** Dropdown to pick from available models; can change mid-conversation.
 - **Bulk mode:** One thread per attached file, concurrent limit configurable.

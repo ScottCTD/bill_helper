@@ -64,7 +64,7 @@ def test_run_terminal_injects_cli_context_and_scrubs_token(client, monkeypatch) 
 
     assert result.status.value == "ok"
     assert captured["command"] == ["bash", "-lc", "bh status"]
-    assert captured["workdir"] == "/workspace/workspace"
+    assert captured["workdir"] == "/workspace/scratch"
     assert captured["env"]["BH_THREAD_ID"] == thread["id"]
     assert captured["env"]["BH_RUN_ID"] == run["id"]
     assert captured["env"]["BH_API_BASE_URL"]

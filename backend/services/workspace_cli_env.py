@@ -9,8 +9,8 @@ from backend.config import Settings, get_settings
 from backend.services import docker_cli
 from backend.services.agent_workspace import build_user_workspace_spec
 
-_WORKSPACE_ROOT = "/workspace/workspace"
-_DATA_ROOT = "/workspace/user_data"
+_WORKSPACE_ROOT = "/workspace/scratch"
+_DATA_ROOT = "/workspace/uploads"
 _CONFIG_PATH = "/workspace/.ide/bh-env.json"
 _SHELL_PATH = "/workspace/.ide/bh-shell-env.sh"
 _BASHRC_PATH = "/home/app/.bashrc"

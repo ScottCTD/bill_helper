@@ -62,14 +62,14 @@ def _docker_available() -> bool:
 
 
 def test_mount_source_match_accepts_docker_desktop_host_prefix() -> None:
-    expected = Path("/Users/scottcui/.local/share/bill_helper/user_files/user-1")
+    expected = Path("/Users/scottcui/.local/share/bill_helper/user_files/user-1/uploads")
 
     assert _mount_source_matches_expected(  # noqa: SLF001
-        mount_source="/host_mnt/Users/scottcui/.local/share/bill_helper/user_files/user-1",
+        mount_source="/host_mnt/Users/scottcui/.local/share/bill_helper/user_files/user-1/uploads",
         expected_source=expected,
     )
     assert not _mount_source_matches_expected(  # noqa: SLF001
-        mount_source="/host_mnt/Users/scottcui/.local/share/bill-helper/user_files/user-1",
+        mount_source="/host_mnt/Users/scottcui/.local/share/bill-helper/user_files/user-1/uploads",
         expected_source=expected,
     )
 
@@ -157,8 +157,8 @@ def test_bootstrap_and_admin_user_create_provision_named_workspace_resources(wor
         mounts = inspected.get("Mounts", [])
         config = inspected.get("Config", {})
         labels = config.get("Labels", {}) if isinstance(config, dict) else {}
-        assert admin_spec.data_bind_source.exists()
-        assert user_spec.data_bind_source.exists()
+        assert admin_spec.uploads_bind_source.exists()
+        assert user_spec.uploads_bind_source.exists()
         assert docker_cli.container_exists(docker_binary="docker", container_name=admin_spec.container_name)
         assert docker_cli.container_exists(docker_binary="docker", container_name=user_spec.container_name)
         assert labels.get("bill-helper.user-id") == created_user.id
@@ -166,13 +166,13 @@ def test_bootstrap_and_admin_user_create_provision_named_workspace_resources(wor
         assert any(mount.get("Name") == user_spec.volume_name for mount in mounts if isinstance(mount, dict))
         assert any(
             mount.get("Type") == "bind"
-            and mount.get("Destination") == "/data"
+            and mount.get("Destination") == "/workspace/uploads"
             and mount.get("RW") is False
             for mount in mounts
             if isinstance(mount, dict)
         )
         assert not any(
-            mount.get("Type") == "bind" and mount.get("Destination") == "/workspace/user_data"
+            mount.get("Type") == "bind" and mount.get("Destination") == "/data"
             for mount in mounts
             if isinstance(mount, dict)
         )
@@ -184,7 +184,7 @@ def test_bootstrap_and_admin_user_create_provision_named_workspace_resources(wor
         )
         workspace_session.commit()
 
-        assert not user_spec.data_bind_source.exists()
+        assert not user_spec.uploads_bind_source.exists()
         assert not docker_cli.container_exists(docker_binary="docker", container_name=user_spec.container_name)
     finally:
         remove_user_workspace(user_id=created_user.id)
@@ -227,24 +227,19 @@ def test_workspace_container_mounts_data_read_only_and_workspace_persists(worksp
         docker_cli.exec_in_container(
             docker_binary="docker",
             container_name=spec.container_name,
-            command=["bash", "-lc", f"test -f /data/uploads/{uploaded_name}"],
+            command=["bash", "-lc", f"test -f /workspace/uploads/{uploaded_name}"],
         )
         with pytest.raises(docker_cli.DockerCliError):
             docker_cli.exec_in_container(
                 docker_binary="docker",
                 container_name=spec.container_name,
-                command=["bash", "-lc", "echo no >/data/uploads/should-fail.txt"],
+                command=["bash", "-lc", "echo no >/workspace/uploads/should-fail.txt"],
             )
 
         docker_cli.exec_in_container(
             docker_binary="docker",
             container_name=spec.container_name,
-            command=["bash", "-lc", "echo persisted >/workspace/workspace/persist.txt"],
-        )
-        docker_cli.exec_in_container(
-            docker_binary="docker",
-            container_name=spec.container_name,
-            command=["bash", "-lc", "test ! -e /data/bill_helper.db"],
+            command=["bash", "-lc", "echo persisted >/workspace/scratch/persist.txt"],
         )
     finally:
         stop_user_workspace(user_id=admin.id)
@@ -254,7 +249,7 @@ def test_workspace_container_mounts_data_read_only_and_workspace_persists(worksp
         persisted = docker_cli.exec_in_container(
             docker_binary="docker",
             container_name=spec.container_name,
-            command=["bash", "-lc", "cat /workspace/workspace/persist.txt"],
+            command=["bash", "-lc", "cat /workspace/scratch/persist.txt"],
         )
         code_server_settings = docker_cli.exec_in_container(
             docker_binary="docker",
@@ -280,24 +275,14 @@ def test_workspace_container_mounts_data_read_only_and_workspace_persists(worksp
                 "find /workspace -maxdepth 1 -mindepth 1 ! -name '.*' -printf '%f\\n' | sort",
             ],
         )
-        workspace_user_data_link = docker_cli.exec_in_container(
-            docker_binary="docker",
-            container_name=spec.container_name,
-            command=["bash", "-lc", "readlink /workspace/user_data"],
-        )
-        user_data_listing = docker_cli.exec_in_container(
+        workspace_upload_listing = docker_cli.exec_in_container(
             docker_binary="docker",
             container_name=spec.container_name,
             command=[
                 "bash",
                 "-lc",
-                "find -L /workspace/user_data/uploads -maxdepth 1 -mindepth 1 -printf '%f\\n' | sort",
+                "find /workspace/uploads -maxdepth 1 -mindepth 1 -printf '%f\\n' | sort",
             ],
-        )
-        listing = docker_cli.exec_in_container(
-            docker_binary="docker",
-            container_name=spec.container_name,
-            command=["bash", "-lc", "find /data -maxdepth 2 -type f | sort"],
         )
         assert "persisted" in persisted.stdout
         assert '"chat.disableAIFeatures": true' in code_server_settings.stdout
@@ -310,11 +295,8 @@ def test_workspace_container_mounts_data_read_only_and_workspace_persists(worksp
         assert "tomoki1207.pdf" not in installed_extensions.stdout
         assert "modern-pdf-preview" not in obsolete_extensions.stdout
         assert "tomoki1207.pdf" not in obsolete_extensions.stdout
-        assert workspace_root_listing.stdout.splitlines() == ["user_data", "workspace"]
-        assert workspace_user_data_link.stdout.strip() == "/data/user_data"
-        assert user_data_listing.stdout == "evidence.txt\n"
-        assert "/data/uploads/" in listing.stdout
-        assert "bill_helper.db" not in listing.stdout
+        assert workspace_root_listing.stdout.splitlines() == ["scratch", "uploads"]
+        assert workspace_upload_listing.stdout == "evidence.txt\n"
 
         snapshot = build_user_workspace_snapshot(user_id=admin.id)
         assert snapshot.status == "running"

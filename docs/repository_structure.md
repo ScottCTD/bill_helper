@@ -123,8 +123,7 @@
 - `serializers.py`: ORM-to-schema mapping helpers.
 - `taxonomy.py`: shared taxonomy normalization, term assignment, and usage-count helpers.
 - `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, including DB-backed ordered `user_memory` and `available_agent_models` support.
-- `user_files.py`: canonical per-user file path management, atomic writes/imports, hashing, and artifact-promotion helpers.
-- `user_file_workspace_view.py`: backend-managed read-only workspace mirror stored under each user's canonical file root and exposed inside the IDE as `/workspace/user_data`.
+- `user_files.py`: canonical per-user upload path management, atomic writes/imports, hashing, and readable stored-filename helpers.
 - `docker_cli.py`: thin Docker CLI adapter for image/volume/container lifecycle helpers.
 - `agent_workspace.py`: deterministic per-user workspace spec construction plus Docker-backed provisioning/start-stop/remove helpers.
 - `workspace_browser.py`: current-user workspace snapshot shaping for lifecycle and IDE launch state.
@@ -140,7 +139,9 @@
   - `execution.py`: agent execution-policy service (message intake/run lifecycle/context-token reads) plus benchmark/test execution facade methods.
   - `attachments.py`: message-to-canonical-file linkage helpers for attachment rows.
   - `attachment_content.py`: public attachment-content seam plus vision capability checks.
-  - `attachment_content_pdf.py`: PDF text extraction, OCR fallback, render, and recoverable parse helpers.
+  - `docling_convert.py`: Docling standard-pipeline conversion and referenced markdown export for agent bundles
+  - `agent_attachment_bundle.py`: dated upload bundle paths, Docling orchestration, and workspace path helpers
+  - `agent_upload_bundle_relocate.py`: one-shot relocate of bundle dirs to created-at dates and readable folder names
   - `attachment_content_assembly.py`: attachment display-name, data-url, and model-content assembly helpers.
   - `message_history.py`: public thread-to-model message assembly seam.
   - `message_history_content.py`: attachment-backed user-content shaping and entity-category prompt context helpers.
@@ -282,6 +283,7 @@
 - `/scripts/seed_defaults.py`: reset local DB and seed default tags, entity categories, and accounts; optional user-memory copy now has explicit error policy (`best_effort` default, optional `fail_fast`) and shared DB factory usage.
 - `/scripts/seed_demo.py`: local seed dataset generation.
 - `/scripts/bootstrap_admin.py`: create or reset an admin password-backed login and upgrade the database to head when needed.
+- `/scripts/migrate_agent_upload_bundle_paths.py`: migrate Docling bundle dirs to ``uploads/<created-at-date>/<readable-bundle>/raw.<ext>`` and rewrite readable sibling assets (optional admin one-shot).
 - `/scripts/setup_shared_env.sh`: copies `.env` (or `.env.example`) to `~/.config/bill-helper/.env` for cross-worktree secret sharing.
 - `/scripts/check_docs_sync.py`: docs consistency checks (migration refs + stale term detection + index links).
 - `/.data` (runtime, legacy): per-worktree SQLite DB override location (ignored in git). Default data location is `~/.local/share/bill_helper/`.

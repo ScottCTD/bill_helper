@@ -19,9 +19,10 @@ This feature doc describes the current billing assistant architecture, prompt sh
 
 The current assistant is a review-gated tool-calling runtime with a deliberately small model-visible surface:
 
-- the model sees only `rename_thread`, `send_intermediate_update`, `add_user_memory`, and `terminal`
+- the model sees only `rename_thread`, `send_intermediate_update`, `add_user_memory`, `terminal`, and `read_image`
 - Bill Helper app reads, proposal creation/updates/removal, and review actions now happen through the installed `bh` CLI inside the workspace container
 - `terminal` is the bridge for both local workspace file work and backend-backed Bill Helper operations
+- `read_image` is the narrow multimodal escape hatch for loading specific `/workspace/...` images only when attachment hints or later workspace work make visual inspection necessary
 - proposals still create `AgentChangeItem` rows first; direct ledger mutation still happens only in review apply handlers
 
 The old read/proposal/review modules still exist internally, but no longer as direct model-facing tools. They are now backend building blocks reused by proposal HTTP routes, normalization, patching, and apply logic.
@@ -34,8 +35,8 @@ The old read/proposal/review modules still exist internally, but no longer as di
 | Model client | `backend/services/agent/model_client.py`, `backend/services/agent/model_client_support/` | LiteLLM integration, retry behavior, streaming delta normalization, and usage accounting |
 | Prompt assembly | `backend/services/agent/system_prompt.j2`, `backend/services/agent/prompts.py` | Behavior rules, current-user context, `bh` cheat sheet insertion, and memory injection |
 | Message history | `backend/services/agent/message_history.py`, `backend/services/agent/message_history_content.py`, `backend/services/agent/attachment_content.py` | Thread history shaping, attachment extraction, PDF/image handling, and review/interruption prefixing |
-| Runtime-visible tool catalog | `backend/services/agent/tool_runtime_support/catalog.py`, `backend/services/agent/tool_runtime_support/catalog_session.py`, `backend/services/agent/tool_runtime_support/catalog_terminal.py` | Exact tool schemas exposed to the model |
-| Workspace execution | `backend/services/agent/terminal.py`, `backend/services/docker_cli.py`, `backend/services/agent_workspace.py` | Workspace startup, short-lived session injection, shell execution, output truncation, and secret scrubbing |
+| Runtime-visible tool catalog | `backend/services/agent/tool_runtime_support/catalog.py`, `backend/services/agent/tool_runtime_support/catalog_session.py`, `backend/services/agent/tool_runtime_support/catalog_terminal.py`, `backend/services/agent/tool_runtime_support/catalog_image.py` | Exact tool schemas exposed to the model |
+| Workspace execution | `backend/services/agent/terminal.py`, `backend/services/agent/read_image.py`, `backend/services/docker_cli.py`, `backend/services/agent_workspace.py` | Workspace startup, short-lived session injection, shell execution, on-demand image reads, output truncation, and secret scrubbing |
 | CLI | `backend/cli/main.py`, `backend/cli/support.py`, `backend/cli/rendering.py`, `backend/cli/reference.py` | Thin HTTP client, compact/text rendering, and prompt/doc reference metadata |
 | Internal domain helpers | `backend/services/agent/read_tools/`, `backend/services/agent/proposals/`, `backend/services/agent/proposal_http.py`, `backend/services/agent/proposal_patching.py` | Lookup helpers plus proposal normalization, metadata, and patching reused behind APIs and review/apply |
 | Review/apply | `backend/services/agent/reviews/`, `backend/services/agent/apply/`, `backend/routers/agent.py`, `backend/routers/agent_proposals.py` | Proposal inspection, approve/reject/reopen transitions, reviewer overrides, and canonical mutations |
@@ -47,14 +48,15 @@ The old read/proposal/review modules still exist internally, but no longer as di
 2. Backend persists the message, attachments, and a new `agent_runs` row.
 3. Runtime builds the system prompt, current-user context, entity-category context, user memory section, and message history.
 4. If the thread is untitled, the runtime exposes only `rename_thread`.
-5. After the thread has a valid title, the runtime exposes the four-tool catalog.
+5. After the thread has a valid title, the runtime exposes the five-tool catalog.
 6. The model uses `send_intermediate_update` before meaningful tool-call batches.
 7. For Bill Helper app work, the model calls `terminal` and executes `bh ...` inside the workspace container.
 8. `terminal` ensures the workspace is running, mints a short-lived backend session, injects `BH_*` env, executes `bash -lc`, truncates output when needed, and revokes the temporary session afterward.
-9. `bh` calls backend routes for reads and current-thread proposal lifecycle actions.
-10. Proposal creation stores pending `AgentChangeItem` rows scoped to the current thread and run.
-11. Human review approves, rejects, or reopens proposals.
-12. Only approval apply handlers mutate the real domain tables.
+9. When an upload hint lists related image paths, the model can call `read_image` later to append only the selected `/workspace/...` images for visual inspection.
+10. `bh` calls backend routes for reads and current-thread proposal lifecycle actions.
+11. Proposal creation stores pending `AgentChangeItem` rows scoped to the current thread and run.
+12. Human review approves, rejects, or reopens proposals.
+13. Only approval apply handlers mutate the real domain tables.
 
 ## Prompt Shape
 
@@ -85,6 +87,20 @@ Important current behavior:
 ## Runtime-Visible Tool Contracts
 
 The model-visible tool surface is intentionally small, but it is still documented exactly here.
+
+### Attachment Content The Agent Sees
+
+For a newly uploaded PDF or image bundle, the initial user turn is text-first. The agent sees:
+
+- one attachment text block per uploaded file before the user’s free-text prompt
+- absolute workspace paths, including:
+  - `raw.<ext>`
+  - `parsed.md`
+  - all related image paths under `/workspace/uploads/...`
+- a short note telling the agent to use `read_image` only when visual inspection is needed
+- the full `parsed.md` contents inline under a `--- parsed.md ---` delimiter
+
+The initial attachment block does not include any eager `image_url` parts anymore, even for vision-capable models.
 
 <!-- GENERATED:runtime-tool-contracts:start -->
 ### `add_user_memory`
@@ -127,7 +143,7 @@ Arguments:
 
 Description:
 
-Use this tool for shell work inside the current user's workspace container. Use `bh` for Bill Helper app operations, standard shell commands for local work under /workspace, and read-only inspection under /data. Use `bh` when the task is about the Bill Helper app. 
+Use this tool for shell work inside the current user's workspace container. Use `bh` for Bill Helper app operations, standard shell commands for local work under /workspace, and read-only inspection under /workspace/uploads. Use `bh` when the task is about the Bill Helper app. 
 
 Arguments:
 
@@ -135,12 +151,71 @@ Arguments:
   description: Shell command to execute verbatim via `bash -lc`. May include newlines, pipes, redirects, command substitution, or heredocs.
   constraints: minLength=1
 - `cwd: string | null`
-  description: Optional working directory inside the workspace container. Defaults to the workspace root `/workspace/workspace`.
+  description: Optional working directory inside the workspace container. Defaults to the writable scratch root `/workspace/scratch`.
   constraints: default=None
 - `timeout_seconds: integer`
   description: Command timeout in seconds. Defaults to 120. Allowed range: 1 to 600.
   constraints: minimum=1, maximum=600, default=120
+
+### `read_image`
+
+Description:
+
+Load one or more image files that already exist inside the current user's workspace container and append them for visual inspection. Use this when an attachment note lists related image paths or when you discover relevant image files under /workspace.
+
+Arguments:
+
+- `paths: list[string]` required
+  description: Absolute image paths inside the current user's workspace container. Use paths already shown in attachment workspace hints or discovered in `/workspace`.
+  constraints: minItems=1
 <!-- GENERATED:runtime-tool-contracts:end -->
+
+### `read_image` Output Contract
+
+On success, the backend stores the normal tool-call payload and also appends a multimodal `role=tool` message to the next model call.
+
+Persisted tool-call JSON:
+
+```json
+{
+  "status": "ok",
+  "summary": "loaded N image(s)",
+  "paths": [
+    "/workspace/uploads/2026-03-22/example/raw.png",
+    "/workspace/scratch/chart.png"
+  ],
+  "image_count": 2
+}
+```
+
+Model-facing tool message content:
+
+```json
+[
+  {
+    "type": "text",
+    "text": "Loaded image(s) for visual inspection:\n- /workspace/uploads/2026-03-22/example/raw.png\n- /workspace/scratch/chart.png"
+  },
+  {
+    "type": "image_url",
+    "image_url": {
+      "url": "data:image/png;base64,..."
+    }
+  },
+  {
+    "type": "image_url",
+    "image_url": {
+      "url": "data:image/png;base64,..."
+    }
+  }
+]
+```
+
+Failure behavior:
+
+- non-vision models receive a normal tool error and no image parts are appended
+- invalid paths, missing files, non-image files, paths outside `/workspace`, and over-limit requests fail the whole tool call
+- duplicate input paths are silently deduped while preserving first-seen order
 
 ## `bh` CLI Contract
 

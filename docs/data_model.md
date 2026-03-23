@@ -271,13 +271,13 @@ Deletion semantics:
 
 ## `user_files`
 
-Purpose: canonical registry for durable user-visible files, including agent uploads and future workspace artifacts.
+Purpose: canonical registry for durable user-visible uploads, including agent attachment bundles.
 
 Fields:
 
 - `id` (PK UUID string)
 - `owner_user_id` (FK -> `users.id`)
-- `storage_area` (`upload` or `artifact`)
+- `storage_area` (currently `upload`)
 - `source_type` (string origin marker such as `agent_message_attachment`)
 - `stored_relative_path` (owner-local relative path under `user_files/{user_id}`)
 - `original_filename`
@@ -289,7 +289,7 @@ Fields:
 
 Operational notes:
 
-- files live under `{data_dir}/user_files/{user_id}/{uploads,artifacts}`
+- files live under `{data_dir}/user_files/{user_id}/uploads`
 - `(owner_user_id, stored_relative_path)` is unique
 - deleting a thread removes attachment rows but does not delete canonical file payloads from disk
 

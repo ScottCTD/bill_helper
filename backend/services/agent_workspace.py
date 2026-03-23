@@ -18,11 +18,11 @@ from starlette import status
 from backend.config import Settings, get_settings
 from backend.services import docker_cli
 from backend.services.crud_policy import PolicyViolation
-from backend.services.user_files import ensure_user_file_roots, user_file_owner_root
+from backend.services.user_files import ensure_user_file_roots, user_upload_root
 
 WORKSPACE_CONTAINER_PREFIX = "bill-helper-sandbox-"
 WORKSPACE_VOLUME_PREFIX = "bill-helper-workspace-"
-WORKSPACE_CONTAINER_REVISION = "ide-v12"
+WORKSPACE_CONTAINER_REVISION = "ide-v13"
 WORKSPACE_IDE_PORT = 13337
 WORKSPACE_IDE_READY_TIMEOUT_SECONDS = 12.0
 
@@ -38,12 +38,12 @@ class UserWorkspaceSpec:
     docker_binary: str
     container_name: str
     volume_name: str
-    data_bind_source: Path
+    uploads_bind_source: Path
     container_revision: str
     ide_port: int
     ide_launch_path: str
     workspace_mount_path: str = "/workspace"
-    data_mount_path: str = "/data"
+    uploads_mount_path: str = "/workspace/uploads"
 
 
 @dataclass(slots=True, frozen=True)
@@ -69,7 +69,7 @@ def build_user_workspace_spec(
         docker_binary=resolved_settings.agent_workspace_docker_binary,
         container_name=f"{WORKSPACE_CONTAINER_PREFIX}{user_id}",
         volume_name=f"{WORKSPACE_VOLUME_PREFIX}{user_id}",
-        data_bind_source=user_file_owner_root(
+        uploads_bind_source=user_upload_root(
             user_id=user_id,
             data_dir=resolved_settings.data_dir,
         ).resolve(),
@@ -145,7 +145,7 @@ def _ensure_user_workspace_provisioned(
                 container_name=spec.container_name,
                 image=spec.image,
                 workspace_volume_name=spec.volume_name,
-                data_bind_source=str(spec.data_bind_source),
+                uploads_bind_source=str(spec.uploads_bind_source),
                 published_tcp_ports=[spec.ide_port],
                 labels=_workspace_labels(spec=spec),
             )
@@ -414,25 +414,38 @@ def _workspace_container_needs_recreate(*, spec: UserWorkspaceSpec) -> bool:
         return True
     if config.get("Image") != spec.image:
         return True
+    current_image_id = docker_cli.image_id(
+        docker_binary=spec.docker_binary,
+        image=spec.image,
+    )
+    inspected_image_id = inspected.get("Image")
+    if (
+        isinstance(current_image_id, str)
+        and current_image_id
+        and isinstance(inspected_image_id, str)
+        and inspected_image_id
+        and current_image_id != inspected_image_id
+    ):
+        return True
     mounts = inspected.get("Mounts")
     if not isinstance(mounts, list):
         return True
     has_workspace_volume = False
-    has_data_bind = False
+    has_uploads_bind = False
     for mount in mounts:
         if not isinstance(mount, dict):
             continue
         if mount.get("Type") == "volume" and mount.get("Destination") == spec.workspace_mount_path:
             has_workspace_volume = mount.get("Name") == spec.volume_name
-        if mount.get("Type") == "bind" and mount.get("Destination") == spec.data_mount_path:
-            has_data_bind = (
+        if mount.get("Type") == "bind" and mount.get("Destination") == spec.uploads_mount_path:
+            has_uploads_bind = (
                 mount.get("RW") is False
                 and _mount_source_matches_expected(
                     mount_source=mount.get("Source"),
-                    expected_source=spec.data_bind_source,
+                    expected_source=spec.uploads_bind_source,
                 )
             )
-    if not has_workspace_volume or not has_data_bind:
+    if not has_workspace_volume or not has_uploads_bind:
         return True
     return docker_cli.container_host_port(inspected=inspected, container_port=spec.ide_port) is None
 
