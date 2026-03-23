@@ -144,6 +144,8 @@ describe("AgentPanel", () => {
         run_id: "run-1",
         llm_tool_call_id: null,
         tool_name: "list_entries",
+        display_label: "Listed entries",
+        display_detail: null,
         input_json: {},
         output_json: {},
         output_text: "",

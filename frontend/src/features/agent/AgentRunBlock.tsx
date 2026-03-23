@@ -114,7 +114,7 @@ function ToolCallTimelineRow({
     >
       <summary>
         <ChevronRight className="agent-tool-call-chevron" />
-        <span className="agent-tool-call-name">{toolCall?.tool_name ?? "Tool call"}</span>
+        <span className="agent-tool-call-name">{toolCall?.display_label ?? toolCall?.tool_name ?? "Tool call"}</span>
         <span
           className={cn("agent-tool-call-status-dot", lifecycleStatusClass)}
           title={toolLifecycleLabel(item.lifecycleEventType)}

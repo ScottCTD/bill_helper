@@ -82,6 +82,8 @@ export interface AgentToolCall {
   run_id: string;
   llm_tool_call_id: string | null;
   tool_name: string;
+  display_label: string;
+  display_detail: string | null;
   input_json: Record<string, unknown> | null;
   output_json: Record<string, unknown> | null;
   output_text: string | null;

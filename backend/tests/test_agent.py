@@ -936,6 +936,7 @@ def test_add_user_memory_tool_persists_runtime_settings_memory(client, monkeypat
     assert run["status"] == "completed"
     assert len(run["tool_calls"]) == 1
     assert run["tool_calls"][0]["tool_name"] == "add_user_memory"
+    assert run["tool_calls"][0]["display_label"] == "Added 2 memory items"
     assert run["tool_calls"][0]["output_json"]["added_items"] == [
         "Prefers terse answers.",
         "Works in CAD.",
@@ -1185,6 +1186,7 @@ def test_run_records_tool_argument_decode_failures(client, monkeypatch):
     assert len(run["tool_calls"]) == 1
     tool_call = run["tool_calls"][0]
     assert tool_call["tool_name"] == "terminal"
+    assert tool_call["display_label"] == "Ran terminal command"
     assert tool_call["status"] == "error"
     assert tool_call["input_json"] == {}
     assert tool_call["output_json"]["summary"] == "tool argument decode failed"
@@ -1227,6 +1229,7 @@ def test_thread_detail_compacts_tool_call_payloads(client, monkeypatch):
     compact_tool_call = detail["runs"][0]["tool_calls"][0]
     assert compact_tool_call["id"] == run["tool_calls"][0]["id"]
     assert compact_tool_call["tool_name"] == "terminal"
+    assert compact_tool_call["display_label"] == "bh tags list"
     assert compact_tool_call["has_full_payload"] is False
     assert compact_tool_call["input_json"] is None
     assert compact_tool_call["output_json"] is None
@@ -1267,6 +1270,7 @@ def test_tool_call_detail_endpoint_returns_full_payload(client, monkeypatch):
 
     assert payload["id"] == tool_call_id
     assert payload["tool_name"] == "terminal"
+    assert payload["display_label"] == "bh tags list"
     assert payload["has_full_payload"] is True
     assert isinstance(payload["input_json"], dict)
     assert isinstance(payload["output_json"], dict)
@@ -1562,6 +1566,7 @@ def test_stream_rename_thread_tool_updates_title_before_final_assistant_turn(cli
         "tool_call_completed",
     ]
     assert tool_call_events[-1]["tool_call"]["tool_name"] == "rename_thread"
+    assert tool_call_events[-1]["tool_call"]["display_label"] == 'Renamed thread to "Budget Review"'
     assert events[-1]["event"]["event_type"] == "run_completed"
 
     detail_response = client.get(f"/api/v1/agent/threads/{thread_id}")
@@ -1754,6 +1759,11 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
         "terminal",
         "terminal",
     ]
+    assert [event["tool_call"]["display_label"] for event in tool_call_events] == [
+        "bh tags list",
+        "bh tags list",
+        "bh tags list",
+    ]
     assert [event["tool_call"]["has_full_payload"] for event in tool_call_events] == [False, False, False]
     assert [event["tool_call"]["status"] for event in tool_call_events] == ["queued", "running", "ok"]
 
@@ -1767,6 +1777,7 @@ def test_stream_message_endpoint_converts_assistant_tool_step_text_into_reasonin
     run = detail["runs"][0]
     assert len(run["tool_calls"]) == 1
     assert run["tool_calls"][0]["tool_name"] == "terminal"
+    assert run["tool_calls"][0]["display_label"] == "bh tags list"
     reasoning_run_events = [event for event in run["events"] if event["event_type"] == "reasoning_update"]
     assert len(reasoning_run_events) == 1
     assert reasoning_run_events[0]["message"] == "I am checking current tags before making any changes."

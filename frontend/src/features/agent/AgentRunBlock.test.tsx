@@ -47,6 +47,7 @@ describe("AgentRunBlock", () => {
     const toolCall = buildToolCall({
       id: "tool-1",
       tool_name: "list_entries",
+      display_label: "Listed entries",
       output_text: "OK\nsummary: returned 2 of 2 matching entries",
       output_json: { status: "ok", summary: "returned 2 of 2 matching entries" }
     });
@@ -64,7 +65,7 @@ describe("AgentRunBlock", () => {
     render(<AgentRunBlock run={run} isMutating={false} mode="activity" />);
 
     await userEvent.click(screen.getByText("1 tool call"));
-    await userEvent.click(screen.getByText("list_entries"));
+    await userEvent.click(screen.getByText("Listed entries"));
 
     expect(screen.getByText("Model-visible tool result")).toBeInTheDocument();
     expect(screen.getByText(/OK\s+summary: returned 2 of 2 matching entries/i)).toBeInTheDocument();
@@ -75,6 +76,7 @@ describe("AgentRunBlock", () => {
     const optimisticToolCall = buildToolCall({
       id: "tool-1",
       tool_name: "list_tags",
+      display_label: "Listed tags",
       input_json: { include_descriptions: true }
     });
     const run = buildRun({
@@ -96,7 +98,7 @@ describe("AgentRunBlock", () => {
     );
 
     await userEvent.click(screen.getByText("1 tool call"));
-    await userEvent.click(screen.getByText("list_tags"));
+    await userEvent.click(screen.getByText("Listed tags"));
 
     expect(screen.queryByText("Waiting for tool snapshot...")).not.toBeInTheDocument();
     expect(screen.getByText("Arguments")).toBeInTheDocument();
@@ -108,6 +110,7 @@ describe("AgentRunBlock", () => {
       id: "tool-compact",
       run_id: "run-compact",
       tool_name: "list_tags",
+      display_label: "Listed tags",
       has_full_payload: false,
       input_json: null,
       output_json: null,
@@ -137,17 +140,18 @@ describe("AgentRunBlock", () => {
       />
     );
 
-    await userEvent.click(screen.getByText("list_tags"));
+    await userEvent.click(screen.getByText("Listed tags"));
 
     expect(onHydrateToolCall).toHaveBeenCalledWith("run-compact", "tool-compact");
     expect(screen.getByText("Tool details")).toBeInTheDocument();
   });
 
-  it("renders streamed compact tool labels before hydration", async () => {
+  it("renders streamed compact tool display labels before hydration", async () => {
     const compactToolCall = buildToolCall({
       id: "tool-streamed-compact",
       run_id: "run-streamed-compact",
       tool_name: "propose_create_entity",
+      display_label: "Proposed entity creation",
       has_full_payload: false,
       input_json: null,
       output_json: null,
@@ -178,9 +182,9 @@ describe("AgentRunBlock", () => {
       />
     );
 
-    expect(screen.getByText("propose_create_entity")).toBeInTheDocument();
+    expect(screen.getByText("Proposed entity creation")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByText("propose_create_entity"));
+    await userEvent.click(screen.getByText("Proposed entity creation"));
 
     expect(screen.getByText("Tool details")).toBeInTheDocument();
     expect(screen.getByText("Loading on demand...")).toBeInTheDocument();
@@ -240,7 +244,7 @@ describe("AgentRunBlock", () => {
   });
 
   it("keeps tool rows collapsed by default while streaming", () => {
-    const toolCall = buildToolCall({ id: "tool-1", tool_name: "list_entries" });
+    const toolCall = buildToolCall({ id: "tool-1", tool_name: "list_entries", display_label: "Listed entries" });
     const run = buildRun({
       id: "run-running-tool",
       status: "running",
@@ -250,7 +254,7 @@ describe("AgentRunBlock", () => {
 
     render(<AgentRunBlock run={run} isMutating={false} mode="activity" />);
 
-    const toolDetails = screen.getByText("list_entries").closest("details");
+    const toolDetails = screen.getByText("Listed entries").closest("details");
     expect(toolDetails).not.toHaveAttribute("open");
   });
 });

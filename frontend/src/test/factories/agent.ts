@@ -6,6 +6,8 @@ export function buildToolCall(overrides: Partial<AgentToolCall> = {}): AgentTool
     run_id: overrides.run_id ?? "run-1",
     llm_tool_call_id: overrides.llm_tool_call_id !== undefined ? overrides.llm_tool_call_id : "provider-call-1",
     tool_name: overrides.tool_name ?? "list_entries",
+    display_label: overrides.display_label ?? (overrides.tool_name ?? "list_entries"),
+    display_detail: overrides.display_detail !== undefined ? overrides.display_detail : null,
     input_json: overrides.input_json !== undefined ? overrides.input_json : {},
     output_json: overrides.output_json !== undefined ? overrides.output_json : {},
     output_text: overrides.output_text !== undefined ? overrides.output_text : "OK\nsummary: test",

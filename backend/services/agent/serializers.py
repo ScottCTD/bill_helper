@@ -33,6 +33,7 @@ from backend.schemas_agent import (
 )
 from backend.services.agent.attachment_content_assembly import attachment_display_name
 from backend.services.agent.pricing import calculate_usage_costs
+from backend.services.agent.tool_call_display import build_tool_call_display
 
 
 logger = logging.getLogger(__name__)
@@ -88,11 +89,18 @@ def message_to_schema(message: AgentMessage, *, api_prefix: str) -> AgentMessage
 
 
 def tool_call_to_schema(tool_call: AgentToolCall, *, include_payload: bool = True) -> AgentToolCallRead:
+    display = build_tool_call_display(
+        tool_call.tool_name,
+        input_json=tool_call.input_json,
+        output_json=tool_call.output_json,
+    )
     return AgentToolCallRead(
         id=tool_call.id,
         run_id=tool_call.run_id,
         llm_tool_call_id=tool_call.llm_tool_call_id,
         tool_name=tool_call.tool_name,
+        display_label=display.label,
+        display_detail=display.detail,
         input_json=tool_call.input_json if include_payload else None,
         output_json=tool_call.output_json if include_payload else None,
         output_text=tool_call.output_text if include_payload else None,

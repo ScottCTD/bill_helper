@@ -82,6 +82,8 @@ class AgentToolCallRead(AgentOrmReadSchema):
     run_id: str
     llm_tool_call_id: str | None = None
     tool_name: str
+    display_label: str
+    display_detail: str | None = None
     input_json: dict[str, Any] | None = None
     output_json: dict[str, Any] | None = None
     output_text: str | None = None

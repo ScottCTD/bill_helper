@@ -91,7 +91,7 @@
 - `backend/services/agent/apply/`
   - apply-family package: `common.py` for lookup and applied-reference helpers, `catalog.py` for tag/entity/account mutations, `entries.py` for entry mutations, `groups.py` for group and membership mutations, and `dispatch.py` for change-type routing
 - `backend/services/agent/serializers.py`
-  - timeline-ready serializer helpers, including compatibility filtering for legacy unsupported change-item rows and surface-aware terminal reply shaping
+  - timeline-ready serializer helpers, including compatibility filtering for legacy unsupported change-item rows, tool-call display summaries, and surface-aware terminal reply shaping
 
 ## Prompt And Tooling Rules
 
@@ -181,6 +181,7 @@ Endpoints:
 - each run persists a `surface` hint so later execution and polling can distinguish Telegram-originated runs from default app runs
 - streamed runs emit transient `reasoning_delta`, `text_delta`, and ordered persisted `run_event` rows
 - streamed tool lifecycle `run_event` payloads include a compact top-level `tool_call` snapshot so clients can render the tool name immediately without fetching full payloads
+- tool-call payloads now include backend-computed `display_label` / `display_detail` fields so clients can render high-signal summaries without duplicating formatter logic
 - clients may hydrate a streamed `rename_thread` tool call immediately and update the visible thread title before the final assistant message arrives
 - `send_intermediate_update` is persisted as a `reasoning_update` event, not as a fake tool call
 - malformed tool-call JSON now persists an explicit tool-call error with raw argument text and decode metadata instead of being silently rewritten to an empty argument object
