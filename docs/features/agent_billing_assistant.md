@@ -47,7 +47,7 @@ The old read/proposal/review modules still exist internally, but no longer as di
 1. User sends a message to an agent thread.
 2. Backend persists the message, attachments, and a new `agent_runs` row.
 3. Runtime builds the system prompt, current-user context, entity-category context, user memory section, and message history.
-4. If the thread is untitled, the runtime exposes only `rename_thread`.
+4. If the thread is untitled, the runtime exposes only `rename_thread` and requests that tool explicitly.
 5. After the thread has a valid title, the runtime exposes the five-tool catalog.
 6. The model uses `send_intermediate_update` before meaningful tool-call batches.
 7. For Bill Helper app work, the model calls `terminal` and executes `bh ...` inside the workspace container.

@@ -36,11 +36,27 @@ from .usage import (
 )
 
 _PROMPT_CACHE_INJECTION_POINTS_MAX = 4
+_UNSUPPORTED_TOOL_CHOICE_ERROR_SNIPPET = "no endpoints found that support the provided 'tool_choice' value"
 logger = logging.getLogger(__name__)
 
 
 class AgentModelError(RuntimeError):
     pass
+
+
+def _message_text(exc: Exception) -> str:
+    return str(getattr(exc, "message", None) or exc)
+
+
+def _request_uses_forced_tool_choice(request: dict[str, Any]) -> bool:
+    return "tool_choice" in request and request.get("tool_choice") != "auto"
+
+
+def _is_unsupported_tool_choice_error(exc: Exception) -> bool:
+    status_code = getattr(exc, "status_code", None)
+    if status_code not in (400, 404, 422):
+        return False
+    return _UNSUPPORTED_TOOL_CHOICE_ERROR_SNIPPET in _message_text(exc).casefold()
 
 
 def _cache_injection_points_for_messages(
@@ -186,6 +202,23 @@ class LiteLLMModelClient:
             )
             return litellm.completion(**request)
 
+    def _completion_with_request_fallbacks(self, request: dict[str, Any]) -> Any:
+        try:
+            return self._completion_with_transient_ssl_retry(request)
+        except Exception as exc:
+            if not _request_uses_forced_tool_choice(request) or not _is_unsupported_tool_choice_error(
+                exc
+            ):
+                raise
+            logger.info(
+                "retrying model completion without forced tool_choice after provider rejection",
+                extra={"model_name": self._model_name},
+            )
+            retry_request = {
+                key: value for key, value in request.items() if key != "tool_choice"
+            }
+            return self._completion_with_transient_ssl_retry(retry_request)
+
     def _chat_completion_once(
         self,
         messages: list[dict[str, Any]],
@@ -201,13 +234,13 @@ class LiteLLMModelClient:
             response_format=response_format,
         )
         try:
-            return self._completion_with_transient_ssl_retry(request)
+            return self._completion_with_request_fallbacks(request)
         except Exception as exc:
             raise self._to_model_error(exc) from exc
 
     def _stream_completion_once(self, request: dict[str, Any]) -> Any:
         try:
-            return self._completion_with_transient_ssl_retry(request)
+            return self._completion_with_request_fallbacks(request)
         except OpenAIError as exc:
             status_code = getattr(exc, "status_code", None)
             if request.get("stream_options") and status_code in (400, 422):
@@ -216,7 +249,7 @@ class LiteLLMModelClient:
                     for key, value in request.items()
                     if key != "stream_options"
                 }
-                return self._completion_with_transient_ssl_retry(retry_request)
+                return self._completion_with_request_fallbacks(retry_request)
             raise
 
     def complete(

@@ -47,12 +47,6 @@ from backend.services.runtime_settings import resolve_runtime_settings
 
 
 _RENAME_THREAD_TOOL_NAME = "rename_thread"
-_MODELS_WITHOUT_EXPLICIT_TOOL_CHOICE = frozenset(
-    {
-        "openrouter/qwen/qwen3.5-27b",
-        "qwen/qwen3.5-27b",
-    }
-)
 
 ModelCall = Callable[..., dict[str, Any]]
 ModelStreamCall = Callable[..., Iterator[dict[str, Any]]]
@@ -129,13 +123,11 @@ class RuntimeRunLoopAdapterBase(AgentRunLoopAdapter[PreparedToolCall]):
             return {}
         request_kwargs: dict[str, Any] = {
             "tools": build_openai_tool_schemas(tool_names=[_RENAME_THREAD_TOOL_NAME]),
-        }
-        model_name = (self.run.model_name or "").strip().casefold()
-        if model_name not in _MODELS_WITHOUT_EXPLICIT_TOOL_CHOICE:
-            request_kwargs["tool_choice"] = {
+            "tool_choice": {
                 "type": "function",
                 "function": {"name": _RENAME_THREAD_TOOL_NAME},
-            }
+            },
+        }
         return request_kwargs
 
     def build_initial_messages(self) -> list[dict[str, Any]]:

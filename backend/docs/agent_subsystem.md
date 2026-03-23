@@ -107,7 +107,7 @@
 - `send_intermediate_update` is required as the first tool call when tool work is needed
 - `add_user_memory` is an add-only tool for explicit remember-this requests; mutate/remove requests must be declined
 - `rename_thread` should run right after the first user message in a new thread, then only when the user explicitly asks or the topic materially changes
-- untitled threads are runtime-gated to expose only the `rename_thread` tool on the first model step; most models also receive an explicit required `tool_choice`, but `openrouter/qwen/qwen3.5-27b` falls back to tool-list restriction only because OpenRouter rejects explicit `tool_choice` for that model in thinking mode
+- untitled threads are runtime-gated to expose only the `rename_thread` tool on the first model step and request an explicit required `tool_choice`; if a provider rejects that forced `tool_choice`, the LiteLLM client retries once without `tool_choice` while keeping the rename-only tool list restriction
 - `terminal` injects backend URL, a short-lived bearer session, current thread id, and current run id on every execution; the agent does not supply those manually
 - the prompt has a dedicated `Grouping` section that combines fixed `BUNDLE` / `SPLIT` / `RECURRING` semantics, examples, and workflow guidance
 - after proposing a new entry, the prompt instructs the agent to check whether an existing recurring, split, or bundle group should absorb it and to propose the membership change when needed

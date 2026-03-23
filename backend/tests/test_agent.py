@@ -1024,7 +1024,7 @@ def test_untitled_thread_restricts_model_request_to_rename_thread(client, monkey
     ]
 
 
-def test_openrouter_qwen_untitled_thread_skips_explicit_tool_choice(client, monkeypatch):
+def test_openrouter_qwen_untitled_thread_still_requests_explicit_tool_choice(client, monkeypatch):
     from backend.services.agent import runtime
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter-key")
@@ -1064,7 +1064,10 @@ def test_openrouter_qwen_untitled_thread_skips_explicit_tool_choice(client, monk
 
     assert run["status"] == "completed"
     assert captured_kwargs
-    assert "tool_choice" not in captured_kwargs[0]
+    assert captured_kwargs[0]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "rename_thread"},
+    }
     assert [tool["function"]["name"] for tool in captured_kwargs[0]["tools"]] == [
         "rename_thread"
     ]

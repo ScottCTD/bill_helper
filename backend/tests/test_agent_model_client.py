@@ -327,6 +327,148 @@ def test_complete_retries_transient_ssl_bad_record_mac_when_max_attempts_is_one(
     assert response["usage"]["output_tokens"] == 2
 
 
+def test_complete_retries_without_forced_tool_choice_after_provider_rejection(monkeypatch):
+    client = LiteLLMModelClient(
+        model_name="openrouter/qwen/qwen3.5-27b",
+        tools=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "rename_thread",
+                    "description": "Rename thread",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ],
+        retry_max_attempts=1,
+        retry_initial_wait_seconds=0.0,
+        retry_max_wait_seconds=0.0,
+        retry_backoff_multiplier=2.0,
+    )
+    captured_requests: list[dict[str, object]] = []
+
+    def fake_completion(**kwargs):
+        captured_requests.append(dict(kwargs))
+        if len(captured_requests) == 1:
+            raise litellm.NotFoundError(
+                message=(
+                    "NotFoundError: OpenrouterException - "
+                    '{"error":{"message":"No endpoints found that support the provided '
+                    '\'tool_choice\' value.","code":404}}'
+                ),
+                llm_provider="openrouter",
+                model="openrouter/qwen/qwen3.5-27b",
+            )
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="",
+                        tool_calls=[
+                            SimpleNamespace(
+                                id="call_rename_thread",
+                                function=SimpleNamespace(
+                                    name="rename_thread",
+                                    arguments='{"title":"Budget Review"}',
+                                ),
+                            )
+                        ],
+                    )
+                )
+            ],
+            usage={"input_tokens": 3, "output_tokens": 2},
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    response = client.complete(
+        [{"role": "user", "content": "hi"}],
+        tool_choice={"type": "function", "function": {"name": "rename_thread"}},
+    )
+
+    assert len(captured_requests) == 2
+    assert captured_requests[0]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "rename_thread"},
+    }
+    assert "tool_choice" not in captured_requests[1]
+    assert response["tool_calls"][0]["function"]["name"] == "rename_thread"
+
+
+def test_complete_stream_retries_without_forced_tool_choice_after_provider_rejection(monkeypatch):
+    client = LiteLLMModelClient(
+        model_name="openrouter/qwen/qwen3.5-27b",
+        tools=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "rename_thread",
+                    "description": "Rename thread",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ],
+        retry_max_attempts=1,
+        retry_initial_wait_seconds=0.0,
+        retry_max_wait_seconds=0.0,
+        retry_backoff_multiplier=2.0,
+    )
+    captured_requests: list[dict[str, object]] = []
+
+    def fake_completion(**kwargs):
+        captured_requests.append(dict(kwargs))
+        if len(captured_requests) == 1:
+            raise litellm.NotFoundError(
+                message=(
+                    "NotFoundError: OpenrouterException - "
+                    '{"error":{"message":"No endpoints found that support the provided '
+                    '\'tool_choice\' value.","code":404}}'
+                ),
+                llm_provider="openrouter",
+                model="openrouter/qwen/qwen3.5-27b",
+            )
+        return iter(
+            [
+                {
+                    "choices": [
+                        {
+                            "delta": {
+                                "tool_calls": [
+                                    {
+                                        "index": 0,
+                                        "id": "call_rename_thread",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "rename_thread",
+                                            "arguments": '{"title":"Budget Review"}',
+                                        },
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {"choices": [{"delta": {}}], "usage": {"input_tokens": 2, "output_tokens": 1}},
+            ]
+        )
+
+    monkeypatch.setattr("backend.services.agent.model_client.litellm.completion", fake_completion)
+    events = list(
+        client.complete_stream(
+            [{"role": "user", "content": "hi"}],
+            tool_choice={"type": "function", "function": {"name": "rename_thread"}},
+        )
+    )
+
+    assert len(captured_requests) == 2
+    assert captured_requests[0]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "rename_thread"},
+    }
+    assert "tool_choice" not in captured_requests[1]
+    assert [event["type"] for event in events] == ["done"]
+    assert events[0]["message"]["tool_calls"][0]["function"]["name"] == "rename_thread"
+
+
 def test_complete_injects_prompt_cache_control_points_when_supported(monkeypatch):
     captured_request: dict[str, object] = {}
     client = _build_model_client()
