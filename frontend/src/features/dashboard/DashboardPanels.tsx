@@ -27,15 +27,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { formatMinor } from "../../lib/format";
 import type { Dashboard } from "../../lib/types";
 import { cn } from "../../lib/utils";
-import { DashboardSankeyChart } from "./DashboardSankeyChart";
+import {
+  DashboardProjectionChart,
+  DashboardOverviewGroupBreakdownCard,
+  DashboardOverviewTrendSmallMultiplesCard
+} from "./DashboardOverviewCharts";
 import {
   CHART_COLORS,
   DASHBOARD_PIE_ANIMATION_PROPS,
   DashboardChartContainer,
   type DashboardViewMode,
   axisTick,
-  buildYearLargestExpenses,
-  buildYearlyFilterGroupsWithTagTotals,
   builtinGroupColor,
   dashboardBarColor,
   dashboardPieColor,
@@ -43,9 +45,6 @@ import {
   formatDayFromDate,
   formatDelta,
   formatMonthLong,
-  formatMonthShort,
-  shiftMonthKey,
-  sumFilterGroupForMonths,
   tooltipAmount,
   tooltipAmountWithName
 } from "./helpers";
@@ -54,6 +53,8 @@ type DashboardOverviewPanelProps = {
   viewMode: DashboardViewMode;
   selectedYear: number;
   data: Dashboard;
+  overviewFilterGroups: Dashboard["filter_groups"];
+  trendChartData: Array<Record<string, unknown>>;
   primaryFilterGroup: Dashboard["filter_groups"][number] | null;
   yearlyQueriesLoading: boolean;
   yearlyQueryError?: Error;
@@ -61,23 +62,21 @@ type DashboardOverviewPanelProps = {
   selectedYearIncomeTotalMinor: number;
   selectedYearNetTotalMinor: number;
   yearlyPrimaryFilterGroupTotalMinor: number;
-  selectedYearMonths: string[];
-  yearlyDashboardsByMonth: Map<string, Dashboard>;
 };
 
 export function DashboardOverviewPanel({
   viewMode,
   selectedYear,
   data,
+  overviewFilterGroups,
+  trendChartData,
   primaryFilterGroup,
   yearlyQueriesLoading,
   yearlyQueryError,
   selectedYearExpenseTotalMinor,
   selectedYearIncomeTotalMinor,
   selectedYearNetTotalMinor,
-  yearlyPrimaryFilterGroupTotalMinor,
-  selectedYearMonths,
-  yearlyDashboardsByMonth
+  yearlyPrimaryFilterGroupTotalMinor
 }: DashboardOverviewPanelProps) {
   return (
     <section className="stack-lg" role="tabpanel" id="dashboard-panel-overview" aria-labelledby="dashboard-tab-overview">
@@ -93,18 +92,22 @@ export function DashboardOverviewPanel({
             />
           </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Expense Flow by Filter Group &amp; Tags</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[32rem] min-w-0">
-              {data.kpis.expense_total_minor === 0 ? (
-                <p className="muted">No expense activity this month.</p>
-              ) : (
-                <DashboardSankeyChart filterGroups={data.filter_groups} currencyCode={data.currency_code} />
-              )}
-            </CardContent>
-          </Card>
+          <DashboardOverviewGroupBreakdownCard
+            titlePrefix=""
+            filterGroups={overviewFilterGroups}
+            currencyCode={data.currency_code}
+            yearlyQueriesLoading={false}
+            yearlyQueryError={undefined}
+          />
+
+          <DashboardOverviewTrendSmallMultiplesCard
+            titlePrefix=""
+            filterGroups={data.filter_groups}
+            trendChartData={trendChartData}
+            currencyCode={data.currency_code}
+            yearlyQueriesLoading={false}
+            yearlyQueryError={undefined}
+          />
 
           <Card>
             <CardHeader>
@@ -134,26 +137,13 @@ export function DashboardOverviewPanel({
                 </p>
               </div>
               <div className="rounded-lg border border-border/70">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Filter group</TableHead>
-                      <TableHead>Projected total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.filter_groups.map((group) => (
-                      <TableRow key={group.key}>
-                        <TableCell>{group.name}</TableCell>
-                        <TableCell>
-                          {data.projection.projected_total_minor === null
-                            ? "-"
-                            : formatMinor(data.projection.projected_filter_group_totals[group.key] ?? 0, data.currency_code)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="p-4">
+                  <DashboardProjectionChart
+                    projection={data.projection}
+                    filterGroups={data.filter_groups}
+                    currencyCode={data.currency_code}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -170,74 +160,22 @@ export function DashboardOverviewPanel({
             />
           </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{selectedYear} Expense Flow by Filter Group &amp; Tags</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[32rem] min-w-0">
-              {yearlyQueriesLoading ? (
-                <p className="muted">Loading yearly data...</p>
-              ) : yearlyQueryError ? (
-                <p className="error">Failed to load yearly data: {yearlyQueryError.message}</p>
-              ) : selectedYearExpenseTotalMinor === 0 ? (
-                <p className="muted">No expense activity this year.</p>
-              ) : (
-                <DashboardSankeyChart
-                  filterGroups={buildYearlyFilterGroupsWithTagTotals(data.filter_groups, selectedYearMonths, yearlyDashboardsByMonth)}
-                  currencyCode={data.currency_code}
-                />
-              )}
-            </CardContent>
-          </Card>
+          <DashboardOverviewGroupBreakdownCard
+            titlePrefix={`${selectedYear} `}
+            filterGroups={overviewFilterGroups}
+            currencyCode={data.currency_code}
+            yearlyQueriesLoading={yearlyQueriesLoading}
+            yearlyQueryError={yearlyQueryError}
+          />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{selectedYear} Filter Group Monthly Bars</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="muted text-sm">Each saved filter group gets its own month-by-month bar chart for the selected year.</p>
-              {yearlyQueriesLoading ? (
-                <p className="muted">Loading filter-group yearly bars...</p>
-              ) : yearlyQueryError ? (
-                <p className="error">Failed to load filter-group yearly bars: {yearlyQueryError.message}</p>
-              ) : (
-                <div className="grid gap-4 xl:grid-cols-2">
-                  {data.filter_groups.map((group, index) => {
-                    const groupYearData = selectedYearMonths.map((monthKey) => ({
-                      month: formatMonthShort(monthKey),
-                      total_minor: filterGroupTotalForMonth(yearlyDashboardsByMonth.get(monthKey), group.key)
-                    }));
-                    return (
-                      <div key={group.key} className="rounded-xl border border-border/70 p-4">
-                        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <p className="font-medium">{group.name}</p>
-                            <p className="muted text-xs">{selectedYear}</p>
-                          </div>
-                          <Badge variant="outline" style={{ borderColor: dashboardBarColor(index), color: dashboardBarColor(index) }}>
-                            {formatMinor(sumFilterGroupForMonths(selectedYearMonths, yearlyDashboardsByMonth, group.key), data.currency_code)}
-                          </Badge>
-                        </div>
-                        <div className="h-56 min-w-0">
-                          <DashboardChartContainer>
-                            {({ width, height }) => (
-                              <BarChart width={width} height={height} data={groupYearData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.muted} opacity={0.2} />
-                                <XAxis dataKey="month" />
-                                <YAxis tickFormatter={axisTick} />
-                                <Tooltip formatter={(value, name) => tooltipAmountWithName(data.currency_code, value, name)} />
-                                <Bar dataKey="total_minor" name={group.name} fill={dashboardBarColor(index)} radius={[4, 4, 0, 0]} />
-                              </BarChart>
-                            )}
-                          </DashboardChartContainer>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <DashboardOverviewTrendSmallMultiplesCard
+            titlePrefix={`${selectedYear} `}
+            filterGroups={data.filter_groups}
+            trendChartData={trendChartData}
+            currencyCode={data.currency_code}
+            yearlyQueriesLoading={yearlyQueriesLoading}
+            yearlyQueryError={yearlyQueryError}
+          />
         </>
       )}
     </section>
@@ -249,16 +187,11 @@ type DashboardDailyPanelProps = {
   selectedYear: number;
   data: Dashboard;
   dailyChartData: Array<Record<string, unknown>>;
-  month: string;
-  previousMonthDashboard: Dashboard | undefined;
   yearlyQueriesLoading: boolean;
   yearlyQueryError?: Error;
   yearlyOverviewData: Array<Record<string, unknown>>;
   yearlyAverageExpenseMonthMinor: number;
   yearlyMedianExpenseMonthMinor: number;
-  selectedYearMonths: string[];
-  previousYearMonths: string[];
-  yearlyDashboardsByMonth: Map<string, Dashboard>;
 };
 
 export function DashboardDailyPanel({
@@ -266,16 +199,11 @@ export function DashboardDailyPanel({
   selectedYear,
   data,
   dailyChartData,
-  month,
-  previousMonthDashboard,
   yearlyQueriesLoading,
   yearlyQueryError,
   yearlyOverviewData,
   yearlyAverageExpenseMonthMinor,
-  yearlyMedianExpenseMonthMinor,
-  selectedYearMonths,
-  previousYearMonths,
-  yearlyDashboardsByMonth
+  yearlyMedianExpenseMonthMinor
 }: DashboardDailyPanelProps) {
   const dayToDayColor = builtinGroupColor("day_to_day");
   return (
@@ -367,47 +295,6 @@ export function DashboardDailyPanel({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Monthly Spend by Filter Group</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg border border-border/70">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Filter Group</TableHead>
-                      <TableHead>Monthly Spend</TableHead>
-                      <TableHead>Delta to Last Month</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.filter_groups.map((group) => {
-                      const prev = filterGroupTotalForMonth(previousMonthDashboard, group.key);
-                      const delta = group.total_minor - prev;
-                      const pct = prev > 0 ? ((delta / prev) * 100).toFixed(1) : null;
-                      return (
-                        <TableRow key={group.key}>
-                          <TableCell className="font-medium">{group.name}</TableCell>
-                          <TableCell>{formatMinor(group.total_minor, data.currency_code)}</TableCell>
-                          <TableCell>
-                            {prev === 0 && group.total_minor === 0 ? (
-                              <span className="text-muted-foreground">—</span>
-                            ) : (
-                              <span className={cn(delta > 0 ? "text-red-500" : delta < 0 ? "text-green-500" : "text-muted-foreground")}>
-                                {formatDelta(delta, data.currency_code)}
-                                {pct !== null ? ` (${delta > 0 ? "+" : ""}${pct}%)` : ""}
-                              </span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
         </>
       ) : (
         <>
@@ -461,14 +348,15 @@ type DashboardBreakdownsPanelProps = {
   viewMode: DashboardViewMode;
   month: string;
   data: Dashboard;
+  previousMonthDashboard: Dashboard | undefined;
 };
 
-export function DashboardBreakdownsPanel({ viewMode, month, data }: DashboardBreakdownsPanelProps) {
+export function DashboardBreakdownsPanel({ viewMode, month, data, previousMonthDashboard }: DashboardBreakdownsPanelProps) {
   return (
     <section className="grid gap-4 xl:grid-cols-3" role="tabpanel" id="dashboard-panel-breakdowns" aria-labelledby="dashboard-tab-breakdowns">
       {viewMode === "year" ? (
         <div className="dashboard-scope-note xl:col-span-3">
-          Breakdowns remain anchored to <strong>{formatMonthLong(month)}</strong>. Use `Overview` and `Spending` for year-level trend charts.
+          Breakdowns remain anchored to <strong>{formatMonthLong(month)}</strong>. Use `Overview` and `Daily Expense` for year-level trend charts.
         </div>
       ) : null}
       <Card className="xl:col-span-1">
@@ -545,6 +433,48 @@ export function DashboardBreakdownsPanel({ viewMode, month, data }: DashboardBre
               )}
             </DashboardChartContainer>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="xl:col-span-3">
+        <CardHeader>
+          <CardTitle>Monthly Spend by Filter Group</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border border-border/70">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Filter Group</TableHead>
+                  <TableHead>Monthly Spend</TableHead>
+                  <TableHead>Delta to Last Month</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.filter_groups.map((group) => {
+                  const prev = filterGroupTotalForMonth(previousMonthDashboard, group.key);
+                  const delta = group.total_minor - prev;
+                  const pct = prev > 0 ? ((delta / prev) * 100).toFixed(1) : null;
+                  return (
+                    <TableRow key={group.key}>
+                      <TableCell className="font-medium">{group.name}</TableCell>
+                      <TableCell>{formatMinor(group.total_minor, data.currency_code)}</TableCell>
+                      <TableCell>
+                        {prev === 0 && group.total_minor === 0 ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <span className={cn(delta > 0 ? "text-red-500" : delta < 0 ? "text-green-500" : "text-muted-foreground")}>
+                            {formatDelta(delta, data.currency_code)}
+                            {pct !== null ? ` (${delta > 0 ? "+" : ""}${pct}%)` : ""}
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </section>

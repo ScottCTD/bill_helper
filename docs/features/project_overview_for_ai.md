@@ -231,10 +231,10 @@ The most recent snapshot produces one **open interval** from that snapshot to to
 **Data rules:** Uses a single configurable dashboard currency; entries in other currencies are excluded from all calculations. Internal account-to-account transfers are excluded from KPIs, charts, and projections.
 
 **Tabs and behavior:**
-- **Overview:** Month/year toggle; KPI cards (expense, income, net); income vs expense trend bar (stacked by filter group); filter group pie; projection cards for current month.
-- **Spending:** Daily area chart stacked by filter group; average/median spend metrics; month-over-month comparison.
-- **Breakdowns:** By tag, by source entity, by destination entity.
-- **Insights:** Largest expenses with filter group badges; weekday distribution; reconciliation summary.
+- **Overview:** Month/year toggle; KPI cards (expense, income, net); income vs expense trend bar (stacked by filter group); builtin filter-group spend breakdown in trend-order with per-group tag facets and explicit sqrt-scale labeling on both ranked and facet bars; small-multiple expense-group trends; projection bars for current month with solid actual spend, translucent forecast extensions, and explicit sqrt-scale labeling.
+- **Daily Expense:** Day-to-day daily bar chart with average/median spend metrics; yearly mode switches to monthly filter-group bars.
+- **Breakdowns:** Monthly spend by filter group plus by-tag, by-source-entity, and by-destination-entity breakdowns.
+- **Insights:** Largest expenses with filter group badges.
 
 **Navigation:** Scrollable timeline of months with expense activity; no manual month picker. Yearly view assembled from repeated month-scoped reads.
 

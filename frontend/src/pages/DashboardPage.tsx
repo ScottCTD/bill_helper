@@ -34,6 +34,7 @@ import {
   buildTimelineYears,
   buildYearLargestExpenses,
   buildYearMonthKeys,
+  buildYearlyFilterGroupsWithTagTotals,
   buildYearlyOverviewData,
   builtinGroupColor,
   builtinIncomeGroupColor,
@@ -394,6 +395,10 @@ export function DashboardPage() {
         );
   const trendGroups = sortByIncomeTrendOrder(viewMode === "month" ? expenseTrendGroupsFiltered : expenseTrendGroupsFiltered);
   const trendTitle = viewMode === "month" ? "Income vs Expense Trend" : `${selectedYear} Income vs Expense Trend`;
+  const overviewFilterGroups =
+    viewMode === "year"
+      ? buildYearlyFilterGroupsWithTagTotals(data.filter_groups, selectedYearMonths, yearlyDashboardsByMonth)
+      : data.filter_groups;
   return (
     <div className="dashboard-page-layout">
       <div className="stack-lg min-w-0">
@@ -489,6 +494,8 @@ export function DashboardPage() {
             viewMode={viewMode}
             selectedYear={selectedYear}
             data={data}
+            overviewFilterGroups={overviewFilterGroups}
+            trendChartData={trendChartData}
             primaryFilterGroup={primaryFilterGroup}
             yearlyQueriesLoading={yearlyQueriesLoading}
             yearlyQueryError={yearlyQueryError}
@@ -496,8 +503,6 @@ export function DashboardPage() {
             selectedYearIncomeTotalMinor={selectedYearIncomeTotalMinor}
             selectedYearNetTotalMinor={selectedYearNetTotalMinor}
             yearlyPrimaryFilterGroupTotalMinor={yearlyPrimaryFilterGroupTotalMinor}
-            selectedYearMonths={selectedYearMonths}
-            yearlyDashboardsByMonth={yearlyDashboardsByMonth}
           />
         ) : null}
 
@@ -507,20 +512,22 @@ export function DashboardPage() {
             selectedYear={selectedYear}
             data={data}
             dailyChartData={dailyChartData}
-            month={month}
-            previousMonthDashboard={previousMonthDashboard}
             yearlyQueriesLoading={yearlyQueriesLoading}
             yearlyQueryError={yearlyQueryError}
             yearlyOverviewData={yearlyOverviewData}
             yearlyAverageExpenseMonthMinor={yearlyAverageExpenseMonthMinor}
             yearlyMedianExpenseMonthMinor={yearlyMedianExpenseMonthMinor}
-            selectedYearMonths={selectedYearMonths}
-            previousYearMonths={previousYearMonths}
-            yearlyDashboardsByMonth={yearlyDashboardsByMonth}
           />
         ) : null}
 
-        {activeTab === "breakdowns" ? <DashboardBreakdownsPanel viewMode={viewMode} month={month} data={data} /> : null}
+        {activeTab === "breakdowns" ? (
+          <DashboardBreakdownsPanel
+            viewMode={viewMode}
+            month={month}
+            data={data}
+            previousMonthDashboard={previousMonthDashboard}
+          />
+        ) : null}
 
         {activeTab === "insights" ? (
           <DashboardInsightsPanel

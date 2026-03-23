@@ -127,7 +127,7 @@
 
 ### `frontend/src/pages/DashboardPage.tsx`
 
-- tabbed analytics surface with `Overview`, `Spending`, `Breakdowns`, `Insights`, and `Agent`; tab buttons have no secondary description line under the row
+- tabbed analytics surface with `Overview`, `Daily Expense`, `Breakdowns`, `Insights`, and `Agent`; tab buttons have no secondary description line under the row
 - route shell now uses the shared page header, a shared control surface, and `StatBlock` summaries instead of bespoke metric cards for the top-line KPIs
 - includes an explicit `Month` / `Year` mode toggle
 - month and year scope use a horizontal strip in the same row as View and Currency: **View** (Month/Year toggle), **Period** (flexible middle column, only as wide as the gap between the side fields), **Currency**; on small screens those stack full-width; chips are oldest-to-newest left-to-right with the newest toward the trailing edge, overflow scrolls horizontally inside the Period column so only the visible viewport is “in frame” at once; vertical wheel on the strip maps to horizontal scrolling; click to select; arrow keys step selection when the strip is focused
@@ -137,6 +137,9 @@
 - dashboard totals and charts exclude internal transfers when both endpoints resolve to account-backed entity roots
 - monthly classification is driven by saved filter groups, including yearly views that fan out to month-scoped dashboard reads for the selected and previous years
 - the monthly and yearly `Income vs Expense Trend` charts stack income segments and expense filter-group segments (two stacks per month) using a restrained dashboard-specific palette; month view fixes the trend window to the last six months ending at the client’s current calendar month (not the timeline-selected month), and both modes show a grouped legend (Income, then Expense) with swatches in stack order
+- `Overview` replaces the old Sankey with a builtin-only grouped spend card that keeps builtin groups in the same sequence as the main trend view, combines each group with per-group tag facets, and marks both the ranked bars and facet bars as sqrt-scaled; it also adds refined small-multiple trend cards for expense groups
+- the current-month projection area uses stacked horizontal bars: solid spent-so-far segments with translucent projected growth extensions on a labeled sqrt scale
+- `Breakdowns` now includes the month-over-month `Monthly Spend by Filter Group` table instead of leaving that comparison in `Daily Expense`
 - `Insights` is intentionally reduced to the largest-expenses table only; month mode shows the current month while year mode aggregates the selected year's largest expenses
 
 ## Filters

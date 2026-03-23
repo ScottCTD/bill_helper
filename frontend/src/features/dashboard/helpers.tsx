@@ -77,7 +77,7 @@ export function sortByIncomeTrendOrder<T extends { key: string }>(groups: T[]): 
 
 export const DASHBOARD_TABS: Array<{ id: DashboardTab; label: string }> = [
   { id: "overview", label: "Overview" },
-  { id: "daily", label: "Spending" },
+  { id: "daily", label: "Daily Expense" },
   { id: "breakdowns", label: "Breakdowns" },
   { id: "insights", label: "Insights" },
   { id: "agent", label: "Agent" }
@@ -436,14 +436,24 @@ export function buildYearFilterGroupTagTotals(
   return totals;
 }
 
-/** Build per-group tag_totals for the yearly Sankey (aggregated across all year months). */
+/** Build per-group yearly totals and tag_totals aggregated across all selected year months. */
 export function buildYearlyFilterGroupsWithTagTotals(
   filterGroups: Dashboard["filter_groups"],
   selectedYearMonths: string[],
   yearlyDashboardsByMonth: Map<string, Dashboard>
 ): Dashboard["filter_groups"] {
-  return filterGroups.map((group) => ({
-    ...group,
-    tag_totals: buildYearFilterGroupTagTotals(group.key, selectedYearMonths, yearlyDashboardsByMonth)
-  }));
+  const selectedYearExpenseTotalMinor = sumDashboardKpiForMonths(
+    selectedYearMonths,
+    yearlyDashboardsByMonth,
+    "expense_total_minor"
+  );
+  return filterGroups.map((group) => {
+    const totalMinor = sumFilterGroupForMonths(selectedYearMonths, yearlyDashboardsByMonth, group.key);
+    return {
+      ...group,
+      total_minor: totalMinor,
+      share: selectedYearExpenseTotalMinor > 0 ? totalMinor / selectedYearExpenseTotalMinor : 0,
+      tag_totals: buildYearFilterGroupTagTotals(group.key, selectedYearMonths, yearlyDashboardsByMonth)
+    };
+  });
 }
