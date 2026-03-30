@@ -5,18 +5,27 @@
  * - Outputs: typed helpers, contracts, or exports from `types`.
  * - Side effects: module-local frontend behavior only.
  */
+export type DraftAttachmentKind = "image" | "pdf";
+
+export type DraftAttachmentPhase = "uploading" | "parsing" | "ready" | "failed";
+
 export interface DraftAttachment {
   id: string;
   file: File;
+  kind: DraftAttachmentKind;
+  localObjectUrl: string;
+  uploadedAttachmentId: string | null;
+  uploadProgress: number;
+  phase: DraftAttachmentPhase;
+  errorMessage: string | null;
 }
 
-export type DraftAttachmentKind = "image" | "pdf";
-
-export interface DraftAttachmentPreview {
+export interface ReadyDraftAttachment {
   id: string;
   file: File;
-  url: string;
   kind: DraftAttachmentKind;
+  localObjectUrl: string;
+  uploadedAttachmentId: string;
 }
 
 export interface PendingUserAttachmentPreview {

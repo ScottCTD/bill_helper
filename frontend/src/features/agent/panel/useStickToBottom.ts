@@ -25,6 +25,7 @@ export function useStickToBottom<T extends HTMLElement>() {
   const [containerEl, setContainerEl] = useState<T | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const stuckRef = useRef(true);
+  const autoFollowSuppressedRef = useRef(false);
   const programmaticScroll = useRef(false);
   const prevScrollHeight = useRef(0);
   const smoothScrollReleaseTimer = useRef<number | null>(null);
@@ -46,6 +47,7 @@ export function useStickToBottom<T extends HTMLElement>() {
   }, [clearProgrammaticGuardTimer]);
 
   const stick = useCallback(() => {
+    autoFollowSuppressedRef.current = false;
     stuckRef.current = true;
     setIsAtBottom(true);
   }, []);
@@ -54,6 +56,13 @@ export function useStickToBottom<T extends HTMLElement>() {
     stuckRef.current = false;
     setIsAtBottom(false);
   }, []);
+
+  const detachFromBottom = useCallback(() => {
+    clearProgrammaticGuardTimer();
+    autoFollowSuppressedRef.current = true;
+    programmaticScroll.current = false;
+    unstick();
+  }, [clearProgrammaticGuardTimer, unstick]);
 
   // Scroll listener — detect manual scroll-away
   useEffect(() => {
@@ -91,13 +100,21 @@ export function useStickToBottom<T extends HTMLElement>() {
       const newHeight = container.scrollHeight;
       if (newHeight !== previousHeight) {
         const distanceBeforeGrowth = distanceFromBottom(previousHeight, container.scrollTop, container.clientHeight);
+        const distanceAfterResize = distanceFromBottom(newHeight, container.scrollTop, container.clientHeight);
         prevScrollHeight.current = newHeight;
-        if (stuckRef.current || distanceBeforeGrowth <= BOTTOM_THRESHOLD_PX) {
+        if (distanceAfterResize <= BOTTOM_THRESHOLD_PX) {
           stick();
-          clearProgrammaticGuardTimer();
-          programmaticScroll.current = true;
-          container.scrollTop = newHeight;
-          programmaticScroll.current = false;
+        } else {
+          const shouldAutoFollow =
+            !autoFollowSuppressedRef.current &&
+            (stuckRef.current || distanceBeforeGrowth <= BOTTOM_THRESHOLD_PX);
+          if (shouldAutoFollow) {
+            stick();
+            clearProgrammaticGuardTimer();
+            programmaticScroll.current = true;
+            container.scrollTop = newHeight;
+            programmaticScroll.current = false;
+          }
         }
       }
       rafId = requestAnimationFrame(tick);
@@ -139,5 +156,5 @@ export function useStickToBottom<T extends HTMLElement>() {
     };
   }, [clearProgrammaticGuardTimer]);
 
-  return { containerRef, isAtBottom, scrollToBottom, snapToBottom };
+  return { containerRef, detachFromBottom, isAtBottom, scrollToBottom, snapToBottom };
 }

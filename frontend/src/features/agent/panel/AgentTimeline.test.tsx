@@ -76,6 +76,7 @@ function renderTimeline(
     optimisticToolCallsByRunId: {},
     activeOptimisticEvents: [],
     activeOptimisticToolCalls: [],
+    detachFromBottom: () => undefined,
     onHydrateToolCall: () => undefined,
     hydratingToolCallIds: new Set<string>(),
     isAtBottom: true,
@@ -84,6 +85,21 @@ function renderTimeline(
   };
 
   return render(<AgentTimeline {...props} />);
+}
+
+function expectArticleClasses(
+  element: HTMLElement,
+  expectedClasses: string[],
+  unexpectedClasses: string[] = []
+) {
+  const article = element.closest("article");
+  expect(article).not.toBeNull();
+  for (const className of expectedClasses) {
+    expect(article).toHaveClass(className);
+  }
+  for (const className of unexpectedClasses) {
+    expect(article).not.toHaveClass(className);
+  }
 }
 
 describe("AgentTimeline", () => {
@@ -126,6 +142,7 @@ describe("AgentTimeline", () => {
       optimisticToolCallsByRunId: {},
       activeOptimisticEvents: [],
       activeOptimisticToolCalls: [],
+      detachFromBottom: () => undefined,
       onHydrateToolCall: () => undefined,
       hydratingToolCallIds: new Set<string>(),
       isAtBottom: true,
@@ -155,6 +172,22 @@ describe("AgentTimeline", () => {
 
     expect(markdownRenderSpy).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Historical **markdown** reply")).toBeInTheDocument();
+    expectArticleClasses(screen.getByText("Historical **markdown** reply"), ["agent-message", "agent-message-assistant"], ["agent-message-user"]);
+  });
+
+  it("keeps user messages as right-aligned bubbles", () => {
+    renderTimeline({
+      messages: [
+        buildMessage({
+          id: "message-user-1",
+          role: "user",
+          content_markdown: "Bubble me."
+        })
+      ]
+    });
+
+    expectArticleClasses(screen.getByText("Bubble me."), ["agent-message", "agent-message-user"], ["agent-message-assistant"]);
+    expect(screen.getByText("Bubble me.").closest(".agent-message-user-bubble")).not.toBeNull();
   });
 
   it("shows the optimistic assistant caret before the first stream event arrives", () => {
@@ -165,6 +198,7 @@ describe("AgentTimeline", () => {
 
     expect(screen.getByText("▍")).toBeInTheDocument();
     expect(container.querySelector(".agent-message-streaming-text")).not.toBeNull();
+    expectArticleClasses(screen.getByText("▍"), ["agent-message", "agent-message-assistant", "agent-message-streaming"], ["agent-message-user"]);
   });
 
   it("switches into the live activity bubble as soon as run_started arrives", () => {
@@ -227,6 +261,7 @@ describe("AgentTimeline", () => {
 
     expect(screen.getAllByText("Run interrupted by user.")).toHaveLength(1);
     expect(screen.getByText("Please import the statement.")).toBeInTheDocument();
+    expectArticleClasses(screen.getByText("Run interrupted by user."), ["agent-message", "agent-message-assistant", "agent-message-activity"], ["agent-message-user"]);
   });
 
   it("does not render empty assistant shells for legacy tool-only runs without events", () => {
@@ -263,6 +298,7 @@ describe("AgentTimeline", () => {
     renderTimeline({
       messages: [
         buildMessage({
+          role: "assistant",
           attachments: [
             {
               id: "attachment-image-1",
@@ -291,6 +327,7 @@ describe("AgentTimeline", () => {
     renderTimeline({
       messages: [
         buildMessage({
+          role: "assistant",
           attachments: [
             {
               id: "attachment-image-1",
@@ -317,6 +354,7 @@ describe("AgentTimeline", () => {
     renderTimeline({
       messages: [
         buildMessage({
+          role: "assistant",
           attachments: [
             {
               id: "attachment-pdf-1",
@@ -347,6 +385,7 @@ describe("AgentTimeline", () => {
     renderTimeline({
       messages: [
         buildMessage({
+          role: "assistant",
           attachments: [
             {
               id: "attachment-pdf-1",
@@ -365,6 +404,40 @@ describe("AgentTimeline", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Open" }));
 
     expect(openSpy).toHaveBeenCalledWith(expect.stringContaining("blob:"), "_blank", "noopener,noreferrer");
+  });
+
+  it("renders user attachments as compact file rows above the message text", async () => {
+    requestBlobSpy.mockResolvedValue(new Blob(["pdf-bytes"], { type: "application/pdf" }));
+
+    renderTimeline({
+      messages: [
+        buildMessage({
+          role: "user",
+          content_markdown: "Please review these statements.",
+          attachments: [
+            {
+              id: "attachment-pdf-1",
+              message_id: "message-1",
+              display_name: "statement.pdf",
+              mime_type: "application/pdf",
+              file_path: "/tmp/statement.pdf",
+              attachment_url: "/api/v1/agent/attachments/attachment-pdf-1",
+              created_at: "2026-02-15T10:00:00Z"
+            }
+          ]
+        })
+      ]
+    });
+
+    const bubble = screen.getByText("Please review these statements.").closest(".agent-message-user-bubble");
+    expect(bubble).not.toBeNull();
+    expect(await screen.findByRole("button", { name: "Open statement.pdf" })).toBeInTheDocument();
+    expect(screen.getByText("statement.pdf")).toBeInTheDocument();
+    expect(screen.queryByTitle("statement.pdf")).not.toBeInTheDocument();
+    expect(requestBlobSpy).toHaveBeenCalledWith(
+      "/api/v1/agent/attachments/attachment-pdf-1",
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
   });
 
   it("renders attached optimistic tool progress with hydrated tool details and no duplicate run card", async () => {
@@ -402,6 +475,7 @@ describe("AgentTimeline", () => {
 
     expect(screen.getAllByText("1 tool call")).toHaveLength(1);
     expect(document.querySelectorAll("article.agent-message-assistant")).toHaveLength(1);
+    expect(document.querySelectorAll("article.agent-message-user")).toHaveLength(0);
 
     await userEvent.click(screen.getByText("list_tags"));
 
@@ -443,5 +517,7 @@ describe("AgentTimeline", () => {
     expect(liveBubbleText.indexOf("Still streaming the next sentence...")).toBeGreaterThan(
       liveBubbleText.indexOf("Drafting the first batch now.")
     );
+    expect(document.querySelector("article.agent-message-streaming")).toHaveClass("agent-message-assistant");
+    expect(document.querySelector("article.agent-message-streaming")).not.toHaveClass("agent-message-user");
   });
 });

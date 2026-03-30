@@ -106,6 +106,7 @@ describe("AgentRunBlock", () => {
 
   it("hydrates compact tool call payloads when the row is expanded", async () => {
     const onHydrateToolCall = vi.fn();
+    const onInspectActivity = vi.fn();
     const toolCall = buildToolCall({
       id: "tool-compact",
       run_id: "run-compact",
@@ -135,6 +136,7 @@ describe("AgentRunBlock", () => {
       <AgentRunBlock
         run={run}
         isMutating={false}
+        onInspectActivity={onInspectActivity}
         onHydrateToolCall={onHydrateToolCall}
         mode="activity"
       />
@@ -142,6 +144,7 @@ describe("AgentRunBlock", () => {
 
     await userEvent.click(screen.getByText("Listed tags"));
 
+    expect(onInspectActivity).toHaveBeenCalled();
     expect(onHydrateToolCall).toHaveBeenCalledWith("run-compact", "tool-compact");
     expect(screen.getByText("Tool details")).toBeInTheDocument();
   });

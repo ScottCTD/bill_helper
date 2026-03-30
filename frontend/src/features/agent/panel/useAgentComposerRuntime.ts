@@ -71,18 +71,24 @@ export function useAgentComposerRuntime({
   const [pendingAssistantMessagesByThreadId, setPendingAssistantMessagesByThreadId] = useState<
     Record<string, PendingAssistantMessage>
   >({});
-  const { containerRef: timelineScrollRef, isAtBottom, scrollToBottom, snapToBottom } = useStickToBottom<HTMLDivElement>();
+  const {
+    containerRef: timelineScrollRef,
+    detachFromBottom,
+    isAtBottom,
+    scrollToBottom,
+    snapToBottom
+  } = useStickToBottom<HTMLDivElement>();
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [composerModelOverride, setComposerModelOverride] = useState<string | null>(null);
   const lastSnappedThreadRef = useRef("");
   const pendingUserMessagesRef = useRef<Record<string, PendingUserMessage>>({});
   const attachmentState = useAgentDraftAttachments({ setActionError });
   const {
-    draftFiles,
-    setDraftFiles,
-    draftAttachmentPreviews,
+    draftAttachments,
+    setDraftAttachments,
     isComposerDragActive,
     fileInputRef,
+    resolveDraftAttachmentsForSend,
     handlers: {
       handleDraftFileSelection,
       handleComposerPaste,
@@ -190,7 +196,7 @@ export function useAgentComposerRuntime({
     addOptimisticRunningThreadId,
     bulkLaunchConcurrencyLimit,
     clearOptimisticThreadTitle,
-    draftFiles,
+    draftAttachments,
     draftMessage,
     ensureThreadId,
     handleAgentStreamEvent,
@@ -200,8 +206,9 @@ export function useAgentComposerRuntime({
     resetOptimisticRunState,
     selectedComposerModel,
     selectedThreadId,
+    resolveDraftAttachmentsForSend,
     setActionError,
-    setDraftFiles,
+    setDraftAttachments,
     setDraftMessage,
     setIsBulkLaunching,
     setPendingAssistantMessage,
@@ -348,7 +355,7 @@ export function useAgentComposerRuntime({
       availableModels: availableComposerModels,
       bulkModeHelpText: BULK_MODE_HELP_TEXT,
       composerTextareaRef,
-      draftAttachmentPreviews,
+      draftAttachments,
       draftMessage,
       fileInputRef,
       isBulkLaunching,
@@ -381,6 +388,7 @@ export function useAgentComposerRuntime({
       activeOptimisticToolCalls,
       activeStreamReasoningText,
       activeStreamText,
+      detachFromBottom,
       hydratingToolCallIds,
       isAtBottom,
       onHydrateToolCall: handleHydrateToolCall,

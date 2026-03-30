@@ -145,6 +145,7 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
       activeOptimisticToolCalls: runtime.timeline.activeOptimisticToolCalls,
       activeStreamReasoningText: runtime.timeline.activeStreamReasoningText,
       activeStreamText: runtime.timeline.activeStreamText,
+      detachFromBottom: runtime.timeline.detachFromBottom,
       errorMessage: data.threadQuery.isError ? (data.threadQuery.error as Error).message : null,
       hydratingToolCallIds: runtime.timeline.hydratingToolCallIds,
       isAtBottom: runtime.timeline.isAtBottom,

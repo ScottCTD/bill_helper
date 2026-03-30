@@ -3,24 +3,19 @@
  * - Purpose: provide the `useAgentDraftAttachments` React hook or UI state helper.
  * - Inputs: callers that import `frontend/src/features/agent/panel/useAgentDraftAttachments.ts` and pass module-defined arguments or framework events.
  * - Outputs: hooks and state helpers exported by `useAgentDraftAttachments`.
- * - Side effects: client-side state coordination and query wiring.
+ * - Side effects: client-side attachment upload/parsing coordination plus local object URL lifecycle.
  */
 import {
   type ChangeEvent,
   type ClipboardEvent,
   type DragEvent,
   useEffect,
-  useMemo,
   useRef,
   useState
 } from "react";
 
-import {
-  detectDraftAttachmentKind,
-  isSupportedAgentAttachment,
-  type DraftAttachment,
-  type DraftAttachmentPreview
-} from "./types";
+import { deleteAgentDraftAttachment, uploadAgentDraftAttachment } from "../../../lib/api";
+import { detectDraftAttachmentKind, isSupportedAgentAttachment, type DraftAttachment, type ReadyDraftAttachment } from "./types";
 
 interface UseAgentDraftAttachmentsArgs {
   setActionError: (message: string | null) => void;
@@ -28,35 +23,103 @@ interface UseAgentDraftAttachmentsArgs {
 
 export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
   const { setActionError } = args;
-  const [draftFiles, setDraftFiles] = useState<DraftAttachment[]>([]);
+  const [draftAttachments, setDraftAttachments] = useState<DraftAttachment[]>([]);
   const [isComposerDragActive, setIsComposerDragActive] = useState(false);
 
   const draftFileIdCounterRef = useRef(0);
   const composerDragDepthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadAbortControllersRef = useRef<Record<string, AbortController>>({});
+  const uploadPromisesRef = useRef<Record<string, Promise<ReadyDraftAttachment>>>({});
+  const previousAttachmentsRef = useRef<Record<string, DraftAttachment>>({});
 
-  const draftAttachmentPreviews = useMemo<DraftAttachmentPreview[]>(
-    () =>
-      draftFiles.map((item) => ({
-        id: item.id,
-        file: item.file,
-        url: URL.createObjectURL(item.file),
-        kind: detectDraftAttachmentKind(item.file)
-      })),
-    [draftFiles]
-  );
+  useEffect(() => {
+    const previousAttachments = previousAttachmentsRef.current;
+    const nextAttachments = Object.fromEntries(draftAttachments.map((attachment) => [attachment.id, attachment]));
+    Object.entries(previousAttachments).forEach(([attachmentId, attachment]) => {
+      if (!(attachmentId in nextAttachments)) {
+        delete uploadAbortControllersRef.current[attachmentId];
+        delete uploadPromisesRef.current[attachmentId];
+        URL.revokeObjectURL(attachment.localObjectUrl);
+      }
+    });
+    previousAttachmentsRef.current = nextAttachments;
+  }, [draftAttachments]);
 
   useEffect(() => {
     return () => {
-      draftAttachmentPreviews.forEach((preview) => {
-        URL.revokeObjectURL(preview.url);
+      Object.values(uploadAbortControllersRef.current).forEach((controller) => controller.abort());
+      Object.values(previousAttachmentsRef.current).forEach((attachment) => {
+        URL.revokeObjectURL(attachment.localObjectUrl);
       });
     };
-  }, [draftAttachmentPreviews]);
+  }, []);
 
   function nextDraftAttachmentId(): string {
     draftFileIdCounterRef.current += 1;
     return `draft-attachment-${draftFileIdCounterRef.current}`;
+  }
+
+  function updateDraftAttachment(attachmentId: string, updater: (current: DraftAttachment) => DraftAttachment): void {
+    setDraftAttachments((current) =>
+      current.map((attachment) => (attachment.id === attachmentId ? updater(attachment) : attachment))
+    );
+  }
+
+  function startDraftAttachmentUpload(attachment: DraftAttachment): void {
+    const abortController = new AbortController();
+    uploadAbortControllersRef.current[attachment.id] = abortController;
+    const uploadPromise = (async () => {
+      const uploadedAttachment = await uploadAgentDraftAttachment({
+        file: attachment.file,
+        signal: abortController.signal,
+        onUploadProgress: (progressPercent) => {
+          updateDraftAttachment(attachment.id, (current) => ({
+            ...current,
+            phase: "uploading",
+            uploadProgress: progressPercent
+          }));
+        },
+        onParsingStart: () => {
+          updateDraftAttachment(attachment.id, (current) => ({
+            ...current,
+            phase: "parsing",
+            uploadProgress: 100
+          }));
+        }
+      });
+
+      const readyAttachment: ReadyDraftAttachment = {
+        id: attachment.id,
+        file: attachment.file,
+        kind: attachment.kind,
+        localObjectUrl: attachment.localObjectUrl,
+        uploadedAttachmentId: uploadedAttachment.id
+      };
+
+      updateDraftAttachment(attachment.id, (current) => ({
+        ...current,
+        phase: "ready",
+        uploadProgress: 100,
+        uploadedAttachmentId: uploadedAttachment.id,
+        errorMessage: null
+      }));
+      delete uploadAbortControllersRef.current[attachment.id];
+      return readyAttachment;
+    })().catch((error: Error) => {
+      delete uploadAbortControllersRef.current[attachment.id];
+      if (error.name === "AbortError") {
+        throw error;
+      }
+      updateDraftAttachment(attachment.id, (current) => ({
+        ...current,
+        phase: "failed",
+        errorMessage: error.message
+      }));
+      throw error;
+    });
+    uploadPromise.catch(() => undefined);
+    uploadPromisesRef.current[attachment.id] = uploadPromise;
   }
 
   function appendDraftAttachments(files: File[]): void {
@@ -77,13 +140,20 @@ export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
     if (allowedFiles.length === 0) {
       return;
     }
-    setDraftFiles((current) => [
-      ...current,
-      ...allowedFiles.map((file) => ({
-        id: nextDraftAttachmentId(),
-        file
-      }))
-    ]);
+
+    const nextAttachments = allowedFiles.map((file) => ({
+      id: nextDraftAttachmentId(),
+      file,
+      kind: detectDraftAttachmentKind(file),
+      localObjectUrl: URL.createObjectURL(file),
+      uploadedAttachmentId: null,
+      uploadProgress: 0,
+      phase: "uploading" as const,
+      errorMessage: null
+    }));
+
+    setDraftAttachments((current) => [...current, ...nextAttachments]);
+    nextAttachments.forEach((attachment) => startDraftAttachmentUpload(attachment));
   }
 
   function handleDraftFileSelection(event: ChangeEvent<HTMLInputElement>) {
@@ -161,15 +231,46 @@ export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
   }
 
   function removeDraftAttachment(attachmentId: string) {
-    setDraftFiles((current) => current.filter((item) => item.id !== attachmentId));
+    const currentAttachment = previousAttachmentsRef.current[attachmentId];
+    uploadAbortControllersRef.current[attachmentId]?.abort();
+    delete uploadAbortControllersRef.current[attachmentId];
+    delete uploadPromisesRef.current[attachmentId];
+    setDraftAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
+    if (currentAttachment?.uploadedAttachmentId) {
+      void deleteAgentDraftAttachment(currentAttachment.uploadedAttachmentId).catch((error: Error) => {
+        setActionError(error.message);
+      });
+    }
+  }
+
+  async function resolveDraftAttachmentsForSend(attachments: DraftAttachment[]): Promise<ReadyDraftAttachment[]> {
+    const results = await Promise.all(
+      attachments.map(async (attachment) => {
+        if (attachment.uploadedAttachmentId) {
+          return {
+            id: attachment.id,
+            file: attachment.file,
+            kind: attachment.kind,
+            localObjectUrl: attachment.localObjectUrl,
+            uploadedAttachmentId: attachment.uploadedAttachmentId
+          } satisfies ReadyDraftAttachment;
+        }
+        const uploadPromise = uploadPromisesRef.current[attachment.id];
+        if (!uploadPromise) {
+          throw new Error(attachment.errorMessage || `Attachment ${attachment.file.name} is not ready.`);
+        }
+        return await uploadPromise;
+      })
+    );
+    return results;
   }
 
   return {
-    draftFiles,
-    setDraftFiles,
-    draftAttachmentPreviews,
+    draftAttachments,
+    setDraftAttachments,
     isComposerDragActive,
     fileInputRef,
+    resolveDraftAttachmentsForSend,
     handlers: {
       handleDraftFileSelection,
       handleComposerPaste,

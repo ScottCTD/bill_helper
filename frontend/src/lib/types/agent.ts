@@ -68,6 +68,13 @@ export interface AgentMessageAttachment {
   created_at: string;
 }
 
+export interface AgentDraftAttachment {
+  id: string;
+  display_name: string;
+  mime_type: string;
+  created_at: string;
+}
+
 export interface AgentMessage {
   id: string;
   thread_id: string;

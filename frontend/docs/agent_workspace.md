@@ -57,17 +57,19 @@ Supporting modules include:
 - running state is thread-scoped rather than panel-global, so a background stream keeps its spinner in the rail without forcing other selected idle threads into a stop-oriented composer state
 - delete stays unavailable only for the specific running or deleting thread; idle sibling threads keep their delete affordance even while another thread is active
 - inline rename remains available per thread unless that same thread already has a rename mutation in flight
-- assistant activity bubbles keep a stable conversational width while nested tool-call sections expand or collapse
+- assistant turns and user bubbles share the same centered readable column; assistant content drops the outer bubble shell, while user bubbles stay right-aligned within that column and only go edge-to-edge when the panel is narrow
 - timeline is event-driven from persisted `run.events`
 - tool rows appear as queued, then update in place through running, completed, failed, or cancelled
 - backend tool-call payloads now include a high-signal `display_label`; the timeline uses that summary for both compact SSE snapshots and hydrated rows instead of rendering raw tool names
 - streamed `rename_thread` calls hydrate immediately so the thread rail relabels before the assistant finishes the turn
-- live SSE `reasoning_delta` and `text_delta` chunks render transient Reasoning and Assistant updates inside the same activity bubble until persisted events/messages reconcile
+- live SSE `reasoning_delta` and `text_delta` chunks render transient Reasoning and Assistant updates inside the same full-width assistant row until persisted events/messages reconcile
 - compact tool-call snapshots are hydrated on demand from `GET /agent/tool-calls/{tool_call_id}`
-- assistant activity and transient SSE text render in the same assistant/update bubble
+- assistant activity and transient SSE text render in the same full-width assistant row without an outer bubble shell
+- manually expanding or collapsing activity/tool-call details detaches the timeline from auto-follow so the clicked location stays stable until the reviewer scrolls back to bottom
 - optimistic user and assistant placeholders reconcile against persisted timeline messages
 - persisted image attachments render through authenticated blob fetches so previews survive thread reloads even though the API uses bearer-token auth instead of cookie-backed file URLs
-- inline attachment cards stay bounded: images preserve their aspect ratio up to a larger capped size and open in a browser-native tab when clicked, while PDFs use a small scrollable browser preview plus filename label and an explicit `Open` action
+- user-message attachments render as compact file rows above the message text and open in a browser-native tab instead of embedding inline previews inside the bubble
+- assistant-message inline attachment cards stay bounded: images preserve their aspect ratio up to a larger capped size and open in a browser-native tab when clicked, while PDFs use a small scrollable browser preview plus filename label and an explicit `Open` action
 - `useAgentComposerStreamState.ts` owns stream-event accumulation, tool-call hydration, rename-thread reconciliation, and the optimistic run timeline cache
 
 ## Thread Review Surface
@@ -93,11 +95,14 @@ Supporting modules include:
 
 ## Composer
 
-- pinned composer surface with inline attachment chips
+- pinned composer surface with larger stacked attachment prep cards
 - composer now stays docked against the bottom edge of the agent workspace instead of leaving dead space below the input row
 - textarea and control row share one card surface instead of reading as separate color bands
 - supports picker, paste, and drag-drop for images and PDFs
-- attachment chips stay inline-only for now, while message attachments use browser-native large-view behavior instead of an app modal: images open in a native tab on click and PDFs expose an `Open` action beside the inline preview
+- composer attachments upload immediately on selection, then continue through server-side parsing before send; each draft card shows filename, live upload/parsing state, and a compact inline progress bar beside the filename
+- composer draft attachments stay removable while they are uploading or parsing so the user can drop a file before sending
+- single-send and Bulk mode both wait for all draft attachments to finish upload/parsing before the actual message request starts; once ready, the send request references persisted `attachment_ids` instead of re-uploading the same files
+- message attachments use browser-native large-view behavior instead of an app modal: user-message attachments stay compact file rows, assistant images open in a native tab on click, and assistant PDFs expose an `Open` action beside the inline preview
 - includes a `Bulk mode` toggle beside `Add Attachments`
 - shows an `Agent model` dropdown immediately left of the primary composer action and sources options from runtime settings `available_agent_models` in the same order
 - initializes the picker from the latest run model when a thread has history, otherwise falls back through the thread's configured model and runtime default `agent_model`

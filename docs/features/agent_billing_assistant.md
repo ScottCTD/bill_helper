@@ -6,7 +6,7 @@ This feature doc describes the current billing assistant architecture, prompt sh
 
 1. Open the app and navigate to the Agent route.
 2. Create or select a conversation thread.
-3. Pick the next-run model from the composer dropdown if needed, then send text and optional attachments.
+3. Pick the next-run model from the composer dropdown if needed, attach optional images/PDFs, let upload/parsing finish or continue in the background, then send.
 4. Review the live run timeline:
    - user and assistant messages render inline
    - progress updates and tool-call events appear during execution
@@ -45,18 +45,19 @@ The old read/proposal/review modules still exist internally, but no longer as di
 ## Runtime Flow
 
 1. User sends a message to an agent thread.
-2. Backend persists the message, attachments, and a new `agent_runs` row.
-3. Runtime builds the system prompt, current-user context, entity-category context, user memory section, and message history.
-4. If the thread is untitled, the runtime exposes only `rename_thread` and requests that tool explicitly.
-5. After the thread has a valid title, the runtime exposes the five-tool catalog.
-6. The model uses `send_intermediate_update` before meaningful tool-call batches.
-7. For Bill Helper app work, the model calls `terminal` and executes `bh ...` inside the workspace container.
-8. `terminal` ensures the workspace is running, mints a short-lived backend session, injects `BH_*` env, executes `bash -lc`, truncates output when needed, and revokes the temporary session afterward.
-9. When an upload hint lists related image paths, the model can call `read_image` later to append only the selected `/workspace/...` images for visual inspection.
-10. `bh` calls backend routes for reads and current-thread proposal lifecycle actions.
-11. Proposal creation stores pending `AgentChangeItem` rows scoped to the current thread and run.
-12. Human review approves, rejects, or reopens proposals.
-13. Only approval apply handlers mutate the real domain tables.
+2. If the user attached files in the composer first, backend has already persisted and parsed those draft uploads under canonical `user_files`.
+3. Backend persists the message, binds any uploaded attachments (or inline request files), and creates a new `agent_runs` row.
+4. Runtime builds the system prompt, current-user context, entity-category context, user memory section, and message history.
+5. If the thread is untitled, the runtime exposes only `rename_thread` and requests that tool explicitly.
+6. After the thread has a valid title, the runtime exposes the five-tool catalog.
+7. The model uses `send_intermediate_update` before meaningful tool-call batches.
+8. For Bill Helper app work, the model calls `terminal` and executes `bh ...` inside the workspace container.
+9. `terminal` ensures the workspace is running, mints a short-lived backend session, injects `BH_*` env, executes `bash -lc`, truncates output when needed, and revokes the temporary session afterward.
+10. When an upload hint lists related image paths, the model can call `read_image` later to append only the selected `/workspace/...` images for visual inspection.
+11. `bh` calls backend routes for reads and current-thread proposal lifecycle actions.
+12. Proposal creation stores pending `AgentChangeItem` rows scoped to the current thread and run.
+13. Human review approves, rejects, or reopens proposals.
+14. Only approval apply handlers mutate the real domain tables.
 
 ## Prompt Shape
 

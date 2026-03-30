@@ -25,8 +25,10 @@ vi.mock("../../lib/api", async () => {
     reopenAgentChangeItem: vi.fn(),
     renameAgentThread: vi.fn(),
     rejectAgentChangeItem: vi.fn(),
+    deleteAgentDraftAttachment: vi.fn(),
     sendAgentMessage: vi.fn(),
-    streamAgentMessage: vi.fn()
+    streamAgentMessage: vi.fn(),
+    uploadAgentDraftAttachment: vi.fn()
   };
 });
 
@@ -119,6 +121,10 @@ function buildPdfFile(name: string) {
   return new File(["%PDF-1.7"], name, { type: "application/pdf" });
 }
 
+function uploadedAttachmentIdForFileName(name: string) {
+  return `draft-${name}`;
+}
+
 describe("AgentPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -162,6 +168,7 @@ describe("AgentPanel", () => {
     vi.mocked(api.rejectAgentChangeItem).mockResolvedValue(buildChangeItem({ status: "REJECTED" }));
     vi.mocked(api.reopenAgentChangeItem).mockResolvedValue(buildChangeItem({ status: "PENDING_REVIEW" }));
     vi.mocked(api.deleteAgentThread).mockResolvedValue();
+    vi.mocked(api.deleteAgentDraftAttachment).mockResolvedValue();
     vi.mocked(api.interruptAgentRun).mockResolvedValue(buildRun({ status: "failed", error_text: "Run interrupted by user." }));
     vi.mocked(api.renameAgentThread).mockResolvedValue({
       id: "thread-1",
@@ -169,6 +176,12 @@ describe("AgentPanel", () => {
       created_at: "2026-03-06T10:00:00Z",
       updated_at: "2026-03-06T10:05:00Z"
     });
+    vi.mocked(api.uploadAgentDraftAttachment).mockImplementation(async ({ file }) => ({
+      id: uploadedAttachmentIdForFileName(file.name),
+      display_name: file.name,
+      mime_type: file.type || "application/octet-stream",
+      created_at: "2026-03-06T10:00:00Z"
+    }));
     vi.mocked(api.sendAgentMessage).mockResolvedValue(
       buildRun({
         status: "running",
@@ -305,6 +318,98 @@ describe("AgentPanel", () => {
     expect(api.sendAgentMessage).not.toHaveBeenCalled();
   });
 
+  it("shows attachment upload then parsing progress before the draft becomes ready", async () => {
+    let resolveUpload: ((value: Awaited<ReturnType<typeof api.uploadAgentDraftAttachment>>) => void) | null = null;
+
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
+    vi.mocked(api.uploadAgentDraftAttachment).mockImplementation(
+      ({ file, onUploadProgress, onParsingStart }) =>
+        new Promise((resolve) => {
+          onUploadProgress?.(42);
+          onParsingStart?.();
+          resolveUpload = () =>
+            resolve({
+              id: uploadedAttachmentIdForFileName(file.name),
+              display_name: file.name,
+              mime_type: file.type || "application/octet-stream",
+              created_at: "2026-03-06T10:00:00Z"
+            });
+        })
+    );
+
+    const { container } = renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!(fileInput instanceof HTMLInputElement)) {
+      throw new Error("Expected file input");
+    }
+
+    await userEvent.upload(fileInput, [buildPdfFile("statement.pdf")]);
+
+    expect(await screen.findByText("statement.pdf")).toBeInTheDocument();
+    expect(screen.getByText("Parsing…")).toBeInTheDocument();
+
+    await act(async () => {
+      resolveUpload?.();
+    });
+
+    await waitFor(() => expect(screen.queryByText("Parsing…")).not.toBeInTheDocument());
+    expect(screen.getByText("statement.pdf")).toBeInTheDocument();
+  });
+
+  it("waits for attachment preparation before sending the streamed message", async () => {
+    let resolveUpload: ((value: Awaited<ReturnType<typeof api.uploadAgentDraftAttachment>>) => void) | null = null;
+
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getAgentThread)
+      .mockResolvedValueOnce(buildThreadDetail([]))
+      .mockResolvedValue(buildThreadDetail([]));
+    vi.mocked(api.uploadAgentDraftAttachment).mockImplementation(
+      ({ file }) =>
+        new Promise((resolve) => {
+          resolveUpload = () =>
+            resolve({
+              id: uploadedAttachmentIdForFileName(file.name),
+              display_name: file.name,
+              mime_type: file.type || "application/octet-stream",
+              created_at: "2026-03-06T10:00:00Z"
+            });
+        })
+    );
+
+    const { container } = renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!(fileInput instanceof HTMLInputElement)) {
+      throw new Error("Expected file input");
+    }
+
+    await userEvent.upload(fileInput, [buildPdfFile("statement.pdf")]);
+    await userEvent.type(screen.getByRole("textbox"), "Review this statement");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument();
+    expect(api.streamAgentMessage).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveUpload?.();
+    });
+
+    await waitFor(() =>
+      expect(api.streamAgentMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread-1",
+          content: "Review this statement",
+          files: [],
+          attachmentIds: [uploadedAttachmentIdForFileName("statement.pdf")]
+        })
+      )
+    );
+  });
+
   it("starts one fresh thread per file in Bulk mode without reusing the selected thread", async () => {
     let createCount = 0;
     vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
@@ -341,7 +446,8 @@ describe("AgentPanel", () => {
         {
           threadId: "thread-created-1",
           content: "Review this statement",
-          files: [expect.objectContaining({ name: "statement-january.pdf" })],
+          files: [],
+          attachmentIds: [uploadedAttachmentIdForFileName("statement-january.pdf")],
           modelName: "gpt-test"
         }
       ],
@@ -349,7 +455,8 @@ describe("AgentPanel", () => {
         {
           threadId: "thread-created-2",
           content: "Review this statement",
-          files: [expect.objectContaining({ name: "statement-february.pdf" })],
+          files: [],
+          attachmentIds: [uploadedAttachmentIdForFileName("statement-february.pdf")],
           modelName: "gpt-test"
         }
       ]

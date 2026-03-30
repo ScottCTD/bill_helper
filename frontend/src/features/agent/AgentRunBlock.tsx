@@ -29,6 +29,7 @@ import { MarkdownRenderer } from "../../components/ui/MarkdownRenderer";
 interface AgentRunBlockProps {
   run: AgentRun;
   isMutating: boolean;
+  onInspectActivity?: () => void;
   onHydrateToolCall?: (runId: string, toolCallId: string) => void;
   hydratingToolCallIds?: ReadonlySet<string>;
   mode?: "activity" | "summary" | "all";
@@ -58,16 +59,18 @@ function renderableStreamingUpdateText(value: string, showPlaceholder: boolean):
 function CollapsibleReasoningUpdate({
   message,
   source,
-  defaultOpen
+  defaultOpen,
+  onInspectActivity
 }: {
   message: string;
   source: ReasoningUpdateSource;
   defaultOpen?: boolean;
+  onInspectActivity?: () => void;
 }) {
   const label = reasoningSourceLabel(source);
   return (
     <details className="agent-reasoning-update-collapsible" open={defaultOpen}>
-      <summary>
+      <summary onClick={onInspectActivity}>
         <ChevronRight className="agent-tool-call-chevron" />
         <span className="agent-reasoning-update-label">{label}</span>
         <span className="agent-reasoning-update-preview">{reasoningUpdatePreview(message)}</span>
@@ -80,11 +83,13 @@ function CollapsibleReasoningUpdate({
 function ToolCallTimelineRow({
   item,
   defaultOpen,
+  onInspectActivity,
   onHydrateToolCall,
   isHydrating = false
 }: {
   item: Extract<RunActivityItem, { type: "tool_call" }>;
   defaultOpen?: boolean;
+  onInspectActivity?: () => void;
   onHydrateToolCall?: (runId: string, toolCallId: string) => void;
   isHydrating?: boolean;
 }) {
@@ -112,7 +117,7 @@ function ToolCallTimelineRow({
       open={defaultOpen}
       onToggle={(event) => setIsOpen((event.currentTarget as HTMLDetailsElement).open)}
     >
-      <summary>
+      <summary onClick={onInspectActivity}>
         <ChevronRight className="agent-tool-call-chevron" />
         <span className="agent-tool-call-name">{toolCall?.display_label ?? toolCall?.tool_name ?? "Tool call"}</span>
         <span
@@ -168,6 +173,7 @@ function ToolCallTimelineRow({
 function ActivityTimeline({
   items,
   isRunning,
+  onInspectActivity,
   onHydrateToolCall,
   hydratingToolCallIds,
   streamingReasoningText = "",
@@ -176,6 +182,7 @@ function ActivityTimeline({
 }: {
   items: RunActivityItem[];
   isRunning: boolean;
+  onInspectActivity?: () => void;
   onHydrateToolCall?: (runId: string, toolCallId: string) => void;
   hydratingToolCallIds?: ReadonlySet<string>;
   streamingReasoningText?: string;
@@ -194,7 +201,7 @@ function ActivityTimeline({
   const hasStreamingAssistantText = visibleStreamingAssistantText.length > 0;
   return (
     <details className={cn("agent-run-root-activity", isRunning && "agent-run-root-activity-static")} open={isRunning}>
-      <summary>
+      <summary onClick={onInspectActivity}>
         <ChevronRight className="agent-tool-call-chevron" />
         <span className="agent-tool-call-group-label">
           {summarizeActivityTimeline(
@@ -212,18 +219,20 @@ function ActivityTimeline({
           if (item.type === "reasoning_update") {
             return (
               <CollapsibleReasoningUpdate
-                key={item.key}
-                message={item.message}
-                source={item.source}
-                defaultOpen={isRunning && isLast}
-              />
-            );
-          }
+              key={item.key}
+              message={item.message}
+              source={item.source}
+              defaultOpen={isRunning && isLast}
+              onInspectActivity={onInspectActivity}
+            />
+          );
+        }
           return (
             <ToolCallTimelineRow
               key={item.key}
               item={item}
               defaultOpen={false}
+              onInspectActivity={onInspectActivity}
               onHydrateToolCall={onHydrateToolCall}
               isHydrating={Boolean(hydratingToolCallIds?.has(item.toolCallId))}
             />
@@ -234,6 +243,7 @@ function ActivityTimeline({
             message={visibleStreamingReasoningText}
             source="model_reasoning"
             defaultOpen={isRunning}
+            onInspectActivity={onInspectActivity}
           />
         ) : null}
         {hasStreamingAssistantText ? (
@@ -241,6 +251,7 @@ function ActivityTimeline({
             message={visibleStreamingAssistantText}
             source="assistant_content"
             defaultOpen={isRunning}
+            onInspectActivity={onInspectActivity}
           />
         ) : null}
       </div>
@@ -251,6 +262,7 @@ function ActivityTimeline({
 export function PendingAssistantActivityBlock({
   events,
   toolCalls = [],
+  onInspectActivity,
   onHydrateToolCall,
   hydratingToolCallIds,
   streamingReasoningText = "",
@@ -258,6 +270,7 @@ export function PendingAssistantActivityBlock({
 }: {
   events: AgentRunEvent[];
   toolCalls?: AgentToolCall[];
+  onInspectActivity?: () => void;
   onHydrateToolCall?: (runId: string, toolCallId: string) => void;
   hydratingToolCallIds?: ReadonlySet<string>;
   streamingReasoningText?: string;
@@ -280,6 +293,7 @@ export function PendingAssistantActivityBlock({
     <ActivityTimeline
       items={items}
       isRunning={true}
+      onInspectActivity={onInspectActivity}
       onHydrateToolCall={onHydrateToolCall}
       hydratingToolCallIds={hydratingToolCallIds}
       streamingReasoningText={streamingReasoningText}
@@ -292,6 +306,7 @@ export function PendingAssistantActivityBlock({
 export function AgentRunBlock({
   run,
   isMutating,
+  onInspectActivity,
   onHydrateToolCall,
   hydratingToolCallIds,
   mode = "all",
@@ -344,6 +359,7 @@ export function AgentRunBlock({
             <ActivityTimeline
               items={activityTimeline}
               isRunning={isRunning}
+              onInspectActivity={onInspectActivity}
               onHydrateToolCall={onHydrateToolCall}
               hydratingToolCallIds={hydratingToolCallIds}
               streamingReasoningText={streamingReasoningText}

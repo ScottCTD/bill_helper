@@ -69,6 +69,12 @@ class AgentMessageAttachmentRead(AgentOrmReadSchema):
     attachment_url: str
     created_at: datetime
 
+class AgentDraftAttachmentRead(AgentOrmReadSchema):
+    id: str
+    display_name: str
+    mime_type: str
+    created_at: datetime
+
 class AgentMessageRead(AgentOrmReadSchema):
     id: str
     thread_id: str

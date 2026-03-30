@@ -18,9 +18,11 @@ from starlette import status
 from backend.database import open_session
 from backend.enums_agent import AgentMessageRole, AgentRunStatus
 from backend.models_agent import AgentMessage, AgentRun, AgentThread
-from backend.config import get_settings
-from backend.services.agent.agent_attachment_bundle import ingest_agent_attachment_with_docling
-from backend.services.agent.attachments import create_message_attachment
+from backend.services.agent.attachments import (
+    attach_existing_user_files,
+    create_message_attachment,
+    ingest_draft_attachment_upload,
+)
 from backend.services.agent.context_tokens import count_context_tokens
 from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.runtime import (
@@ -90,6 +92,7 @@ async def create_user_message_and_start_run(
     thread_id: str,
     content: str,
     files: list[UploadFile],
+    attachment_ids: list[str] | None = None,
     db: Session,
     model_name: str | None = None,
     surface: str = "app",
@@ -113,12 +116,13 @@ async def create_user_message_and_start_run(
         )
 
     clean_content = _normalize_optional_text(content)
-    if not clean_content and not files:
+    requested_attachment_ids = list(attachment_ids or [])
+    if not clean_content and not files and not requested_attachment_ids:
         raise AgentExecutionPolicyError(
             detail="Message must include text or at least one attachment.",
             status_code=status.HTTP_400_BAD_REQUEST,
         )
-    if len(files) > settings.agent_max_images_per_message:
+    if len(files) + len(requested_attachment_ids) > settings.agent_max_images_per_message:
         raise AgentExecutionPolicyError(
             detail=f"Too many attachments. Max allowed is {settings.agent_max_images_per_message}.",
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -135,36 +139,17 @@ async def create_user_message_and_start_run(
     bundle_dirs_to_cleanup: list[Path] = []
     try:
         for upload in files:
-            mime_type = (upload.content_type or "").lower()
-            if not (mime_type.startswith("image/") or mime_type == "application/pdf"):
-                raise AgentExecutionPolicyError(
-                    detail="Only image and PDF attachments are supported.",
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                )
-            file_bytes = await upload.read()
-            if len(file_bytes) > settings.agent_max_image_size_bytes:
-                raise AgentExecutionPolicyError(
-                    detail=f"Attachment too large. Max bytes allowed is {settings.agent_max_image_size_bytes}.",
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                )
             try:
-                user_file = ingest_agent_attachment_with_docling(
+                user_file = await ingest_draft_attachment_upload(
                     db,
                     owner_user_id=thread.owner_user_id,
-                    file_bytes=file_bytes,
-                    mime_type=mime_type,
-                    original_filename=upload.filename,
-                    timezone_name=get_settings().current_user_timezone,
+                    upload=upload,
+                    settings=settings,
                 )
             except PolicyViolation as exc:
                 raise AgentExecutionPolicyError(
                     detail=exc.detail,
                     status_code=exc.status_code,
-                ) from exc
-            except RuntimeError as exc:
-                raise AgentExecutionPolicyError(
-                    detail="Attachment could not be parsed. Try a different file or format.",
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 ) from exc
             bundle_dirs_to_cleanup.append(resolve_user_file_path(user_file).parent)
             create_message_attachment(
@@ -172,6 +157,19 @@ async def create_user_message_and_start_run(
                 message_id=user_message.id,
                 user_file=user_file,
             )
+
+        try:
+            attach_existing_user_files(
+                db,
+                attachment_ids=requested_attachment_ids,
+                message_id=user_message.id,
+                owner_user_id=thread.owner_user_id,
+            )
+        except PolicyViolation as exc:
+            raise AgentExecutionPolicyError(
+                detail=exc.detail,
+                status_code=exc.status_code,
+            ) from exc
     except AgentExecutionPolicyError:
         for bundle_dir in bundle_dirs_to_cleanup:
             shutil.rmtree(bundle_dir, ignore_errors=True)

@@ -5,6 +5,7 @@
 # - Side effects: filesystem writes and file renames; loads Docling/EasyOCR models on first use.
 from __future__ import annotations
 
+from functools import lru_cache
 import logging
 import re
 from pathlib import Path
@@ -31,6 +32,7 @@ def _rewrite_markdown_image_paths_to_basenames(markdown: str) -> str:
     return _MARKDOWN_IMAGE.sub(replacer, markdown)
 
 
+@lru_cache(maxsize=2)
 def _build_converter(*, is_pdf: bool) -> DocumentConverter:
     pipeline_options = PdfPipelineOptions()
     pipeline_options.ocr_options = EasyOcrOptions()

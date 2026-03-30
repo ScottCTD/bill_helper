@@ -20,7 +20,7 @@ import {
   mapWithConcurrency,
   summarizeFilenames
 } from "./helpers";
-import { detectDraftAttachmentKind, type DraftAttachment, type PendingAssistantMessage, type PendingUserMessage } from "./types";
+import { type DraftAttachment, type PendingAssistantMessage, type PendingUserMessage, type ReadyDraftAttachment } from "./types";
 
 interface UseAgentComposerActionsArgs {
   activeRunId: string | null;
@@ -28,7 +28,7 @@ interface UseAgentComposerActionsArgs {
   addOptimisticRunningThreadId: (threadId: string) => void;
   bulkLaunchConcurrencyLimit: number;
   clearOptimisticThreadTitle: (threadId: string) => void;
-  draftFiles: DraftAttachment[];
+  draftAttachments: DraftAttachment[];
   draftMessage: string;
   ensureThreadId: () => Promise<string>;
   handleAgentStreamEvent: (threadId: string, event: AgentStreamEvent) => void;
@@ -36,10 +36,11 @@ interface UseAgentComposerActionsArgs {
   isBulkMode: boolean;
   removeOptimisticRunningThreadId: (threadId: string) => void;
   resetOptimisticRunState: (threadId?: string) => void;
+  resolveDraftAttachmentsForSend: (attachments: DraftAttachment[]) => Promise<ReadyDraftAttachment[]>;
   selectedComposerModel: string;
   selectedThreadId: string;
   setActionError: (message: string | null) => void;
-  setDraftFiles: Dispatch<SetStateAction<DraftAttachment[]>>;
+  setDraftAttachments: Dispatch<SetStateAction<DraftAttachment[]>>;
   setDraftMessage: (message: string) => void;
   setIsBulkLaunching: (value: boolean) => void;
   setPendingAssistantMessage: (threadId: string, message: PendingAssistantMessage | null) => void;
@@ -56,7 +57,7 @@ export function useAgentComposerActions({
   addOptimisticRunningThreadId,
   bulkLaunchConcurrencyLimit,
   clearOptimisticThreadTitle,
-  draftFiles,
+  draftAttachments,
   draftMessage,
   ensureThreadId,
   handleAgentStreamEvent,
@@ -64,10 +65,11 @@ export function useAgentComposerActions({
   isBulkMode,
   removeOptimisticRunningThreadId,
   resetOptimisticRunState,
+  resolveDraftAttachmentsForSend,
   selectedComposerModel,
   selectedThreadId,
   setActionError,
-  setDraftFiles,
+  setDraftAttachments,
   setDraftMessage,
   setIsBulkLaunching,
   setPendingAssistantMessage,
@@ -98,7 +100,8 @@ export function useAgentComposerActions({
     setActionError(null);
     setIsBulkLaunching(true);
     try {
-      const results = await mapWithConcurrency(attachments, bulkLaunchConcurrencyLimit, async (attachment) => {
+      const readyAttachments = await resolveDraftAttachmentsForSend(attachments);
+      const results = await mapWithConcurrency(readyAttachments, bulkLaunchConcurrencyLimit, async (attachment) => {
         let createdThread: AgentThread | null = null;
         try {
           createdThread = await createAgentThread({
@@ -115,7 +118,8 @@ export function useAgentComposerActions({
           await sendAgentMessage({
             threadId: createdThread.id,
             content,
-            files: [attachment.file],
+            files: [],
+            attachmentIds: [attachment.uploadedAttachmentId],
             modelName: selectedComposerModel || undefined
           });
           return { attachmentId: attachment.id, fileName: attachment.file.name, failed: false as const, errorMessage: null };
@@ -150,7 +154,7 @@ export function useAgentComposerActions({
       const failedResults = results.filter((result) => result.failed);
       const failedAttachmentIdSet = new Set(failedResults.map((result) => result.attachmentId));
       const uniqueErrorMessages = [...new Set(failedResults.map((result) => result.errorMessage).filter(Boolean))];
-      setDraftFiles((current) => current.filter((attachment) => failedAttachmentIdSet.has(attachment.id)));
+      setDraftAttachments((current) => current.filter((attachment) => failedAttachmentIdSet.has(attachment.id)));
       if (failedAttachmentIdSet.size === 0) {
         setDraftMessage("");
       }
@@ -179,7 +183,6 @@ export function useAgentComposerActions({
   }
 
   async function handleSubmitSingleMessage(content: string, attachments: DraftAttachment[]) {
-    const sendingDraftFiles = [...attachments];
     let threadId: string | null = null;
     try {
       threadId = await ensureThreadId();
@@ -191,6 +194,7 @@ export function useAgentComposerActions({
       setThreadStreamHealthy(activeThreadId, true);
       resetOptimisticRunState(activeThreadId);
       invalidateAgentThreadData(queryClient, activeThreadId);
+      const readyAttachments = await resolveDraftAttachmentsForSend(attachments);
       const baselineLastUserMessageId =
         [...(threadDetail?.messages ?? [])]
           .reverse()
@@ -207,12 +211,12 @@ export function useAgentComposerActions({
         content,
         createdAt: new Date().toISOString(),
         baselineLastUserMessageId,
-        attachments: sendingDraftFiles.map((item, index) => ({
+        attachments: readyAttachments.map((item, index) => ({
           id: `${item.id}-${index}`,
           name: item.file.name,
           url: URL.createObjectURL(item.file),
           mimeType: item.file.type || "",
-          kind: detectDraftAttachmentKind(item.file)
+          kind: item.kind
         }))
       };
       setPendingUserMessage(activeThreadId, optimisticMessage);
@@ -223,13 +227,14 @@ export function useAgentComposerActions({
         baselineLastAssistantMessageId
       });
       setDraftMessage("");
-      setDraftFiles([]);
+      setDraftAttachments([]);
       snapToBottom();
 
       await streamAgentMessage({
         threadId: activeThreadId,
         content,
-        files: sendingDraftFiles.map((item) => item.file),
+        files: [],
+        attachmentIds: readyAttachments.map((item) => item.uploadedAttachmentId),
         modelName: selectedComposerModel || undefined,
         signal: sendAbortController.signal,
         onEvent: (streamEvent) => handleAgentStreamEvent(activeThreadId, streamEvent)
@@ -274,14 +279,14 @@ export function useAgentComposerActions({
     setActionError(null);
     const content = draftMessage.trim();
     if (isBulkMode) {
-      await handleSubmitBulkMessages(content, [...draftFiles]);
+      await handleSubmitBulkMessages(content, [...draftAttachments]);
       return;
     }
-    if (!content && draftFiles.length === 0) {
+    if (!content && draftAttachments.length === 0) {
       setActionError("Enter a message or attach at least one file.");
       return;
     }
-    await handleSubmitSingleMessage(content, [...draftFiles]);
+    await handleSubmitSingleMessage(content, [...draftAttachments]);
   }
 
   async function handleStopRun() {

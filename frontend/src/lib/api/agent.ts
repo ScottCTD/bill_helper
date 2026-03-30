@@ -8,6 +8,7 @@
 
 import { clearStoredAuthToken, getStoredAuthToken } from "../../features/auth/storage";
 import type {
+  AgentDraftAttachment,
   AgentDashboard,
   AgentDashboardRangeKey,
   AgentChangeItem,
@@ -76,13 +77,21 @@ function parseAgentStreamEvent(rawBlock: string): AgentStreamEvent | null {
   return payload as AgentStreamEvent;
 }
 
-function buildAgentMessageFormData(content: string, files: File[], modelName?: string | null): FormData {
+function buildAgentMessageFormData(
+  content: string,
+  files: File[],
+  modelName?: string | null,
+  attachmentIds: string[] = []
+): FormData {
   const formData = new FormData();
   formData.set("content", content);
   const normalizedModelName = modelName?.trim();
   if (normalizedModelName) {
     formData.set("model_name", normalizedModelName);
   }
+  attachmentIds.forEach((attachmentId) => {
+    formData.append("attachment_ids", attachmentId);
+  });
   files.forEach((file) => {
     formData.append("files", file);
   });
@@ -145,11 +154,12 @@ export function sendAgentMessage(payload: {
   threadId: string;
   content: string;
   files: File[];
+  attachmentIds?: string[];
   modelName?: string | null;
 }): Promise<AgentRun> {
   return request<AgentRun>(`/api/v1/agent/threads/${payload.threadId}/messages`, {
     method: "POST",
-    body: buildAgentMessageFormData(payload.content, payload.files, payload.modelName)
+    body: buildAgentMessageFormData(payload.content, payload.files, payload.modelName, payload.attachmentIds ?? [])
   });
 }
 
@@ -157,6 +167,7 @@ export async function streamAgentMessage(payload: {
   threadId: string;
   content: string;
   files: File[];
+  attachmentIds?: string[];
   modelName?: string | null;
   signal?: AbortSignal;
   onEvent: (event: AgentStreamEvent) => void;
@@ -167,7 +178,7 @@ export async function streamAgentMessage(payload: {
   }
   const response = await fetch(`${API_BASE_URL}/api/v1/agent/threads/${payload.threadId}/messages/stream`, {
     method: "POST",
-    body: buildAgentMessageFormData(payload.content, payload.files, payload.modelName),
+    body: buildAgentMessageFormData(payload.content, payload.files, payload.modelName, payload.attachmentIds ?? []),
     signal: payload.signal,
     headers: {
       Accept: "text/event-stream",
@@ -211,6 +222,94 @@ export async function streamAgentMessage(payload: {
       payload.onEvent(event);
     }
   }
+}
+
+export async function uploadAgentDraftAttachment(payload: {
+  file: File;
+  onUploadProgress?: (progressPercent: number) => void;
+  onParsingStart?: () => void;
+  signal?: AbortSignal;
+}): Promise<AgentDraftAttachment> {
+  const token = getStoredAuthToken();
+  if (!token) {
+    throw new Error("Log in before calling the API.");
+  }
+
+  return await new Promise<AgentDraftAttachment>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.set("file", payload.file);
+
+    const cleanupAbortListener = () => {
+      if (payload.signal) {
+        payload.signal.removeEventListener("abort", handleAbort);
+      }
+    };
+
+    function handleAbort() {
+      xhr.abort();
+    }
+
+    xhr.open("POST", `${API_BASE_URL}/api/v1/agent/draft-attachments`);
+    xhr.responseType = "text";
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) {
+        return;
+      }
+      payload.onUploadProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    };
+
+    xhr.upload.onload = () => {
+      payload.onUploadProgress?.(100);
+      payload.onParsingStart?.();
+    };
+
+    xhr.onerror = () => {
+      cleanupAbortListener();
+      reject(new Error("Attachment upload failed."));
+    };
+
+    xhr.onabort = () => {
+      cleanupAbortListener();
+      reject(new DOMException("The operation was aborted.", "AbortError"));
+    };
+
+    xhr.onload = () => {
+      cleanupAbortListener();
+      const responseText = typeof xhr.responseText === "string" ? xhr.responseText : "";
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const message = extractErrorMessage(responseText, xhr.status);
+        if (xhr.status === 401) {
+          clearStoredAuthToken();
+        }
+        reject(new ApiError(message, xhr.status));
+        return;
+      }
+      try {
+        resolve(JSON.parse(responseText) as AgentDraftAttachment);
+      } catch {
+        reject(new Error("Attachment upload returned invalid JSON."));
+      }
+    };
+
+    if (payload.signal) {
+      if (payload.signal.aborted) {
+        xhr.abort();
+        return;
+      }
+      payload.signal.addEventListener("abort", handleAbort, { once: true });
+    }
+
+    xhr.send(formData);
+  });
+}
+
+export function deleteAgentDraftAttachment(attachmentId: string): Promise<void> {
+  return request<void>(`/api/v1/agent/draft-attachments/${attachmentId}`, {
+    method: "DELETE"
+  });
 }
 
 export function getAgentRun(runId: string): Promise<AgentRun> {

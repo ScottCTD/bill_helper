@@ -429,6 +429,144 @@ def test_uploaded_attachments_are_stored_under_canonical_user_files(client, monk
     assert all(path.exists() for path in attachment_paths)
 
 
+def test_draft_attachment_upload_can_be_sent_later_by_attachment_id(client, monkeypatch):
+    captured_messages: list[list[dict]] = []
+
+    def capture_model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "Processed uploaded draft attachment."}
+
+    patch_model(monkeypatch, capture_model)
+
+    upload_response = client.post(
+        "/api/v1/agent/draft-attachments",
+        files={"file": ("statement.pdf", build_pdf_bytes(["Invoice total CAD 123.45"]), "application/pdf")},
+    )
+    upload_response.raise_for_status()
+    draft_attachment = upload_response.json()
+
+    thread = create_thread(client)
+    run = send_message(
+        client,
+        thread["id"],
+        "Please summarize this attachment.",
+        attachment_ids=[draft_attachment["id"]],
+    )
+
+    assert run["status"] == "completed"
+    assert captured_messages
+
+    user_messages = [message for message in captured_messages[-1] if message.get("role") == "user"]
+    assert user_messages
+    user_content = user_messages[-1].get("content")
+    assert isinstance(user_content, list)
+    assert [part.get("type") for part in user_content] == ["text", "text"]
+    assert "statement.pdf" in user_content[0].get("text", "")
+    assert user_content[1].get("text") == "Please summarize this attachment."
+
+    detail_response = client.get(f"/api/v1/agent/threads/{thread['id']}")
+    detail_response.raise_for_status()
+    detail = detail_response.json()
+    first_user = next(message for message in detail["messages"] if message["role"] == "user")
+    assert len(first_user["attachments"]) == 1
+    assert first_user["attachments"][0]["display_name"] == "statement.pdf"
+
+
+def test_draft_attachment_upload_reuses_parsed_bundle_for_same_hash(client, monkeypatch):
+    from backend.models_files import UserFile
+    from backend.services.user_files import resolve_user_file_path
+
+    convert_calls: list[Path] = []
+
+    def stub_convert(source_path: Path, *, is_pdf: bool) -> Path:
+        convert_calls.append(source_path)
+        bundle_dir = source_path.parent
+        (bundle_dir / "parsed.md").write_text("# reused bundle\n", encoding="utf-8")
+        return bundle_dir / "parsed.md"
+
+    monkeypatch.setattr(
+        "backend.services.agent.agent_attachment_bundle.convert_upload_bundle_source",
+        stub_convert,
+    )
+
+    pdf_bytes = build_pdf_bytes(["Invoice total CAD 123.45"])
+    first_response = client.post(
+        "/api/v1/agent/draft-attachments",
+        files={"file": ("statement.pdf", pdf_bytes, "application/pdf")},
+    )
+    first_response.raise_for_status()
+    first_attachment = first_response.json()
+
+    second_response = client.post(
+        "/api/v1/agent/draft-attachments",
+        files={"file": ("statement.pdf", pdf_bytes, "application/pdf")},
+    )
+    second_response.raise_for_status()
+    second_attachment = second_response.json()
+
+    assert len(convert_calls) == 1
+    assert first_attachment["id"] != second_attachment["id"]
+
+    with open_session() as db:
+        first_user_file = db.get(UserFile, first_attachment["id"])
+        second_user_file = db.get(UserFile, second_attachment["id"])
+        assert first_user_file is not None
+        assert second_user_file is not None
+        assert first_user_file.stored_relative_path != second_user_file.stored_relative_path
+        assert first_user_file.sha256 == second_user_file.sha256
+        assert resolve_user_file_path(first_user_file).parent.joinpath("parsed.md").is_file()
+        assert resolve_user_file_path(second_user_file).parent.joinpath("parsed.md").is_file()
+
+
+def test_delete_draft_attachment_removes_unbound_upload_bundle(client):
+    from backend.models_files import UserFile
+    from backend.services.user_files import resolve_user_file_path
+
+    upload_response = client.post(
+        "/api/v1/agent/draft-attachments",
+        files={"file": ("receipt.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+    )
+    upload_response.raise_for_status()
+    draft_attachment = upload_response.json()
+
+    with open_session() as db:
+        user_file = db.get(UserFile, draft_attachment["id"])
+        assert user_file is not None
+        bundle_dir = resolve_user_file_path(user_file).parent
+        assert bundle_dir.exists()
+
+    delete_response = client.delete(f"/api/v1/agent/draft-attachments/{draft_attachment['id']}")
+    assert delete_response.status_code == 204
+
+    with open_session() as db:
+        assert db.get(UserFile, draft_attachment["id"]) is None
+    assert not bundle_dir.exists()
+
+
+def test_delete_draft_attachment_rejects_bound_message_attachment(client, monkeypatch):
+    patch_model(monkeypatch, lambda _messages: {"role": "assistant", "content": "Attachment processed."})
+
+    upload_response = client.post(
+        "/api/v1/agent/draft-attachments",
+        files={"file": ("receipt.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+    )
+    upload_response.raise_for_status()
+    draft_attachment = upload_response.json()
+
+    thread = create_thread(client)
+    run = send_message(
+        client,
+        thread["id"],
+        "Process this receipt.",
+        attachment_ids=[draft_attachment["id"]],
+    )
+    assert run["status"] == "completed"
+
+    delete_response = client.delete(f"/api/v1/agent/draft-attachments/{draft_attachment['id']}")
+    assert delete_response.status_code == 409
+    assert delete_response.json()["detail"] == "Attachment is already bound to a message and cannot be removed."
+
+
 def test_thread_list_marks_running_threads(client, monkeypatch):
     block_model = Event()
     block_model.clear()

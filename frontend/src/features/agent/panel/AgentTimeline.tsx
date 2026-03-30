@@ -6,7 +6,7 @@
  * - Side effects: React rendering and user event wiring.
  */
 import { Fragment, memo, type Ref } from "react";
-import { ArrowDown, FileText } from "lucide-react";
+import { ArrowDown, File, FileImage, FileText } from "lucide-react";
 
 import type { AgentMessage, AgentRun, AgentRunEvent, AgentToolCall } from "../../../lib/types";
 import { cn } from "../../../lib/utils";
@@ -14,8 +14,11 @@ import { AgentRunBlock, PendingAssistantActivityBlock } from "../AgentRunBlock";
 import { MarkdownRenderer } from "../../../components/ui/MarkdownRenderer";
 import { AgentAttachmentImageCard } from "./AgentAttachmentImageCard";
 import { AgentAttachmentPdfCard } from "./AgentAttachmentPdfCard";
+import { AgentAttachmentFileRow } from "./AgentAttachmentFileRow";
+import { AgentMessageAttachmentRow } from "./AgentMessageAttachmentRow";
 import { AgentMessageAttachmentImage } from "./AgentMessageAttachmentImage";
 import { AgentMessageAttachmentPdf } from "./AgentMessageAttachmentPdf";
+import { openAttachmentInNewTab } from "./attachmentBrowserOpen";
 import { prettyDateTime } from "./format";
 import type { PendingAssistantMessage, PendingUserMessage } from "./types";
 
@@ -39,6 +42,7 @@ export interface AgentTimelineProps {
   optimisticToolCallsByRunId: Record<string, AgentToolCall[]>;
   activeOptimisticEvents: AgentRunEvent[];
   activeOptimisticToolCalls: AgentToolCall[];
+  detachFromBottom: () => void;
   onHydrateToolCall: (runId: string, toolCallId: string) => void;
   hydratingToolCallIds: ReadonlySet<string>;
   isAtBottom: boolean;
@@ -66,6 +70,7 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
     optimisticToolCallsByRunId = {},
     activeOptimisticEvents = [],
     activeOptimisticToolCalls = [],
+    detachFromBottom,
     onHydrateToolCall,
     hydratingToolCallIds,
     isAtBottom,
@@ -82,6 +87,125 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
 
   function hasRenderableRunCard(run: AgentRun, optimisticEvents: AgentRunEvent[] = []): boolean {
     return Boolean(run.error_text) || run.events.length > 0 || run.change_items.length > 0 || optimisticEvents.length > 0;
+  }
+
+  function renderAssistantAttachments(attachments: AgentMessage["attachments"]) {
+    if (attachments.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="agent-message-attachments">
+        {attachments.map((attachment) => (
+          "message_id" in attachment ? (
+            isImageMimeType(attachment.mime_type) ? (
+              <AgentMessageAttachmentImage
+                key={attachment.id}
+                attachmentUrl={attachment.attachment_url}
+                alt={attachment.display_name}
+              />
+            ) : isPdfMimeType(attachment.mime_type) ? (
+              <AgentMessageAttachmentPdf
+                key={attachment.id}
+                attachmentUrl={attachment.attachment_url}
+                title={attachment.display_name}
+              />
+            ) : (
+              <div
+                key={attachment.id}
+                className="agent-message-attachment-file"
+              >
+                <FileText className="h-4 w-4" />
+                <span>{attachment.display_name}</span>
+              </div>
+            )
+          ) : attachment.kind === "image" ? (
+            <AgentAttachmentImageCard key={attachment.id} previewUrl={attachment.url} alt={attachment.name} />
+          ) : attachment.kind === "pdf" ? (
+            <AgentAttachmentPdfCard key={attachment.id} previewUrl={attachment.url} title={attachment.name} />
+          ) : (
+            <div key={attachment.id} className="agent-message-attachment-file">
+              <FileText className="h-4 w-4" />
+              <span>{attachment.name}</span>
+            </div>
+          )
+        ))}
+      </div>
+    );
+  }
+
+  function renderUserAttachments(
+    attachments: AgentMessage["attachments"] | PendingUserMessage["attachments"]
+  ) {
+    if (attachments.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="agent-message-user-attachments">
+        {attachments.map((attachment) => (
+          "message_id" in attachment ? (
+            <AgentMessageAttachmentRow
+              key={attachment.id}
+              attachmentUrl={attachment.attachment_url}
+              fileLabel={attachment.display_name}
+              mimeType={attachment.mime_type}
+            />
+          ) : (
+            <AgentAttachmentFileRow
+              key={attachment.id}
+              fileLabel={attachment.name}
+              icon={
+                attachment.kind === "image"
+                  ? FileImage
+                  : attachment.kind === "pdf"
+                    ? FileText
+                    : File
+              }
+              onOpen={() => openAttachmentInNewTab(attachment.url)}
+            />
+          )
+        ))}
+      </div>
+    );
+  }
+
+  function renderUserBubble(options: {
+    createdAt: string;
+    text: string;
+    emptyText: string;
+    attachments: AgentMessage["attachments"] | PendingUserMessage["attachments"];
+  }) {
+    return (
+      <>
+        <header className="agent-message-header agent-message-user-meta">
+          <span className="muted">{prettyDateTime(options.createdAt)}</span>
+        </header>
+        <div className="agent-message-user-bubble">
+          {renderUserAttachments(options.attachments)}
+          {options.text ? (
+            <p className="agent-message-text">{options.text}</p>
+          ) : (
+            <p className="muted">{options.emptyText}</p>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  function messageClassName(options: {
+    isAssistant?: boolean;
+    isUser?: boolean;
+    isActivity?: boolean;
+    isStreaming?: boolean;
+  }): string {
+    return cn(
+      "agent-message",
+      options.isAssistant && "agent-message-assistant",
+      options.isUser && "agent-message-user",
+      options.isActivity && "agent-message-activity",
+      options.isStreaming && "agent-message-streaming"
+    );
   }
 
   return (
@@ -104,85 +228,70 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
             return (
               <Fragment key={message.id}>
                 <article
-                  className={cn(
-                    "agent-message",
-                    isAssistant && "agent-message-assistant",
-                    isUser && "agent-message-user",
-                    messageRuns.length > 0 && "agent-message-activity"
-                  )}
+                  className={messageClassName({
+                    isAssistant,
+                    isUser,
+                    isActivity: messageRuns.length > 0
+                  })}
                 >
-                  <header>
-                    <strong>{isUser ? "You" : isAssistant ? "Assistant" : message.role}</strong>
-                    <span className="muted">{prettyDateTime(message.created_at)}</span>
-                  </header>
-
-                  {isAssistant
-                    ? messageRuns.map((run) => (
-                        <AgentRunBlock
-                          key={`${run.id}-activity`}
-                          run={run}
-                          isMutating={isMutating}
-                          onHydrateToolCall={onHydrateToolCall}
-                          hydratingToolCallIds={hydratingToolCallIds}
-                          mode="activity"
-                          optimisticEvents={optimisticRunEventsByRunId[run.id] ?? []}
-                          optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
-                        />
-                      ))
-                    : null}
-
-                  {renderedContent.trim() ? (
-                    shouldRenderMarkdown ? (
-                      <MarkdownRenderer markdown={renderedContent} />
-                    ) : (
-                      <p className="agent-message-text">{renderedContent}</p>
-                    )
+                  {isUser ? (
+                    renderUserBubble({
+                      createdAt: message.created_at,
+                      text: renderedContent,
+                      emptyText: "(no text)",
+                      attachments: message.attachments
+                    })
                   ) : (
-                    <p className="muted">(no text)</p>
-                  )}
+                    <>
+                      <header className="agent-message-header agent-message-meta-only">
+                        <span className="muted">{prettyDateTime(message.created_at)}</span>
+                      </header>
 
-                  {message.attachments.length > 0 ? (
-                    <div className="agent-message-attachments">
-                      {message.attachments.map((attachment) => (
-                        isImageMimeType(attachment.mime_type) ? (
-                          <AgentMessageAttachmentImage
-                            key={attachment.id}
-                            attachmentUrl={attachment.attachment_url}
-                            alt={attachment.display_name}
-                          />
-                        ) : isPdfMimeType(attachment.mime_type) ? (
-                          <AgentMessageAttachmentPdf
-                            key={attachment.id}
-                            attachmentUrl={attachment.attachment_url}
-                            title={attachment.display_name}
-                          />
+                      {isAssistant
+                        ? messageRuns.map((run) => (
+                            <AgentRunBlock
+                              key={`${run.id}-activity`}
+                              run={run}
+                              isMutating={isMutating}
+                              onInspectActivity={detachFromBottom}
+                              onHydrateToolCall={onHydrateToolCall}
+                              hydratingToolCallIds={hydratingToolCallIds}
+                              mode="activity"
+                              optimisticEvents={optimisticRunEventsByRunId[run.id] ?? []}
+                              optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
+                            />
+                          ))
+                        : null}
+
+                      {renderedContent.trim() ? (
+                        shouldRenderMarkdown ? (
+                          <MarkdownRenderer markdown={renderedContent} />
                         ) : (
-                          <div
-                            key={attachment.id}
-                            className="agent-message-attachment-file"
-                          >
-                            <FileText className="h-4 w-4" />
-                            <span>{attachment.display_name}</span>
-                          </div>
+                          <p className="agent-message-text">{renderedContent}</p>
                         )
-                      ))}
-                    </div>
-                  ) : null}
+                      ) : (
+                        <p className="muted">(no text)</p>
+                      )}
 
-                  {isAssistant
-                    ? messageRuns.map((run) => (
-                        <AgentRunBlock
-                          key={`${run.id}-summary`}
-                          run={run}
-                          isMutating={isMutating}
-                          onHydrateToolCall={onHydrateToolCall}
-                          hydratingToolCallIds={hydratingToolCallIds}
-                          mode="summary"
-                          optimisticEvents={optimisticRunEventsByRunId[run.id] ?? []}
-                          optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
-                        />
-                      ))
-                    : null}
+                      {renderAssistantAttachments(message.attachments)}
+
+                      {isAssistant
+                        ? messageRuns.map((run) => (
+                            <AgentRunBlock
+                              key={`${run.id}-summary`}
+                              run={run}
+                              isMutating={isMutating}
+                              onInspectActivity={detachFromBottom}
+                              onHydrateToolCall={onHydrateToolCall}
+                              hydratingToolCallIds={hydratingToolCallIds}
+                              mode="summary"
+                              optimisticEvents={optimisticRunEventsByRunId[run.id] ?? []}
+                              optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
+                            />
+                          ))
+                        : null}
+                    </>
+                  )}
                 </article>
 
                 {isUser
@@ -198,15 +307,18 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
                       return (
                         <article
                           key={`${run.id}-unattached`}
-                          className="agent-message agent-message-activity agent-message-assistant agent-message-working"
+                          className={messageClassName({
+                            isAssistant: true,
+                            isActivity: true
+                          })}
                         >
-                          <header>
-                            <strong>Assistant</strong>
+                          <header className="agent-message-header agent-message-meta-only">
                             <span className="muted">{prettyDateTime(run.created_at)}</span>
                           </header>
                           <AgentRunBlock
                             run={run}
                             isMutating={isMutating}
+                            onInspectActivity={detachFromBottom}
                             onHydrateToolCall={onHydrateToolCall}
                             hydratingToolCallIds={hydratingToolCallIds}
                             mode="activity"
@@ -222,48 +334,33 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
           })}
 
           {pendingUserMessage && pendingUserMessage.threadId === selectedThreadId ? (
-            <article className="agent-message agent-message-user" key={pendingUserMessage.id}>
-              <header>
-                <strong>You</strong>
-                <span className="muted">{prettyDateTime(pendingUserMessage.createdAt)}</span>
-              </header>
-              {pendingUserMessage.content ? (
-                <p className="agent-message-text">{pendingUserMessage.content}</p>
-              ) : (
-                <p className="muted">(attachment-only message)</p>
-              )}
-              {pendingUserMessage.attachments.length > 0 ? (
-                <div className="agent-message-attachments">
-                  {pendingUserMessage.attachments.map((attachment) => (
-                    attachment.kind === "image" ? (
-                      <AgentAttachmentImageCard key={attachment.id} previewUrl={attachment.url} alt={attachment.name} />
-                    ) : attachment.kind === "pdf" ? (
-                      <AgentAttachmentPdfCard key={attachment.id} previewUrl={attachment.url} title={attachment.name} />
-                    ) : (
-                      <div key={attachment.id} className="agent-message-attachment-file">
-                        <FileText className="h-4 w-4" />
-                        <span>{attachment.name}</span>
-                      </div>
-                    )
-                  ))}
-                </div>
-              ) : null}
+            <article className={messageClassName({ isUser: true })} key={pendingUserMessage.id}>
+              {renderUserBubble({
+                createdAt: pendingUserMessage.createdAt,
+                text: pendingUserMessage.content,
+                emptyText: "(attachment-only message)",
+                attachments: pendingUserMessage.attachments
+              })}
             </article>
           ) : null}
 
           {shouldShowOptimisticAssistantBubble && pendingAssistantMessage ? (
             <article
-              className="agent-message agent-message-activity agent-message-assistant agent-message-streaming"
+              className={messageClassName({
+                isAssistant: true,
+                isActivity: true,
+                isStreaming: true
+              })}
               key={pendingAssistantMessage.id}
             >
-              <header>
-                <strong>Assistant</strong>
+              <header className="agent-message-header agent-message-meta-only">
                 <span className="muted">{prettyDateTime(pendingAssistantMessage.createdAt)}</span>
               </header>
               {pendingRunAttachedToOptimisticMessage ? (
                 <AgentRunBlock
                   run={pendingRunAttachedToOptimisticMessage}
                   isMutating={isMutating}
+                  onInspectActivity={detachFromBottom}
                   onHydrateToolCall={onHydrateToolCall}
                   hydratingToolCallIds={hydratingToolCallIds}
                   mode="activity"
@@ -276,6 +373,7 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
                 <PendingAssistantActivityBlock
                   events={activeOptimisticEvents}
                   toolCalls={activeOptimisticToolCalls}
+                  onInspectActivity={detachFromBottom}
                   onHydrateToolCall={onHydrateToolCall}
                   hydratingToolCallIds={hydratingToolCallIds}
                   streamingReasoningText={activeStreamReasoningText}
@@ -311,15 +409,18 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
             return (
               <article
                 key={`pending-run-${run.id}`}
-                className="agent-message agent-message-activity agent-message-assistant agent-message-working"
+                className={messageClassName({
+                  isAssistant: true,
+                  isActivity: true
+                })}
               >
-                <header>
-                  <strong>Assistant</strong>
+                <header className="agent-message-header agent-message-meta-only">
                   <span className="muted">{prettyDateTime(run.created_at)}</span>
                 </header>
                 <AgentRunBlock
                   run={run}
                   isMutating={isMutating}
+                  onInspectActivity={detachFromBottom}
                   onHydrateToolCall={onHydrateToolCall}
                   hydratingToolCallIds={hydratingToolCallIds}
                   optimisticEvents={optimisticEvents}

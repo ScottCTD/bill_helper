@@ -74,6 +74,47 @@ Includes:
 
 ## Message Send
 
+### `POST /agent/draft-attachments`
+
+Upload one draft image or PDF attachment and parse it immediately.
+
+Content type: `multipart/form-data`
+
+Form fields:
+
+- `file` (required image or PDF attachment)
+
+Behavior:
+
+- owner-scoped to the authenticated principal
+- validates the same attachment size and mime-type limits as message-send
+- stores the canonical upload bundle under `{data_dir}/user_files/{owner_user_id}/uploads/...`
+- when the same owner uploads the same attachment bytes again, the backend reuses the existing parsed bundle by content hash and skips a second Docling pass
+- runs Docling parsing before returning, so the frontend can show upload then parsing progress before the user presses `Send`
+- returns a lightweight attachment handle for later message-send requests
+
+Response: `201 AgentDraftAttachmentRead`
+
+Errors:
+
+- `400` unsupported type or invalid payload
+- `422` attachment could not be parsed
+
+### `DELETE /agent/draft-attachments/{attachment_id}`
+
+Delete one unbound draft attachment. Response: `204`
+
+Behavior:
+
+- owner-scoped to the authenticated principal
+- removes the canonical `user_files` row and its upload bundle directory
+- rejects deletion after the attachment has been bound to a message
+
+Errors:
+
+- `404` draft attachment not found
+- `409` attachment is already bound to a message
+
 ### `POST /agent/threads/{thread_id}/messages`
 
 Create a user message and run the agent in background.
@@ -85,13 +126,15 @@ Form fields:
 - `content` (optional if files are present)
 - `model_name` (optional explicit model selection; must match one of the `available_agent_models` returned by `GET /settings`)
 - `surface` (`app` by default; `telegram` enables Telegram-safe prompt and reply shaping)
-- `files` (0..N image or PDF attachments)
+- `files` (0..N image or PDF attachments uploaded inline with this request)
+- `attachment_ids` (0..N previously uploaded draft attachment ids)
 
 Behavior:
 
 - thread lookup is owner-scoped
-- validates attachment count and size limits
+- validates the combined attachment count and size limits across inline `files` plus referenced `attachment_ids`
 - persists the message and stores uploaded attachments under `{data_dir}/user_files/{owner_user_id}/uploads/...` using dated readable bundle directories (`uploads/YYYY-MM-DD/<original-stem>/`, with `(N)` suffixes for collisions) and a fixed primary filename (`raw.<ext>`); Docling output (`parsed.md` plus readable referenced images) is written beside the primary file before the message is committed, and existing bundles can be migrated with `scripts/migrate_agent_upload_bundle_paths.py`
+- referenced `attachment_ids` are attached without re-uploading or re-parsing; they must belong to the same principal and still be unbound drafts
 - creates an `agent_runs` row with initial `status=running`
 - starts bounded tool-calling execution in background
 - PDFs and images are converted with Docling (standard pipeline + EasyOCR on the API host); the initial model turn receives inline `parsed.md` plus absolute `/workspace/uploads/...` image-path hints, and later tool turns can load selected images on demand through `read_image`
@@ -118,7 +161,8 @@ Form fields:
 
 - `content` (optional if files are present)
 - `surface` (`app` by default; `telegram` enables Telegram-safe prompt and reply shaping)
-- `files` (0..N image or PDF attachments)
+- `files` (0..N image or PDF attachments uploaded inline with this request)
+- `attachment_ids` (0..N previously uploaded draft attachment ids)
 
 Behavior:
 

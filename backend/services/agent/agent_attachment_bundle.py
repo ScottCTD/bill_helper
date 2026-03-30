@@ -5,6 +5,7 @@
 # - Side effects: canonical filesystem writes and Docling artifact generation inside the upload bundle.
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 from datetime import UTC, datetime
@@ -21,7 +22,10 @@ from backend.services.user_files import (
     STORAGE_AREA_UPLOAD,
     UPLOADS_DIRNAME,
     create_user_file_for_existing_canonical_path,
+    find_user_file_by_sha256,
+    resolve_user_file_path,
     suffix_for_mime_type,
+    user_file_owner_root,
     user_upload_root,
     write_canonical_bytes_at_relative_path,
 )
@@ -125,6 +129,67 @@ def build_agent_upload_stored_relative_path(
     return f"{UPLOADS_DIRNAME}/{date_str}/{bundle_dir}/{primary}"
 
 
+def _hash_bytes(file_bytes: bytes) -> str:
+    return hashlib.sha256(file_bytes).hexdigest()
+
+
+def _copy_existing_bundle_to_new_relative_path(
+    *,
+    existing_user_file: UserFile,
+    new_relative_path: str,
+    data_dir: Path | None = None,
+) -> Path:
+    source_primary = resolve_user_file_path(existing_user_file, data_dir=data_dir)
+    source_bundle_dir = source_primary.parent
+    target_primary = user_file_owner_root(
+        user_id=existing_user_file.owner_user_id,
+        data_dir=data_dir,
+    ) / new_relative_path
+    target_bundle_dir = target_primary.parent
+    shutil.copytree(source_bundle_dir, target_bundle_dir)
+    return target_primary
+
+
+def duplicate_agent_attachment_from_existing_bundle(
+    db: Session,
+    *,
+    existing_user_file: UserFile,
+    owner_user_id: str,
+    original_filename: str | None,
+    timezone_name: str,
+    data_dir: Path | None = None,
+) -> UserFile:
+    rel = build_agent_upload_stored_relative_path(
+        owner_user_id=owner_user_id,
+        original_filename=original_filename,
+        mime_type=existing_user_file.mime_type,
+        timezone_name=timezone_name,
+        data_dir=data_dir,
+    )
+    copied_primary: Path | None = None
+    try:
+        copied_primary = _copy_existing_bundle_to_new_relative_path(
+            existing_user_file=existing_user_file,
+            new_relative_path=rel,
+            data_dir=data_dir,
+        )
+        return create_user_file_for_existing_canonical_path(
+            db,
+            owner_user_id=owner_user_id,
+            storage_area=STORAGE_AREA_UPLOAD,
+            source_type=SOURCE_TYPE_AGENT_ATTACHMENT,
+            stored_relative_path=rel,
+            original_filename=original_filename,
+            display_name=None,
+            mime_type=existing_user_file.mime_type,
+            data_dir=data_dir,
+        )
+    except Exception:
+        if copied_primary is not None:
+            shutil.rmtree(copied_primary.parent, ignore_errors=True)
+        raise
+
+
 def ingest_agent_attachment_with_docling(
     db: Session,
     *,
@@ -141,6 +206,27 @@ def ingest_agent_attachment_with_docling(
     is_image = mime.startswith("image/")
     if not (is_pdf or is_image):
         raise PolicyViolation.bad_request("Only PDF and image attachments are supported.")
+
+    content_hash = _hash_bytes(file_bytes)
+    existing = find_user_file_by_sha256(
+        db,
+        user_id=owner_user_id,
+        sha256=content_hash,
+        storage_area=STORAGE_AREA_UPLOAD,
+    )
+    if (
+        existing is not None
+        and existing.source_type == SOURCE_TYPE_AGENT_ATTACHMENT
+        and existing.mime_type == mime
+    ):
+        return duplicate_agent_attachment_from_existing_bundle(
+            db,
+            existing_user_file=existing,
+            owner_user_id=owner_user_id,
+            original_filename=original_filename,
+            timezone_name=timezone_name,
+            data_dir=data_dir,
+        )
 
     rel = build_agent_upload_stored_relative_path(
         owner_user_id=owner_user_id,

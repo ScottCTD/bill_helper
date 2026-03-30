@@ -47,26 +47,28 @@ def send_message(
     *,
     surface: str = "app",
     files: list[tuple[str, bytes, str]] | None = None,
+    attachment_ids: list[str] | None = None,
     model_name: str | None = None,
     wait_for_completion: bool = True,
     timeout_seconds: float = 2.0,
 ) -> dict:
-    request_files = (
-        [
-            ("files", (filename, file_bytes, mime_type))
-            for filename, file_bytes, mime_type in files
-        ]
-        if files
-        else None
+    request_files = [
+        ("files", (filename, file_bytes, mime_type))
+        for filename, file_bytes, mime_type in files or []
+    ]
+    request_files.extend(
+        ("attachment_ids", (None, attachment_id))
+        for attachment_id in attachment_ids or []
     )
+    request_data = {
+        "content": content,
+        "surface": surface,
+        "model_name": model_name or "",
+    }
     response = client.post(
         f"/api/v1/agent/threads/{thread_id}/messages",
-        data={
-            "content": content,
-            "surface": surface,
-            "model_name": model_name or "",
-        },
-        files=request_files,
+        data=request_data,
+        files=request_files or None,
     )
     response.raise_for_status()
     run = response.json()

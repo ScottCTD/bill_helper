@@ -42,7 +42,7 @@ function installScrollMetrics(element: HTMLDivElement, initial: ScrollMetrics): 
 
 function HookHarness({ initiallyMounted = true }: { initiallyMounted?: boolean }) {
   const [isMounted, setIsMounted] = useState(initiallyMounted);
-  const { containerRef, isAtBottom, scrollToBottom } = useStickToBottom<HTMLDivElement>();
+  const { containerRef, detachFromBottom, isAtBottom, scrollToBottom } = useStickToBottom<HTMLDivElement>();
 
   return (
     <div>
@@ -51,6 +51,9 @@ function HookHarness({ initiallyMounted = true }: { initiallyMounted?: boolean }
       </button>
       <button type="button" onClick={scrollToBottom}>
         scroll-to-bottom
+      </button>
+      <button type="button" onClick={detachFromBottom}>
+        detach
       </button>
       <div data-testid="is-at-bottom">{isAtBottom ? "true" : "false"}</div>
       {isMounted ? <div data-testid="container" ref={containerRef} /> : null}
@@ -188,6 +191,63 @@ describe("useStickToBottom", () => {
     });
 
     expect(metrics.scrollTop).toBe(330);
+    expect(screen.getByTestId("is-at-bottom")).toHaveTextContent("true");
+  });
+
+  it("stops following growth after an explicit detach interaction", () => {
+    renderHarness();
+
+    const container = screen.getByTestId("container") as HTMLDivElement;
+    const metrics = installScrollMetrics(container, {
+      scrollTop: 100,
+      scrollHeight: 200,
+      clientHeight: 100
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(20);
+    });
+    metrics.scrollTop = 100;
+    fireEvent.scroll(container);
+    expect(screen.getByTestId("is-at-bottom")).toHaveTextContent("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "detach" }));
+    expect(screen.getByTestId("is-at-bottom")).toHaveTextContent("false");
+
+    metrics.scrollHeight = 340;
+    act(() => {
+      vi.advanceTimersByTime(20);
+    });
+
+    expect(metrics.scrollTop).toBe(100);
+    expect(screen.getByTestId("is-at-bottom")).toHaveTextContent("false");
+  });
+
+  it("re-hides the scroll affordance when collapsed content leaves no meaningful overflow", () => {
+    renderHarness();
+
+    const container = screen.getByTestId("container") as HTMLDivElement;
+    const metrics = installScrollMetrics(container, {
+      scrollTop: 120,
+      scrollHeight: 260,
+      clientHeight: 120
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(20);
+    });
+    metrics.scrollTop = 96;
+    fireEvent.scroll(container);
+    expect(screen.getByTestId("is-at-bottom")).toHaveTextContent("false");
+
+    fireEvent.click(screen.getByRole("button", { name: "detach" }));
+    expect(screen.getByTestId("is-at-bottom")).toHaveTextContent("false");
+
+    metrics.scrollHeight = 220;
+    act(() => {
+      vi.advanceTimersByTime(20);
+    });
+
     expect(screen.getByTestId("is-at-bottom")).toHaveTextContent("true");
   });
 });

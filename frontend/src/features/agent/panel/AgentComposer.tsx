@@ -6,18 +6,18 @@
  * - Side effects: React rendering and user event wiring.
  */
 import type { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, KeyboardEvent, RefObject } from "react";
-import { CircleHelp, FileText, Paperclip, SendHorizontal, Square, X } from "lucide-react";
+import { CircleHelp, FileImage, FileText, LoaderCircle, Paperclip, SendHorizontal, Square, X } from "lucide-react";
 
 import { cn } from "../../../lib/utils";
 import { Button } from "../../../components/ui/button";
 import { Switch } from "../../../components/ui/switch";
 import { Textarea } from "../../../components/ui/textarea";
 import { Tooltip } from "../../../components/ui/tooltip";
-import type { DraftAttachmentPreview } from "./types";
+import type { DraftAttachment } from "./types";
 
 interface AgentComposerProps {
   isComposerDragActive: boolean;
-  draftAttachmentPreviews: DraftAttachmentPreview[];
+  draftAttachments: DraftAttachment[];
   onRemoveAttachment: (attachmentId: string) => void;
   composerTextareaRef: RefObject<HTMLTextAreaElement | null>;
   fileInputRef: RefObject<HTMLInputElement | null>;
@@ -50,7 +50,7 @@ interface AgentComposerProps {
 export function AgentComposer(props: AgentComposerProps) {
   const {
     isComposerDragActive,
-    draftAttachmentPreviews,
+    draftAttachments,
     onRemoveAttachment,
     composerTextareaRef,
     fileInputRef,
@@ -95,33 +95,66 @@ export function AgentComposer(props: AgentComposerProps) {
       onDrop={onDrop}
     >
       {isComposerDragActive ? <p className="muted">Drop images or PDFs to attach</p> : null}
-      {draftAttachmentPreviews.length > 0 ? (
+      {draftAttachments.length > 0 ? (
         <div className="agent-draft-attachments" aria-label="Pending attachments">
-          {draftAttachmentPreviews.map((preview) => (
+          {draftAttachments.map((attachment) => (
             <div
-              key={preview.id}
-              className={cn("agent-draft-attachment-chip", preview.kind === "pdf" && "agent-draft-attachment-chip-file")}
-            >
-              {preview.kind === "image" ? (
-                <div className="agent-draft-attachment-preview" title={preview.file.name}>
-                  <img src={preview.url} alt={preview.file.name} loading="lazy" />
-                </div>
-              ) : (
-                <div className="agent-draft-attachment-file" title={preview.file.name}>
-                  <FileText className="h-4 w-4" />
-                  <span className="agent-draft-attachment-file-name">{preview.file.name}</span>
-                </div>
+              key={attachment.id}
+              className={cn(
+                "agent-draft-attachment-card",
+                attachment.phase === "failed" && "agent-draft-attachment-card-failed"
               )}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="agent-draft-attachment-remove !size-4"
-                onClick={() => onRemoveAttachment(preview.id)}
-                aria-label={`Remove ${preview.file.name}`}
-              >
-                <X className="h-2 w-2" />
-              </Button>
+            >
+              <div className="agent-draft-attachment-card-top">
+                <div className="agent-draft-attachment-file" title={attachment.file.name}>
+                  {attachment.kind === "image" ? <FileImage className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                  <span className="agent-draft-attachment-file-name">{attachment.file.name}</span>
+                </div>
+                <span className="agent-draft-attachment-inline-status">
+                  {attachment.phase === "uploading" ? (
+                    <span className="agent-draft-attachment-inline-label">{`${attachment.uploadProgress}%`}</span>
+                  ) : attachment.phase === "parsing" ? (
+                    <span className="agent-draft-attachment-inline-label agent-draft-attachment-status-live">
+                      <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                      Parsing…
+                    </span>
+                  ) : attachment.phase === "ready" ? (
+                    <span className="agent-draft-attachment-inline-label">Ready</span>
+                  ) : attachment.phase === "failed" ? (
+                    <span className="agent-draft-attachment-inline-label agent-draft-attachment-inline-label-error">
+                      {attachment.errorMessage || "Upload failed."}
+                    </span>
+                  ) : null}
+                  <span className="agent-draft-attachment-progress" aria-hidden="true">
+                    <span
+                      className={cn(
+                        "agent-draft-attachment-progress-bar",
+                        attachment.phase === "parsing" && "is-parsing",
+                        attachment.phase === "ready" && "is-ready",
+                        attachment.phase === "failed" && "is-failed"
+                      )}
+                      style={
+                        attachment.phase === "uploading"
+                          ? { width: `${Math.max(6, attachment.uploadProgress)}%` }
+                          : attachment.phase === "ready"
+                            ? { width: "100%" }
+                            : undefined
+                      }
+                    />
+                  </span>
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="agent-draft-attachment-remove"
+                  onClick={() => onRemoveAttachment(attachment.id)}
+                  aria-label={`Remove ${attachment.file.name}`}
+                  disabled={isSendingMessage || isBulkLaunching}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
           ))}
         </div>
