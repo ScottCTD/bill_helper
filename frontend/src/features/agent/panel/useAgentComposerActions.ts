@@ -26,6 +26,7 @@ interface UseAgentComposerActionsArgs {
   activeRunId: string | null;
   activeStreamRunId: string | null;
   addOptimisticRunningThreadId: (threadId: string) => void;
+  attachmentsUseOcr: boolean;
   bulkLaunchConcurrencyLimit: number;
   clearOptimisticThreadTitle: (threadId: string) => void;
   draftAttachments: DraftAttachment[];
@@ -55,6 +56,7 @@ export function useAgentComposerActions({
   activeRunId,
   activeStreamRunId,
   addOptimisticRunningThreadId,
+  attachmentsUseOcr,
   bulkLaunchConcurrencyLimit,
   clearOptimisticThreadTitle,
   draftAttachments,
@@ -120,6 +122,7 @@ export function useAgentComposerActions({
             content,
             files: [],
             attachmentIds: [attachment.uploadedAttachmentId],
+            attachmentsUseOcr,
             modelName: selectedComposerModel || undefined
           });
           return { attachmentId: attachment.id, fileName: attachment.file.name, failed: false as const, errorMessage: null };
@@ -235,6 +238,7 @@ export function useAgentComposerActions({
         content,
         files: [],
         attachmentIds: readyAttachments.map((item) => item.uploadedAttachmentId),
+        attachmentsUseOcr,
         modelName: selectedComposerModel || undefined,
         signal: sendAbortController.signal,
         onEvent: (streamEvent) => handleAgentStreamEvent(activeThreadId, streamEvent)

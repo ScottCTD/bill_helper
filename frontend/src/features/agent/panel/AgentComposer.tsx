@@ -24,6 +24,8 @@ interface AgentComposerProps {
   draftMessage: string;
   availableModels: string[];
   selectedModel: string;
+  attachmentsUseOcr: boolean;
+  isAttachmentsUseOcrDisabled: boolean;
   isModelPickerDisabled: boolean;
   isMutating: boolean;
   isRunInFlight: boolean;
@@ -33,6 +35,7 @@ interface AgentComposerProps {
   isInterruptPending: boolean;
   bulkModeHelpText: string;
   actionError: string | null;
+  onAttachmentsUseOcrChange: (checked: boolean) => void;
   onBulkModeChange: (checked: boolean) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onDragEnter: (event: DragEvent<HTMLFormElement>) => void;
@@ -57,6 +60,8 @@ export function AgentComposer(props: AgentComposerProps) {
     draftMessage,
     availableModels,
     selectedModel,
+    attachmentsUseOcr,
+    isAttachmentsUseOcrDisabled,
     isModelPickerDisabled,
     isMutating,
     isRunInFlight,
@@ -66,6 +71,7 @@ export function AgentComposer(props: AgentComposerProps) {
     isInterruptPending,
     bulkModeHelpText,
     actionError,
+    onAttachmentsUseOcrChange,
     onBulkModeChange,
     onSubmit,
     onDragEnter,
@@ -84,6 +90,25 @@ export function AgentComposer(props: AgentComposerProps) {
   const composerPlaceholder = isBulkMode
     ? "Enter one shared prompt. Each attached file will start its own fresh thread."
     : "Ask a question or ask the agent to propose entries/tags/entities...";
+
+  function attachmentStatusLabel(attachment: DraftAttachment): string | null {
+    if (attachment.phase === "uploading") {
+      return `${attachment.uploadProgress}%`;
+    }
+    if (attachment.phase === "parsing") {
+      return "Parsing…";
+    }
+    if (attachment.phase === "processing") {
+      return attachment.kind === "pdf" ? "Preparing pages…" : "Saving…";
+    }
+    if (attachment.phase === "ready") {
+      return "Ready";
+    }
+    if (attachment.phase === "failed") {
+      return attachment.errorMessage || "Upload failed.";
+    }
+    return null;
+  }
 
   return (
     <form
@@ -111,25 +136,24 @@ export function AgentComposer(props: AgentComposerProps) {
                   <span className="agent-draft-attachment-file-name">{attachment.file.name}</span>
                 </div>
                 <span className="agent-draft-attachment-inline-status">
-                  {attachment.phase === "uploading" ? (
-                    <span className="agent-draft-attachment-inline-label">{`${attachment.uploadProgress}%`}</span>
-                  ) : attachment.phase === "parsing" ? (
+                  {attachment.phase === "parsing" || attachment.phase === "processing" ? (
                     <span className="agent-draft-attachment-inline-label agent-draft-attachment-status-live">
                       <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                      Parsing…
+                      {attachmentStatusLabel(attachment)}
                     </span>
-                  ) : attachment.phase === "ready" ? (
-                    <span className="agent-draft-attachment-inline-label">Ready</span>
                   ) : attachment.phase === "failed" ? (
                     <span className="agent-draft-attachment-inline-label agent-draft-attachment-inline-label-error">
-                      {attachment.errorMessage || "Upload failed."}
+                      {attachmentStatusLabel(attachment)}
                     </span>
+                  ) : null}
+                  {attachment.phase === "uploading" || attachment.phase === "ready" ? (
+                    <span className="agent-draft-attachment-inline-label">{attachmentStatusLabel(attachment)}</span>
                   ) : null}
                   <span className="agent-draft-attachment-progress" aria-hidden="true">
                     <span
                       className={cn(
                         "agent-draft-attachment-progress-bar",
-                        attachment.phase === "parsing" && "is-parsing",
+                        (attachment.phase === "parsing" || attachment.phase === "processing") && "is-parsing",
                         attachment.phase === "ready" && "is-ready",
                         attachment.phase === "failed" && "is-failed"
                       )}
@@ -202,6 +226,17 @@ export function AgentComposer(props: AgentComposerProps) {
                 </button>
               </Tooltip>
             </label>
+            {draftAttachments.length > 0 ? (
+              <label className="agent-composer-bulk-toggle">
+                <Switch
+                  checked={attachmentsUseOcr}
+                  onCheckedChange={onAttachmentsUseOcrChange}
+                  disabled={isAttachmentsUseOcrDisabled}
+                  aria-label="Use OCR for attachments"
+                />
+                <span className="agent-composer-bulk-toggle-label">OCR</span>
+              </label>
+            ) : null}
           </div>
 
           <div className="agent-composer-primary-actions">

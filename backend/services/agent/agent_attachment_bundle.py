@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pymupdf
 from sqlalchemy.orm import Session
 
 from backend.models_files import UserFile
@@ -150,6 +151,28 @@ def _copy_existing_bundle_to_new_relative_path(
     return target_primary
 
 
+def _bundle_has_docling_output(
+    user_file: UserFile,
+    *,
+    data_dir: Path | None = None,
+) -> bool:
+    primary_path = resolve_user_file_path(user_file, data_dir=data_dir)
+    return primary_path.parent.joinpath("parsed.md").is_file()
+
+
+def _bundle_has_pdf_page_images(
+    user_file: UserFile,
+    *,
+    data_dir: Path | None = None,
+) -> bool:
+    primary_path = resolve_user_file_path(user_file, data_dir=data_dir)
+    bundle_dir = primary_path.parent
+    return any(
+        path.is_file() and path.name != primary_path.name and path.suffix.lower() == ".png"
+        for path in bundle_dir.iterdir()
+    )
+
+
 def duplicate_agent_attachment_from_existing_bundle(
     db: Session,
     *,
@@ -218,6 +241,7 @@ def ingest_agent_attachment_with_docling(
         existing is not None
         and existing.source_type == SOURCE_TYPE_AGENT_ATTACHMENT
         and existing.mime_type == mime
+        and _bundle_has_docling_output(existing, data_dir=data_dir)
     ):
         return duplicate_agent_attachment_from_existing_bundle(
             db,
@@ -247,6 +271,85 @@ def ingest_agent_attachment_with_docling(
     except Exception:
         shutil.rmtree(primary_path.parent, ignore_errors=True)
         raise
+
+    return create_user_file_for_existing_canonical_path(
+        db,
+        owner_user_id=owner_user_id,
+        storage_area=STORAGE_AREA_UPLOAD,
+        source_type=SOURCE_TYPE_AGENT_ATTACHMENT,
+        stored_relative_path=rel,
+        original_filename=original_filename,
+        display_name=None,
+        mime_type=mime_type,
+        data_dir=data_dir,
+    )
+
+
+def _render_pdf_pages_without_ocr(primary_path: Path) -> None:
+    document = pymupdf.open(primary_path)
+    try:
+        for page_index in range(document.page_count):
+            page = document.load_page(page_index)
+            pixmap = page.get_pixmap(matrix=pymupdf.Matrix(1.5, 1.5), alpha=False)
+            pixmap.save(primary_path.parent / f"page-{page_index + 1}.png")
+    finally:
+        document.close()
+
+
+def ingest_agent_attachment_without_docling(
+    db: Session,
+    *,
+    owner_user_id: str,
+    file_bytes: bytes,
+    mime_type: str,
+    original_filename: str | None,
+    timezone_name: str,
+    data_dir: Path | None = None,
+) -> UserFile:
+    mime = (mime_type or "").lower()
+    is_pdf = mime == "application/pdf"
+    is_image = mime.startswith("image/")
+    if not (is_pdf or is_image):
+        raise PolicyViolation.bad_request("Only PDF and image attachments are supported.")
+
+    content_hash = _hash_bytes(file_bytes)
+    existing = find_user_file_by_sha256(
+        db,
+        user_id=owner_user_id,
+        sha256=content_hash,
+        storage_area=STORAGE_AREA_UPLOAD,
+    )
+    if existing is not None and existing.source_type == SOURCE_TYPE_AGENT_ATTACHMENT and existing.mime_type == mime:
+        if is_image or _bundle_has_pdf_page_images(existing, data_dir=data_dir) or _bundle_has_docling_output(existing, data_dir=data_dir):
+            return duplicate_agent_attachment_from_existing_bundle(
+                db,
+                existing_user_file=existing,
+                owner_user_id=owner_user_id,
+                original_filename=original_filename,
+                timezone_name=timezone_name,
+                data_dir=data_dir,
+            )
+
+    rel = build_agent_upload_stored_relative_path(
+        owner_user_id=owner_user_id,
+        original_filename=original_filename,
+        mime_type=mime,
+        timezone_name=timezone_name,
+        data_dir=data_dir,
+    )
+    primary_path = write_canonical_bytes_at_relative_path(
+        owner_user_id=owner_user_id,
+        storage_area=STORAGE_AREA_UPLOAD,
+        stored_relative_path=rel,
+        file_bytes=file_bytes,
+        data_dir=data_dir,
+    )
+    try:
+        if is_pdf:
+            _render_pdf_pages_without_ocr(primary_path)
+    except Exception:
+        shutil.rmtree(primary_path.parent, ignore_errors=True)
+        raise RuntimeError("Document conversion failed.")
 
     return create_user_file_for_existing_canonical_path(
         db,

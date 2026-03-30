@@ -66,6 +66,7 @@ export function useAgentComposerRuntime({
   upsertThreadSummary
 }: UseAgentComposerRuntimeArgs) {
   const [draftMessage, setDraftMessage] = useState("");
+  const [attachmentsUseOcr, setAttachmentsUseOcr] = useState(false);
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [pendingUserMessagesByThreadId, setPendingUserMessagesByThreadId] = useState<Record<string, PendingUserMessage>>({});
   const [pendingAssistantMessagesByThreadId, setPendingAssistantMessagesByThreadId] = useState<
@@ -82,7 +83,7 @@ export function useAgentComposerRuntime({
   const [composerModelOverride, setComposerModelOverride] = useState<string | null>(null);
   const lastSnappedThreadRef = useRef("");
   const pendingUserMessagesRef = useRef<Record<string, PendingUserMessage>>({});
-  const attachmentState = useAgentDraftAttachments({ setActionError });
+  const attachmentState = useAgentDraftAttachments({ setActionError, attachmentsUseOcr });
   const {
     draftAttachments,
     setDraftAttachments,
@@ -106,6 +107,8 @@ export function useAgentComposerRuntime({
   );
   const selectedComposerModel =
     composerModelOverride && availableComposerModels.includes(composerModelOverride) ? composerModelOverride : resolvedComposerModel;
+  const visionCapableComposerModels = runtimeSettings?.vision_capable_agent_models ?? [];
+  const selectedModelSupportsVision = visionCapableComposerModels.includes(selectedComposerModel);
   const bulkLaunchConcurrencyLimit =
     runtimeSettings?.agent_bulk_max_concurrent_threads ?? DEFAULT_BULK_LAUNCH_CONCURRENCY_LIMIT;
   const hasActiveRun = useMemo(() => (threadDetail?.runs ?? []).some((run) => run.status === "running"), [threadDetail?.runs]);
@@ -194,6 +197,7 @@ export function useAgentComposerRuntime({
     activeRunId,
     activeStreamRunId,
     addOptimisticRunningThreadId,
+    attachmentsUseOcr,
     bulkLaunchConcurrencyLimit,
     clearOptimisticThreadTitle,
     draftAttachments,
@@ -241,6 +245,16 @@ export function useAgentComposerRuntime({
       setComposerModelOverride(null);
     }
   }, [availableComposerModels, composerModelOverride]);
+
+  useEffect(() => {
+    if (!selectedModelSupportsVision) {
+      setAttachmentsUseOcr(true);
+      return;
+    }
+    if (draftAttachments.length === 0) {
+      setAttachmentsUseOcr(false);
+    }
+  }, [draftAttachments.length, selectedModelSupportsVision]);
 
   useEffect(() => {
     if (!selectedThreadId || !threadDetail?.messages || lastSnappedThreadRef.current === selectedThreadId) {
@@ -349,15 +363,26 @@ export function useAgentComposerRuntime({
     setActionError(null);
   }
 
+  function handleAttachmentsUseOcrChange(checked: boolean) {
+    if (!selectedModelSupportsVision) {
+      setAttachmentsUseOcr(true);
+      return;
+    }
+    setAttachmentsUseOcr(checked);
+    setActionError(null);
+  }
+
   return {
     composer: {
       actionError,
       availableModels: availableComposerModels,
       bulkModeHelpText: BULK_MODE_HELP_TEXT,
       composerTextareaRef,
+      attachmentsUseOcr,
       draftAttachments,
       draftMessage,
       fileInputRef,
+      isAttachmentsUseOcrDisabled: !selectedModelSupportsVision || isMutating || isSendingMessage || isBulkLaunching,
       isBulkLaunching,
       isBulkMode,
       isComposerDragActive,
@@ -366,6 +391,7 @@ export function useAgentComposerRuntime({
       isMutating,
       isRunInFlight,
       isSendingMessage,
+      onAttachmentsUseOcrChange: handleAttachmentsUseOcrChange,
       onBulkModeChange: handleBulkModeChange,
       onComposerKeyDown: handleComposerKeyDown,
       onComposerPaste: handleComposerPaste,

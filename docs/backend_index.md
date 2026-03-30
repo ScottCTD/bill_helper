@@ -33,6 +33,7 @@ This file is the backend index. Use it to find the focused backend docs under `.
 - `0034_add_entry_tagging_model_to_runtime_settings`
 - `0035_add_user_files_and_agent_workspace`
 - `0036_add_agent_run_created_at_index`
+- `0037_add_agent_message_attachments_use_ocr`
 
 ## Related Docs
 

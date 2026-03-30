@@ -82,6 +82,7 @@ Content type: `multipart/form-data`
 
 Form fields:
 
+- `use_ocr` (`true` by default; when `false`, images store raw-only and PDFs prepare page images without inline OCR text)
 - `file` (required image or PDF attachment)
 
 Behavior:
@@ -90,7 +91,8 @@ Behavior:
 - validates the same attachment size and mime-type limits as message-send
 - stores the canonical upload bundle under `{data_dir}/user_files/{owner_user_id}/uploads/...`
 - when the same owner uploads the same attachment bytes again, the backend reuses the existing parsed bundle by content hash and skips a second Docling pass
-- runs Docling parsing before returning, so the frontend can show upload then parsing progress before the user presses `Send`
+- when `use_ocr=true`, runs Docling parsing before returning, so the frontend can show upload then parsing progress before the user presses `Send`
+- when `use_ocr=false`, skips OCR parsing; images are stored raw and PDFs prepare page-image assets for later vision sends
 - returns a lightweight attachment handle for later message-send requests
 
 Response: `201 AgentDraftAttachmentRead`
@@ -125,6 +127,7 @@ Form fields:
 
 - `content` (optional if files are present)
 - `model_name` (optional explicit model selection; must match one of the `available_agent_models` returned by `GET /settings`)
+- `attachments_use_ocr` (`true` by default; when `false`, vision-capable models receive image parts instead of inline OCR text for attached PDFs/images)
 - `surface` (`app` by default; `telegram` enables Telegram-safe prompt and reply shaping)
 - `files` (0..N image or PDF attachments uploaded inline with this request)
 - `attachment_ids` (0..N previously uploaded draft attachment ids)
@@ -137,7 +140,9 @@ Behavior:
 - referenced `attachment_ids` are attached without re-uploading or re-parsing; they must belong to the same principal and still be unbound drafts
 - creates an `agent_runs` row with initial `status=running`
 - starts bounded tool-calling execution in background
-- PDFs and images are converted with Docling (standard pipeline + EasyOCR on the API host); the initial model turn receives inline `parsed.md` plus absolute `/workspace/uploads/...` image-path hints, and later tool turns can load selected images on demand through `read_image`
+- PDFs and images are converted with Docling (standard pipeline + EasyOCR on the API host)
+- when `attachments_use_ocr=true`, the initial model turn receives inline `parsed.md` plus absolute `/workspace/uploads/...` image-path hints, and later tool turns can load selected images on demand through `read_image`
+- when `attachments_use_ocr=false`, the selected model must support vision; images are sent as direct `image_url` parts and PDFs are sent as bundle image parts instead of inline OCR text
 - provider routing resolves through LiteLLM using the requested `model_name` when supplied, otherwise the configured default model
 - proposal tool outputs include `proposal_id` and `proposal_short_id`
 
@@ -147,6 +152,7 @@ Errors:
 
 - `400` invalid payload
 - `400` selected `model_name` is not enabled in runtime settings
+- `400` `attachments_use_ocr=false` was requested for a non-vision model
 - `404` thread not found
 - `422` attachment could not be parsed (Docling failure); no user message is persisted
 - `503` provider credentials unavailable
@@ -160,6 +166,7 @@ Content type: `multipart/form-data`
 Form fields:
 
 - `content` (optional if files are present)
+- `attachments_use_ocr` (`true` by default; when `false`, vision-capable models receive image parts instead of inline OCR text for attached PDFs/images)
 - `surface` (`app` by default; `telegram` enables Telegram-safe prompt and reply shaping)
 - `files` (0..N image or PDF attachments uploaded inline with this request)
 - `attachment_ids` (0..N previously uploaded draft attachment ids)

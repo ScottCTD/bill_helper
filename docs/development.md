@@ -217,7 +217,8 @@ Behavior:
 - runs `uv run alembic upgrade head`
 - auto-seeds demo data only when the database is effectively empty
 - runs `npm install` in `frontend/`
-- starts backend, frontend, and optionally Telegram polling
+- starts backend and frontend
+- skips Telegram polling by default; pass `./scripts/dev_up.sh --with-telegram` to opt in
 - writes logs under `logs/`
 
 ## Run Backend Only

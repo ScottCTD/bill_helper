@@ -62,6 +62,7 @@ Runtime override behavior:
 - effective runtime settings resolve as `override -> env default` where applicable
 - `user_memory` is DB-backed only, normalized as an ordered `list[str]`, and injected into every agent system prompt as a markdown unordered list when set
 - `available_agent_models` is DB-backed only, normalized as an ordered `list[str]`, and always resolved to include the effective `agent_model`
+- `vision_capable_agent_models` is a derived read-only list returned by `GET /api/v1/settings` so clients can tell which enabled models allow OCR-off attachment sends
 - `entry_tagging_model` is DB-backed only, may be blank, and must stay inside the effective `available_agent_models` list; blank disables inline entry tag suggestion
 - identity is request-principal-based at API boundaries and is not persisted in runtime settings
 - protected HTTP routes require explicit `X-Bill-Helper-Principal`; the frontend owns that header through the local principal session
@@ -140,6 +141,7 @@ Supported persisted overrides include:
 - `agent_model`
 - `entry_tagging_model`
 - `available_agent_models`
+- `vision_capable_agent_models` (derived read-only response field, not persisted)
 - run-limit and retry fields
 - attachment limits
 - `agent_base_url`
@@ -149,6 +151,7 @@ Important constraints:
 
 - identity is not stored in runtime settings
 - `available_agent_models` is normalized to always include the effective `agent_model`
+- `vision_capable_agent_models` is derived from the effective `available_agent_models` list using the same vision-capability helper the agent runtime uses for attachment handling
 - `entry_tagging_model` must be blank or included in the effective `available_agent_models`
 - `agent_base_url` only allows public `http` / `https` endpoints
 - `agent_api_key` is never returned from the API

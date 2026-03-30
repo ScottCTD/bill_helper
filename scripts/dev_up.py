@@ -6,6 +6,7 @@
 # - Side effects: command-line execution and repository automation as implemented below.
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass, field
 from datetime import datetime
 import os
@@ -117,6 +118,7 @@ class ManagedService:
 @dataclass(slots=True)
 class DevUpRunner:
     root_dir: Path
+    start_telegram: bool = False
     interrupted: threading.Event = field(default_factory=threading.Event)
     shutting_down: bool = False
 
@@ -185,7 +187,7 @@ class DevUpRunner:
             ),
         ]
 
-        if self._telegram_configured():
+        if self.start_telegram and self._telegram_configured():
             services.append(
                 ManagedService(
                     name=TELEGRAM_LOG_NAME,
@@ -194,8 +196,10 @@ class DevUpRunner:
                     log_path=log_dir / f"{TELEGRAM_LOG_NAME}-{timestamp}.log",
                 )
             )
-        else:
+        elif self.start_telegram:
             print("Skipping telegram startup because TELEGRAM_BOT_TOKEN is not configured.")
+        else:
+            print("Skipping telegram startup by default. Pass --with-telegram to opt in.")
 
         return services
 
@@ -280,7 +284,14 @@ class DevUpRunner:
 
 
 def main() -> int:
-    return DevUpRunner(root_dir=ROOT_DIR).run()
+    parser = argparse.ArgumentParser(description="Start the local Bill Helper dev stack.")
+    parser.add_argument(
+        "--with-telegram",
+        action="store_true",
+        help="Also start the Telegram polling worker.",
+    )
+    args = parser.parse_args()
+    return DevUpRunner(root_dir=ROOT_DIR, start_telegram=args.with_telegram).run()
 
 
 if __name__ == "__main__":

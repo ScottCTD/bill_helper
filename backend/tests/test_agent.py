@@ -518,6 +518,119 @@ def test_draft_attachment_upload_reuses_parsed_bundle_for_same_hash(client, monk
         assert resolve_user_file_path(second_user_file).parent.joinpath("parsed.md").is_file()
 
 
+def test_draft_attachment_upload_reruns_docling_when_hash_match_bundle_lacks_parsed_markdown(client, monkeypatch):
+    from backend.models_files import UserFile
+    from backend.services.user_files import resolve_user_file_path
+
+    convert_calls: list[Path] = []
+
+    def stub_convert(source_path: Path, *, is_pdf: bool) -> Path:
+        convert_calls.append(source_path)
+        bundle_dir = source_path.parent
+        (bundle_dir / "parsed.md").write_text("# regenerated bundle\n", encoding="utf-8")
+        return bundle_dir / "parsed.md"
+
+    monkeypatch.setattr(
+        "backend.services.agent.agent_attachment_bundle.convert_upload_bundle_source",
+        stub_convert,
+    )
+
+    pdf_bytes = build_pdf_bytes(["Invoice total CAD 123.45"])
+    first_response = client.post(
+        "/api/v1/agent/draft-attachments",
+        files={"file": ("statement.pdf", pdf_bytes, "application/pdf")},
+    )
+    first_response.raise_for_status()
+    first_attachment = first_response.json()
+
+    with open_session() as db:
+        first_user_file = db.get(UserFile, first_attachment["id"])
+        assert first_user_file is not None
+        resolve_user_file_path(first_user_file).parent.joinpath("parsed.md").unlink()
+
+    second_response = client.post(
+        "/api/v1/agent/draft-attachments",
+        files={"file": ("statement.pdf", pdf_bytes, "application/pdf")},
+    )
+    second_response.raise_for_status()
+    second_attachment = second_response.json()
+
+    assert len(convert_calls) == 2
+
+    with open_session() as db:
+        second_user_file = db.get(UserFile, second_attachment["id"])
+        assert second_user_file is not None
+        assert resolve_user_file_path(second_user_file).parent.joinpath("parsed.md").is_file()
+
+
+def test_draft_attachment_upload_without_ocr_for_pdf_skips_docling_markdown_and_keeps_page_images(client, monkeypatch):
+    from backend.models_files import UserFile
+    from backend.services.user_files import resolve_user_file_path
+
+    convert_calls: list[Path] = []
+
+    def stub_convert(source_path: Path, *, is_pdf: bool) -> Path:
+        convert_calls.append(source_path)
+        bundle_dir = source_path.parent
+        (bundle_dir / "parsed.md").write_text("# should not exist\n", encoding="utf-8")
+        return bundle_dir / "parsed.md"
+
+    monkeypatch.setattr(
+        "backend.services.agent.agent_attachment_bundle.convert_upload_bundle_source",
+        stub_convert,
+    )
+
+    pdf_bytes = build_pdf_bytes(["Invoice total CAD 123.45"])
+    response = client.post(
+        "/api/v1/agent/draft-attachments",
+        data={"use_ocr": "false"},
+        files={"file": ("statement.pdf", pdf_bytes, "application/pdf")},
+    )
+    response.raise_for_status()
+    attachment = response.json()
+
+    assert convert_calls == []
+
+    with open_session() as db:
+        user_file = db.get(UserFile, attachment["id"])
+        assert user_file is not None
+        bundle_dir = resolve_user_file_path(user_file).parent
+        assert not bundle_dir.joinpath("parsed.md").exists()
+        assert bundle_dir.joinpath("page-1.png").is_file()
+
+
+def test_draft_attachment_upload_runs_docling_when_ocr_is_enabled_after_raw_duplicate(client, monkeypatch):
+    convert_calls: list[Path] = []
+
+    def stub_convert(source_path: Path, *, is_pdf: bool) -> Path:
+        convert_calls.append(source_path)
+        bundle_dir = source_path.parent
+        (bundle_dir / "parsed.md").write_text("# regenerated with ocr\n", encoding="utf-8")
+        return bundle_dir / "parsed.md"
+
+    monkeypatch.setattr(
+        "backend.services.agent.agent_attachment_bundle.convert_upload_bundle_source",
+        stub_convert,
+    )
+
+    pdf_bytes = build_pdf_bytes(["Invoice total CAD 123.45"])
+    first_response = client.post(
+        "/api/v1/agent/draft-attachments",
+        data={"use_ocr": "false"},
+        files={"file": ("statement.pdf", pdf_bytes, "application/pdf")},
+    )
+    first_response.raise_for_status()
+
+    second_response = client.post(
+        "/api/v1/agent/draft-attachments",
+        data={"use_ocr": "true"},
+        files={"file": ("statement.pdf", pdf_bytes, "application/pdf")},
+    )
+    second_response.raise_for_status()
+
+    assert len(convert_calls) == 1
+
+
 def test_delete_draft_attachment_removes_unbound_upload_bundle(client):
     from backend.models_files import UserFile
     from backend.services.user_files import resolve_user_file_path
@@ -653,6 +766,122 @@ def test_send_message_rejects_unsupported_attachment_type(client):
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "Only image and PDF attachments are supported."
+
+
+def test_image_attachment_can_skip_ocr_for_vision_model(client, monkeypatch):
+    captured_messages: list[list[dict]] = []
+
+    def capture_model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "Processed image visually."}
+
+    patch_model(monkeypatch, capture_model)
+    settings_response = client.patch(
+        "/api/v1/settings",
+        json={
+            "available_agent_models": [
+                "openrouter/qwen/qwen3.5-27b",
+                "gpt-test",
+            ]
+        },
+    )
+    settings_response.raise_for_status()
+
+    thread = create_thread(client)
+    run = send_message(
+        client,
+        thread["id"],
+        "Describe this image.",
+        files=[("receipt.png", _MINI_PNG, "image/png")],
+        attachments_use_ocr=False,
+        model_name="openrouter/qwen/qwen3.5-27b",
+    )
+
+    assert run["status"] == "completed"
+    user_messages = [message for message in captured_messages[-1] if message.get("role") == "user"]
+    assert user_messages
+    user_content = user_messages[-1].get("content")
+    assert isinstance(user_content, list)
+    assert [part.get("type") for part in user_content] == ["text", "image_url", "text"]
+    assert "receipt.png" in user_content[0].get("text", "")
+    assert user_content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+    assert user_content[2].get("text") == "Describe this image."
+
+
+def test_pdf_attachment_can_skip_ocr_for_vision_model(client, monkeypatch):
+    captured_messages: list[list[dict]] = []
+
+    def capture_model(messages):
+        captured_messages.append(messages)
+        return {"role": "assistant", "content": "Processed PDF visually."}
+
+    patch_model(monkeypatch, capture_model)
+    settings_response = client.patch(
+        "/api/v1/settings",
+        json={
+            "available_agent_models": [
+                "openrouter/qwen/qwen3.5-27b",
+                "gpt-test",
+            ]
+        },
+    )
+    settings_response.raise_for_status()
+
+    thread = create_thread(client)
+    pdf_bytes = build_pdf_bytes(
+        [
+            "Page one invoice line item",
+            "Page two invoice line item",
+        ]
+    )
+    run = send_message(
+        client,
+        thread["id"],
+        "Read this PDF visually.",
+        files=[("invoice.pdf", pdf_bytes, "application/pdf")],
+        attachments_use_ocr=False,
+        model_name="openrouter/qwen/qwen3.5-27b",
+    )
+
+    assert run["status"] == "completed"
+    user_messages = [message for message in captured_messages[-1] if message.get("role") == "user"]
+    assert user_messages
+    user_content = user_messages[-1].get("content")
+    assert isinstance(user_content, list)
+    assert user_content[0].get("type") == "text"
+    assert "invoice.pdf" in user_content[0].get("text", "")
+    image_parts = [part for part in user_content if isinstance(part, dict) and part.get("type") == "image_url"]
+    assert len(image_parts) == 2
+    assert all(part["image_url"]["url"].startswith("data:image/png;base64,") for part in image_parts)
+    assert user_content[-1].get("text") == "Read this PDF visually."
+
+
+def test_send_message_rejects_disabling_ocr_for_non_vision_model(client, monkeypatch):
+    monkeypatch.setattr("backend.services.agent.execution.model_supports_vision", lambda _model_name: False)
+    settings_response = client.patch(
+        "/api/v1/settings",
+        json={
+            "available_agent_models": [
+                "gpt-test",
+                "openai/gpt-4.1-mini",
+            ]
+        },
+    )
+    settings_response.raise_for_status()
+
+    thread = create_thread(client)
+    response = client.post(
+        f"/api/v1/agent/threads/{thread['id']}/messages",
+        data={
+            "content": "Describe this image.",
+            "attachments_use_ocr": "false",
+            "model_name": "gpt-test",
+        },
+        files=[("files", ("receipt.png", _MINI_PNG, "image/png"))],
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "OCR can only be disabled when the selected model supports vision."
 
 
 def test_pdf_attachment_includes_docling_markdown_without_eager_images(client, monkeypatch):

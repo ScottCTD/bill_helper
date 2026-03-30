@@ -99,6 +99,7 @@ function buildRuntimeSettings(overrides: RuntimeSettingsOverrideInput = {}) {
     agent_model: "gpt-test",
     entry_tagging_model: null,
     available_agent_models: ["gpt-test", "openai/gpt-4.1-mini", "openrouter/qwen/qwen3.5-27b"],
+    vision_capable_agent_models: ["openrouter/qwen/qwen3.5-27b"],
     agent_max_steps: 8,
     agent_bulk_max_concurrent_threads: 4,
     agent_retry_max_attempts: 3,
@@ -324,10 +325,10 @@ describe("AgentPanel", () => {
     vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
     vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
     vi.mocked(api.uploadAgentDraftAttachment).mockImplementation(
-      ({ file, onUploadProgress, onParsingStart }) =>
+      ({ file, onUploadProgress, onServerProcessingStart }) =>
         new Promise((resolve) => {
           onUploadProgress?.(42);
-          onParsingStart?.();
+          onServerProcessingStart?.();
           resolveUpload = () =>
             resolve({
               id: uploadedAttachmentIdForFileName(file.name),
@@ -404,10 +405,157 @@ describe("AgentPanel", () => {
           threadId: "thread-1",
           content: "Review this statement",
           files: [],
-          attachmentIds: [uploadedAttachmentIdForFileName("statement.pdf")]
+          attachmentIds: [uploadedAttachmentIdForFileName("statement.pdf")],
+          attachmentsUseOcr: true
         })
       )
     );
+  });
+
+  it("defaults OCR off for vision-capable models and shows non-OCR preparation labels", async () => {
+    let resolveUpload: ((value: Awaited<ReturnType<typeof api.uploadAgentDraftAttachment>>) => void) | null = null;
+
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getAgentThread)
+      .mockResolvedValueOnce(buildThreadDetail([]))
+      .mockResolvedValue(buildThreadDetail([]));
+    vi.mocked(api.uploadAgentDraftAttachment).mockImplementation(
+      ({ file, onUploadProgress, onServerProcessingStart }) =>
+        new Promise((resolve) => {
+          onUploadProgress?.(100);
+          onServerProcessingStart?.();
+          resolveUpload = () =>
+            resolve({
+              id: uploadedAttachmentIdForFileName(file.name),
+              display_name: file.name,
+              mime_type: file.type || "application/octet-stream",
+              created_at: "2026-03-06T10:00:00Z"
+            });
+        })
+    );
+
+    const { container } = renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Agent model" }), "openrouter/qwen/qwen3.5-27b");
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!(fileInput instanceof HTMLInputElement)) {
+      throw new Error("Expected file input");
+    }
+
+    await userEvent.upload(fileInput, [buildPdfFile("statement.pdf")]);
+    await screen.findByText("statement.pdf");
+
+    const ocrToggle = screen.getByRole("switch", { name: "Use OCR for attachments" });
+    expect(ocrToggle).toBeEnabled();
+    expect(ocrToggle).not.toBeChecked();
+    expect(await screen.findByText("Preparing pages…")).toBeInTheDocument();
+
+    await userEvent.type(screen.getByRole("textbox"), "Use vision");
+    const sendPromise = userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(api.streamAgentMessage).not.toHaveBeenCalled());
+
+    await act(async () => {
+      resolveUpload?.();
+    });
+    await sendPromise;
+
+    await waitFor(() =>
+      expect(api.streamAgentMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: "thread-1",
+          attachmentsUseOcr: false
+        })
+      )
+    );
+  });
+
+  it("forces OCR on for non-vision models", async () => {
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
+    vi.mocked(api.getRuntimeSettings).mockResolvedValue(
+      buildRuntimeSettings({
+        available_agent_models: ["gpt-test", "openai/gpt-4.1-mini"],
+        vision_capable_agent_models: []
+      })
+    );
+
+    const { container } = renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!(fileInput instanceof HTMLInputElement)) {
+      throw new Error("Expected file input");
+    }
+
+    await userEvent.upload(fileInput, [buildPdfFile("statement.pdf")]);
+    const ocrToggle = await screen.findByRole("switch", { name: "Use OCR for attachments" });
+    expect(ocrToggle).toBeDisabled();
+    expect(ocrToggle).toBeChecked();
+  });
+
+  it("restarts draft preparation without OCR when the toggle flips off mid-parse", async () => {
+    vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
+    vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
+    vi.mocked(api.getRuntimeSettings).mockResolvedValue(buildRuntimeSettings());
+    vi.mocked(api.uploadAgentDraftAttachment).mockImplementation(
+      ({ file, useOcr, onUploadProgress, onServerProcessingStart, signal }) =>
+        new Promise((resolve, reject) => {
+          onUploadProgress?.(100);
+          onServerProcessingStart?.();
+          if (useOcr) {
+            signal?.addEventListener(
+              "abort",
+              () => reject(new DOMException("The operation was aborted.", "AbortError")),
+              { once: true }
+            );
+            return;
+          }
+          signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("The operation was aborted.", "AbortError")),
+            { once: true }
+          );
+          if (vi.mocked(api.uploadAgentDraftAttachment).mock.calls.filter(([payload]) => payload.useOcr === false).length === 1) {
+            return;
+          }
+          resolve({
+            id: uploadedAttachmentIdForFileName(file.name),
+            display_name: file.name,
+            mime_type: file.type || "application/octet-stream",
+            created_at: "2026-03-06T10:00:00Z"
+          });
+        })
+    );
+
+    const { container } = renderWithQueryClient(<AgentPanel isOpen />);
+
+    await screen.findByRole("button", { name: "Review thread" });
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Agent model" }), "openrouter/qwen/qwen3.5-27b");
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!(fileInput instanceof HTMLInputElement)) {
+      throw new Error("Expected file input");
+    }
+
+    await userEvent.upload(fileInput, [buildPdfFile("statement.pdf")]);
+    const ocrToggle = await screen.findByRole("switch", { name: "Use OCR for attachments" });
+    expect(ocrToggle).not.toBeChecked();
+    expect(await screen.findByText("Preparing pages…")).toBeInTheDocument();
+
+    await userEvent.click(ocrToggle);
+    expect(ocrToggle).toBeChecked();
+    await waitFor(() =>
+      expect(vi.mocked(api.uploadAgentDraftAttachment).mock.calls.map(([payload]) => payload.useOcr)).toEqual([false, true])
+    );
+    expect(await screen.findByText("Parsing…")).toBeInTheDocument();
+
+    await userEvent.click(ocrToggle);
+    expect(ocrToggle).not.toBeChecked();
+    await waitFor(() =>
+      expect(vi.mocked(api.uploadAgentDraftAttachment).mock.calls.map(([payload]) => payload.useOcr)).toEqual([false, true, false])
+    );
+    await waitFor(() => expect(screen.queryByText("Parsing…")).not.toBeInTheDocument());
   });
 
   it("starts one fresh thread per file in Bulk mode without reusing the selected thread", async () => {
@@ -448,6 +596,7 @@ describe("AgentPanel", () => {
           content: "Review this statement",
           files: [],
           attachmentIds: [uploadedAttachmentIdForFileName("statement-january.pdf")],
+          attachmentsUseOcr: true,
           modelName: "gpt-test"
         }
       ],
@@ -457,6 +606,7 @@ describe("AgentPanel", () => {
           content: "Review this statement",
           files: [],
           attachmentIds: [uploadedAttachmentIdForFileName("statement-february.pdf")],
+          attachmentsUseOcr: true,
           modelName: "gpt-test"
         }
       ]

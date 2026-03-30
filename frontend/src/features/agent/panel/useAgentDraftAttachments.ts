@@ -19,10 +19,11 @@ import { detectDraftAttachmentKind, isSupportedAgentAttachment, type DraftAttach
 
 interface UseAgentDraftAttachmentsArgs {
   setActionError: (message: string | null) => void;
+  attachmentsUseOcr: boolean;
 }
 
 export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
-  const { setActionError } = args;
+  const { setActionError, attachmentsUseOcr } = args;
   const [draftAttachments, setDraftAttachments] = useState<DraftAttachment[]>([]);
   const [isComposerDragActive, setIsComposerDragActive] = useState(false);
 
@@ -72,6 +73,7 @@ export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
     const uploadPromise = (async () => {
       const uploadedAttachment = await uploadAgentDraftAttachment({
         file: attachment.file,
+        useOcr: attachment.useOcr,
         signal: abortController.signal,
         onUploadProgress: (progressPercent) => {
           updateDraftAttachment(attachment.id, (current) => ({
@@ -80,10 +82,10 @@ export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
             uploadProgress: progressPercent
           }));
         },
-        onParsingStart: () => {
+        onServerProcessingStart: () => {
           updateDraftAttachment(attachment.id, (current) => ({
             ...current,
-            phase: "parsing",
+            phase: attachment.useOcr ? "parsing" : "processing",
             uploadProgress: 100
           }));
         }
@@ -122,6 +124,31 @@ export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
     uploadPromisesRef.current[attachment.id] = uploadPromise;
   }
 
+  function restartDraftAttachmentUpload(attachmentId: string, nextUseOcr: boolean): void {
+    const currentAttachment = previousAttachmentsRef.current[attachmentId];
+    if (!currentAttachment) {
+      return;
+    }
+    uploadAbortControllersRef.current[attachmentId]?.abort();
+    delete uploadAbortControllersRef.current[attachmentId];
+    delete uploadPromisesRef.current[attachmentId];
+    if (currentAttachment.uploadedAttachmentId) {
+      void deleteAgentDraftAttachment(currentAttachment.uploadedAttachmentId).catch((error: Error) => {
+        setActionError(error.message);
+      });
+    }
+    const restartedAttachment: DraftAttachment = {
+      ...currentAttachment,
+      uploadedAttachmentId: null,
+      uploadProgress: 0,
+      phase: "uploading",
+      errorMessage: null,
+      useOcr: nextUseOcr
+    };
+    updateDraftAttachment(attachmentId, () => restartedAttachment);
+    startDraftAttachmentUpload(restartedAttachment);
+  }
+
   function appendDraftAttachments(files: File[]): void {
     if (files.length === 0) {
       return;
@@ -149,12 +176,21 @@ export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
       uploadedAttachmentId: null,
       uploadProgress: 0,
       phase: "uploading" as const,
-      errorMessage: null
+      errorMessage: null,
+      useOcr: attachmentsUseOcr
     }));
 
     setDraftAttachments((current) => [...current, ...nextAttachments]);
     nextAttachments.forEach((attachment) => startDraftAttachmentUpload(attachment));
   }
+
+  useEffect(() => {
+    draftAttachments.forEach((attachment) => {
+      if (attachment.useOcr !== attachmentsUseOcr) {
+        restartDraftAttachmentUpload(attachment.id, attachmentsUseOcr);
+      }
+    });
+  }, [attachmentsUseOcr, draftAttachments]);
 
   function handleDraftFileSelection(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);

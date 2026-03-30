@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from backend.config import DEFAULT_AGENT_MODEL, get_settings
 from backend.models_settings import RuntimeSettings as RuntimeSettingsRow
+from backend.services.agent.attachment_content import model_supports_vision
 from backend.services.agent.model_client import validate_litellm_environment
 from backend.services.runtime_settings_contracts import (
     RuntimeSettingsOverridesView,
@@ -323,6 +324,9 @@ def build_runtime_settings_view(
         agent_model=resolved.agent_model,
         entry_tagging_model=resolved.entry_tagging_model,
         available_agent_models=resolved.available_agent_models,
+        vision_capable_agent_models=[
+            model_name for model_name in resolved.available_agent_models if model_supports_vision(model_name)
+        ],
         agent_max_steps=resolved.agent_max_steps,
         agent_bulk_max_concurrent_threads=resolved.agent_bulk_max_concurrent_threads,
         agent_retry_max_attempts=resolved.agent_retry_max_attempts,

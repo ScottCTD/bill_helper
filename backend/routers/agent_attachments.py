@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,7 @@ router = APIRouter(
 
 @router.post("/draft-attachments", response_model=AgentDraftAttachmentRead, status_code=status.HTTP_201_CREATED)
 async def create_draft_attachment(
+    use_ocr: bool = Form(default=True),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     principal: RequestPrincipal = Depends(get_current_principal),
@@ -39,6 +40,7 @@ async def create_draft_attachment(
             owner_user_id=principal.user_id,
             upload=file,
             settings=settings,
+            use_ocr=use_ocr,
         )
     except PolicyViolation as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc

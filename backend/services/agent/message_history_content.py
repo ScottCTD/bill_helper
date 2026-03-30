@@ -54,6 +54,7 @@ def build_entity_category_context(db: Session, *, owner_user_id: str | None) -> 
 def build_user_content(
     message: AgentMessage,
     *,
+    model_name: str | None = None,
     review_results_prefix: str | None = None,
     interruption_prefix: str | None = None,
 ) -> str | list[dict[str, Any]]:
@@ -65,8 +66,10 @@ def build_user_content(
     if not message.attachments:
         return content_text
 
+    use_ocr = message.attachments_use_ocr or not attachment_content.model_supports_vision(model_name or "")
     parts = attachment_content.assemble_attachment_parts(
         message.attachments,
+        use_ocr=use_ocr,
     )
 
     if content_text.strip():

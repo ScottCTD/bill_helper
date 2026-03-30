@@ -48,6 +48,7 @@ def send_message(
     surface: str = "app",
     files: list[tuple[str, bytes, str]] | None = None,
     attachment_ids: list[str] | None = None,
+    attachments_use_ocr: bool = True,
     model_name: str | None = None,
     wait_for_completion: bool = True,
     timeout_seconds: float = 2.0,
@@ -63,6 +64,7 @@ def send_message(
     request_data = {
         "content": content,
         "surface": surface,
+        "attachments_use_ocr": str(attachments_use_ocr).lower(),
         "model_name": model_name or "",
     }
     response = client.post(

@@ -94,6 +94,12 @@ uv run python scripts/bootstrap_admin.py --name admin --password admin
 ./scripts/dev_up.sh
 ```
 
+Telegram polling is skipped by default. To opt in:
+
+```bash
+./scripts/dev_up.sh --with-telegram
+```
+
 | Surface | URL |
 |---------|-----|
 | 🌐 Web app | `http://localhost:5173` |

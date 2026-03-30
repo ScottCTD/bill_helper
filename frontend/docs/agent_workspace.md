@@ -10,7 +10,7 @@
 - page header uses the static title `Bill Assistant`; model selection stays in the composer dropdown instead of the title row
 - visual styling now follows the same compact neutral workspace system as the rest of the app: the agent panel is no longer a full-screen bespoke surface with separate page chrome
 - the route-level border now comes from the same shared workspace shell used by the ledger pages; the agent panel renders borderless inside that shell
-- the main conversation column stays width-capped for readability but is left-aligned to the shared workspace inset instead of centering within the panel
+- the main conversation column stays width-capped for readability and centered within the shared workspace panel
 
 Supporting modules include:
 
@@ -99,9 +99,13 @@ Supporting modules include:
 - composer now stays docked against the bottom edge of the agent workspace instead of leaving dead space below the input row
 - textarea and control row share one card surface instead of reading as separate color bands
 - supports picker, paste, and drag-drop for images and PDFs
-- composer attachments upload immediately on selection, then continue through server-side parsing before send; each draft card shows filename, live upload/parsing state, and a compact inline progress bar beside the filename
-- composer draft attachments stay removable while they are uploading or parsing so the user can drop a file before sending
+- composer attachments upload immediately on selection, then continue through server-side preparation before send; each draft card stays on one line with the filename, a live status label, and a compact inline progress bar beside the filename
+- composer draft attachments stay removable while they are uploading or otherwise preparing so the user can drop a file before sending
 - single-send and Bulk mode both wait for all draft attachments to finish upload/parsing before the actual message request starts; once ready, the send request references persisted `attachment_ids` instead of re-uploading the same files
+- when attachments are present, the composer shows an `OCR` toggle beside `Bulk mode`; vision-capable models default it off for new attachments, while non-vision models keep it checked and disabled
+- draft status labels map directly to the active preparation mode: `Parsing…` means OCR/Docling is still running, `Preparing pages…` means a PDF is being converted into page images without OCR text, `Saving…` means a non-OCR image upload is finishing server-side, and `Ready` means the persisted draft attachment can be sent immediately
+- flipping `OCR` off while an OCR-backed draft is still uploading/parsing aborts that in-flight draft and restarts it in non-OCR preparation mode so the composer stops waiting on OCR work
+- flipping `OCR` on while a non-OCR draft is still preparing restarts that draft in OCR mode so the composer waits for `Parsing…` before send
 - message attachments use browser-native large-view behavior instead of an app modal: user-message attachments stay compact file rows, assistant images open in a native tab on click, and assistant PDFs expose an `Open` action beside the inline preview
 - includes a `Bulk mode` toggle beside `Add Attachments`
 - shows an `Agent model` dropdown immediately left of the primary composer action and sources options from runtime settings `available_agent_models` in the same order

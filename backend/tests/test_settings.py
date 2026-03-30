@@ -24,11 +24,34 @@ def test_settings_endpoint_returns_effective_defaults(client):
     assert payload["dashboard_currency_code"] == settings.dashboard_currency_code
     assert payload["agent_model"] == settings.agent_model
     assert payload["available_agent_models"] == expected_default_available_agent_models()
+    assert isinstance(payload["vision_capable_agent_models"], list)
     assert payload["agent_bulk_max_concurrent_threads"] == settings.agent_bulk_max_concurrent_threads
     assert payload["overrides"]["user_memory"] is None
     assert payload["overrides"]["agent_model"] is None
     assert payload["overrides"]["available_agent_models"] is None
     assert payload["overrides"]["agent_bulk_max_concurrent_threads"] is None
+
+
+def test_settings_endpoint_reports_vision_capable_available_models(client, monkeypatch):
+    monkeypatch.setattr(
+        "backend.services.runtime_settings.model_supports_vision",
+        lambda model_name: model_name.endswith("vision"),
+    )
+
+    response = client.patch(
+        "/api/v1/settings",
+        json={
+            "available_agent_models": [
+                "model-text",
+                "model-vision",
+            ]
+        },
+    )
+    response.raise_for_status()
+    payload = response.json()
+
+    assert payload["available_agent_models"][:2] == ["model-text", "model-vision"]
+    assert payload["vision_capable_agent_models"] == ["model-vision"]
 
 
 def test_settings_endpoint_no_longer_reports_mutable_identity(client, auth_headers):

@@ -128,7 +128,22 @@ Purpose:
 - effective runtime values are resolved as `override -> env default` where applicable
 - `user_memory` is an optional DB-only JSON-serialized list of strings used for persistent agent prompt context
 - `available_agent_models` is an optional DB-only JSON-serialized ordered list; the resolved API value always includes the effective `agent_model`
+- `vision_capable_agent_models` is not persisted; it is derived at read time from the effective available model list
 - identity is not stored here
+
+## `agent_messages`
+
+- `id` (PK UUID string)
+- `thread_id` (FK -> `agent_threads.id`)
+- `role` (`AgentMessageRole`)
+- `content_markdown`
+- `attachments_use_ocr` (bool, default `true`; message-level multimodal preference for attached PDFs/images)
+- `created_at`
+
+Operational rules:
+
+- `attachments_use_ocr=false` is accepted only when the send-time model supports vision
+- later thread replay may still fall back to OCR text when a non-vision model reuses the same history
 
 ## `entities`
 

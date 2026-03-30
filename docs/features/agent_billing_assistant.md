@@ -6,7 +6,7 @@ This feature doc describes the current billing assistant architecture, prompt sh
 
 1. Open the app and navigate to the Agent route.
 2. Create or select a conversation thread.
-3. Pick the next-run model from the composer dropdown if needed, attach optional images/PDFs, let upload/parsing finish or continue in the background, then send.
+3. Pick the next-run model from the composer dropdown if needed, attach optional images/PDFs, keep `OCR` on for text-first parsing or leave it off for vision-first sends, let preparation finish or continue in the background, then send.
 4. Review the live run timeline:
    - user and assistant messages render inline
    - progress updates and tool-call events appear during execution
@@ -101,7 +101,9 @@ For a newly uploaded PDF or image bundle, the initial user turn is text-first. T
 - a short note telling the agent to use `read_image` only when visual inspection is needed
 - the full `parsed.md` contents inline under a `--- parsed.md ---` delimiter
 
-The initial attachment block does not include any eager `image_url` parts anymore, even for vision-capable models.
+When the composer keeps OCR enabled, the initial attachment block does not include any eager `image_url` parts.
+When the composer disables OCR for a vision-capable model, images are sent as direct `image_url` parts and PDFs are sent as bundle image parts instead of inline `parsed.md` text.
+In the app UI, vision-capable models default the composer `OCR` toggle off for newly attached files, while non-vision models force it on.
 
 <!-- GENERATED:runtime-tool-contracts:start -->
 ### `add_user_memory`

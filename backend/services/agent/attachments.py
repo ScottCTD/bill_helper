@@ -15,7 +15,10 @@ from starlette import status
 from backend.config import get_settings
 from backend.models_agent import AgentMessageAttachment
 from backend.models_files import UserFile
-from backend.services.agent.agent_attachment_bundle import ingest_agent_attachment_with_docling
+from backend.services.agent.agent_attachment_bundle import (
+    ingest_agent_attachment_with_docling,
+    ingest_agent_attachment_without_docling,
+)
 from backend.services.crud_policy import PolicyViolation
 from backend.services.runtime_settings import ResolvedRuntimeSettings
 from backend.services.user_files import SOURCE_TYPE_AGENT_ATTACHMENT, resolve_user_file_path
@@ -42,6 +45,7 @@ async def ingest_draft_attachment_upload(
     owner_user_id: str,
     upload: UploadFile,
     settings: ResolvedRuntimeSettings,
+    use_ocr: bool = True,
 ) -> UserFile:
     mime_type = (upload.content_type or "").lower()
     if not (mime_type.startswith("image/") or mime_type == "application/pdf"):
@@ -56,7 +60,16 @@ async def ingest_draft_attachment_upload(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
     try:
-        return ingest_agent_attachment_with_docling(
+        if use_ocr:
+            return ingest_agent_attachment_with_docling(
+                db,
+                owner_user_id=owner_user_id,
+                file_bytes=file_bytes,
+                mime_type=mime_type,
+                original_filename=upload.filename,
+                timezone_name=get_settings().current_user_timezone,
+            )
+        return ingest_agent_attachment_without_docling(
             db,
             owner_user_id=owner_user_id,
             file_bytes=file_bytes,

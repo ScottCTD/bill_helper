@@ -5,6 +5,8 @@
 # - Side effects: reads canonical files from disk.
 from __future__ import annotations
 
+import base64
+import mimetypes
 import re
 from pathlib import Path
 from typing import Any
@@ -115,6 +117,57 @@ def _assemble_docling_bundle_parts(
     return [{"type": "text", "text": header}]
 
 
+def _image_url_part_for_path(path: Path, *, mime_type: str | None = None) -> dict[str, Any]:
+    resolved_mime_type = mime_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    data_url = f"data:{resolved_mime_type};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"
+    return {
+        "type": "image_url",
+        "image_url": {"url": data_url},
+    }
+
+
+def _assemble_pdf_visual_parts(
+    attachment: AgentMessageAttachment,
+    *,
+    attachment_name: str,
+) -> list[dict[str, Any]]:
+    if not is_docling_bundle_primary_stored_path(attachment.user_file.stored_relative_path):
+        return _non_bundle_reupload_parts(attachment_name, is_pdf=True)
+    primary = Path(attachment.file_path)
+    bundle_dir = primary.parent
+    parsed_path = bundle_dir / "parsed.md"
+    md_text = parsed_path.read_text(encoding="utf-8", errors="replace") if parsed_path.is_file() else ""
+    image_paths = _vision_image_paths_for_bundle(bundle_dir, md_text, primary_path=primary)
+    if not image_paths:
+        return [
+            {
+                "type": "text",
+                "text": (
+                    f"Attachment {attachment_name} does not have bundle page images available. "
+                    "Re-upload the PDF to regenerate the visual bundle."
+                ),
+            }
+        ]
+    return [
+        {"type": "text", "text": f"Attachment {attachment_name} (PDF pages as images)."},
+        *[_image_url_part_for_path(path, mime_type=mimetypes.guess_type(path.name)[0]) for path in image_paths],
+    ]
+
+
+def _assemble_image_visual_parts(
+    attachment: AgentMessageAttachment,
+    *,
+    attachment_name: str,
+) -> list[dict[str, Any]]:
+    path = Path(attachment.file_path)
+    if not path.is_file():
+        return _non_bundle_reupload_parts(attachment_name, is_pdf=False)
+    return [
+        {"type": "text", "text": f"Attachment {attachment_name} (image)."},
+        _image_url_part_for_path(path, mime_type=attachment.mime_type or None),
+    ]
+
+
 def _non_bundle_reupload_parts(attachment_name: str, *, is_pdf: bool) -> list[dict[str, Any]]:
     kind = "PDF" if is_pdf else "image"
     return [
@@ -156,22 +209,40 @@ def assemble_image_attachment_parts(
 
 def assemble_attachment_parts(
     attachments: list[AgentMessageAttachment],
+    *,
+    use_ocr: bool = True,
 ) -> list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
     for attachment in attachments:
         attachment_name = attachment_display_name(attachment)
         if is_pdf_attachment(attachment):
+            if use_ocr:
+                parts.extend(
+                    assemble_pdf_attachment_parts(
+                        attachment,
+                        attachment_name=attachment_name,
+                    )
+                )
+            else:
+                parts.extend(
+                    _assemble_pdf_visual_parts(
+                        attachment,
+                        attachment_name=attachment_name,
+                    )
+                )
+            continue
+        if use_ocr:
             parts.extend(
-                assemble_pdf_attachment_parts(
+                assemble_image_attachment_parts(
                     attachment,
                     attachment_name=attachment_name,
                 )
             )
-            continue
-        parts.extend(
-            assemble_image_attachment_parts(
-                attachment,
-                attachment_name=attachment_name,
+        else:
+            parts.extend(
+                _assemble_image_visual_parts(
+                    attachment,
+                    attachment_name=attachment_name,
+                )
             )
-        )
     return parts

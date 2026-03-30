@@ -54,6 +54,7 @@
 - `versions/0034_add_entry_tagging_model_to_runtime_settings.py`: adds the optional runtime override for inline AI entry tag suggestions (`runtime_settings.entry_tagging_model`).
 - `versions/0035_add_user_files_and_agent_workspace.py`: adds the canonical `user_files` registry, rewires historical agent attachments to it, and introduces per-user workspace provisioning support.
 - `versions/0036_add_agent_run_created_at_index.py`: adds an index on `agent_runs.created_at` for range-based agent dashboard analytics reads.
+- `versions/0037_add_agent_message_attachments_use_ocr.py`: adds persisted message-level OCR mode for attachment-bearing user turns.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)
@@ -66,7 +67,7 @@
 - `enums_finance.py`: ledger enums (`EntryKind`, `GroupType`, `GroupMemberRole`, plus legacy migration-only `LinkType`).
 - `enums_agent.py`: agent run/review/message enums.
 - `models_finance.py`: ledger/account/entity/tag/taxonomy/filter-group/entry ORM models.
-- `models_agent.py`: agent thread/run/tool-call/change/review ORM models.
+- `models_agent.py`: agent thread/message/run/tool-call/change/review ORM models, including message-level attachment OCR mode.
 - `models_files.py`: canonical per-user durable file registry ORM model.
 - `models_settings.py`: runtime settings ORM model and table mapping.
 - `contracts_groups.py`: shared group create/update contracts and the typed group-member target payload used by schemas, routers, services, and group-member apply flows.
@@ -122,7 +123,7 @@
 - `crud_policy.py`: shared CRUD validation/conflict policy primitives and standardized error-translation helpers.
 - `serializers.py`: ORM-to-schema mapping helpers.
 - `taxonomy.py`: shared taxonomy normalization, term assignment, and usage-count helpers.
-- `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, including DB-backed ordered `user_memory` and `available_agent_models` support.
+- `runtime_settings.py`: resolves effective runtime settings from persisted overrides + env defaults, including DB-backed ordered `user_memory` and `available_agent_models` support plus derived vision-capable model lists for the composer.
 - `user_files.py`: canonical per-user upload path management, atomic writes/imports, hashing, and readable stored-filename helpers.
 - `docker_cli.py`: thin Docker CLI adapter for image/volume/container lifecycle helpers.
 - `agent_workspace.py`: deterministic per-user workspace spec construction plus Docker-backed provisioning/start-stop/remove helpers.

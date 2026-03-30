@@ -40,6 +40,7 @@ class RuntimeSettingsRead(BaseModel):
     agent_model: str
     entry_tagging_model: str | None = None
     available_agent_models: list[str]
+    vision_capable_agent_models: list[str]
     agent_max_steps: int
     agent_bulk_max_concurrent_threads: int
     agent_retry_max_attempts: int

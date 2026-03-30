@@ -168,6 +168,7 @@ Endpoints:
 
 - `GET /api/v1/agent/threads/{thread_id}` returns `current_context_tokens`
 - message-send endpoints accept optional multipart `model_name`; when present it must match one of the resolved runtime `available_agent_models`
+- message-send endpoints accept optional multipart `attachments_use_ocr`; `false` is only accepted for vision-capable models
 - message-send endpoints accept raw multipart `files`, pre-uploaded `attachment_ids`, or both in the same request
 - thread detail returns compact tool-call snapshots by default (`has_full_payload=false`)
 - thread detail keeps `configured_model_name` as the resolved runtime default while each run persists its own `model_name`; `current_context_tokens` follows the newest run model when a thread already has runs
@@ -192,9 +193,10 @@ Endpoints:
 - `send_intermediate_update` is persisted as a `reasoning_update` event, not as a fake tool call
 - malformed tool-call JSON now persists an explicit tool-call error with raw argument text and decode metadata instead of being silently rewritten to an empty argument object
 - attachment-bearing user turns reach the model as ordered content parts: attachment text, then the typed user prompt
+- each user message persists `attachments_use_ocr`; OCR-off requests are honored for vision-capable runs, while later non-vision replay falls back to the parsed text path so thread history still works after a model change
 - eager draft uploads reuse the same canonical upload bundle and Docling parsing path as inline message attachments; once a draft is attached to a message it can no longer be deleted as an unbound draft
 - new agent uploads are written into the canonical per-user store under `{data_dir}/user_files/{owner_user_id}/uploads/...`, and `agent_message_attachments` link to those canonical rows instead of owning file metadata directly
-- PDF and image attachments are written into per-upload bundle directories, converted with Docling (standard pipeline + EasyOCR) on the API host, rewritten to `raw.<ext>` plus readable sibling image names, and exposed to the model as inline `parsed.md` text plus workspace image-path hints; the model can later call `read_image` to load selected bundle images on demand, and rows outside the dated bundle layout only receive a short re-upload hint at inference time
+- PDF and image attachments are written into per-upload bundle directories, converted with Docling (standard pipeline + EasyOCR) on the API host, rewritten to `raw.<ext>` plus readable sibling image names, and exposed either as inline `parsed.md` text plus workspace image-path hints (`attachments_use_ocr=true`) or as direct `image_url` parts (`attachments_use_ocr=false` on vision-capable runs); the model can later call `read_image` to load selected bundle images on demand, and rows outside the dated bundle layout only receive a short re-upload hint at inference time
 - interruption marks runs as `failed` and injects interruption context into the next turn
 - pending proposals remain inspectable in later turns while still `PENDING_REVIEW`
 - reviewed proposal context now includes reviewer override values when `payload_override` changed the approved payload, so later turns can see concrete edited values instead of only changed field names

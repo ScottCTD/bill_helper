@@ -101,6 +101,7 @@ def build_llm_messages(
                     "role": "user",
                     "content": build_user_content(
                         message,
+                        model_name=model_name,
                         review_results_prefix=message_review_prefix,
                         interruption_prefix=message_interruption_prefix,
                     ),

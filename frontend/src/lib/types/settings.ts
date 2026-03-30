@@ -32,6 +32,7 @@ export interface RuntimeSettings {
   agent_model: string;
   entry_tagging_model: string | null;
   available_agent_models: string[];
+  vision_capable_agent_models?: string[];
   agent_max_steps: number;
   agent_bulk_max_concurrent_threads: number;
   agent_retry_max_attempts: number;

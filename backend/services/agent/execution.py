@@ -18,6 +18,7 @@ from starlette import status
 from backend.database import open_session
 from backend.enums_agent import AgentMessageRole, AgentRunStatus
 from backend.models_agent import AgentMessage, AgentRun, AgentThread
+from backend.services.agent.attachment_content import model_supports_vision
 from backend.services.agent.attachments import (
     attach_existing_user_files,
     create_message_attachment,
@@ -93,6 +94,7 @@ async def create_user_message_and_start_run(
     content: str,
     files: list[UploadFile],
     attachment_ids: list[str] | None = None,
+    attachments_use_ocr: bool = True,
     db: Session,
     model_name: str | None = None,
     surface: str = "app",
@@ -127,11 +129,17 @@ async def create_user_message_and_start_run(
             detail=f"Too many attachments. Max allowed is {settings.agent_max_images_per_message}.",
             status_code=status.HTTP_400_BAD_REQUEST,
         )
+    if (files or requested_attachment_ids) and not attachments_use_ocr and not model_supports_vision(selected_model_name):
+        raise AgentExecutionPolicyError(
+            detail="OCR can only be disabled when the selected model supports vision.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
     user_message = AgentMessage(
         thread_id=thread.id,
         role=AgentMessageRole.USER,
         content_markdown=clean_content,
+        attachments_use_ocr=attachments_use_ocr,
     )
     db.add(user_message)
     db.flush()

@@ -81,10 +81,12 @@ function buildAgentMessageFormData(
   content: string,
   files: File[],
   modelName?: string | null,
-  attachmentIds: string[] = []
+  attachmentIds: string[] = [],
+  attachmentsUseOcr = false
 ): FormData {
   const formData = new FormData();
   formData.set("content", content);
+  formData.set("attachments_use_ocr", String(attachmentsUseOcr));
   const normalizedModelName = modelName?.trim();
   if (normalizedModelName) {
     formData.set("model_name", normalizedModelName);
@@ -155,11 +157,18 @@ export function sendAgentMessage(payload: {
   content: string;
   files: File[];
   attachmentIds?: string[];
+  attachmentsUseOcr?: boolean;
   modelName?: string | null;
 }): Promise<AgentRun> {
   return request<AgentRun>(`/api/v1/agent/threads/${payload.threadId}/messages`, {
     method: "POST",
-    body: buildAgentMessageFormData(payload.content, payload.files, payload.modelName, payload.attachmentIds ?? [])
+    body: buildAgentMessageFormData(
+      payload.content,
+      payload.files,
+      payload.modelName,
+      payload.attachmentIds ?? [],
+      payload.attachmentsUseOcr ?? false
+    )
   });
 }
 
@@ -168,6 +177,7 @@ export async function streamAgentMessage(payload: {
   content: string;
   files: File[];
   attachmentIds?: string[];
+  attachmentsUseOcr?: boolean;
   modelName?: string | null;
   signal?: AbortSignal;
   onEvent: (event: AgentStreamEvent) => void;
@@ -178,7 +188,13 @@ export async function streamAgentMessage(payload: {
   }
   const response = await fetch(`${API_BASE_URL}/api/v1/agent/threads/${payload.threadId}/messages/stream`, {
     method: "POST",
-    body: buildAgentMessageFormData(payload.content, payload.files, payload.modelName, payload.attachmentIds ?? []),
+    body: buildAgentMessageFormData(
+      payload.content,
+      payload.files,
+      payload.modelName,
+      payload.attachmentIds ?? [],
+      payload.attachmentsUseOcr ?? false
+    ),
     signal: payload.signal,
     headers: {
       Accept: "text/event-stream",
@@ -226,8 +242,9 @@ export async function streamAgentMessage(payload: {
 
 export async function uploadAgentDraftAttachment(payload: {
   file: File;
+  useOcr?: boolean;
   onUploadProgress?: (progressPercent: number) => void;
-  onParsingStart?: () => void;
+  onServerProcessingStart?: () => void;
   signal?: AbortSignal;
 }): Promise<AgentDraftAttachment> {
   const token = getStoredAuthToken();
@@ -239,6 +256,7 @@ export async function uploadAgentDraftAttachment(payload: {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.set("file", payload.file);
+    formData.set("use_ocr", String(payload.useOcr ?? false));
 
     const cleanupAbortListener = () => {
       if (payload.signal) {
@@ -263,7 +281,7 @@ export async function uploadAgentDraftAttachment(payload: {
 
     xhr.upload.onload = () => {
       payload.onUploadProgress?.(100);
-      payload.onParsingStart?.();
+      payload.onServerProcessingStart?.();
     };
 
     xhr.onerror = () => {
