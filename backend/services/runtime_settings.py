@@ -20,7 +20,10 @@ from backend.services.runtime_settings_contracts import (
     RuntimeSettingsView,
 )
 from backend.validation.runtime_settings import (
+    build_effective_agent_model_display_names,
+    finalize_agent_model_display_names_for_storage,
     parse_agent_models_or_none,
+    parse_agent_model_display_names_or_none,
     normalize_currency_code_or_none,
     parse_user_memory_or_none,
     normalize_secret_or_none,
@@ -101,7 +104,13 @@ def update_runtime_settings_override(
         entry_tagging_model=next_entry_tagging_model,
         available_agent_models=next_available_agent_models,
     )
-    for field_name, value in updates.model_dump(exclude_unset=True).items():
+    patch_updates = dict(updates.model_dump(exclude_unset=True))
+    if "agent_model_display_names" in patch_updates:
+        patch_updates["agent_model_display_names"] = finalize_agent_model_display_names_for_storage(
+            patch_updates["agent_model_display_names"],
+            available_agent_models=next_available_agent_models,
+        )
+    for field_name, value in patch_updates.items():
         # Skip masked sentinel to prevent accidental overwrites of API key
         if field_name == "agent_api_key" and value == "***masked***":
             continue
@@ -110,6 +119,12 @@ def update_runtime_settings_override(
         if field_name == "user_memory":
             value = serialize_user_memory_or_none(value)
         setattr(row, field_name, value)
+    if updates.includes("available_agent_models") and not updates.includes("agent_model_display_names"):
+        existing_display = parse_agent_model_display_names_or_none(row.agent_model_display_names)
+        row.agent_model_display_names = finalize_agent_model_display_names_for_storage(
+            existing_display,
+            available_agent_models=next_available_agent_models,
+        )
     db.add(row)
     db.flush()
     return row
@@ -317,6 +332,10 @@ def build_runtime_settings_view(
         model_name=resolved.agent_model
     )
 
+    effective_display_names = build_effective_agent_model_display_names(
+        available_agent_models=resolved.available_agent_models,
+        stored_text=override.agent_model_display_names if override else None,
+    )
     return RuntimeSettingsView(
         user_memory=resolved.user_memory,
         default_currency_code=resolved.default_currency_code,
@@ -324,6 +343,7 @@ def build_runtime_settings_view(
         agent_model=resolved.agent_model,
         entry_tagging_model=resolved.entry_tagging_model,
         available_agent_models=resolved.available_agent_models,
+        agent_model_display_names=effective_display_names,
         vision_capable_agent_models=[
             model_name for model_name in resolved.available_agent_models if model_supports_vision(model_name)
         ],
@@ -358,6 +378,9 @@ def build_runtime_settings_view(
             if override
             else None,
             available_agent_models=parse_agent_models_or_none(override.available_agent_models)
+            if override
+            else None,
+            agent_model_display_names=parse_agent_model_display_names_or_none(override.agent_model_display_names)
             if override
             else None,
             agent_max_steps=override.agent_max_steps if override else None,

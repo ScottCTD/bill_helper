@@ -376,6 +376,7 @@ export function useAgentComposerRuntime({
     composer: {
       actionError,
       availableModels: availableComposerModels,
+      modelDisplayNames: runtimeSettings?.agent_model_display_names ?? {},
       bulkModeHelpText: BULK_MODE_HELP_TEXT,
       composerTextareaRef,
       attachmentsUseOcr,

@@ -42,6 +42,8 @@ export function normalizeModelName(value: string | null | undefined): string | n
   return normalized || null;
 }
 
+export { resolveAgentModelOptionLabel } from "../../../lib/agent_models";
+
 export function resolveComposerModelName(
   availableModels: string[],
   threadDetail?: { runs: { model_name: string | null }[]; configured_model_name: string | null },

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import mimetypes
 import re
 from pathlib import Path
@@ -14,11 +15,15 @@ from typing import Any
 from backend.models_agent import AgentMessageAttachment
 from backend.services.agent.agent_attachment_bundle import (
     is_docling_bundle_primary_stored_path,
+    pdf_pages_as_png_bytes,
     workspace_uploads_prefix_for_primary_stored_path,
 )
 
+logger = logging.getLogger(__name__)
+
 _MARKDOWN_IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+_PAGE_PNG_RE = re.compile(r"^page-(\d+)\.png$", re.IGNORECASE)
 
 
 def is_pdf_attachment(attachment: AgentMessageAttachment) -> bool:
@@ -126,6 +131,30 @@ def _image_url_part_for_path(path: Path, *, mime_type: str | None = None) -> dic
     }
 
 
+def _image_url_part_for_png_bytes(png_bytes: bytes) -> dict[str, Any]:
+    data_url = f"data:image/png;base64,{base64.b64encode(png_bytes).decode('ascii')}"
+    return {
+        "type": "image_url",
+        "image_url": {"url": data_url},
+    }
+
+
+def _sorted_pdf_page_png_paths(bundle_dir: Path, *, primary_path: Path) -> list[Path]:
+    """``page-1.png``, ``page-2.png``, … sorted by page number (vision path, one image per page)."""
+    pages: list[tuple[int, Path]] = []
+    primary_resolved = primary_path.resolve()
+    for entry in bundle_dir.iterdir():
+        if not entry.is_file():
+            continue
+        if entry.resolve() == primary_resolved:
+            continue
+        match = _PAGE_PNG_RE.match(entry.name)
+        if match:
+            pages.append((int(match.group(1)), entry))
+    pages.sort(key=lambda item: item[0])
+    return [path for _, path in pages]
+
+
 def _assemble_pdf_visual_parts(
     attachment: AgentMessageAttachment,
     *,
@@ -134,24 +163,50 @@ def _assemble_pdf_visual_parts(
     if not is_docling_bundle_primary_stored_path(attachment.user_file.stored_relative_path):
         return _non_bundle_reupload_parts(attachment_name, is_pdf=True)
     primary = Path(attachment.file_path)
+    if not primary.is_file() or primary.suffix.lower() != ".pdf":
+        return _non_bundle_reupload_parts(attachment_name, is_pdf=True)
     bundle_dir = primary.parent
-    parsed_path = bundle_dir / "parsed.md"
-    md_text = parsed_path.read_text(encoding="utf-8", errors="replace") if parsed_path.is_file() else ""
-    image_paths = _vision_image_paths_for_bundle(bundle_dir, md_text, primary_path=primary)
-    if not image_paths:
-        return [
-            {
-                "type": "text",
-                "text": (
-                    f"Attachment {attachment_name} does not have bundle page images available. "
-                    "Re-upload the PDF to regenerate the visual bundle."
-                ),
-            }
+    page_paths = _sorted_pdf_page_png_paths(bundle_dir, primary_path=primary)
+    image_parts: list[dict[str, Any]]
+    if page_paths:
+        image_parts = [
+            _image_url_part_for_path(path, mime_type=mimetypes.guess_type(path.name)[0])
+            for path in page_paths
         ]
-    return [
-        {"type": "text", "text": f"Attachment {attachment_name} (PDF pages as images)."},
-        *[_image_url_part_for_path(path, mime_type=mimetypes.guess_type(path.name)[0]) for path in image_paths],
-    ]
+    else:
+        try:
+            png_chunks = pdf_pages_as_png_bytes(primary)
+        except Exception:
+            logger.exception(
+                "pdf_vision_assembly.rasterize_failed attachment_name=%s primary=%s",
+                attachment_name,
+                primary,
+            )
+            return [
+                {
+                    "type": "text",
+                    "text": (
+                        f"Attachment {attachment_name} could not be rasterized for vision. "
+                        "Re-upload the PDF or enable OCR mode."
+                    ),
+                }
+            ]
+        if not png_chunks:
+            return [
+                {
+                    "type": "text",
+                    "text": (
+                        f"Attachment {attachment_name} has no pages to render for vision. "
+                        "Re-upload the PDF."
+                    ),
+                }
+            ]
+        image_parts = [_image_url_part_for_png_bytes(chunk) for chunk in png_chunks]
+
+    header = (
+        f"Attachment {attachment_name} (PDF, vision path: one image per page, {len(image_parts)} page(s))."
+    )
+    return [{"type": "text", "text": header}, *image_parts]
 
 
 def _assemble_image_visual_parts(

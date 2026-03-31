@@ -1255,7 +1255,7 @@ def test_execute_tool_returns_json_safe_validation_errors_for_rename_thread() ->
     with open_session() as db:
         result = execute_tool(
             "rename_thread",
-            {"title": "one two three four"},
+            {"title": "one two three four five six"},
             ToolContext(db=db, run_id="run-1"),
         )
 

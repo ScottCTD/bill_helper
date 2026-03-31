@@ -6,7 +6,10 @@
  * - Side effects: module-local frontend behavior only.
  */
 import type { RuntimeSettings, RuntimeSettingsUpdatePayload } from "../../lib/types";
+import { parseAgentModelLines, pruneAgentModelDisplayNames } from "../../lib/agent_models";
 import type { SettingsFormState } from "./types";
+
+export { parseAgentModelLines };
 
 const USER_MEMORY_LINE_PREFIXES = ["- ", "* ", "+ "];
 
@@ -17,6 +20,7 @@ export const RESET_RUNTIME_SETTINGS_PAYLOAD: RuntimeSettingsUpdatePayload = {
   agent_model: null,
   entry_tagging_model: null,
   available_agent_models: [],
+  agent_model_display_names: null,
   agent_max_steps: null,
   agent_bulk_max_concurrent_threads: null,
   agent_max_images_per_message: null,
@@ -76,26 +80,6 @@ function parseUserMemoryLines(rawValue: string): string[] | null {
   return items.length > 0 ? items : null;
 }
 
-export function parseAgentModelLines(rawValue: string): string[] {
-  const items: string[] = [];
-  const seenKeys = new Set<string>();
-
-  for (const line of rawValue.split(/\r?\n/)) {
-    const item = line.trim();
-    if (!item) {
-      continue;
-    }
-    const itemKey = item.toLocaleLowerCase();
-    if (seenKeys.has(itemKey)) {
-      continue;
-    }
-    seenKeys.add(itemKey);
-    items.push(item);
-  }
-
-  return items;
-}
-
 function parsePositiveInteger(rawValue: string, fieldName: string): number {
   const parsed = Number(rawValue);
   if (!Number.isInteger(parsed) || parsed <= 0) {
@@ -120,6 +104,7 @@ export function buildSettingsFormState(data: RuntimeSettings): SettingsFormState
     agent_model: data.agent_model,
     entry_tagging_model: data.entry_tagging_model ?? "",
     available_agent_models: formatLines(data.available_agent_models),
+    agent_model_display_names: { ...data.agent_model_display_names },
     agent_max_steps: String(data.agent_max_steps),
     agent_bulk_max_concurrent_threads: String(data.agent_bulk_max_concurrent_threads),
     agent_max_images_per_message: String(data.agent_max_images_per_message),
@@ -183,6 +168,7 @@ export function buildSettingsUpdatePayload(formState: SettingsFormState): Runtim
       : undefined
     : null;
   const nextAvailableAgentModels = parseAgentModelLines(formState.available_agent_models);
+  const nextDisplayNames = pruneAgentModelDisplayNames(formState.agent_model_display_names, nextAvailableAgentModels);
   const nextEntryTaggingModel = formState.entry_tagging_model.trim();
   if (nextEntryTaggingModel && !nextAvailableAgentModels.includes(nextEntryTaggingModel)) {
     throw new Error("Default tagging model must be one of the available models.");
@@ -195,6 +181,7 @@ export function buildSettingsUpdatePayload(formState: SettingsFormState): Runtim
     agent_model: formState.agent_model.trim(),
     entry_tagging_model: nextEntryTaggingModel || null,
     available_agent_models: nextAvailableAgentModels,
+    agent_model_display_names: Object.keys(nextDisplayNames).length > 0 ? nextDisplayNames : null,
     agent_max_steps: nextAgentMaxSteps,
     agent_bulk_max_concurrent_threads: nextAgentBulkMaxConcurrentThreads,
     agent_max_images_per_message: nextAgentMaxImagesPerMessage,

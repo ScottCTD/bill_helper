@@ -13,6 +13,7 @@ export interface RuntimeSettingsOverrides {
   agent_model: string | null;
   entry_tagging_model: string | null;
   available_agent_models: string[] | null;
+  agent_model_display_names: Record<string, string> | null;
   agent_max_steps: number | null;
   agent_bulk_max_concurrent_threads: number | null;
   agent_retry_max_attempts: number | null;
@@ -32,6 +33,7 @@ export interface RuntimeSettings {
   agent_model: string;
   entry_tagging_model: string | null;
   available_agent_models: string[];
+  agent_model_display_names: Record<string, string>;
   vision_capable_agent_models?: string[];
   agent_max_steps: number;
   agent_bulk_max_concurrent_threads: number;
@@ -53,6 +55,7 @@ export interface RuntimeSettingsUpdatePayload {
   agent_model?: string | null;
   entry_tagging_model?: string | null;
   available_agent_models?: string[] | null;
+  agent_model_display_names?: Record<string, string> | null;
   agent_max_steps?: number | null;
   agent_bulk_max_concurrent_threads?: number | null;
   agent_retry_max_attempts?: number | null;

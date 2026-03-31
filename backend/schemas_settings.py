@@ -19,6 +19,7 @@ class RuntimeSettingsOverridesRead(BaseModel):
     agent_model: str | None = None
     entry_tagging_model: str | None = None
     available_agent_models: list[str] | None = None
+    agent_model_display_names: dict[str, str] | None = None
     agent_max_steps: int | None = None
     agent_bulk_max_concurrent_threads: int | None = None
     agent_retry_max_attempts: int | None = None
@@ -40,6 +41,7 @@ class RuntimeSettingsRead(BaseModel):
     agent_model: str
     entry_tagging_model: str | None = None
     available_agent_models: list[str]
+    agent_model_display_names: dict[str, str]
     vision_capable_agent_models: list[str]
     agent_max_steps: int
     agent_bulk_max_concurrent_threads: int

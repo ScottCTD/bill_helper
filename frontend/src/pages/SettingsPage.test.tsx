@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +28,10 @@ const baseSettingsFixture: RuntimeSettings = {
     "openai/gpt-4.1-mini",
     "openrouter/qwen/qwen3.5-27b",
   ],
+  agent_model_display_names: {
+    "bedrock/us.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6",
+    "openrouter/qwen/qwen3.5-27b": "Qwen 3.5 27B",
+  },
   agent_max_steps: 20,
   agent_bulk_max_concurrent_threads: 4,
   agent_retry_max_attempts: 2,
@@ -45,6 +49,7 @@ const baseSettingsFixture: RuntimeSettings = {
     agent_model: null,
     entry_tagging_model: null,
     available_agent_models: null,
+    agent_model_display_names: null,
     agent_max_steps: null,
     agent_bulk_max_concurrent_threads: null,
     agent_retry_max_attempts: null,
@@ -112,13 +117,15 @@ describe("SettingsPage", () => {
     const defaultModelInput = await screen.findByLabelText("Default model");
     expect(defaultModelInput).toHaveValue("openrouter/qwen/qwen3.5-27b");
     expect(screen.getByLabelText("Default tagging model")).toHaveValue("");
-    expect(screen.getByLabelText("Available models")).toHaveValue(
-      "bedrock/us.anthropic.claude-sonnet-4-6\nopenai/gpt-4.1-mini\nopenrouter/qwen/qwen3.5-27b"
-    );
+    const modelIdInputs = screen.getAllByRole("textbox", { name: /Model id, row/ });
+    expect(modelIdInputs).toHaveLength(3);
+    expect(modelIdInputs[0]).toHaveValue("bedrock/us.anthropic.claude-sonnet-4-6");
+    expect(modelIdInputs[1]).toHaveValue("openai/gpt-4.1-mini");
+    expect(modelIdInputs[2]).toHaveValue("openrouter/qwen/qwen3.5-27b");
     expect(Array.from(defaultModelInput.querySelectorAll("option")).map((option) => option.textContent)).toEqual([
-      "bedrock/us.anthropic.claude-sonnet-4-6",
+      "Claude Sonnet 4.6",
       "openai/gpt-4.1-mini",
-      "openrouter/qwen/qwen3.5-27b",
+      "Qwen 3.5 27B",
     ]);
   });
 
@@ -262,15 +269,48 @@ describe("SettingsPage", () => {
 
     await openAgentTab();
     const defaultModelInput = await screen.findByLabelText("Default model");
-    const availableModelsInput = screen.getByLabelText("Available models");
 
     await userEvent.selectOptions(defaultModelInput, "openai/gpt-4.1-mini");
-    await userEvent.clear(availableModelsInput);
-    await userEvent.type(
-      availableModelsInput,
-      "openai/gpt-4.1-mini\n\ngoogle/gemini-2.5-pro\nbedrock/us.anthropic.claude-sonnet-4-6\nopenai/gpt-4.1-mini"
-    );
-    await userEvent.selectOptions(defaultModelInput, "google/gemini-2.5-pro");
+
+    // Edit row 1 before row 0 so we never have two identical openai/gpt-4.1-mini ids before the next edit (dedupe would drop a row).
+    await act(async () => {
+      fireEvent.change(screen.getAllByRole("textbox", { name: /Model id, row/ })[1]!, {
+        target: { value: "google/gemini-2.5-pro" },
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getAllByRole("textbox", { name: /Model id, row/ })[1]).toHaveValue("google/gemini-2.5-pro");
+    });
+    await act(async () => {
+      fireEvent.change(screen.getAllByRole("textbox", { name: /Model id, row/ })[0]!, {
+        target: { value: "openai/gpt-4.1-mini" },
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getAllByRole("textbox", { name: /Model id, row/ })[0]).toHaveValue("openai/gpt-4.1-mini");
+    });
+    await act(async () => {
+      fireEvent.change(screen.getAllByRole("textbox", { name: /Model id, row/ })[2]!, {
+        target: { value: "bedrock/us.anthropic.claude-sonnet-4-6" },
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getAllByRole("textbox", { name: /Model id, row/ })[2]).toHaveValue("bedrock/us.anthropic.claude-sonnet-4-6");
+    });
+
+    await waitFor(() => {
+      const select = screen.getByLabelText("Default model") as HTMLSelectElement;
+      const values = [...select.options].map((option) => option.value).filter(Boolean);
+      expect(values).toEqual(
+        expect.arrayContaining([
+          "openai/gpt-4.1-mini",
+          "google/gemini-2.5-pro",
+          "bedrock/us.anthropic.claude-sonnet-4-6",
+        ])
+      );
+    });
+
+    await userEvent.selectOptions(screen.getByLabelText("Default model"), "google/gemini-2.5-pro");
     fireEvent.submit(document.getElementById("runtime-settings-form") as HTMLFormElement);
 
     await waitFor(() => {
@@ -296,12 +336,10 @@ describe("SettingsPage", () => {
 
     await openAgentTab();
     const defaultModelInput = await screen.findByLabelText("Default model");
-    const availableModelsInput = screen.getByLabelText("Available models");
 
     expect(defaultModelInput).toHaveValue("openrouter/qwen/qwen3.5-27b");
 
-    await userEvent.clear(availableModelsInput);
-    await userEvent.type(availableModelsInput, "bedrock/us.anthropic.claude-sonnet-4-6\nopenai/gpt-4.1-mini");
+    await userEvent.click(screen.getByRole("button", { name: "Remove model row 3" }));
 
     expect(defaultModelInput).toHaveValue("bedrock/us.anthropic.claude-sonnet-4-6");
   });
@@ -321,12 +359,10 @@ describe("SettingsPage", () => {
 
     await openAgentTab();
     const taggingModelInput = await screen.findByLabelText("Default tagging model");
-    const availableModelsInput = screen.getByLabelText("Available models");
 
     expect(taggingModelInput).toHaveValue("openrouter/qwen/qwen3.5-27b");
 
-    await userEvent.clear(availableModelsInput);
-    await userEvent.type(availableModelsInput, "bedrock/us.anthropic.claude-sonnet-4-6\nopenai/gpt-4.1-mini");
+    await userEvent.click(screen.getByRole("button", { name: "Remove model row 3" }));
 
     expect(taggingModelInput).toHaveValue("");
   });
@@ -382,6 +418,7 @@ describe("SettingsPage", () => {
         agent_model: null,
         entry_tagging_model: null,
         available_agent_models: [],
+        agent_model_display_names: null,
       })
     );
   });

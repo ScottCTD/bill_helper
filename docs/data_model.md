@@ -110,6 +110,8 @@ Operational rules:
   - `dashboard_currency_code`
   - `agent_model`
   - `available_agent_models` (nullable JSON-serialized ordered list of model identifiers)
+  - `entry_tagging_model`
+  - `agent_model_display_names` (nullable JSON-serialized object mapping model id → display label for UI)
   - `agent_max_steps`
   - `agent_bulk_max_concurrent_threads`
   - `agent_retry_max_attempts`
@@ -128,6 +130,7 @@ Purpose:
 - effective runtime values are resolved as `override -> env default` where applicable
 - `user_memory` is an optional DB-only JSON-serialized list of strings used for persistent agent prompt context
 - `available_agent_models` is an optional DB-only JSON-serialized ordered list; the resolved API value always includes the effective `agent_model`
+  - `agent_model_display_names` is an optional DB-only JSON object of UI labels; the API merges these with built-in labels for known default-catalog model ids and exposes only entries for models in the effective available list
 - `vision_capable_agent_models` is not persisted; it is derived at read time from the effective available model list
 - identity is not stored here
 

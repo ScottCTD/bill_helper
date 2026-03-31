@@ -186,7 +186,7 @@
 - `Agent` groups memory/models, provider overrides, run limits, bulk and attachment limits, and reliability into separate sections
 - section UI is split across `SettingsToolbar.tsx`, `SettingsGeneralSection.tsx`, `SettingsAgentSection.tsx`, and `ResetSettingsDialog.tsx`
 - `Agent memory` lives under the `Agent` tab, is edited as one item per line, persists as a list of strings, and is sent to every backend agent system prompt
-- `Default model` is chosen from a dropdown sourced from `Available models`; available models still use one newline-separated identifier per line, preserve entered order, and fallback the default to the first remaining listed model if the current selection is removed
-- `Default tagging model` is a separate optional dropdown sourced from `Available models`; leaving it blank disables inline entry tag suggestion, and removing the selected model from `Available models` auto-clears it back to blank
+- `Available models` is a single table-style editor (model id + optional display label per row, add/remove/reorder) that persists ordered ids and labels together; `Default model` and `Default tagging model` sit below it and list the same ids with display labels when set (including server default labels for the built-in catalog)
+- `Default tagging model` is a separate optional dropdown sourced from the same available model list; leaving it blank disables inline entry tag suggestion, and removing the selected model from the list auto-clears it back to blank
 - bulk concurrency is labeled around concurrent launches, while the per-message attachment limit explicitly calls out that Bulk mode still starts one fresh thread per attachment
 - agent provider overrides use a compact toggle; when off the custom endpoint/key fields are hidden and saving falls back to server env values from `.env` or process env

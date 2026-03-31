@@ -31,7 +31,7 @@ SESSION_TOOLS: dict[str, AgentToolDefinition] = {
     "rename_thread": AgentToolDefinition(
         name="rename_thread",
         description=(
-            "Rename the current thread to a short 1-3 word topic. Use this right after the first user "
+            "Rename the current thread to a short 1-5 word topic. Use this right after the first user "
             "message in a new thread. After that, only rename when the user explicitly asks or the topic "
             "shifts substantially."
         ),

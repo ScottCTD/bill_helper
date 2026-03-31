@@ -202,6 +202,9 @@ Note: entry-level status has been removed; review state lives in `agent_change_i
 - `0033_multi_user_security`
 - `0034_add_entry_tagging_model_to_runtime_settings`
 - `0035_add_user_files_and_agent_workspace`
+- `0036_add_agent_run_created_at_index`
+- `0037_add_agent_message_attachments_use_ocr`
+- `0038_add_agent_model_display_names_to_runtime_settings`
 - Operational commands:
   - `uv run alembic upgrade head`
   - `uv run python scripts/bootstrap_admin.py --name <user> --password <pass>`

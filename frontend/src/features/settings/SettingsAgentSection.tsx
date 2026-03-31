@@ -11,6 +11,8 @@ import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
 import { Switch } from "../../components/ui/switch";
 import { Textarea } from "../../components/ui/textarea";
+import { resolveAgentModelOptionLabel } from "../../lib/agent_models";
+import { AgentAvailableModelsEditor } from "./AgentAvailableModelsEditor";
 import { SETTINGS_FIELD_IDS } from "./constants";
 import { parseAgentModelLines } from "./formState";
 import type { SettingsFormPatch, SettingsFormState } from "./types";
@@ -36,22 +38,6 @@ function MemoryAndModelsCard({ formState, onFormPatch }: SettingsFormPatchHandle
   const taggingModelValue =
     hasAvailableModels && availableModelOptions.includes(formState.entry_tagging_model) ? formState.entry_tagging_model : "";
 
-  function handleAvailableModelsChange(nextValue: string) {
-    const nextAvailableModels = parseAgentModelLines(nextValue);
-    const nextDefaultModel = nextAvailableModels.includes(formState.agent_model)
-      ? formState.agent_model
-      : nextAvailableModels[0] ?? "";
-    const nextTaggingModel = nextAvailableModels.includes(formState.entry_tagging_model)
-      ? formState.entry_tagging_model
-      : "";
-
-    onFormPatch({
-      available_agent_models: nextValue,
-      agent_model: nextDefaultModel,
-      entry_tagging_model: nextTaggingModel,
-    });
-  }
-
   return (
     <Card>
       <CardHeader>
@@ -72,9 +58,17 @@ function MemoryAndModelsCard({ formState, onFormPatch }: SettingsFormPatchHandle
         </FormField>
 
         <FormField
+          label="Available models"
+          htmlFor={SETTINGS_FIELD_IDS.availableModels}
+          hint="Add one row per model: LiteLLM model id and optional display label. Order is preserved; duplicate ids (ignoring case) are dropped when saving. Default model and tagging model below use these ids and labels."
+        >
+          <AgentAvailableModelsEditor formState={formState} onFormPatch={onFormPatch} fieldId={SETTINGS_FIELD_IDS.availableModels} />
+        </FormField>
+
+        <FormField
           label="Default model"
           htmlFor={SETTINGS_FIELD_IDS.defaultModel}
-          hint="Used for new chats and runs. Choose from the configured Available models list."
+          hint="Used for new chats and runs. Values match the available models list above; option text uses display labels when set."
         >
           <NativeSelect
             id={SETTINGS_FIELD_IDS.defaultModel}
@@ -85,7 +79,7 @@ function MemoryAndModelsCard({ formState, onFormPatch }: SettingsFormPatchHandle
             {!hasAvailableModels ? <option value="">No available models configured</option> : null}
             {availableModelOptions.map((modelName) => (
               <option key={modelName} value={modelName}>
-                {modelName}
+                {resolveAgentModelOptionLabel(modelName, formState.agent_model_display_names)}
               </option>
             ))}
           </NativeSelect>
@@ -94,7 +88,7 @@ function MemoryAndModelsCard({ formState, onFormPatch }: SettingsFormPatchHandle
         <FormField
           label="Default tagging model"
           htmlFor={SETTINGS_FIELD_IDS.defaultTaggingModel}
-          hint="Used only for inline entry tag suggestions. Leave blank to disable the feature."
+          hint="Used only for inline entry tag suggestions. Leave blank to disable the feature. Option text uses display labels when set."
         >
           <NativeSelect
             id={SETTINGS_FIELD_IDS.defaultTaggingModel}
@@ -104,22 +98,10 @@ function MemoryAndModelsCard({ formState, onFormPatch }: SettingsFormPatchHandle
             <option value="">Disabled</option>
             {availableModelOptions.map((modelName) => (
               <option key={modelName} value={modelName}>
-                {modelName}
+                {resolveAgentModelOptionLabel(modelName, formState.agent_model_display_names)}
               </option>
             ))}
           </NativeSelect>
-        </FormField>
-
-        <FormField
-          label="Available models"
-          htmlFor={SETTINGS_FIELD_IDS.availableModels}
-          hint="Enter one model identifier per line. Blank lines are ignored, order is preserved, and the default model always stays on a listed option."
-        >
-          <Textarea
-            id={SETTINGS_FIELD_IDS.availableModels}
-            value={formState.available_agent_models}
-            onChange={(event) => handleAvailableModelsChange(event.target.value)}
-          />
         </FormField>
       </CardContent>
     </Card>

@@ -122,12 +122,12 @@ Arguments:
 
 Description:
 
-Rename the current thread to a short 1-3 word topic. Use this right after the first user message in a new thread. After that, only rename when the user explicitly asks or the topic shifts substantially.
+Rename the current thread to a short 1-5 word topic. Use this right after the first user message in a new thread. After that, only rename when the user explicitly asks or the topic shifts substantially.
 
 Arguments:
 
 - `title: string` required
-  description: Short thread title/topic in 1-3 words.
+  description: Short thread title/topic in 1-5 words.
   constraints: minLength=1, maxLength=80
 
 ### `send_intermediate_update`

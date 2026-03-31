@@ -285,15 +285,24 @@ def ingest_agent_attachment_with_docling(
     )
 
 
-def _render_pdf_pages_without_ocr(primary_path: Path) -> None:
+def pdf_pages_as_png_bytes(primary_path: Path) -> list[bytes]:
+    """Render each PDF page to PNG bytes (same scale as on-disk ``page-*.png`` bundles)."""
     document = pymupdf.open(primary_path)
     try:
+        rendered: list[bytes] = []
         for page_index in range(document.page_count):
             page = document.load_page(page_index)
             pixmap = page.get_pixmap(matrix=pymupdf.Matrix(1.5, 1.5), alpha=False)
-            pixmap.save(primary_path.parent / f"page-{page_index + 1}.png")
+            rendered.append(pixmap.tobytes("png"))
+        return rendered
     finally:
         document.close()
+
+
+def _render_pdf_pages_without_ocr(primary_path: Path) -> None:
+    parent = primary_path.parent
+    for index, png_bytes in enumerate(pdf_pages_as_png_bytes(primary_path), start=1):
+        (parent / f"page-{index}.png").write_bytes(png_bytes)
 
 
 def ingest_agent_attachment_without_docling(

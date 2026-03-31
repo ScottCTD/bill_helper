@@ -12,6 +12,7 @@ export interface SettingsFormState {
   agent_model: string;
   entry_tagging_model: string;
   available_agent_models: string;
+  agent_model_display_names: Record<string, string>;
   agent_max_steps: string;
   agent_bulk_max_concurrent_threads: string;
   agent_max_images_per_message: string;

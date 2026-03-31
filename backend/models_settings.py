@@ -29,6 +29,7 @@ class RuntimeSettings(Base):
     agent_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     entry_tagging_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     available_agent_models: Mapped[str | None] = mapped_column(Text, nullable=True)
+    agent_model_display_names: Mapped[str | None] = mapped_column(Text, nullable=True)
     agent_max_steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
     agent_bulk_max_concurrent_threads: Mapped[int | None] = mapped_column(
         Integer, nullable=True

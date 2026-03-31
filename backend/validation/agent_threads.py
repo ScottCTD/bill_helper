@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 THREAD_TITLE_MAX_LENGTH = 80
-THREAD_TITLE_MAX_WORDS = 3
+THREAD_TITLE_MAX_WORDS = 5
 
 
 class AgentThreadTitleError(ValueError):

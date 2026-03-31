@@ -10,6 +10,8 @@ from collections.abc import Iterable
 from ipaddress import ip_address
 from urllib.parse import urlparse
 
+from backend.config import DEFAULT_AGENT_MODEL
+
 USER_MEMORY_MAX_CHARS = 4000
 _USER_MEMORY_LIST_PREFIXES = ("- ", "* ", "+ ")
 
@@ -136,6 +138,123 @@ def serialize_agent_models_or_none(items: list[str] | None) -> str | None:
     if normalized_items is None:
         return None
     return json.dumps(normalized_items, ensure_ascii=False)
+
+
+AGENT_MODEL_DISPLAY_NAME_MAX_LEN = 80
+AGENT_MODEL_DISPLAY_NAMES_MAX_KEYS = 64
+
+# Built-in labels for the default available-model catalog (case-insensitive match on id).
+# User-stored overrides in `agent_model_display_names` replace these per model id.
+STANDARD_AGENT_MODEL_DISPLAY_NAMES: dict[str, str] = {
+    DEFAULT_AGENT_MODEL: "Claude Haiku 4.5",
+    "bedrock/us.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6",
+    "openrouter/qwen/qwen3.5-27b": "Qwen 3.5 27B",
+    "openrouter/moonshotai/kimi-k2.5": "Kimi K2.5",
+    "openrouter/minimax/minimax-m2.5": "MiniMax 2.5",
+}
+_STANDARD_LABELS_BY_CASEFOLD: dict[str, str] = {
+    key.casefold(): label for key, label in STANDARD_AGENT_MODEL_DISPLAY_NAMES.items()
+}
+
+
+def normalize_agent_model_display_names_payload_or_none(
+    value: object | None,
+) -> dict[str, str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("agent_model_display_names must be a JSON object or null")
+    normalized: dict[str, str] = {}
+    seen_keys: set[str] = set()
+    for raw_key, raw_val in value.items():
+        key = normalize_agent_model_item_or_none(str(raw_key))
+        if key is None:
+            continue
+        key_fold = key.casefold()
+        if key_fold in seen_keys:
+            continue
+        seen_keys.add(key_fold)
+        val = normalize_text_or_none(str(raw_val))
+        if val is None:
+            continue
+        if len(val) > AGENT_MODEL_DISPLAY_NAME_MAX_LEN:
+            raise ValueError(
+                f"agent_model_display_names values must be at most {AGENT_MODEL_DISPLAY_NAME_MAX_LEN} characters"
+            )
+        normalized[key] = val
+        if len(normalized) > AGENT_MODEL_DISPLAY_NAMES_MAX_KEYS:
+            raise ValueError(
+                f"agent_model_display_names must have at most {AGENT_MODEL_DISPLAY_NAMES_MAX_KEYS} entries"
+            )
+    return normalized or None
+
+
+def parse_agent_model_display_names_or_none(value: object) -> dict[str, str] | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return normalize_agent_model_display_names_payload_or_none(value)
+    if isinstance(value, str):
+        normalized_text = normalize_multiline_text_or_none(value)
+        if normalized_text is None:
+            return None
+        try:
+            decoded = json.loads(normalized_text)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(decoded, dict):
+            return normalize_agent_model_display_names_payload_or_none(decoded)
+        return None
+    return None
+
+
+def finalize_agent_model_display_names_for_storage(
+    payload: dict[str, str] | None,
+    *,
+    available_agent_models: list[str],
+) -> str | None:
+    if not payload:
+        return None
+    available_by_fold = {model.casefold(): model for model in available_agent_models}
+    merged: dict[str, str] = {}
+    for raw_key, raw_val in payload.items():
+        key = normalize_agent_model_item_or_none(raw_key)
+        if key is None:
+            continue
+        canonical = available_by_fold.get(key.casefold())
+        if canonical is None:
+            continue
+        val = normalize_text_or_none(str(raw_val))
+        if val is None:
+            continue
+        merged[canonical] = val[:AGENT_MODEL_DISPLAY_NAME_MAX_LEN]
+    if not merged:
+        return None
+    return json.dumps(merged, ensure_ascii=False)
+
+
+def build_effective_agent_model_display_names(
+    *,
+    available_agent_models: list[str],
+    stored_text: str | None,
+) -> dict[str, str]:
+    stored = parse_agent_model_display_names_or_none(stored_text) if stored_text else None
+    available_by_fold = {model.casefold(): model for model in available_agent_models}
+    out: dict[str, str] = {}
+    for canonical in available_agent_models:
+        label = _STANDARD_LABELS_BY_CASEFOLD.get(canonical.casefold())
+        if label:
+            out[canonical] = label
+    if stored:
+        for key, val in stored.items():
+            canonical = available_by_fold.get(key.casefold())
+            if canonical is None:
+                continue
+            val_norm = normalize_text_or_none(val)
+            if val_norm is None:
+                continue
+            out[canonical] = val_norm
+    return out
 
 
 def normalize_currency_code_or_none(value: str | None) -> str | None:

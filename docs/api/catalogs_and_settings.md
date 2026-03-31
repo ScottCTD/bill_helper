@@ -330,6 +330,7 @@ Response highlights:
 - `agent_model`
 - `entry_tagging_model`
 - `available_agent_models`
+- `agent_model_display_names` (map of model id → short label for UI; only keys in the effective `available_agent_models` list are returned)
 - `vision_capable_agent_models`
 - `agent_bulk_max_concurrent_threads`
 - `agent_base_url`
@@ -341,6 +342,7 @@ Behavior:
 - settings are global to the app instance, not per authenticated user
 - `user_memory` is DB-backed only and returned as an ordered list of strings
 - `available_agent_models` is DB-backed only and returned as an ordered list of model identifiers; the effective list always includes `agent_model`
+- `agent_model_display_names` merges built-in short labels for the default catalog model ids with any DB-backed overrides; stored labels win on key overlap; the API returns only entries whose keys match the effective available model list (case-insensitive match, canonical keys follow the available-model ordering)
 - `vision_capable_agent_models` is a derived read-only subset of `available_agent_models` that the frontend can use to disable OCR-off attachment sends for non-vision models
 - identity is not part of runtime settings anymore
 - `entry_tagging_model` is DB-backed only, nullable, and must resolve to one of the effective `available_agent_models`; blank disables inline entry tag suggestion
@@ -362,6 +364,7 @@ Updatable fields include:
 - `agent_model`
 - `entry_tagging_model`
 - `available_agent_models`
+- `agent_model_display_names`
 - `agent_max_steps`
 - `agent_bulk_max_concurrent_threads`
 - retry policy fields
@@ -373,5 +376,6 @@ Notes:
 
 - `user_memory` must be sent as a JSON list of strings; empty list clears the override
 - `available_agent_models` must be sent as a JSON list of strings; empty list clears the override
+- `agent_model_display_names` must be sent as a JSON object mapping model ids to short strings, or `null` to clear the override; keys not in the effective available model list are ignored server-side
 - `agent_base_url` must use `http` or `https` and cannot target localhost or non-public IP literals
 - `agent_api_key` cannot be the masked sentinel value `***masked***`

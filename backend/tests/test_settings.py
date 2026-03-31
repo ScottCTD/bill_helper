@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 from backend.tests.agent_test_utils import create_thread, patch_model, send_message
+from backend.validation.runtime_settings import build_effective_agent_model_display_names
 
 
 def expected_default_available_agent_models() -> list[str]:
@@ -26,9 +28,14 @@ def test_settings_endpoint_returns_effective_defaults(client):
     assert payload["available_agent_models"] == expected_default_available_agent_models()
     assert isinstance(payload["vision_capable_agent_models"], list)
     assert payload["agent_bulk_max_concurrent_threads"] == settings.agent_bulk_max_concurrent_threads
+    assert payload["agent_model_display_names"] == build_effective_agent_model_display_names(
+        available_agent_models=expected_default_available_agent_models(),
+        stored_text=None,
+    )
     assert payload["overrides"]["user_memory"] is None
     assert payload["overrides"]["agent_model"] is None
     assert payload["overrides"]["available_agent_models"] is None
+    assert payload["overrides"]["agent_model_display_names"] is None
     assert payload["overrides"]["agent_bulk_max_concurrent_threads"] is None
 
 
@@ -117,6 +124,37 @@ def test_settings_available_models_override_and_clear(client):
     clear_payload = clear_override.json()
     assert clear_payload["available_agent_models"] == expected_default_available_agent_models()
     assert clear_payload["overrides"]["available_agent_models"] is None
+
+
+def test_settings_agent_model_display_names_override_and_clear(client):
+    set_override = client.patch(
+        "/api/v1/settings",
+        json={
+            "available_agent_models": [
+                "openai/gpt-4.1-mini",
+                "google/gemini-2.5-pro",
+            ],
+            "agent_model_display_names": {
+                "openai/gpt-4.1-mini": "GPT-4.1 mini",
+            },
+        },
+    )
+    set_override.raise_for_status()
+    payload = set_override.json()
+    override_display = payload["overrides"]["agent_model_display_names"]
+    assert payload["agent_model_display_names"] == build_effective_agent_model_display_names(
+        available_agent_models=payload["available_agent_models"],
+        stored_text=json.dumps(override_display, ensure_ascii=False) if override_display else None,
+    )
+
+    clear_override = client.patch("/api/v1/settings", json={"agent_model_display_names": None})
+    clear_override.raise_for_status()
+    clear_payload = clear_override.json()
+    assert clear_payload["agent_model_display_names"] == build_effective_agent_model_display_names(
+        available_agent_models=clear_payload["available_agent_models"],
+        stored_text=None,
+    )
+    assert clear_payload["overrides"]["agent_model_display_names"] is None
 
 
 def test_settings_bulk_concurrency_override_and_clear(client):

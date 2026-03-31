@@ -153,6 +153,7 @@ async def create_user_message_and_start_run(
                     owner_user_id=thread.owner_user_id,
                     upload=upload,
                     settings=settings,
+                    use_ocr=attachments_use_ocr,
                 )
             except PolicyViolation as exc:
                 raise AgentExecutionPolicyError(

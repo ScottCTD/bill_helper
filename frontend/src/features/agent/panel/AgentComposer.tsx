@@ -13,6 +13,7 @@ import { Button } from "../../../components/ui/button";
 import { Switch } from "../../../components/ui/switch";
 import { Textarea } from "../../../components/ui/textarea";
 import { Tooltip } from "../../../components/ui/tooltip";
+import { resolveAgentModelOptionLabel } from "./helpers";
 import type { DraftAttachment } from "./types";
 
 interface AgentComposerProps {
@@ -23,6 +24,7 @@ interface AgentComposerProps {
   fileInputRef: RefObject<HTMLInputElement | null>;
   draftMessage: string;
   availableModels: string[];
+  modelDisplayNames: Record<string, string>;
   selectedModel: string;
   attachmentsUseOcr: boolean;
   isAttachmentsUseOcrDisabled: boolean;
@@ -59,6 +61,7 @@ export function AgentComposer(props: AgentComposerProps) {
     fileInputRef,
     draftMessage,
     availableModels,
+    modelDisplayNames,
     selectedModel,
     attachmentsUseOcr,
     isAttachmentsUseOcrDisabled,
@@ -250,7 +253,7 @@ export function AgentComposer(props: AgentComposerProps) {
               {availableModels.length === 0 ? <option value="">Loading models…</option> : null}
               {availableModels.map((modelName) => (
                 <option key={modelName} value={modelName}>
-                  {modelName}
+                  {resolveAgentModelOptionLabel(modelName, modelDisplayNames)}
                 </option>
               ))}
             </select>
