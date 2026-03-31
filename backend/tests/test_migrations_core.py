@@ -940,3 +940,14 @@ def test_head_migration_includes_agent_run_created_at_index(tmp_path):
     run_indexes = {row["name"] for row in inspector.get_indexes("agent_runs")}
 
     assert "ix_agent_runs_created_at" in run_indexes
+
+
+def test_head_migration_includes_agent_run_approval_policy(tmp_path):
+    database_url = _sqlite_url(tmp_path, "migration_head_approval_policy.sqlite")
+    command.upgrade(_build_alembic_config(database_url), "head")
+
+    engine = create_engine(database_url, future=True)
+    inspector = inspect(engine)
+    run_columns = {column["name"] for column in inspector.get_columns("agent_runs")}
+
+    assert "approval_policy" in run_columns

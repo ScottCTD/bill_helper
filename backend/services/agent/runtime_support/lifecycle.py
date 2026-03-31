@@ -10,7 +10,10 @@ from typing import Callable
 
 from sqlalchemy.orm import Session
 
-from backend.enums_agent import AgentRunEventType, AgentRunStatus
+from backend.enums_agent import AgentApprovalPolicy, AgentRunEventType, AgentRunStatus
+from backend.services.agent.reviews.auto_approve_run import (
+    maybe_auto_approve_after_completed_run,
+)
 from backend.models_agent import AgentMessage, AgentRun, AgentRunEvent, AgentThread
 from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.runtime_state import (
@@ -44,6 +47,7 @@ def create_run(
     calculate_context_tokens: ContextTokenCalculator,
     model_name: str | None = None,
     surface: str = "app",
+    approval_policy: AgentApprovalPolicy = AgentApprovalPolicy.DEFAULT,
 ) -> AgentRun:
     settings = resolve_runtime_settings(db)
     selected_model_name = normalize_text_or_none(model_name) or settings.agent_model
@@ -60,6 +64,7 @@ def create_run(
         user_message_id=user_message.id,
         status=AgentRunStatus.RUNNING,
         model_name=selected_model_name,
+        approval_policy=approval_policy,
         surface=surface,
         context_tokens=calculate_context_tokens(
             model_name=selected_model_name,
@@ -123,6 +128,13 @@ def persist_terminal_run_state(
         message=event_message,
     )
     db.commit()
+    if status == AgentRunStatus.COMPLETED:
+        maybe_auto_approve_after_completed_run(
+            db,
+            run_id=run.id,
+            thread_id=run.thread_id,
+            approval_policy=run.approval_policy,
+        )
     return terminal_event
 
 

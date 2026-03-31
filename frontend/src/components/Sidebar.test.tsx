@@ -111,9 +111,9 @@ describe("Sidebar", () => {
       .filter((label): label is string => Boolean(label));
 
     expect(navLinks).toEqual([
+      "Dashboard",
       "Agent",
       "Workspace",
-      "Dashboard",
       "Accounts",
       "Entries",
       "Groups",

@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.enums_agent import AgentChangeType, AgentMessageRole, AgentRunStatus
+from backend.enums_agent import AgentApprovalPolicy, AgentChangeType, AgentMessageRole, AgentRunStatus
 from backend.models_agent import AgentChangeItem, AgentMessage, AgentMessageAttachment, AgentRun, AgentThread
 from backend.models_finance import User
 from backend.services.agent.attachments import create_message_attachment
@@ -197,6 +197,7 @@ def _create_benchmark_run(
         user_message_id=user_message.id,
         status=AgentRunStatus.RUNNING,
         model_name=model_name,
+        approval_policy=AgentApprovalPolicy.DEFAULT,
     )
     db.add(run)
     db.commit()

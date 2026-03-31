@@ -82,11 +82,13 @@ function buildAgentMessageFormData(
   files: File[],
   modelName?: string | null,
   attachmentIds: string[] = [],
-  attachmentsUseOcr = false
+  attachmentsUseOcr = false,
+  approvalPolicy: "default" | "yolo" = "default"
 ): FormData {
   const formData = new FormData();
   formData.set("content", content);
   formData.set("attachments_use_ocr", String(attachmentsUseOcr));
+  formData.set("approval_policy", approvalPolicy);
   const normalizedModelName = modelName?.trim();
   if (normalizedModelName) {
     formData.set("model_name", normalizedModelName);
@@ -159,6 +161,7 @@ export function sendAgentMessage(payload: {
   attachmentIds?: string[];
   attachmentsUseOcr?: boolean;
   modelName?: string | null;
+  approvalPolicy?: "default" | "yolo";
 }): Promise<AgentRun> {
   return request<AgentRun>(`/api/v1/agent/threads/${payload.threadId}/messages`, {
     method: "POST",
@@ -167,7 +170,8 @@ export function sendAgentMessage(payload: {
       payload.files,
       payload.modelName,
       payload.attachmentIds ?? [],
-      payload.attachmentsUseOcr ?? false
+      payload.attachmentsUseOcr ?? false,
+      payload.approvalPolicy ?? "default"
     )
   });
 }
@@ -179,6 +183,7 @@ export async function streamAgentMessage(payload: {
   attachmentIds?: string[];
   attachmentsUseOcr?: boolean;
   modelName?: string | null;
+  approvalPolicy?: "default" | "yolo";
   signal?: AbortSignal;
   onEvent: (event: AgentStreamEvent) => void;
 }): Promise<void> {
@@ -193,7 +198,8 @@ export async function streamAgentMessage(payload: {
       payload.files,
       payload.modelName,
       payload.attachmentIds ?? [],
-      payload.attachmentsUseOcr ?? false
+      payload.attachmentsUseOcr ?? false,
+      payload.approvalPolicy ?? "default"
     ),
     signal: payload.signal,
     headers: {

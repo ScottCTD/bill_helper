@@ -89,7 +89,7 @@
 - `backend/services/agent/benchmark_interface.py`
   - benchmark-facing `run_benchmark_case` contract
 - `backend/services/agent/reviews/`
-  - review-workflow package: `common.py` for change-item record helpers, `dependencies.py` for approval blockers, `overrides.py` for payload-override normalization, and `workflow.py` for approve/reject/reopen state transitions
+  - review-workflow package: `common.py` for change-item record helpers, `dependencies.py` for approval blockers, `overrides.py` for payload-override normalization, `workflow.py` for approve/reject/reopen state transitions, and `auto_approve_run.py` for YOLO post-run auto-approval passes
 - `backend/services/agent/apply/`
   - apply-family package: `common.py` for lookup and applied-reference helpers, `catalog.py` for tag/entity/account mutations, `entries.py` for entry mutations, `groups.py` for group and membership mutations, and `dispatch.py` for change-type routing
 - `backend/services/agent/serializers.py`
@@ -136,7 +136,7 @@
   - also owns the message-create HTTP translation, SSE event formatting, and background-session launch helpers used only by the thread send endpoints
 - delegates message validation and run lifecycle policy to `backend/services/agent/execution.py`
 - delegates eager draft attachment ingest/delete to `backend/services/agent/attachments.py`
-- accepts an optional `surface` form field on message-send routes and persists it onto the created run for background continuation
+- accepts optional `surface` and `approval_policy` form fields on message-send routes and persists them onto the created run for background continuation (`approval_policy=yolo` triggers post-completion auto-approval of that run’s pending change items via `backend/services/agent/reviews/auto_approve_run.py`)
 - delegates canonical upload storage to `backend/services/user_files.py` through `backend/services/agent/execution.py`
 - starts background runs with injected session factories from `get_session_maker()`
 - all agent endpoints require an explicit authenticated request principal; non-admin users are scoped to their own threads while admins can access every thread
@@ -170,6 +170,7 @@ Endpoints:
 
 - `GET /api/v1/agent/threads/{thread_id}` returns `current_context_tokens`
 - message-send endpoints accept optional multipart `model_name`; when present it must match one of the resolved runtime `available_agent_models`
+- message-send endpoints accept optional multipart `approval_policy` (`default` or `yolo`); each run persists the chosen value and exposes it on `AgentRunRead`
 - message-send endpoints accept optional multipart `attachments_use_ocr`; `false` is only accepted for vision-capable models
 - message-send endpoints accept raw multipart `files`, pre-uploaded `attachment_ids`, or both in the same request
 - thread detail returns compact tool-call snapshots by default (`has_full_payload=false`)

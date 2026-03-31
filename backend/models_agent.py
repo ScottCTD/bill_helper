@@ -5,14 +5,17 @@
 # - Side effects: module-local behavior only.
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 from backend.db_meta import Base
 from backend.enums_agent import (
+    AgentApprovalPolicy,
     AgentChangeStatus,
     AgentChangeType,
     AgentMessageRole,
@@ -23,6 +26,42 @@ from backend.enums_agent import (
     AgentToolCallStatus,
 )
 from backend.models_shared import utc_now, uuid_str
+
+_logger = logging.getLogger(__name__)
+
+
+def _coerce_approval_policy(raw: object) -> AgentApprovalPolicy:
+    """Map DB/API strings to StrEnum; tolerate legacy ALL_CAPS or PG enum labels."""
+    if isinstance(raw, AgentApprovalPolicy):
+        return raw
+    key = (str(raw) if raw is not None else "").strip().lower()
+    if key in ("", "default"):
+        return AgentApprovalPolicy.DEFAULT
+    if key == "yolo":
+        return AgentApprovalPolicy.YOLO
+    _logger.warning(
+        "unknown agent_runs.approval_policy value=%r; using %s",
+        raw,
+        AgentApprovalPolicy.DEFAULT.value,
+    )
+    return AgentApprovalPolicy.DEFAULT
+
+
+class _AgentApprovalPolicyColumn(TypeDecorator):
+    """Persist as VARCHAR (`0039`); avoids SQLAlchemy/PG enum name vs StrEnum value mismatches (`default`/`yolo`)."""
+
+    impl = String(32)
+    cache_ok = True
+
+    def process_bind_param(self, value: object, dialect: object) -> str | None:
+        if value is None:
+            return None
+        return _coerce_approval_policy(value).value
+
+    def process_result_value(self, value: object, dialect: object) -> AgentApprovalPolicy | None:
+        if value is None:
+            return None
+        return _coerce_approval_policy(value)
 
 
 class AgentThread(Base):
@@ -145,6 +184,11 @@ class AgentRun(Base):
         Enum(AgentRunStatus), nullable=False, index=True
     )
     model_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    approval_policy: Mapped[AgentApprovalPolicy] = mapped_column(
+        _AgentApprovalPolicyColumn(),
+        nullable=False,
+        default=AgentApprovalPolicy.DEFAULT,
+    )
     surface: Mapped[str] = mapped_column(String(32), nullable=False, default="app")
     context_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -4,7 +4,13 @@ import time
 from statistics import median
 
 from backend.database import SessionLocal
-from backend.enums_agent import AgentMessageRole, AgentRunEventType, AgentRunStatus, AgentToolCallStatus
+from backend.enums_agent import (
+    AgentApprovalPolicy,
+    AgentMessageRole,
+    AgentRunEventType,
+    AgentRunStatus,
+    AgentToolCallStatus,
+)
 from backend.models_agent import AgentMessage, AgentRun, AgentRunEvent, AgentThread, AgentToolCall
 from backend.models_finance import User
 
@@ -42,6 +48,7 @@ def _seed_tool_heavy_thread(
                 assistant_message_id=assistant_message.id,
                 status=AgentRunStatus.COMPLETED,
                 model_name="openai/gpt-4.1-mini",
+                approval_policy=AgentApprovalPolicy.DEFAULT,
                 context_tokens=4_096,
             )
             db.add(run)

@@ -12,7 +12,13 @@ import { useNotifications } from "../../../components/ui/notification-center";
 import { createAgentThread, deleteAgentThread, getAgentThread, sendAgentMessage, streamAgentMessage } from "../../../lib/api";
 import { invalidateAgentThreadData } from "../../../lib/queryInvalidation";
 import { queryKeys } from "../../../lib/queryKeys";
-import type { AgentStreamEvent, AgentThread, AgentThreadDetail, AgentThreadSummary } from "../../../lib/types";
+import type {
+  AgentApprovalPolicy,
+  AgentStreamEvent,
+  AgentThread,
+  AgentThreadDetail,
+  AgentThreadSummary
+} from "../../../lib/types";
 import { sortRunsByCreatedAt } from "../activity";
 import {
   buildThreadSummary,
@@ -26,6 +32,7 @@ interface UseAgentComposerActionsArgs {
   activeRunId: string | null;
   activeStreamRunId: string | null;
   addOptimisticRunningThreadId: (threadId: string) => void;
+  approvalPolicy: AgentApprovalPolicy;
   attachmentsUseOcr: boolean;
   bulkLaunchConcurrencyLimit: number;
   clearOptimisticThreadTitle: (threadId: string) => void;
@@ -56,6 +63,7 @@ export function useAgentComposerActions({
   activeRunId,
   activeStreamRunId,
   addOptimisticRunningThreadId,
+  approvalPolicy,
   attachmentsUseOcr,
   bulkLaunchConcurrencyLimit,
   clearOptimisticThreadTitle,
@@ -123,7 +131,8 @@ export function useAgentComposerActions({
             files: [],
             attachmentIds: [attachment.uploadedAttachmentId],
             attachmentsUseOcr,
-            modelName: selectedComposerModel || undefined
+            modelName: selectedComposerModel || undefined,
+            approvalPolicy
           });
           return { attachmentId: attachment.id, fileName: attachment.file.name, failed: false as const, errorMessage: null };
         } catch (error) {
@@ -240,6 +249,7 @@ export function useAgentComposerActions({
         attachmentIds: readyAttachments.map((item) => item.uploadedAttachmentId),
         attachmentsUseOcr,
         modelName: selectedComposerModel || undefined,
+        approvalPolicy,
         signal: sendAbortController.signal,
         onEvent: (streamEvent) => handleAgentStreamEvent(activeThreadId, streamEvent)
       });

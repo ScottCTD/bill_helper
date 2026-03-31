@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from backend.config import DEFAULT_AGENT_MODEL
+from backend.enums_agent import AgentApprovalPolicy
 from backend.models_agent import AgentMessage, AgentRun, AgentThread
 from backend.services.agent.context_tokens import count_context_tokens
 from backend.services.agent.model_client import (
@@ -217,8 +218,10 @@ def start_agent_run(
     *,
     model_name: str | None = None,
     surface: str = "app",
+    approval_policy: AgentApprovalPolicy | None = None,
 ) -> AgentRun:
     ensure_agent_available(db, model_name=model_name)
+    resolved_policy = approval_policy if approval_policy is not None else AgentApprovalPolicy.DEFAULT
     return _create_run(
         db,
         thread=thread,
@@ -226,6 +229,7 @@ def start_agent_run(
         calculate_context_tokens=calculate_context_tokens,
         model_name=model_name,
         surface=surface,
+        approval_policy=resolved_policy,
     )
 
 

@@ -136,6 +136,8 @@ export interface AgentChangeItem {
   review_actions: AgentReviewAction[];
 }
 
+export type AgentApprovalPolicy = "default" | "yolo";
+
 export interface AgentRun {
   id: string;
   thread_id: string;
@@ -143,6 +145,7 @@ export interface AgentRun {
   assistant_message_id: string | null;
   status: AgentRunStatus;
   model_name: string;
+  approval_policy: AgentApprovalPolicy;
   context_tokens: number | null;
   input_tokens: number | null;
   output_tokens: number | null;

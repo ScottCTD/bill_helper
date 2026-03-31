@@ -128,6 +128,7 @@ Form fields:
 - `content` (optional if files are present)
 - `model_name` (optional explicit model selection; must match one of the `available_agent_models` returned by `GET /settings`)
 - `attachments_use_ocr` (`true` by default; when `false`, vision-capable models receive image parts instead of inline OCR text for attached PDFs/images)
+- `approval_policy` (`default` by default; `yolo` auto-applies pending proposals created in this run after it completes successfully, using the same approval dependency rules as manual review)
 - `surface` (`app` by default; `telegram` enables Telegram-safe prompt and reply shaping)
 - `files` (0..N image or PDF attachments uploaded inline with this request)
 - `attachment_ids` (0..N previously uploaded draft attachment ids)
@@ -138,7 +139,7 @@ Behavior:
 - validates the combined attachment count and size limits across inline `files` plus referenced `attachment_ids`
 - persists the message and stores uploaded attachments under `{data_dir}/user_files/{owner_user_id}/uploads/...` using dated readable bundle directories (`uploads/YYYY-MM-DD/<original-stem>/`, with `(N)` suffixes for collisions) and a fixed primary filename (`raw.<ext>`); Docling output (`parsed.md` plus readable referenced images) is written beside the primary file before the message is committed, and existing bundles can be migrated with `scripts/migrate_agent_upload_bundle_paths.py`
 - referenced `attachment_ids` are attached without re-uploading or re-parsing; they must belong to the same principal and still be unbound drafts
-- creates an `agent_runs` row with initial `status=running`
+- creates an `agent_runs` row with initial `status=running` and the requested `approval_policy`
 - starts bounded tool-calling execution in background
 - PDFs and images are converted with Docling (standard pipeline + EasyOCR on the API host)
 - when `attachments_use_ocr=true`, the initial model turn receives inline `parsed.md` plus absolute `/workspace/uploads/...` image-path hints, and later tool turns can load selected images on demand through `read_image`
@@ -166,7 +167,9 @@ Content type: `multipart/form-data`
 Form fields:
 
 - `content` (optional if files are present)
+- `model_name` (optional explicit model selection; must match one of the `available_agent_models` returned by `GET /settings`)
 - `attachments_use_ocr` (`true` by default; when `false`, vision-capable models receive image parts instead of inline OCR text for attached PDFs/images)
+- `approval_policy` (`default` by default; `yolo` auto-applies pending proposals created in this run after it completes successfully, using the same approval dependency rules as manual review)
 - `surface` (`app` by default; `telegram` enables Telegram-safe prompt and reply shaping)
 - `files` (0..N image or PDF attachments uploaded inline with this request)
 - `attachment_ids` (0..N previously uploaded draft attachment ids)
@@ -224,7 +227,7 @@ Behavior:
 
 - lookup is owner-scoped through the parent thread
 - optional query param `surface` (`app` or `telegram`) overrides terminal-reply formatting for this read only
-- payload includes lifecycle metadata, full tool calls (`has_full_payload=true`), change items, usage counters, and derived pricing fields
+- payload includes lifecycle metadata, `approval_policy`, full tool calls (`has_full_payload=true`), change items, usage counters, and derived pricing fields
 
 ### `GET /agent/tool-calls/{tool_call_id}`
 

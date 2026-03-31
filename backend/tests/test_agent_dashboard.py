@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from backend.database import build_engine
-from backend.enums_agent import AgentMessageRole, AgentRunStatus
+from backend.enums_agent import AgentApprovalPolicy, AgentMessageRole, AgentRunStatus
 from backend.models_agent import AgentMessage, AgentRun, AgentThread
 from backend.services.agent.pricing import UsageCosts
 from backend.services.users import find_user_by_name
@@ -41,6 +41,7 @@ def _seed_agent_run(
             user_message=user_message,
             status=status,
             model_name=model_name,
+            approval_policy=AgentApprovalPolicy.DEFAULT,
             surface=surface,
             input_tokens=input_tokens,
             output_tokens=output_tokens,

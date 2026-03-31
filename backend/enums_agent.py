@@ -20,6 +20,11 @@ class AgentRunStatus(StrEnum):
     FAILED = "failed"
 
 
+class AgentApprovalPolicy(StrEnum):
+    DEFAULT = "default"
+    YOLO = "yolo"
+
+
 class AgentToolCallStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"

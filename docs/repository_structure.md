@@ -56,6 +56,7 @@
 - `versions/0036_add_agent_run_created_at_index.py`: adds an index on `agent_runs.created_at` for range-based agent dashboard analytics reads.
 - `versions/0037_add_agent_message_attachments_use_ocr.py`: adds persisted message-level OCR mode for attachment-bearing user turns.
 - `versions/0038_add_agent_model_display_names_to_runtime_settings.py`: adds optional JSON map of model id → UI label (`runtime_settings.agent_model_display_names`).
+- `versions/0039_add_agent_run_approval_policy.py`: adds `agent_runs.approval_policy` (`default` vs `yolo`) for optional post-run auto-approval.
 - `versions/__init__.py`: package marker.
 
 ## Backend (`/backend`)

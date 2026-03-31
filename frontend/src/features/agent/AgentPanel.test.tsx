@@ -599,7 +599,8 @@ describe("AgentPanel", () => {
           files: [],
           attachmentIds: [uploadedAttachmentIdForFileName("statement-january.pdf")],
           attachmentsUseOcr: true,
-          modelName: "gpt-test"
+          modelName: "gpt-test",
+          approvalPolicy: "default"
         }
       ],
       [
@@ -609,7 +610,8 @@ describe("AgentPanel", () => {
           files: [],
           attachmentIds: [uploadedAttachmentIdForFileName("statement-february.pdf")],
           attachmentsUseOcr: true,
-          modelName: "gpt-test"
+          modelName: "gpt-test",
+          approvalPolicy: "default"
         }
       ]
     ]);
@@ -1007,7 +1009,7 @@ describe("AgentPanel", () => {
 
     const modelPicker = await screen.findByRole("combobox", { name: "Agent model" });
     await waitFor(() => expect(modelPicker).toHaveValue("openai/gpt-4.1-mini"));
-    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+    expect(within(modelPicker).getAllByRole("option").map((option) => option.textContent)).toEqual([
       "bedrock/us.anthropic.claude-sonnet-4-6",
       "openai/gpt-4.1-mini"
     ]);

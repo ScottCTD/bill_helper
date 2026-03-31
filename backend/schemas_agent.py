@@ -11,6 +11,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.enums_agent import (
+    AgentApprovalPolicy,
     AgentChangeStatus,
     AgentChangeType,
     AgentMessageRole,
@@ -139,6 +140,7 @@ class AgentRunRead(AgentOrmReadSchema):
     terminal_assistant_reply: str | None = None
     status: AgentRunStatus
     model_name: str
+    approval_policy: AgentApprovalPolicy = AgentApprovalPolicy.DEFAULT
     surface: str = "app"
     reply_surface: str = "app"
     context_tokens: int | None = None

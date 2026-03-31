@@ -99,7 +99,7 @@ Supporting modules include:
 
 ## Composer
 
-- pinned composer surface with larger stacked attachment prep cards
+- pinned composer surface with stacked attachment prep cards; the bottom control row is compact (icon-first attach, short Bulk label, model and approval-policy selects, send/stop)
 - composer now stays docked against the bottom edge of the agent workspace instead of leaving dead space below the input row
 - textarea and control row share one card surface instead of reading as separate color bands
 - supports picker, paste, and drag-drop for images and PDFs
@@ -111,8 +111,9 @@ Supporting modules include:
 - flipping `OCR` off while an OCR-backed draft is still uploading/parsing aborts that in-flight draft and restarts it in non-OCR preparation mode so the composer stops waiting on OCR work
 - flipping `OCR` on while a non-OCR draft is still preparing restarts that draft in OCR mode so the composer waits for `Parsing…` before send
 - message attachments use browser-native large-view behavior instead of an app modal: user-message attachments stay compact file rows, assistant images open in a native tab on click, and assistant PDFs expose an `Open` action beside the inline preview
-- includes a `Bulk mode` toggle beside `Add Attachments`
-- shows an `Agent model` dropdown immediately left of the primary composer action and sources options from runtime settings `available_agent_models` in the same order; option text uses `agent_model_display_names` when set, otherwise the raw model id
+- includes a `Bulk` toggle beside `Attach` (file picker)
+- shows an **Approval policy** select (`Default` vs `Yolo`) next to the model picker; `Default` keeps the existing review workflow, `Yolo` sends `approval_policy=yolo` on the next message so the backend auto-applies this run’s pending proposals after a successful completion (same dependency rules as manual approval)
+- shows an `Agent model` dropdown beside the policy control and sources options from runtime settings `available_agent_models` in the same order; option text uses `agent_model_display_names` when set, otherwise the raw model id
 - initializes the picker from the latest run model when a thread has history, otherwise falls back through the thread's configured model and runtime default `agent_model`
 - changing the picker only affects the next `POST /api/v1/agent/threads/{thread_id}/messages` or `/messages/stream` request; existing thread history is still sent unchanged
 - Bulk mode creates one fresh thread per attached file, reuses the current textarea prompt for every launch, and never copies the currently selected thread history

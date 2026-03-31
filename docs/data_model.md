@@ -362,6 +362,7 @@ Fields:
 - `assistant_message_id` (nullable FK -> `agent_messages.id`)
 - `status` (`AgentRunStatus`)
 - `model_name`
+- `approval_policy` (`default` or `yolo`; `yolo` triggers server-side auto-approval of this run’s pending change items after a successful run completion, subject to the same dependency ordering rules as manual approval)
 - `surface` (string execution surface; currently `app` or `telegram`)
 - `context_tokens` (nullable int; best-effort prompt-size snapshot for the run's current model-visible context, including tool schemas)
 - `input_tokens` (nullable int)

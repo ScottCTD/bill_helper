@@ -230,6 +230,7 @@ def run_to_schema(
         ),
         status=run.status,
         model_name=run.model_name,
+        approval_policy=run.approval_policy,
         surface=run.surface,
         reply_surface=reply_surface,
         context_tokens=run.context_tokens,

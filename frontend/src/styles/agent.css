@@ -1094,19 +1094,23 @@
   }
 
   .agent-composer-toolbar {
-    @apply flex items-center justify-between gap-2 border-t border-border/70 bg-card px-2 pb-2 pt-2;
+    @apply flex min-h-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-border/70 bg-card px-1.5 pb-1.5 pt-1.5;
   }
 
   .agent-composer-attach {
-    @apply gap-1.5 text-muted-foreground hover:text-foreground;
+    @apply gap-1 px-1.5 text-muted-foreground hover:text-foreground;
+  }
+
+  .agent-composer-attach-text {
+    @apply text-xs font-medium;
   }
 
   .agent-composer-secondary-actions {
-    @apply flex items-center gap-2;
+    @apply flex min-w-0 max-w-full flex-1 items-center gap-1.5 overflow-x-auto;
   }
 
   .agent-composer-bulk-toggle {
-    @apply inline-flex items-center gap-2 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground;
+    @apply inline-flex shrink-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground;
   }
 
   .agent-composer-bulk-toggle-label {
@@ -1114,15 +1118,42 @@
   }
 
   .agent-composer-bulk-tooltip-trigger {
-    @apply inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
 
   .agent-composer-primary-actions {
-    @apply ml-auto flex items-center gap-2;
+    @apply ml-auto flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5;
+  }
+
+  /* Shared native <select> chrome for model + policy (match height, type scale, border). */
+  .agent-composer-model-select,
+  .agent-composer-policy-select {
+    @apply h-8 rounded-md border border-border/70 bg-transparent px-2 text-xs font-medium leading-none text-foreground shadow-none;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
 
   .agent-composer-model-select {
-    @apply min-w-[15rem] max-w-[20rem] border-border/70 bg-transparent text-xs shadow-none;
+    @apply min-w-[9.5rem] max-w-[14rem];
+  }
+
+  .agent-composer-policy-wrap {
+    @apply inline-flex items-center gap-1;
+  }
+
+  .agent-composer-policy {
+    @apply inline-flex items-center gap-1.5;
+  }
+
+  .agent-composer-policy-label {
+    @apply hidden shrink-0 text-xs font-medium text-muted-foreground sm:inline;
+  }
+
+  .agent-composer-policy-select {
+    @apply min-w-[5.5rem] max-w-[7rem];
+  }
+
+  .agent-composer-policy-help {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
 
   .agent-composer-send {

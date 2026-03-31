@@ -57,6 +57,7 @@ export function buildRun(overrides: Partial<AgentRun> = {}): AgentRun {
     assistant_message_id: overrides.assistant_message_id !== undefined ? overrides.assistant_message_id : "message-assistant-1",
     status: overrides.status ?? "completed",
     model_name: overrides.model_name ?? "gpt-test",
+    approval_policy: overrides.approval_policy ?? "default",
     context_tokens: overrides.context_tokens !== undefined ? overrides.context_tokens : 10,
     input_tokens: overrides.input_tokens !== undefined ? overrides.input_tokens : 10,
     output_tokens: overrides.output_tokens !== undefined ? overrides.output_tokens : 20,

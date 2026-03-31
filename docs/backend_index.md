@@ -35,6 +35,7 @@ This file is the backend index. Use it to find the focused backend docs under `.
 - `0036_add_agent_run_created_at_index`
 - `0037_add_agent_message_attachments_use_ocr`
 - `0038_add_agent_model_display_names_to_runtime_settings`
+- `0039_add_agent_run_approval_policy`
 
 ## Related Docs
 

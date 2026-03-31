@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from starlette import status
 
 from backend.database import open_session
-from backend.enums_agent import AgentMessageRole, AgentRunStatus
+from backend.enums_agent import AgentApprovalPolicy, AgentMessageRole, AgentRunStatus
 from backend.models_agent import AgentMessage, AgentRun, AgentThread
 from backend.services.agent.attachment_content import model_supports_vision
 from backend.services.agent.attachments import (
@@ -98,6 +98,7 @@ async def create_user_message_and_start_run(
     db: Session,
     model_name: str | None = None,
     surface: str = "app",
+    approval_policy: AgentApprovalPolicy = AgentApprovalPolicy.DEFAULT,
 ) -> AgentRun:
     settings = resolve_runtime_settings(db)
     selected_model_name = normalize_text_or_none(model_name) or settings.agent_model
@@ -196,6 +197,7 @@ async def create_user_message_and_start_run(
         user_message,
         model_name=selected_model_name,
         surface=surface,
+        approval_policy=approval_policy,
     )
 
 

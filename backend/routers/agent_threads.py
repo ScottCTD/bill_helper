@@ -19,7 +19,12 @@ from backend.auth.contracts import RequestPrincipal
 from backend.auth.dependencies import get_current_principal
 from backend.database import get_db
 from backend.database import get_session_maker
-from backend.enums_agent import AgentChangeStatus, AgentRunStatus, SUPPORTED_AGENT_CHANGE_TYPES
+from backend.enums_agent import (
+    AgentApprovalPolicy,
+    AgentChangeStatus,
+    AgentRunStatus,
+    SUPPORTED_AGENT_CHANGE_TYPES,
+)
 from backend.models_agent import (
     AgentChangeItem,
     AgentMessage,
@@ -66,6 +71,18 @@ def sse_event(event_type: str, payload: dict[str, object]) -> str:
     return f"event: {event_type}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
 
 
+def _normalize_approval_policy_form(value: str | None) -> AgentApprovalPolicy:
+    raw = (value or "").strip().lower()
+    if not raw or raw == AgentApprovalPolicy.DEFAULT.value:
+        return AgentApprovalPolicy.DEFAULT
+    if raw == AgentApprovalPolicy.YOLO.value:
+        return AgentApprovalPolicy.YOLO
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="approval_policy must be 'default' or 'yolo'.",
+    )
+
+
 def open_background_session() -> Session:
     return get_session_maker()()
 
@@ -80,6 +97,7 @@ async def create_user_message_run_or_503(
     surface: AgentSurface,
     db: Session,
     model_name: str | None,
+    approval_policy: AgentApprovalPolicy,
 ) -> AgentRun:
     try:
         return await create_user_message_and_start_run(
@@ -91,6 +109,7 @@ async def create_user_message_run_or_503(
             db=db,
             model_name=model_name,
             surface=surface,
+            approval_policy=approval_policy,
         )
     except AgentRuntimeUnavailable as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
@@ -263,6 +282,7 @@ async def send_thread_message(
     content: str = Form(default=""),
     model_name: str | None = Form(default=None),
     attachments_use_ocr: bool = Form(default=True),
+    approval_policy: str | None = Form(default=None),
     surface: AgentSurface = Form(default="app"),
     files: list[UploadFile] = File(default_factory=list),
     attachment_ids: list[str] = Form(default_factory=list),
@@ -279,6 +299,7 @@ async def send_thread_message(
         surface=surface,
         db=db,
         model_name=model_name,
+        approval_policy=_normalize_approval_policy_form(approval_policy),
     )
     Thread(
         target=run_agent_in_background,
@@ -294,6 +315,7 @@ async def send_thread_message_stream(
     content: str = Form(default=""),
     model_name: str | None = Form(default=None),
     attachments_use_ocr: bool = Form(default=True),
+    approval_policy: str | None = Form(default=None),
     surface: AgentSurface = Form(default="app"),
     files: list[UploadFile] = File(default_factory=list),
     attachment_ids: list[str] = Form(default_factory=list),
@@ -310,6 +332,7 @@ async def send_thread_message_stream(
         surface=surface,
         db=db,
         model_name=model_name,
+        approval_policy=_normalize_approval_policy_form(approval_policy),
     )
 
     def stream_events() -> Iterator[str]:

@@ -7,7 +7,12 @@
  */
 import { type ChangeEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import type { AgentThreadDetail, AgentThreadSummary, RuntimeSettings } from "../../../lib/types";
+import type {
+  AgentApprovalPolicy,
+  AgentThreadDetail,
+  AgentThreadSummary,
+  RuntimeSettings
+} from "../../../lib/types";
 import { sortRunsByCreatedAt } from "../activity";
 import {
   BULK_MODE_HELP_TEXT,
@@ -81,6 +86,7 @@ export function useAgentComposerRuntime({
   } = useStickToBottom<HTMLDivElement>();
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [composerModelOverride, setComposerModelOverride] = useState<string | null>(null);
+  const [approvalPolicy, setApprovalPolicy] = useState<AgentApprovalPolicy>("default");
   const lastSnappedThreadRef = useRef("");
   const pendingUserMessagesRef = useRef<Record<string, PendingUserMessage>>({});
   const attachmentState = useAgentDraftAttachments({ setActionError, attachmentsUseOcr });
@@ -198,6 +204,7 @@ export function useAgentComposerRuntime({
     activeRunId,
     activeStreamRunId,
     addOptimisticRunningThreadId,
+    approvalPolicy,
     attachmentsUseOcr,
     bulkLaunchConcurrencyLimit,
     clearOptimisticThreadTitle,
@@ -360,6 +367,13 @@ export function useAgentComposerRuntime({
     setComposerModelOverride(event.target.value);
   }
 
+  function handleApprovalPolicyChange(event: ChangeEvent<HTMLSelectElement>) {
+    const value = event.target.value;
+    if (value === "default" || value === "yolo") {
+      setApprovalPolicy(value);
+    }
+  }
+
   function handleBulkModeChange(checked: boolean) {
     setIsBulkMode(checked);
     setActionError(null);
@@ -394,6 +408,7 @@ export function useAgentComposerRuntime({
       draftMessage,
       fileInputRef,
       isAttachmentsUseOcrDisabled: !selectedModelSupportsVision || isMutating || isSendingMessage || isBulkLaunching,
+      approvalPolicy,
       isBulkLaunching,
       isBulkMode,
       isComposerDragActive,
@@ -411,6 +426,7 @@ export function useAgentComposerRuntime({
       onDragOver: handleComposerDragOver,
       onDrop: handleComposerDrop,
       onFileSelection: handleDraftFileSelection,
+      onApprovalPolicyChange: handleApprovalPolicyChange,
       onMessageChange: handleDraftMessageChange,
       onModelChange: handleComposerModelChange,
       onRemoveAttachment: removeDraftAttachment,

@@ -13,6 +13,7 @@ import { Button } from "../../../components/ui/button";
 import { Switch } from "../../../components/ui/switch";
 import { Textarea } from "../../../components/ui/textarea";
 import { Tooltip } from "../../../components/ui/tooltip";
+import type { AgentApprovalPolicy } from "../../../lib/types";
 import { resolveAgentModelOptionLabel } from "./helpers";
 import type { DraftAttachment } from "./types";
 
@@ -37,6 +38,7 @@ interface AgentComposerProps {
   isInterruptPending: boolean;
   bulkModeHelpText: string;
   actionError: string | null;
+  approvalPolicy: AgentApprovalPolicy;
   onAttachmentsUseOcrChange: (checked: boolean) => void;
   onBulkModeChange: (checked: boolean) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -46,6 +48,7 @@ interface AgentComposerProps {
   onDrop: (event: DragEvent<HTMLFormElement>) => void;
   onMessageChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
   onModelChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+  onApprovalPolicyChange: (event: ChangeEvent<HTMLSelectElement>) => void;
   onComposerKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   onComposerPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
   onFileSelection: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -74,6 +77,7 @@ export function AgentComposer(props: AgentComposerProps) {
     isInterruptPending,
     bulkModeHelpText,
     actionError,
+    approvalPolicy,
     onAttachmentsUseOcrChange,
     onBulkModeChange,
     onSubmit,
@@ -83,6 +87,7 @@ export function AgentComposer(props: AgentComposerProps) {
     onDrop,
     onMessageChange,
     onModelChange,
+    onApprovalPolicyChange,
     onComposerKeyDown,
     onComposerPaste,
     onFileSelection,
@@ -210,9 +215,16 @@ export function AgentComposer(props: AgentComposerProps) {
             tabIndex={-1}
           />
           <div className="agent-composer-secondary-actions">
-            <Button type="button" variant="ghost" size="sm" className="agent-composer-attach" onClick={() => fileInputRef.current?.click()}>
-              <Paperclip className="h-4 w-4" />
-              Add Attachments
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="agent-composer-attach"
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Add attachments"
+            >
+              <Paperclip className="h-4 w-4 shrink-0" />
+              <span className="agent-composer-attach-text">Attach</span>
             </Button>
 
             <label className="agent-composer-bulk-toggle">
@@ -222,10 +234,10 @@ export function AgentComposer(props: AgentComposerProps) {
                 disabled={isMutating || isSendingMessage || isBulkLaunching || isInterruptPending}
                 aria-label="Bulk mode"
               />
-              <span className="agent-composer-bulk-toggle-label">Bulk mode</span>
+              <span className="agent-composer-bulk-toggle-label">Bulk</span>
               <Tooltip content={bulkModeHelpText}>
                 <button type="button" className="agent-composer-bulk-tooltip-trigger" aria-label="Bulk mode help">
-                  <CircleHelp className="h-3.5 w-3.5 text-muted-foreground/80" aria-hidden="true" />
+                  <CircleHelp className="h-3 w-3 text-muted-foreground/80" aria-hidden="true" />
                 </button>
               </Tooltip>
             </label>
@@ -257,6 +269,26 @@ export function AgentComposer(props: AgentComposerProps) {
                 </option>
               ))}
             </select>
+            <div className="agent-composer-policy-wrap">
+              <label className="agent-composer-policy">
+                <span className="agent-composer-policy-label">Policy</span>
+                <select
+                  className="agent-composer-policy-select"
+                  aria-label="Approval policy"
+                  value={approvalPolicy}
+                  onChange={onApprovalPolicyChange}
+                  disabled={isMutating || isSendingMessage || isBulkLaunching || isInterruptPending}
+                >
+                  <option value="default">Default</option>
+                  <option value="yolo">Yolo</option>
+                </select>
+              </label>
+              <Tooltip content="Default: review proposals before they apply. Yolo: auto-apply this run’s proposals after it completes successfully.">
+                <button type="button" className="agent-composer-policy-help" aria-label="Approval policy help">
+                  <CircleHelp className="h-3 w-3 text-muted-foreground/80" aria-hidden="true" />
+                </button>
+              </Tooltip>
+            </div>
 
             {showStopButton ? (
               <Button

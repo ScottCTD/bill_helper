@@ -50,6 +50,7 @@ def send_message(
     attachment_ids: list[str] | None = None,
     attachments_use_ocr: bool = True,
     model_name: str | None = None,
+    approval_policy: str | None = None,
     wait_for_completion: bool = True,
     timeout_seconds: float = 2.0,
 ) -> dict:
@@ -67,6 +68,8 @@ def send_message(
         "attachments_use_ocr": str(attachments_use_ocr).lower(),
         "model_name": model_name or "",
     }
+    if approval_policy is not None:
+        request_data["approval_policy"] = approval_policy
     response = client.post(
         f"/api/v1/agent/threads/{thread_id}/messages",
         data=request_data,
