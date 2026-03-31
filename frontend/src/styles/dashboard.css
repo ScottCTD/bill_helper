@@ -56,9 +56,14 @@
 
   .dashboard-timeline-strip {
     @apply box-border flex h-10 min-h-10 max-w-full items-center gap-1.5 overflow-x-auto overscroll-x-contain rounded-md border border-input bg-muted/30 px-1;
-    scrollbar-width: thin;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     scroll-snap-type: x proximity;
     scroll-padding-inline: 0.25rem;
+  }
+
+  .dashboard-timeline-strip::-webkit-scrollbar {
+    display: none;
   }
 
   .dashboard-timeline-strip:focus-visible {
