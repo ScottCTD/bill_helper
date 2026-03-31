@@ -56,6 +56,14 @@ Agent settings:
 - `AGENT_BASE_URL` / `BILL_HELPER_AGENT_BASE_URL`
 - `AGENT_API_KEY` / `BILL_HELPER_AGENT_API_KEY`
 
+Optional Langfuse LLM observability (read by LiteLLM’s `langfuse_otel` callback; not under `BILL_HELPER_`):
+
+- `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` (enables tracing when both are set)
+- `LANGFUSE_OTEL_HOST` (optional; **LiteLLM defaults to US** `https://us.cloud.langfuse.com`. EU projects must set `https://cloud.langfuse.com` or exports never land in the project you are viewing.)
+- `LANGFUSE_HOST` (optional fallback LiteLLM reads if `LANGFUSE_OTEL_HOST` is unset)
+
+**If the UI stays empty:** (1) Confirm region — EU vs US above. (2) In [Langfuse v4](https://langfuse.com/changelog/2026-03-10-simplify-for-scale), the primary table is **Observations**, not only the legacy traces view; filter by `trace_id` or your run id. (3) Restart the API after changing `.env`. (4) Trigger at least one **successful agent LLM call** (traces are sent after completions). (5) On startup, check logs: if you see `Langfuse OTEL callback did not initialize`, LiteLLM failed to construct the exporter (often missing `opentelemetry-exporter-otlp-proto-http` or bad keys). (6) The backend **force-flushes** the Langfuse-bound TracerProvider after each completion so batches are not stuck behind the default multi-second delay. (7) For export errors, run with `LITELLM_LOG=DEBUG` and watch for OTLP HTTP failures. (8) **Langfuse Cloud “Fast (Preview)”** can delay how soon new observations appear; toggling Fast Preview or refreshing the page often forces the list to catch up—this is a Langfuse UI/product behavior, not the app failing to export.
+
 Runtime override behavior:
 
 - `runtime_settings` stores optional per-field overrides managed by `GET/PATCH /api/v1/settings`, including ordered `user_memory` and `available_agent_models`

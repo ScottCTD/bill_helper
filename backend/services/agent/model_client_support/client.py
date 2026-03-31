@@ -19,6 +19,11 @@ from tenacity import (
 )
 
 from backend.config import DEFAULT_AGENT_MODEL, ensure_env_file_variables_loaded
+from backend.services.agent.langfuse_litellm import (
+    ensure_langfuse_litellm_configured,
+    force_flush_langfuse_otel_best_effort,
+    langfuse_credentials_configured,
+)
 from .environment import normalize_host, normalize_secret, supports_prompt_caching
 from .streaming import (
     append_stream_content,
@@ -126,6 +131,7 @@ class LiteLLMModelClient:
         api_key: str | None = None,
     ) -> None:
         ensure_env_file_variables_loaded()
+        ensure_langfuse_litellm_configured()
         self._model_name = (model_name or "").strip() or DEFAULT_AGENT_MODEL
         self._tools = tools
         self._retry_max_attempts = max(1, retry_max_attempts)
@@ -142,6 +148,7 @@ class LiteLLMModelClient:
         tools: list[dict[str, Any]] | None = None,
         tool_choice: Any = None,
         response_format: Any = None,
+        litellm_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         effective_tools = self._tools if tools is None else tools
         request: dict[str, Any] = {
@@ -153,6 +160,8 @@ class LiteLLMModelClient:
             request["tool_choice"] = "auto" if tool_choice is None else tool_choice
         if response_format is not None:
             request["response_format"] = response_format
+        if litellm_metadata:
+            request["metadata"] = litellm_metadata
         if supports_prompt_caching(self._model_name):
             injection_points = _cache_injection_points_for_messages(messages)
             if injection_points:
@@ -226,12 +235,14 @@ class LiteLLMModelClient:
         tools: list[dict[str, Any]] | None = None,
         tool_choice: Any = None,
         response_format: Any = None,
+        litellm_metadata: dict[str, Any] | None = None,
     ) -> Any:
         request = self._base_request(
             messages,
             tools=tools,
             tool_choice=tool_choice,
             response_format=response_format,
+            litellm_metadata=litellm_metadata,
         )
         try:
             return self._completion_with_request_fallbacks(request)
@@ -259,6 +270,7 @@ class LiteLLMModelClient:
         tools: list[dict[str, Any]] | None = None,
         tool_choice: Any = None,
         response_format: Any = None,
+        litellm_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         retrying = Retrying(
             stop=stop_after_attempt(self._retry_max_attempts),
@@ -278,6 +290,7 @@ class LiteLLMModelClient:
                     tools=tools,
                     tool_choice=tool_choice,
                     response_format=response_format,
+                    litellm_metadata=litellm_metadata,
                 )
         if response is None:  # pragma: no cover - defensive guard
             raise AgentModelError("model request failed: no response")
@@ -300,12 +313,15 @@ class LiteLLMModelClient:
                 }
             )
 
-        return {
+        result = {
             "role": "assistant",
             "content": message.content or "",
             "tool_calls": tool_calls,
             "usage": normalize_usage(getattr(response, "usage", None)),
         }
+        if langfuse_credentials_configured():
+            force_flush_langfuse_otel_best_effort()
+        return result
 
     def complete_stream(
         self,
@@ -314,12 +330,14 @@ class LiteLLMModelClient:
         tools: list[dict[str, Any]] | None = None,
         tool_choice: Any = None,
         response_format: Any = None,
+        litellm_metadata: dict[str, Any] | None = None,
     ) -> Iterator[dict[str, Any]]:
         request = self._base_request(
             messages,
             tools=tools,
             tool_choice=tool_choice,
             response_format=response_format,
+            litellm_metadata=litellm_metadata,
         )
         request["stream"] = True
         request["stream_options"] = {"include_usage": True}
@@ -419,6 +437,8 @@ class LiteLLMModelClient:
             final_content = emitted_content
         if not final_reasoning:
             final_reasoning = emitted_reasoning
+        if langfuse_credentials_configured():
+            force_flush_langfuse_otel_best_effort()
         yield {
             "type": "done",
             "message": {

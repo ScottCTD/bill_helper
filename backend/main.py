@@ -32,6 +32,7 @@ from backend.routers import (
 from backend.routers.agent import router as agent_router
 from backend.routers.accounts import router as accounts_router
 from backend.services.crud_policy import PolicyViolation
+from backend.services.agent.langfuse_litellm import ensure_langfuse_litellm_configured
 from backend.services.agent_workspace import stop_all_user_workspaces_best_effort
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def _app_lifespan(_app: FastAPI):
     try:
+        ensure_langfuse_litellm_configured()
         yield
     finally:
         try:

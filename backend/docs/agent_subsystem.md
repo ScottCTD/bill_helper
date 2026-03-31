@@ -28,6 +28,8 @@
   - thin public seam re-exporting the LiteLLM client contract
 - `backend/services/agent/model_client_support/`
   - grouped model-client internals: `client.py` for the retrying LiteLLM adapter, `environment.py` for provider/env validation and prompt-cache support, `streaming.py` for streamed delta reconciliation, and `usage.py` for usage-shape normalization
+- `backend/services/agent/langfuse_litellm.py`
+  - optional [Langfuse](https://langfuse.com) observability via LiteLLM's `langfuse_otel` callback when `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are set (see [LiteLLM SDK integration](https://langfuse.com/integrations/frameworks/litellm-sdk)); run loop passes `trace_id` (run id), `session_id` (thread id), `trace_user_id` (owner; LiteLLM maps this to Langfuse user id), `generation_name`, and `tags` on each completion; **LiteLLM defaults OTLP to US cloud** — set `LANGFUSE_OTEL_HOST=https://cloud.langfuse.com` for EU; in [Langfuse v4](https://langfuse.com/changelog/2026-03-10-simplify-for-scale) look under **Observations** and filter by `trace_id` / run id
 - `backend/services/agent/tool_runtime.py`
   - thin public seam for tool contracts plus runtime execution entrypoints
 - `backend/services/agent/tool_runtime_support/`
@@ -182,6 +184,7 @@ Endpoints:
 
 ## Current Agent Execution Behavior
 
+- when Langfuse credentials are present, each LLM step is reported through OpenTelemetry to Langfuse; without `LANGFUSE_OTEL_HOST`, LiteLLM targets **US** cloud — EU tenants must set the host explicitly (see `runtime_and_config.md`); install-time dependencies are `opentelemetry-api`, `opentelemetry-sdk`, and `opentelemetry-exporter-otlp-proto-http` alongside LiteLLM
 - runs support both background execution and SSE execution
 - draft attachment uploads parse eagerly before send so the frontend can show upload progress, then parsing progress, while the user is still composing
 - repeated draft uploads of the same bytes for the same owner reuse an existing parsed bundle by SHA-256 and skip a second Docling conversion pass, while still creating a fresh draft row/bundle copy so removal semantics stay independent
@@ -196,7 +199,7 @@ Endpoints:
 - each user message persists `attachments_use_ocr`; OCR-off requests are honored for vision-capable runs, while later non-vision replay falls back to the parsed text path so thread history still works after a model change
 - eager draft uploads reuse the same canonical upload bundle and Docling parsing path as inline message attachments; once a draft is attached to a message it can no longer be deleted as an unbound draft
 - new agent uploads are written into the canonical per-user store under `{data_dir}/user_files/{owner_user_id}/uploads/...`, and `agent_message_attachments` link to those canonical rows instead of owning file metadata directly
-- PDF and image attachments are written into per-upload bundle directories, converted with Docling (standard pipeline + EasyOCR) on the API host, rewritten to `raw.<ext>` plus readable sibling image names, and exposed either as inline `parsed.md` text plus workspace image-path hints (`attachments_use_ocr=true`) or as direct `image_url` parts (`attachments_use_ocr=false` on vision-capable runs); the model can later call `read_image` to load selected bundle images on demand, and rows outside the dated bundle layout only receive a short re-upload hint at inference time
+- PDF and image attachments are written into per-upload bundle directories: with `attachments_use_ocr=true`, Docling (standard pipeline + EasyOCR) produces `raw.<ext>`, `parsed.md`, and sibling figure images on the API host, exposed as inline `parsed.md` text plus workspace image-path hints; with `attachments_use_ocr=false` (vision-capable runs only), PDFs skip Docling and are stored as `raw.pdf` plus PyMuPDF `page-<n>.png` renders (one file per page), and message assembly sends those page images as `image_url` parts (one per page). If a vision turn still sees a Docling-only bundle (for example a draft uploaded with OCR on), assembly rasterizes `raw.pdf` the same way instead of sending Docling figure crops. Rows outside the dated bundle layout only receive a short re-upload hint at inference time; the model can call `read_image` for additional bundle images when needed.
 - interruption marks runs as `failed` and injects interruption context into the next turn
 - pending proposals remain inspectable in later turns while still `PENDING_REVIEW`
 - reviewed proposal context now includes reviewer override values when `payload_override` changed the approved payload, so later turns can see concrete edited values instead of only changed field names

@@ -103,6 +103,7 @@ def call_model(
     tools: list[dict[str, Any]] | None = None,
     tool_choice: Any = None,
     response_format: Any = None,
+    litellm_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     # Stable seam for tests/bench harnesses to inject model responses.
     return _build_model_client(db, model_name=model_name).complete(
@@ -110,6 +111,7 @@ def call_model(
         tools=tools,
         tool_choice=tool_choice,
         response_format=response_format,
+        litellm_metadata=litellm_metadata,
     )
 
 
@@ -121,6 +123,7 @@ def call_model_stream(
     tools: list[dict[str, Any]] | None = None,
     tool_choice: Any = None,
     response_format: Any = None,
+    litellm_metadata: dict[str, Any] | None = None,
 ) -> Iterator[dict[str, Any]]:
     # Stable seam for tests/bench harnesses to inject streaming model responses.
     return _build_model_client(db, model_name=model_name).complete_stream(
@@ -128,6 +131,7 @@ def call_model_stream(
         tools=tools,
         tool_choice=tool_choice,
         response_format=response_format,
+        litellm_metadata=litellm_metadata,
     )
 
 

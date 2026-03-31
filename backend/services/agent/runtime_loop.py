@@ -41,6 +41,7 @@ from backend.services.agent.runtime_state import (
 from backend.services.agent.serializers import stream_run_event_to_payload
 from backend.services.agent.tool_args.shared import INTERMEDIATE_UPDATE_TOOL_NAME
 from backend.services.agent.principal_scope import load_thread_owner_user
+from backend.services.agent.langfuse_litellm import agent_run_litellm_metadata
 from backend.services.agent.tool_runtime import build_openai_tool_schemas, execute_tool
 from backend.services.agent.tool_types import ToolContext, ToolExecutionStatus
 from backend.services.runtime_settings import resolve_runtime_settings
@@ -350,6 +351,13 @@ class RuntimeNonStreamRunLoopAdapter(RuntimeRunLoopAdapterBase):
             llm_messages,
             self.db,
             model_name=self.run.model_name,
+            litellm_metadata=agent_run_litellm_metadata(
+                run_id=self.run.id,
+                thread_id=self.thread.id,
+                owner_user_id=self.thread.owner_user_id,
+                step_index=step_index,
+                surface=self.run.surface,
+            ),
             **self._model_request_kwargs(),
         )
         return (yield from _empty_model_result(assistant_message))
@@ -390,6 +398,13 @@ class RuntimeStreamRunLoopAdapter(RuntimeRunLoopAdapterBase):
             llm_messages,
             self.db,
             model_name=self.run.model_name,
+            litellm_metadata=agent_run_litellm_metadata(
+                run_id=self.run.id,
+                thread_id=self.thread.id,
+                owner_user_id=self.thread.owner_user_id,
+                step_index=step_index,
+                surface=self.run.surface,
+            ),
             **self._model_request_kwargs(),
         ):
             event_type = str(event.get("type") or "")

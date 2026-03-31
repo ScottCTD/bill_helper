@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
@@ -16,6 +17,7 @@ from backend.enums_agent import AgentChangeType, AgentMessageRole, AgentRunStatu
 from backend.models_agent import AgentChangeItem, AgentMessage, AgentMessageAttachment, AgentRun, AgentThread
 from backend.models_finance import User
 from backend.services.agent.attachments import create_message_attachment
+from backend.services.agent.langfuse_litellm import agent_run_litellm_metadata
 from backend.services.agent.message_history import build_llm_messages
 from backend.services.agent.model_client import AgentModelError
 from backend.services.agent.principal_scope import load_thread_owner_user
@@ -290,7 +292,17 @@ class _BenchmarkRunLoopAdapter(AgentRunLoopAdapter[_PreparedToolCall]):
     ) -> ModelStepGenerator:
         self._step_started_at = time.monotonic()
         messages_snapshot = _redact_image_content(llm_messages)
-        assistant_msg = call_model(llm_messages, self._db)
+        assistant_msg = call_model(
+            llm_messages,
+            self._db,
+            litellm_metadata=agent_run_litellm_metadata(
+                run_id=self._run.id,
+                thread_id=self._thread_id,
+                owner_user_id=self._tool_context.principal_user_id,
+                step_index=step_index,
+                surface="benchmark",
+            ),
+        )
         step_usage = extract_usage_dict(assistant_msg, fields=USAGE_FIELDS)
         tool_calls = assistant_msg.get("tool_calls") or []
         assistant_content = assistant_msg.get("content") or ""
