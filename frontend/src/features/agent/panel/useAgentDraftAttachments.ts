@@ -279,6 +279,22 @@ export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
     }
   }
 
+  function clearAllDraftAttachments() {
+    setDraftAttachments((current) => {
+      for (const attachment of current) {
+        uploadAbortControllersRef.current[attachment.id]?.abort();
+        delete uploadAbortControllersRef.current[attachment.id];
+        delete uploadPromisesRef.current[attachment.id];
+        if (attachment.uploadedAttachmentId) {
+          void deleteAgentDraftAttachment(attachment.uploadedAttachmentId).catch((error: Error) => {
+            setActionError(error.message);
+          });
+        }
+      }
+      return [];
+    });
+  }
+
   async function resolveDraftAttachmentsForSend(attachments: DraftAttachment[]): Promise<ReadyDraftAttachment[]> {
     const results = await Promise.all(
       attachments.map(async (attachment) => {
@@ -304,6 +320,7 @@ export function useAgentDraftAttachments(args: UseAgentDraftAttachmentsArgs) {
   return {
     draftAttachments,
     setDraftAttachments,
+    clearAllDraftAttachments,
     isComposerDragActive,
     fileInputRef,
     resolveDraftAttachmentsForSend,

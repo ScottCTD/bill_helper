@@ -5,7 +5,7 @@
  * - Outputs: hooks and state helpers exported by `useAgentPanelController`.
  * - Side effects: client-side state coordination and query wiring.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useResizablePanel } from "../../../hooks/useResizablePanel";
 import { displayThreadName } from "./format";
@@ -18,6 +18,7 @@ interface UseAgentPanelControllerArgs {
 }
 
 export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs) {
+  const [isNewThreadDraft, setIsNewThreadDraft] = useState(false);
   const [selectedThreadId, setSelectedThreadId] = useState<string>("");
   const [isThreadReviewOpen, setIsThreadReviewOpen] = useState(false);
   const [isThreadPanelOpen, setIsThreadPanelOpen] = useState(true);
@@ -49,6 +50,7 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     isOpen,
     selectedThreadId,
     setSelectedThreadId,
+    isNewThreadDraft,
     optimisticRunningThreadIds: actions.optimisticRunningThreadIds,
     optimisticThreadTitlesById: actions.optimisticThreadTitlesById,
     isBulkLaunching,
@@ -80,15 +82,19 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     upsertThreadSummary: actions.upsertThreadSummary
   });
 
-  async function handleCreateThread() {
-    try {
-      await actions.createThread();
-      requestAnimationFrame(() => {
-        runtime.composer.composerTextareaRef.current?.focus();
-      });
-    } catch (error) {
-      actions.setActionError((error as Error).message);
+  useEffect(() => {
+    if (selectedThreadId && isNewThreadDraft) {
+      setIsNewThreadDraft(false);
     }
+  }, [isNewThreadDraft, selectedThreadId]);
+
+  function handleStartNewThreadDraft() {
+    setIsNewThreadDraft(true);
+    setSelectedThreadId("");
+    runtime.composer.resetComposerDraft();
+    requestAnimationFrame(() => {
+      runtime.composer.composerTextareaRef.current?.focus();
+    });
   }
 
   async function handleDeleteThread(threadId: string) {
@@ -127,8 +133,8 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
 
   return {
     header: {
-      createThread() {
-        void handleCreateThread();
+      startNewThreadDraft() {
+        handleStartNewThreadDraft();
       },
       isBulkLaunching,
       isMutating: actions.isMutating,
@@ -143,6 +149,7 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
     timeline: {
       activeOptimisticEvents: runtime.timeline.activeOptimisticEvents,
       activeOptimisticToolCalls: runtime.timeline.activeOptimisticToolCalls,
+      activeStreamRunId: runtime.timeline.activeStreamRunId,
       activeStreamReasoningText: runtime.timeline.activeStreamReasoningText,
       activeStreamText: runtime.timeline.activeStreamText,
       detachFromBottom: runtime.timeline.detachFromBottom,
@@ -184,7 +191,10 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
         requestDeleteThread(threadId);
       },
       onRenameThread: actions.renameThread,
-      onSelectThread: setSelectedThreadId,
+      onSelectThread(threadId: string) {
+        setIsNewThreadDraft(false);
+        setSelectedThreadId(threadId);
+      },
       optimisticRunningThreadIds: actions.optimisticRunningThreadIds,
       panelWidth,
       renamingThreadId: actions.renameThreadMutation.isPending ? (actions.renameThreadMutation.variables?.threadId ?? null) : null,

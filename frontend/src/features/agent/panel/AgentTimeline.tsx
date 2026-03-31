@@ -42,6 +42,7 @@ export interface AgentTimelineProps {
   pendingAssistantMessage: PendingAssistantMessage | null;
   shouldShowOptimisticAssistantBubble: boolean;
   pendingRunAttachedToOptimisticMessage: AgentRun | null;
+  activeStreamRunId: string | null;
   activeStreamReasoningText: string;
   activeStreamText: string;
   optimisticRunEventsByRunId: Record<string, AgentRunEvent[]>;
@@ -69,6 +70,7 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
     pendingAssistantMessage,
     shouldShowOptimisticAssistantBubble,
     pendingRunAttachedToOptimisticMessage,
+    activeStreamRunId,
     activeStreamReasoningText,
     activeStreamText,
     optimisticRunEventsByRunId = {},
@@ -100,7 +102,7 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
     }
 
     return (
-      <div className="agent-message-attachments">
+      <div className="agent-message-attachments scroll-surface">
         {attachments.map((attachment) => {
           if ("message_id" in attachment) {
             if (isImageMimeType(attachment.mime_type)) {
@@ -153,7 +155,7 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
     }
 
     return (
-      <div className="agent-message-user-attachments">
+      <div className="agent-message-user-attachments scroll-surface">
         {attachments.map((attachment) => (
           "message_id" in attachment ? (
             <AgentMessageAttachmentRow
@@ -221,7 +223,9 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
 
   return (
     <>
-      {!selectedThreadId ? <p className="muted agent-timeline-empty">Create or select a thread to begin.</p> : null}
+      {!selectedThreadId ? (
+        <p className="muted agent-timeline-empty">Select a thread or send a message to start a new one.</p>
+      ) : null}
       {isLoading ? <p>Loading timeline...</p> : null}
       {errorMessage ? <p className="error">{errorMessage}</p> : null}
 
@@ -235,6 +239,16 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
             const renderedContent = message.content_markdown;
             const messageRuns = isAssistant ? runsByAssistantMessageId.get(message.id) ?? [] : [];
             const userMessageRuns = isUser ? pendingAssistantRunsByUserMessageId.get(message.id) ?? [] : [];
+            const streamRunForMessage =
+              isAssistant && activeStreamRunId
+                ? messageRuns.find((run) => run.id === activeStreamRunId)
+                : undefined;
+            const isLiveAssistantStream = Boolean(
+              streamRunForMessage && streamRunForMessage.status === "running"
+            );
+            const streamedAssistantMarkdown =
+              isLiveAssistantStream && activeStreamText.length > 0 ? activeStreamText : null;
+            const assistantDisplayMarkdown = streamedAssistantMarkdown ?? renderedContent;
 
             return (
               <Fragment key={message.id}>
@@ -266,15 +280,20 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
                           onInspectActivity={detachFromBottom}
                           onHydrateToolCall={onHydrateToolCall}
                           hydratingToolCallIds={hydratingToolCallIds}
+                          streamingReasoningText={isLiveAssistantStream ? activeStreamReasoningText : undefined}
                         />
                       ) : null}
 
-                      {renderedContent.trim() ? (
+                      {assistantDisplayMarkdown.trim() ? (
                         shouldRenderMarkdown ? (
-                          <MarkdownRenderer markdown={renderedContent} />
+                          <MarkdownRenderer markdown={assistantDisplayMarkdown} />
                         ) : (
-                          <p className="agent-message-text">{renderedContent}</p>
+                          <p className="agent-message-text">{assistantDisplayMarkdown}</p>
                         )
+                      ) : isLiveAssistantStream ? (
+                        <p className="agent-message-text agent-message-streaming-text">
+                          <span className="agent-message-caret">{"\u258d"}</span>
+                        </p>
                       ) : (
                         <p className="muted">(no text)</p>
                       )}

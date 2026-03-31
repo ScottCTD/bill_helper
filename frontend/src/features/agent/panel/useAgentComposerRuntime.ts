@@ -87,6 +87,7 @@ export function useAgentComposerRuntime({
   const {
     draftAttachments,
     setDraftAttachments,
+    clearAllDraftAttachments,
     isComposerDragActive,
     fileInputRef,
     resolveDraftAttachmentsForSend,
@@ -304,10 +305,11 @@ export function useAgentComposerRuntime({
     ) {
       return;
     }
+    // Drop the optimistic bubble once the real assistant row exists; keep stream buffers until
+    // the SSE finishes (handleSubmitSingleMessage) or the user stops the run — resetting here
+    // cleared streamed text while the run was still in flight.
     setPendingAssistantMessage(selectedThreadId, null);
-    resetOptimisticRunState(selectedThreadId);
-    setThreadStreamHealthy(selectedThreadId, false);
-  }, [pendingAssistantMessage, resetOptimisticRunState, selectedThreadId, setThreadStreamHealthy, threadDetail?.messages]);
+  }, [pendingAssistantMessage, selectedThreadId, threadDetail?.messages]);
 
   useEffect(() => {
     if (
@@ -372,6 +374,14 @@ export function useAgentComposerRuntime({
     setActionError(null);
   }
 
+  function resetComposerDraft() {
+    setActionError(null);
+    setDraftMessage("");
+    clearAllDraftAttachments();
+    setIsBulkMode(false);
+    setComposerModelOverride(null);
+  }
+
   return {
     composer: {
       actionError,
@@ -408,11 +418,13 @@ export function useAgentComposerRuntime({
         void actions.handleStopRun();
       },
       onSubmit: actions.handleSubmitMessage,
+      resetComposerDraft,
       selectedModel: selectedComposerModel
     },
     timeline: {
       activeOptimisticEvents,
       activeOptimisticToolCalls,
+      activeStreamRunId,
       activeStreamReasoningText,
       activeStreamText,
       detachFromBottom,

@@ -61,7 +61,7 @@ export function AgentPanel({ isOpen, embedded = false }: AgentPanelProps) {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={controller.header.createThread}
+                onClick={controller.header.startNewThreadDraft}
                 disabled={controller.header.isMutating || controller.header.isBulkLaunching}
               >
                 New Thread

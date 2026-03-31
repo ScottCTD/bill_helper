@@ -22,6 +22,8 @@ interface UseAgentPanelQueriesArgs {
   isOpen: boolean;
   selectedThreadId: string;
   setSelectedThreadId: (threadId: string) => void;
+  /** When true, user chose "New Thread" and we must not auto-select the first listed thread. */
+  isNewThreadDraft: boolean;
   optimisticRunningThreadIds: string[];
   optimisticThreadTitlesById: Record<string, string>;
   isBulkLaunching: boolean;
@@ -33,6 +35,7 @@ export function useAgentPanelQueries({
   isOpen,
   selectedThreadId,
   setSelectedThreadId,
+  isNewThreadDraft,
   optimisticRunningThreadIds,
   optimisticThreadTitlesById,
   isBulkLaunching,
@@ -78,14 +81,14 @@ export function useAgentPanelQueries({
   }, [optimisticThreadTitlesById, threadsQuery.data]);
 
   useEffect(() => {
-    if (!isOpen || selectedThreadId) {
+    if (!isOpen || selectedThreadId || isNewThreadDraft) {
       return;
     }
     const firstId = threadsQuery.data?.[0]?.id;
     if (firstId) {
       setSelectedThreadId(firstId);
     }
-  }, [isOpen, selectedThreadId, setSelectedThreadId, threadsQuery.data]);
+  }, [isOpen, isNewThreadDraft, selectedThreadId, setSelectedThreadId, threadsQuery.data]);
 
   useEffect(() => {
     if (!threadsQuery.data) {

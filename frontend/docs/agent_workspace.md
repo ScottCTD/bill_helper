@@ -7,6 +7,7 @@
 - the home route now adds the shared `PageHeader` plus the shared outer workspace card shell above the agent panel so the AI workspace sits inside the same route-level shell contract as the ledger pages
 - acts as a render shell that wires the header, timeline, composer, thread rail, review modal, and delete confirmation together
 - stateful coordination now lives in `frontend/src/features/agent/panel/useAgentPanelController.ts`, which composes `useAgentPanelQueries.ts` for thread/runtime queries, `useAgentThreadActions.ts` for thread/review mutations plus cache helpers, and `useAgentComposerRuntime.ts` for composer/panel coordination; stream hydration/state lives in `useAgentComposerStreamState.ts`, send-stop orchestration lives in `useAgentComposerActions.ts`, and pure panel helpers live in `frontend/src/features/agent/panel/helpers.ts`
+- the header **New Thread** control clears selection into a client-only draft (no `POST /agent/threads`); the first outbound send calls `ensureThreadId()` in `useAgentComposerActions.ts`, which creates the server thread and selects it; `useAgentPanelQueries.ts` skips auto-selecting the newest/first listed thread while that draft is active so the rail does not snap back
 - page header uses the static title `Bill Assistant`; model selection stays in the composer dropdown instead of the title row
 - visual styling now follows the same compact neutral workspace system as the rest of the app: the agent panel is no longer a full-screen bespoke surface with separate page chrome
 - the route-level border now comes from the same shared workspace shell used by the ledger pages; the agent panel renders borderless inside that shell
@@ -71,6 +72,7 @@ Supporting modules include:
 - optimistic user and assistant placeholders reconcile against persisted timeline messages
 - persisted image attachments render through authenticated blob fetches so previews survive thread reloads even though the API uses bearer-token auth instead of cookie-backed file URLs
 - user-message attachments render as compact file rows above the message text and open in a browser-native tab instead of embedding inline previews inside the bubble
+- composer pending attachments, user attachment rows, and assistant inline attachment grids each cap height with internal vertical scroll when the list is long (`scroll-surface` plus classes in `frontend/src/styles/agent.css`) so the composer and bubbles do not grow unbounded and the scrollbar matches the app’s styled scrollbars; those strips share a bordered, muted background “tray” with tighter gaps and padding than the main bubble chrome
 - assistant-message inline attachment cards stay bounded: images preserve their aspect ratio up to a larger capped size and open in a browser-native tab when clicked, while PDFs use a small scrollable browser preview plus filename label and an explicit `Open` action
 - `useAgentComposerStreamState.ts` owns stream-event accumulation, tool-call hydration, rename-thread reconciliation, and the optimistic run timeline cache
 

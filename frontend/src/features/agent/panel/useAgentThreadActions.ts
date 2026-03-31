@@ -189,11 +189,6 @@ export function useAgentThreadActions({
     return created.id;
   }
 
-  async function createThread() {
-    setActionError(null);
-    return createThreadMutation.mutateAsync({});
-  }
-
   async function deleteThread(threadId: string): Promise<void> {
     await deleteThreadMutation.mutateAsync(threadId);
   }
@@ -263,7 +258,6 @@ export function useAgentThreadActions({
     applyThreadTitleToCaches,
     approveItem,
     clearOptimisticThreadTitle,
-    createThread,
     createThreadMutation,
     deleteThread,
     deleteThreadMutation,
