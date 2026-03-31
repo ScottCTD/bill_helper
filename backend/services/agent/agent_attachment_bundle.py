@@ -286,13 +286,16 @@ def ingest_agent_attachment_with_docling(
 
 
 def pdf_pages_as_png_bytes(primary_path: Path) -> list[bytes]:
-    """Render each PDF page to PNG bytes (same scale as on-disk ``page-*.png`` bundles)."""
+    """Render each PDF page to PNG bytes (same scale as on-disk ``page-*.png`` bundles).
+
+    Uses PyMuPDF scale 2× over the default 72 pt/in raster (~144 dpi).
+    """
     document = pymupdf.open(primary_path)
     try:
         rendered: list[bytes] = []
         for page_index in range(document.page_count):
             page = document.load_page(page_index)
-            pixmap = page.get_pixmap(matrix=pymupdf.Matrix(1.5, 1.5), alpha=False)
+            pixmap = page.get_pixmap(matrix=pymupdf.Matrix(2, 2), alpha=False)
             rendered.append(pixmap.tobytes("png"))
         return rendered
     finally:
