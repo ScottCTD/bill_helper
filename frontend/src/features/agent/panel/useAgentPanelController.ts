@@ -150,7 +150,6 @@ export function useAgentPanelController({ isOpen }: UseAgentPanelControllerArgs)
       hydratingToolCallIds: runtime.timeline.hydratingToolCallIds,
       isAtBottom: runtime.timeline.isAtBottom,
       isLoading: data.threadQuery.isLoading,
-      isMutating: actions.isMutating,
       messages: data.threadQuery.data?.messages,
       onHydrateToolCall: runtime.timeline.onHydrateToolCall,
       optimisticRunEventsByRunId: runtime.timeline.optimisticRunEventsByRunId,

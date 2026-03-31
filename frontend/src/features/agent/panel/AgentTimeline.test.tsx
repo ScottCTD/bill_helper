@@ -69,7 +69,6 @@ function renderTimeline(
     pendingAssistantMessage: null,
     shouldShowOptimisticAssistantBubble: false,
     pendingRunAttachedToOptimisticMessage: null,
-    isMutating: false,
     activeStreamReasoningText: "",
     activeStreamText: "",
     optimisticRunEventsByRunId: {},
@@ -135,7 +134,6 @@ describe("AgentTimeline", () => {
       pendingAssistantMessage: null,
       shouldShowOptimisticAssistantBubble: false,
       pendingRunAttachedToOptimisticMessage: null,
-      isMutating: false,
       activeStreamReasoningText: "",
       activeStreamText: "",
       optimisticRunEventsByRunId: {},
@@ -210,7 +208,6 @@ describe("AgentTimeline", () => {
       ]
     });
 
-    expect(screen.getByText("1 update")).toBeInTheDocument();
     expect(screen.getAllByText("▍").length).toBeGreaterThanOrEqual(1);
     expect(container.querySelector(".agent-message-streaming-text")).toBeNull();
   });
@@ -222,8 +219,7 @@ describe("AgentTimeline", () => {
       activeStreamText: "  "
     });
 
-    expect(screen.getByText("1 update")).toBeInTheDocument();
-    expect(screen.getAllByText("▍").length).toBeGreaterThanOrEqual(1);
+    expect(markdownRenderSpy).toHaveBeenCalledWith("  ");
     expect(container.querySelector(".agent-message-streaming-text")).toBeNull();
   });
 
@@ -234,9 +230,7 @@ describe("AgentTimeline", () => {
       activeStreamReasoningText: "Checking existing entities before proposing changes."
     });
 
-    expect(screen.getByText("1 update")).toBeInTheDocument();
     expect(screen.getAllByText("Checking existing entities before proposing changes.").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Reasoning")).toBeInTheDocument();
   });
 
   it("anchors interrupted pending runs after the triggering user message without duplicating them", () => {
@@ -473,7 +467,7 @@ describe("AgentTimeline", () => {
       activeOptimisticToolCalls: [toolCall]
     });
 
-    expect(screen.getAllByText("1 tool call")).toHaveLength(1);
+    expect(screen.getByText("list_tags")).toBeInTheDocument();
     expect(document.querySelectorAll("article.agent-message-assistant")).toHaveLength(1);
     expect(document.querySelectorAll("article.agent-message-user")).toHaveLength(0);
 
@@ -508,7 +502,6 @@ describe("AgentTimeline", () => {
       activeStreamText: "Still streaming the next sentence..."
     });
 
-    expect(screen.getByText("2 updates")).toBeInTheDocument();
     expect(screen.getAllByText("Drafting the first batch now.").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Still streaming the next sentence...").length).toBeGreaterThanOrEqual(1);
 

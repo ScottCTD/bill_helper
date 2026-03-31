@@ -266,7 +266,8 @@
   .agent-message-assistant > header,
   .agent-message-assistant > .agent-markdown,
   .agent-message-assistant > .agent-message-attachments,
-  .agent-message-assistant > .agent-run-block {
+  .agent-message-assistant > .agent-run-block,
+  .agent-message-assistant .agent-run-activity-timeline .agent-markdown {
     @apply w-full min-w-0;
   }
 
@@ -305,6 +306,14 @@
 
   .agent-markdown {
     @apply grid gap-2 text-sm leading-6 text-foreground;
+  }
+
+  .agent-markdown.agent-run-interleaved-markdown {
+    @apply gap-2 text-xs font-medium leading-5 text-foreground;
+  }
+
+  .agent-run-interleaved-placeholder {
+    @apply text-xs font-medium leading-5 text-foreground;
   }
 
   .agent-markdown p,
@@ -478,86 +487,41 @@
     @apply m-0;
   }
 
-  .agent-run-tools {
-    @apply grid gap-2;
-  }
-
   .agent-run-activity-timeline {
-    @apply grid gap-1;
+    @apply grid w-full min-w-0 gap-2;
   }
 
-  .agent-run-root-activity,
-  .agent-reasoning-update-collapsible,
-  .agent-tool-call-group {
-    @apply rounded-md border border-border bg-secondary/55;
+  .agent-assistant-run-work {
+    @apply grid w-full gap-2;
   }
 
-  .agent-run-root-activity > summary,
-  .agent-reasoning-update-collapsible > summary,
-  .agent-tool-call-group summary {
-    @apply flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-secondary;
-    list-style: none;
+  .agent-work-separator {
+    @apply flex w-full cursor-pointer items-center gap-2 border-0 bg-transparent py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground;
   }
 
-  .agent-run-root-activity > summary::-webkit-details-marker,
-  .agent-reasoning-update-collapsible > summary::-webkit-details-marker,
-  .agent-tool-call-group summary::-webkit-details-marker,
+  .agent-work-separator-line {
+    @apply h-px min-h-px flex-1 bg-border;
+  }
+
+  .agent-work-separator-center {
+    @apply inline-flex max-w-[min(100%,36rem)] shrink-0 items-center gap-1;
+  }
+
+  .agent-work-separator-label {
+    @apply min-w-0 truncate;
+  }
+
+  .agent-work-separator-chevron {
+    @apply shrink-0 text-muted-foreground opacity-80;
+  }
+
   .agent-tool-call summary::-webkit-details-marker,
   .agent-tool-call-static > summary::-webkit-details-marker {
     display: none;
   }
 
-  .agent-run-root-activity[open] > summary .agent-tool-call-chevron,
-  .agent-reasoning-update-collapsible[open] > summary .agent-tool-call-chevron,
-  .agent-tool-call[open] > summary .agent-tool-call-chevron,
-  .agent-tool-call-group[open] > summary .agent-tool-call-chevron {
-    transform: rotate(90deg);
-  }
-
-  .agent-run-root-activity-static,
-  .agent-tool-call-group-static {
-    @apply overflow-hidden;
-  }
-
-  .agent-run-root-activity > .agent-run-activity-timeline {
-    @apply px-2 pb-1.5;
-  }
-
-  .agent-reasoning-update-collapsible > summary {
-    @apply leading-4 text-muted-foreground;
-  }
-
-  .agent-reasoning-update-collapsible[open] > summary .agent-reasoning-update-preview {
-    display: none;
-  }
-
-  .agent-reasoning-update-label {
-    @apply select-none font-medium text-muted-foreground;
-  }
-
-  .agent-reasoning-update-preview {
-    @apply truncate;
-  }
-
-  .agent-reasoning-update-collapsible > .agent-run-reasoning-update {
-    @apply mx-2 mb-1.5 mt-0 rounded-md border-0 bg-transparent px-0 py-0;
-  }
-
-  .agent-run-reasoning-update {
-    @apply m-0 rounded-md border border-border bg-secondary/65 px-2 py-1 text-xs leading-4 text-muted-foreground;
-  }
-
-  .agent-run-reasoning-update.agent-markdown {
-    @apply gap-0.5 text-xs leading-4 text-muted-foreground;
-  }
-
-  .agent-tool-call-group-summary {
-    @apply flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs;
-  }
-
-  .agent-tool-call-group-label,
   .agent-tool-call-name {
-    @apply font-medium text-foreground;
+    @apply min-w-0 truncate text-xs font-normal text-muted-foreground;
   }
 
   .agent-run-changes-summary {
@@ -572,14 +536,6 @@
     @apply inline-flex items-center rounded-md border border-border bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground;
   }
 
-  .agent-tool-call-list {
-    @apply m-0 list-none space-y-0.5 p-2 pt-0;
-  }
-
-  .agent-tool-call-list > li {
-    @apply m-0 p-0;
-  }
-
   .agent-tool-call,
   .agent-tool-call-static {
     @apply rounded-md;
@@ -587,16 +543,12 @@
 
   .agent-tool-call-static > summary,
   .agent-tool-call summary {
-    @apply flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs transition-colors hover:bg-secondary;
+    @apply flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 py-0.5 text-xs transition-colors hover:bg-secondary/80;
     list-style: none;
   }
 
   .agent-tool-call-pending-detail {
     @apply m-0 text-xs;
-  }
-
-  .agent-tool-call-chevron {
-    @apply h-3.5 w-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150;
   }
 
   .agent-tool-call-time {
@@ -643,7 +595,7 @@
   }
 
   .agent-tool-call-details {
-    @apply ml-[7px] mt-0.5 grid gap-1 border-l-2 border-border py-0.5 pl-4;
+    @apply mt-1 grid gap-1 border-l-2 border-border py-0.5 pl-3;
   }
 
   .agent-tool-call-details-label {

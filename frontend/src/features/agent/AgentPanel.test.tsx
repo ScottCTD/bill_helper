@@ -322,7 +322,7 @@ describe("AgentPanel", () => {
   });
 
   it("shows attachment upload then parsing progress before the draft becomes ready", async () => {
-    let resolveUpload: ((value: Awaited<ReturnType<typeof api.uploadAgentDraftAttachment>>) => void) | null = null;
+    let resolveUpload: (() => void) | null = null;
 
     vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
     vi.mocked(api.getAgentThread).mockResolvedValue(buildThreadDetail([]));
@@ -363,7 +363,7 @@ describe("AgentPanel", () => {
   });
 
   it("waits for attachment preparation before sending the streamed message", async () => {
-    let resolveUpload: ((value: Awaited<ReturnType<typeof api.uploadAgentDraftAttachment>>) => void) | null = null;
+    let resolveUpload: (() => void) | null = null;
 
     vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
     vi.mocked(api.getAgentThread)
@@ -415,7 +415,7 @@ describe("AgentPanel", () => {
   });
 
   it("defaults OCR off for vision-capable models and shows non-OCR preparation labels", async () => {
-    let resolveUpload: ((value: Awaited<ReturnType<typeof api.uploadAgentDraftAttachment>>) => void) | null = null;
+    let resolveUpload: (() => void) | null = null;
 
     vi.mocked(api.listAgentThreads).mockResolvedValue([buildThreadSummary()]);
     vi.mocked(api.getAgentThread)

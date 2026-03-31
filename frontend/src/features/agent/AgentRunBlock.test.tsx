@@ -12,7 +12,7 @@ describe("AgentRunBlock", () => {
       change_items: [buildChangeItem({ id: "change-1", status: "PENDING_REVIEW", change_type: "create_entry" })]
     });
 
-    render(<AgentRunBlock run={run} isMutating={false} mode="summary" />);
+    render(<AgentRunBlock run={run} mode="summary" />);
 
     expect(screen.getByText("1 proposed changes pending review")).toBeInTheDocument();
     expect(screen.getByText("Use the thread header Review button to process proposals.")).toBeInTheDocument();
@@ -32,15 +32,13 @@ describe("AgentRunBlock", () => {
           message: "Validating candidate entries",
           source: "tool_call"
         })
-      ]
-      ,
+      ],
       tool_calls: [toolCall]
     });
 
-    render(<AgentRunBlock run={run} isMutating={false} mode="activity" />);
+    render(<AgentRunBlock run={run} mode="activity" />);
 
     expect(screen.getAllByText("Validating candidate entries").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("1 tool call, 1 update")).toBeInTheDocument();
   });
 
   it("renders model-visible tool output in tool-call details", async () => {
@@ -57,14 +55,13 @@ describe("AgentRunBlock", () => {
       events: [
         buildRunEvent({ id: "event-1", sequence_index: 1, event_type: "tool_call_queued", tool_call_id: "tool-1" }),
         buildRunEvent({ id: "event-2", sequence_index: 2, event_type: "tool_call_completed", tool_call_id: "tool-1" })
-      ]
-      ,
+      ],
       tool_calls: [toolCall]
     });
 
-    render(<AgentRunBlock run={run} isMutating={false} mode="activity" />);
+    render(<AgentRunBlock run={run} mode="activity" />);
 
-    await userEvent.click(screen.getByText("1 tool call"));
+    await userEvent.click(screen.getByRole("button", { name: /Worked for/i }));
     await userEvent.click(screen.getByText("Listed entries"));
 
     expect(screen.getByText("Model-visible tool result")).toBeInTheDocument();
@@ -88,7 +85,6 @@ describe("AgentRunBlock", () => {
     render(
       <AgentRunBlock
         run={run}
-        isMutating={false}
         mode="activity"
         optimisticEvents={[
           buildRunEvent({ id: "event-1", sequence_index: 1, event_type: "tool_call_queued", tool_call_id: "tool-1" })
@@ -97,7 +93,6 @@ describe("AgentRunBlock", () => {
       />
     );
 
-    await userEvent.click(screen.getByText("1 tool call"));
     await userEvent.click(screen.getByText("Listed tags"));
 
     expect(screen.queryByText("Waiting for tool snapshot...")).not.toBeInTheDocument();
@@ -135,7 +130,6 @@ describe("AgentRunBlock", () => {
     render(
       <AgentRunBlock
         run={run}
-        isMutating={false}
         onInspectActivity={onInspectActivity}
         onHydrateToolCall={onHydrateToolCall}
         mode="activity"
@@ -170,7 +164,6 @@ describe("AgentRunBlock", () => {
     render(
       <AgentRunBlock
         run={run}
-        isMutating={false}
         mode="activity"
         optimisticEvents={[
           buildRunEvent({
@@ -193,56 +186,15 @@ describe("AgentRunBlock", () => {
     expect(screen.getByText("Loading on demand...")).toBeInTheDocument();
   });
 
-  it("renders transient streaming assistant text inside the activity bubble", () => {
-    const run = buildRun({
-      id: "run-streaming",
-      status: "running",
-      events: []
-    });
-
-    render(
-      <AgentRunBlock
-        run={run}
-        isMutating={false}
-        mode="activity"
-        streamingAssistantText={"Working through the next batch of entries."}
-      />
-    );
-
-    expect(screen.getByText("1 update")).toBeInTheDocument();
-    expect(screen.getAllByText("Working through the next batch of entries.").length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("renders a live assistant placeholder as soon as the run starts", () => {
+  it("renders a live reasoning placeholder as soon as the run starts", () => {
     const run = buildRun({
       id: "run-started",
       status: "running",
       events: [buildRunEvent({ id: "event-1", sequence_index: 1, event_type: "run_started" })]
     });
 
-    render(<AgentRunBlock run={run} isMutating={false} mode="activity" />);
+    render(<AgentRunBlock run={run} mode="activity" />);
 
-    expect(screen.getByText("1 update")).toBeInTheDocument();
-    expect(screen.getAllByText("▍").length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("keeps whitespace-only early stream chunks visible inside the activity bubble", () => {
-    const run = buildRun({
-      id: "run-whitespace-stream",
-      status: "running",
-      events: []
-    });
-
-    render(
-      <AgentRunBlock
-        run={run}
-        isMutating={false}
-        mode="activity"
-        streamingAssistantText={"  "}
-      />
-    );
-
-    expect(screen.getByText("1 update")).toBeInTheDocument();
     expect(screen.getAllByText("▍").length).toBeGreaterThanOrEqual(1);
   });
 
@@ -255,7 +207,7 @@ describe("AgentRunBlock", () => {
       tool_calls: [toolCall]
     });
 
-    render(<AgentRunBlock run={run} isMutating={false} mode="activity" />);
+    render(<AgentRunBlock run={run} mode="activity" />);
 
     const toolDetails = screen.getByText("Listed entries").closest("details");
     expect(toolDetails).not.toHaveAttribute("open");

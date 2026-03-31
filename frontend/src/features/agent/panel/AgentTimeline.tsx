@@ -8,9 +8,16 @@
 import { Fragment, memo, type Ref } from "react";
 import { ArrowDown, File, FileImage, FileText } from "lucide-react";
 
-import type { AgentMessage, AgentRun, AgentRunEvent, AgentToolCall } from "../../../lib/types";
+import type { AgentMessage, AgentMessageAttachment, AgentRun, AgentRunEvent, AgentToolCall } from "../../../lib/types";
+
+/** Persisted message attachments or optimistic preview cards (no `message_id`). */
+type AssistantBubbleAttachment =
+  | AgentMessageAttachment
+  | { id: string; kind: "image" | "pdf"; url: string; name: string };
 import { cn } from "../../../lib/utils";
-import { AgentRunBlock, PendingAssistantActivityBlock } from "../AgentRunBlock";
+import { AssistantMessageRunWork } from "../AssistantMessageRunWork";
+import { AgentRunBlock } from "../AgentRunBlock";
+import { PendingAssistantActivityBlock } from "../AgentRunActivity";
 import { MarkdownRenderer } from "../../../components/ui/MarkdownRenderer";
 import { AgentAttachmentImageCard } from "./AgentAttachmentImageCard";
 import { AgentAttachmentPdfCard } from "./AgentAttachmentPdfCard";
@@ -35,7 +42,6 @@ export interface AgentTimelineProps {
   pendingAssistantMessage: PendingAssistantMessage | null;
   shouldShowOptimisticAssistantBubble: boolean;
   pendingRunAttachedToOptimisticMessage: AgentRun | null;
-  isMutating: boolean;
   activeStreamReasoningText: string;
   activeStreamText: string;
   optimisticRunEventsByRunId: Record<string, AgentRunEvent[]>;
@@ -63,7 +69,6 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
     pendingAssistantMessage,
     shouldShowOptimisticAssistantBubble,
     pendingRunAttachedToOptimisticMessage,
-    isMutating,
     activeStreamReasoningText,
     activeStreamText,
     optimisticRunEventsByRunId = {},
@@ -89,47 +94,53 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
     return Boolean(run.error_text) || run.events.length > 0 || run.change_items.length > 0 || optimisticEvents.length > 0;
   }
 
-  function renderAssistantAttachments(attachments: AgentMessage["attachments"]) {
+  function renderAssistantAttachments(attachments: AssistantBubbleAttachment[]) {
     if (attachments.length === 0) {
       return null;
     }
 
     return (
       <div className="agent-message-attachments">
-        {attachments.map((attachment) => (
-          "message_id" in attachment ? (
-            isImageMimeType(attachment.mime_type) ? (
-              <AgentMessageAttachmentImage
-                key={attachment.id}
-                attachmentUrl={attachment.attachment_url}
-                alt={attachment.display_name}
-              />
-            ) : isPdfMimeType(attachment.mime_type) ? (
-              <AgentMessageAttachmentPdf
-                key={attachment.id}
-                attachmentUrl={attachment.attachment_url}
-                title={attachment.display_name}
-              />
-            ) : (
-              <div
-                key={attachment.id}
-                className="agent-message-attachment-file"
-              >
+        {attachments.map((attachment) => {
+          if ("message_id" in attachment) {
+            if (isImageMimeType(attachment.mime_type)) {
+              return (
+                <AgentMessageAttachmentImage
+                  key={attachment.id}
+                  attachmentUrl={attachment.attachment_url}
+                  alt={attachment.display_name}
+                />
+              );
+            }
+            if (isPdfMimeType(attachment.mime_type)) {
+              return (
+                <AgentMessageAttachmentPdf
+                  key={attachment.id}
+                  attachmentUrl={attachment.attachment_url}
+                  title={attachment.display_name}
+                />
+              );
+            }
+            return (
+              <div key={attachment.id} className="agent-message-attachment-file">
                 <FileText className="h-4 w-4" />
                 <span>{attachment.display_name}</span>
               </div>
-            )
-          ) : attachment.kind === "image" ? (
-            <AgentAttachmentImageCard key={attachment.id} previewUrl={attachment.url} alt={attachment.name} />
-          ) : attachment.kind === "pdf" ? (
-            <AgentAttachmentPdfCard key={attachment.id} previewUrl={attachment.url} title={attachment.name} />
-          ) : (
+            );
+          }
+          if (attachment.kind === "image") {
+            return <AgentAttachmentImageCard key={attachment.id} previewUrl={attachment.url} alt={attachment.name} />;
+          }
+          if (attachment.kind === "pdf") {
+            return <AgentAttachmentPdfCard key={attachment.id} previewUrl={attachment.url} title={attachment.name} />;
+          }
+          return (
             <div key={attachment.id} className="agent-message-attachment-file">
               <FileText className="h-4 w-4" />
               <span>{attachment.name}</span>
             </div>
-          )
-        ))}
+          );
+        })}
       </div>
     );
   }
@@ -247,21 +258,16 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
                         <span className="muted">{prettyDateTime(message.created_at)}</span>
                       </header>
 
-                      {isAssistant
-                        ? messageRuns.map((run) => (
-                            <AgentRunBlock
-                              key={`${run.id}-activity`}
-                              run={run}
-                              isMutating={isMutating}
-                              onInspectActivity={detachFromBottom}
-                              onHydrateToolCall={onHydrateToolCall}
-                              hydratingToolCallIds={hydratingToolCallIds}
-                              mode="activity"
-                              optimisticEvents={optimisticRunEventsByRunId[run.id] ?? []}
-                              optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
-                            />
-                          ))
-                        : null}
+                      {isAssistant && messageRuns.length > 0 ? (
+                        <AssistantMessageRunWork
+                          runs={messageRuns}
+                          optimisticRunEventsByRunId={optimisticRunEventsByRunId}
+                          optimisticToolCallsByRunId={optimisticToolCallsByRunId}
+                          onInspectActivity={detachFromBottom}
+                          onHydrateToolCall={onHydrateToolCall}
+                          hydratingToolCallIds={hydratingToolCallIds}
+                        />
+                      ) : null}
 
                       {renderedContent.trim() ? (
                         shouldRenderMarkdown ? (
@@ -280,7 +286,6 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
                             <AgentRunBlock
                               key={`${run.id}-summary`}
                               run={run}
-                              isMutating={isMutating}
                               onInspectActivity={detachFromBottom}
                               onHydrateToolCall={onHydrateToolCall}
                               hydratingToolCallIds={hydratingToolCallIds}
@@ -315,15 +320,13 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
                           <header className="agent-message-header agent-message-meta-only">
                             <span className="muted">{prettyDateTime(run.created_at)}</span>
                           </header>
-                          <AgentRunBlock
-                            run={run}
-                            isMutating={isMutating}
+                          <AssistantMessageRunWork
+                            runs={[run]}
+                            optimisticRunEventsByRunId={optimisticRunEventsByRunId}
+                            optimisticToolCallsByRunId={optimisticToolCallsByRunId}
                             onInspectActivity={detachFromBottom}
                             onHydrateToolCall={onHydrateToolCall}
                             hydratingToolCallIds={hydratingToolCallIds}
-                            mode="activity"
-                            optimisticEvents={optimisticEvents}
-                            optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
                           />
                         </article>
                       );
@@ -359,7 +362,6 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
               {pendingRunAttachedToOptimisticMessage ? (
                 <AgentRunBlock
                   run={pendingRunAttachedToOptimisticMessage}
-                  isMutating={isMutating}
                   onInspectActivity={detachFromBottom}
                   onHydrateToolCall={onHydrateToolCall}
                   hydratingToolCallIds={hydratingToolCallIds}
@@ -367,7 +369,6 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
                   optimisticEvents={activeOptimisticEvents}
                   optimisticToolCalls={activeOptimisticToolCalls}
                   streamingReasoningText={activeStreamReasoningText}
-                  streamingAssistantText={activeStreamText}
                 />
               ) : activeOptimisticEvents.length > 0 || activeStreamReasoningText.length > 0 || activeStreamText.length > 0 ? (
                 <PendingAssistantActivityBlock
@@ -377,8 +378,10 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
                   onHydrateToolCall={onHydrateToolCall}
                   hydratingToolCallIds={hydratingToolCallIds}
                   streamingReasoningText={activeStreamReasoningText}
-                  streamingAssistantText={activeStreamText}
                 />
+              ) : null}
+              {activeStreamText.length > 0 ? (
+                <MarkdownRenderer markdown={activeStreamText} className="agent-markdown" />
               ) : null}
               {!activeStreamReasoningText.length &&
               !activeStreamText.length &&
@@ -417,14 +420,13 @@ function AgentTimelineComponent(props: AgentTimelineProps) {
                 <header className="agent-message-header agent-message-meta-only">
                   <span className="muted">{prettyDateTime(run.created_at)}</span>
                 </header>
-                <AgentRunBlock
-                  run={run}
-                  isMutating={isMutating}
+                <AssistantMessageRunWork
+                  runs={[run]}
+                  optimisticRunEventsByRunId={optimisticRunEventsByRunId}
+                  optimisticToolCallsByRunId={optimisticToolCallsByRunId}
                   onInspectActivity={detachFromBottom}
                   onHydrateToolCall={onHydrateToolCall}
                   hydratingToolCallIds={hydratingToolCallIds}
-                  optimisticEvents={optimisticEvents}
-                  optimisticToolCalls={optimisticToolCallsByRunId[run.id] ?? []}
                 />
               </article>
             );

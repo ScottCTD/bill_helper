@@ -22,6 +22,8 @@ Supporting modules include:
 - `frontend/src/features/agent/panel/useAgentComposerActions.ts`
 - `frontend/src/features/agent/panel/helpers.ts`
 - `frontend/src/features/agent/AgentRunBlock.tsx`
+- `frontend/src/features/agent/AgentRunActivity.tsx`
+- `frontend/src/features/agent/AssistantMessageRunWork.tsx`
 - `frontend/src/features/agent/activity.ts`
 - `frontend/src/features/agent/panel/AgentThreadList.tsx`
 - `frontend/src/features/agent/panel/AgentThreadPanel.tsx`
@@ -62,9 +64,9 @@ Supporting modules include:
 - tool rows appear as queued, then update in place through running, completed, failed, or cancelled
 - backend tool-call payloads now include a high-signal `display_label`; the timeline uses that summary for both compact SSE snapshots and hydrated rows instead of rendering raw tool names
 - streamed `rename_thread` calls hydrate immediately so the thread rail relabels before the assistant finishes the turn
-- live SSE `reasoning_delta` and `text_delta` chunks render transient Reasoning and Assistant updates inside the same full-width assistant row until persisted events/messages reconcile
+- reasoning updates and interleaved assistant text render as plain markdown at `text-xs` / `font-medium` / foreground in the same **Public Sans** UI stack as the rest of the app (smaller than the final `text-sm` reply); tool-call rows use `font-normal` / muted labels, no chevron—click the row to expand details; live SSE `reasoning_delta` feeds that list, while `text_delta` streams the main assistant answer as normal markdown below the activity list in the same turn
+- completed turns collapse that activity behind a centered separator (work duration plus tool/update counts); clicking the separator expands the full timeline above it; the persisted assistant message body remains the primary visible reply when collapsed
 - compact tool-call snapshots are hydrated on demand from `GET /agent/tool-calls/{tool_call_id}`
-- assistant activity and transient SSE text render in the same full-width assistant row without an outer bubble shell
 - manually expanding or collapsing activity/tool-call details detaches the timeline from auto-follow so the clicked location stays stable until the reviewer scrolls back to bottom
 - optimistic user and assistant placeholders reconcile against persisted timeline messages
 - persisted image attachments render through authenticated blob fetches so previews survive thread reloads even though the API uses bearer-token auth instead of cookie-backed file URLs

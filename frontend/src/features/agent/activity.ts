@@ -15,7 +15,6 @@ import type {
 } from "../../lib/types";
 
 export type RunToolCall = AgentRun["tool_calls"][number];
-export type ReasoningUpdateSource = AgentRunEventSource;
 
 type ToolLifecycleEventType =
   | "tool_call_queued"
@@ -38,7 +37,7 @@ interface RunActivityReasoningUpdate {
   type: "reasoning_update";
   key: string;
   message: string;
-  source: ReasoningUpdateSource;
+  source: AgentRunEventSource;
   createdAt: string;
 }
 
@@ -268,40 +267,81 @@ export function buildRunTimelineFromEvents(events: AgentRunEvent[], toolCalls: R
   return timeline;
 }
 
-export function summarizeActivityTimeline(items: RunActivityItem[], extraUpdateCount: number = 0): string {
-  const toolCount = items.filter((item) => item.type === "tool_call").length;
-  const updateCount = items.filter((item) => item.type === "reasoning_update").length + extraUpdateCount;
+export function countActivityMetrics(items: RunActivityItem[]): { toolCount: number; updateCount: number } {
+  return {
+    toolCount: items.filter((item) => item.type === "tool_call").length,
+    updateCount: items.filter((item) => item.type === "reasoning_update").length
+  };
+}
+
+/** Wall-clock span from earliest run start to latest run end (uses completed_at when set, else created_at). */
+export function aggregateWorkDurationMs(runs: AgentRun[]): number | null {
+  if (runs.length === 0) {
+    return null;
+  }
+  let minStart = Number.POSITIVE_INFINITY;
+  let maxEnd = Number.NEGATIVE_INFINITY;
+  runs.forEach((run) => {
+    const start = new Date(run.created_at).getTime();
+    if (!Number.isNaN(start)) {
+      minStart = Math.min(minStart, start);
+    }
+    const endRaw = run.completed_at ?? run.created_at;
+    const end = new Date(endRaw).getTime();
+    if (!Number.isNaN(end)) {
+      maxEnd = Math.max(maxEnd, end);
+    }
+  });
+  if (!Number.isFinite(minStart) || !Number.isFinite(maxEnd) || maxEnd < minStart) {
+    return null;
+  }
+  return maxEnd - minStart;
+}
+
+export function formatWorkedDurationLabel(durationMs: number): string {
+  const minutes = Math.floor(durationMs / 60_000);
+  if (minutes >= 1) {
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+  const seconds = Math.max(1, Math.ceil(durationMs / 1000));
+  return `${seconds} second${seconds === 1 ? "" : "s"}`;
+}
+
+export function buildAgentWorkSeparatorLabel(runs: AgentRun[], items: RunActivityItem[]): string {
+  const durationMs = aggregateWorkDurationMs(runs);
+  const { toolCount, updateCount } = countActivityMetrics(items);
   const parts: string[] = [];
+  if (durationMs !== null && durationMs >= 0) {
+    parts.push(`Worked for ${formatWorkedDurationLabel(durationMs)}`);
+  }
   if (toolCount > 0) {
     parts.push(`${toolCount} tool call${toolCount === 1 ? "" : "s"}`);
   }
   if (updateCount > 0) {
     parts.push(`${updateCount} update${updateCount === 1 ? "" : "s"}`);
   }
-  return parts.join(", ") || "Activity";
+  return parts.join(", ") || "Agent activity";
 }
 
-function firstLinePreview(text: string, maxLength: number = 80): string {
-  const firstLine = text.split("\n")[0].replace(/^#+\s*/, "").trim();
-  if (firstLine.length <= maxLength) {
-    return firstLine;
-  }
-  return `${firstLine.slice(0, maxLength)}…`;
-}
-
-export function reasoningUpdatePreview(message: string): string {
-  return firstLinePreview(message);
-}
-
-export function reasoningSourceLabel(source: ReasoningUpdateSource): string {
-  switch (source) {
-    case "model_reasoning":
-      return "Reasoning";
-    case "assistant_content":
-      return "Assistant";
-    case "tool_call":
-      return "Update";
-  }
+export function mergeRunActivityItems(
+  runs: AgentRun[],
+  getOptimistic: (runId: string) => { events: AgentRunEvent[]; toolCalls: RunToolCall[] }
+): RunActivityItem[] {
+  const merged: RunActivityItem[] = [];
+  sortRunsByCreatedAt(runs).forEach((run) => {
+    const { events: optEvents, toolCalls: optToolCalls } = getOptimistic(run.id);
+    const mergedEvents = mergeRunEvents(run.events, optEvents);
+    const mergedToolCalls = mergeRunToolCalls(run.tool_calls, optToolCalls);
+    const items = buildRunTimelineFromEvents(mergedEvents, mergedToolCalls);
+    items.forEach((item) => {
+      merged.push({
+        ...item,
+        key: `${run.id}:${item.key}`
+      });
+    });
+  });
+  merged.sort((left, right) => byTimestamp(left.createdAt, right.createdAt));
+  return merged;
 }
 
 export function toolLifecycleLabel(eventType: ToolLifecycleEventType): string {
