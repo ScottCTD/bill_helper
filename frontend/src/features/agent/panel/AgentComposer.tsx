@@ -124,7 +124,7 @@ export function AgentComposer(props: AgentComposerProps) {
     >
       {isComposerDragActive ? <p className="muted">Drop images or PDFs to attach</p> : null}
       {draftAttachments.length > 0 ? (
-        <div className="agent-draft-attachments" aria-label="Pending attachments">
+        <div className="agent-draft-attachments scroll-surface" aria-label="Pending attachments">
           {draftAttachments.map((attachment) => (
             <div
               key={attachment.id}
